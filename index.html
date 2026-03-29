@@ -1521,9 +1521,9 @@ function renderView(view) {
   else if(view==='log') area.innerHTML=renderLog();
   else if(view==='history') area.innerHTML=renderHistory();
   else if(view==='templates') area.innerHTML=renderTemplates();
-  else if(view==='meds') area.innerHTML=renderMedsView();
+  else if(view==='meds') { area.innerHTML=renderMedsView(); loadAllUserDomains().then(()=>{if(S.currentView==='meds')area.innerHTML=renderMedsView();}); }
   else if(view==='stats') area.innerHTML=renderStatsView();
-  else if(view==='crosslog') area.innerHTML=renderCrossLogView();
+  else if(view==='crosslog') { area.innerHTML=renderCrossLogView(); loadAllUserDomains().then(()=>{if(S.currentView==='crosslog')area.innerHTML=renderCrossLogView();}); }
   else if(view==='usage') area.innerHTML=renderUsageView();
   else area.innerHTML='<div class="hint">뷰를 선택하세요.</div>';
 }
@@ -3403,6 +3403,36 @@ function getAllUserConditions() {
 function getUnloadedUserDomains() {
   const currentUser=DC().user;
   return Object.entries(DOMAINS).filter(([id,d])=>d.user===currentUser&&!S.domainState[id]?.master).map(([id,d])=>d);
+}
+
+// Auto-load all domains for current user (for unified meds/crosslog views)
+let _loadingAllDomains=false;
+async function loadAllUserDomains() {
+  if(_loadingAllDomains) return;
+  const currentUser=DC().user;
+  const unloaded=Object.entries(DOMAINS).filter(([id,d])=>d.user===currentUser&&!S.domainState[id]?.master);
+  if(!unloaded.length) return;
+  _loadingAllDomains=true;
+  for(const [domainId,dc] of unloaded) {
+    try {
+      if(!S.domainState[domainId]) S.domainState[domainId]={};
+      const ds=S.domainState[domainId];
+      const folderId=await getOrCreateFolder(dc.folder);
+      ds.folderId=folderId;
+      const files=await driveSearch(dc.masterFile,folderId);
+      if(files.length>0) {
+        ds.masterFileId=files[0].id;
+        ds.master=await driveRead(ds.masterFileId);
+        const def=getDefaultMaster();
+        for(const k of Object.keys(def)){if(!(k in ds.master))ds.master[k]=def[k];}
+      } else {
+        ds.master=getDefaultMaster();
+        ds.masterFileId=await driveCreate(dc.masterFile,ds.master,folderId);
+      }
+      ds.logData=[];ds.logMonth='';ds.logFileId=null;
+    } catch(e) { /* skip failed domain */ }
+  }
+  _loadingAllDomains=false;
 }
 
 // Get meds from all user conditions (for log form)
