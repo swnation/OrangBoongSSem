@@ -2299,10 +2299,11 @@ async function fetchQuickLogsFromCloud() {
   const url = getQuickSyncUrl();
   if (!url) return null;
   try {
-    const res = await fetch(url);
-    const data = await res.json();
+    const res = await fetch(url, { redirect: 'follow' });
+    const text = await res.text();
+    const data = JSON.parse(text);
     return data.ok ? data.entries : null;
-  } catch { return null; }
+  } catch(e) { console.warn('Quick log cloud fetch failed:', e); return null; }
 }
 
 async function markSyncedOnCloud(ids) {
@@ -2313,9 +2314,10 @@ async function markSyncedOnCloud(ids) {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action: 'markSynced', ids }),
-      redirect: 'follow'
+      redirect: 'follow',
+      mode: 'no-cors'
     });
-  } catch { /* 무시 */ }
+  } catch(e) { console.warn('markSynced failed:', e); }
 }
 
 function mergeQuickLogs(local, cloud) {
@@ -2336,6 +2338,7 @@ function mergeQuickLogs(local, cloud) {
 function updateQuickLogBadge() {
   const badge = document.getElementById('quick-log-badge');
   if (!badge) return;
+  if (S.currentDomain !== 'orangi-migraine') { badge.style.display = 'none'; return; }
   const count = getPendingQuickLogs().length;
   if (count > 0) {
     badge.textContent = count;
@@ -2364,12 +2367,15 @@ function checkQuickLogUpdates() {
 
 async function pollCloudQuickLogs() {
   const cloud = await fetchQuickLogsFromCloud();
-  if (!cloud) return;
+  if (!cloud || !cloud.length) return;
   const local = JSON.parse(localStorage.getItem('om_quick_logs') || '[]');
   const merged = mergeQuickLogs(local, cloud);
-  // 새 항목이 추가되었는지 확인
-  if (merged.length !== local.length || JSON.stringify(merged.map(l=>l.id)) !== JSON.stringify(local.map(l=>l.id))) {
-    saveQuickLogs(merged);
+  const localIds = new Set(local.map(l=>l.id));
+  const newFromCloud = merged.filter(l=>!localIds.has(l.id));
+  if (merged.length !== local.length || newFromCloud.length > 0) {
+    _quickLogCache = null; // 캐시 초기화
+    localStorage.setItem('om_quick_logs', JSON.stringify(merged));
+    updateQuickLogBadge();
   }
   checkQuickLogUpdates();
 }
@@ -3760,6 +3766,8 @@ function getConditionMeds() {
   const result=[];
   all.forEach(c=>{
     if(!c.medsList?.length) return;
+    // 현재 도메인의 질환만 표시
+    if(c._domainId !== S.currentDomain) return;
     result.push({condition:c.name,domain:c._domainLabel,icon:c._domainIcon,meds:c.medsList});
   });
   return result;
@@ -4372,27 +4380,65 @@ const _AC_DISEASES = [
 
 // 질환 → 관련 약품 매핑 (자주 사용되는 약)
 const _DISEASE_MEDS = {
-  '편두통':['AAP','Loxoprofen','Sumatriptan','Rizatriptan','Propranolol','Topiramate','Amitriptyline','Valproate','Botox','CGRP mAb'],
-  '만성편두통':['Botox','Topiramate','Amitriptyline','CGRP mAb','Propranolol','Venlafaxine','Valproate'],
-  '난치성만성편두통':['Botox','CGRP mAb','Topiramate','GON block','Propranolol','Venlafaxine'],
-  '주요우울장애(MDD)':['Escitalopram','Sertraline','Venlafaxine','Duloxetine','Bupropion','Mirtazapine','Desvenlafaxine'],
-  '범불안장애(GAD)':['Escitalopram','Sertraline','Venlafaxine','Duloxetine','Buspirone','Hydroxyzine'],
-  '강박장애(OCD)':['Escitalopram','Sertraline','Fluoxetine','Fluvoxamine','Clomipramine'],
-  '공황장애':['Escitalopram','Sertraline','Paroxetine','Alprazolam','Clonazepam'],
-  'ADHD':['Methylphenidate','Concerta','Atomoxetine','Bupropion'],
-  '양극성장애':['Lithium','Valproate','Lamotrigine','Quetiapine','Aripiprazole','Olanzapine'],
-  '불면증':['Zolpidem','Trazodone','Melatonin','Hydroxyzine','Quetiapine'],
-  '고혈압':['Amlodipine','Losartan','Candesartan','Lisinopril','Propranolol','Atenolol','Hydrochlorothiazide'],
-  '이상지질혈증':['Atorvastatin','Rosuvastatin','Ezetimibe','Fenofibrate'],
-  '통풍':['Febuxostat','Allopurinol','Colchicine','Naproxen'],
-  '위식도역류질환(GERD)':['Omeprazole','Pantoprazole','Esomeprazole','Famotidine','Ranitidine'],
-  '천식':['Salbutamol','Fluticasone','Budesonide','Montelukast','Formoterol'],
-  '아토피피부염':['보습제','Hydrocortisone','Tacrolimus','Pimecrolimus','Cetirizine'],
-  '알레르기비염':['Cetirizine','Fexofenadine','Loratadine','Montelukast','Fluticasone 비강'],
-  '제2형당뇨':['Metformin','Glimepiride','Sitagliptin','Empagliflozin','Insulin'],
-  '골관절염':['AAP','Loxoprofen','Naproxen','Celecoxib','관절강내주사'],
-  '골다공증':['Alendronate','Risedronate','Denosumab','칼슘','비타민D'],
-  '류마티스관절염':['Methotrexate','Hydroxychloroquine','Sulfasalazine','Leflunomide','Adalimumab'],
+  // ── 두통 ──
+  '편두통':['AAP 500mg','Loxoprofen','Naproxen','Sumatriptan','Rizatriptan','Propranolol','Topiramate','Amitriptyline','Valproate','Botox','CGRP mAb(Aimovig/Ajovy/Emgality)','Rimegepant','Atogepant'],
+  '만성편두통':['Botox','CGRP mAb(Aimovig/Ajovy/Emgality)','Topiramate','Amitriptyline','Propranolol','Venlafaxine','Valproate','Atogepant','Rimegepant','GON block'],
+  '난치성만성편두통':['Botox','CGRP mAb','GON block','SPG block','Propranolol','Topiramate','Venlafaxine','Atogepant','Rimegepant','신경자극술(VNS/ONS)'],
+  '긴장형두통':['AAP 500mg','Ibuprofen','Naproxen','Amitriptyline','물리치료','스트레스 관리'],
+  '군발두통':['산소요법(O2 15L)','Sumatriptan SC','Verapamil','Galcanezumab','Lithium','Prednisone 단기'],
+  // ── 정신과 — 우울 ──
+  '주요우울장애':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine XR','Duloxetine','Bupropion XL','Mirtazapine','Desvenlafaxine','Vortioxetine','Aripiprazole 보조','CBT'],
+  'MDD':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine XR','Duloxetine','Bupropion XL','Mirtazapine','Desvenlafaxine','Vortioxetine','Aripiprazole 보조','CBT'],
+  '우울장애':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine XR','Duloxetine','Bupropion XL','Mirtazapine','CBT'],
+  '기분부전장애':['Sertraline','Escitalopram','Duloxetine','Bupropion','CBT'],
+  // ── 정신과 — 불안 ──
+  '범불안장애':['Escitalopram','Sertraline','Venlafaxine XR','Duloxetine','Buspirone','Pregabalin','Hydroxyzine','CBT'],
+  'GAD':['Escitalopram','Sertraline','Venlafaxine XR','Duloxetine','Buspirone','Pregabalin','CBT'],
+  '강박장애':['Fluoxetine 고용량','Sertraline','Escitalopram','Fluvoxamine','Clomipramine','ERP치료'],
+  'OCD':['Fluoxetine 고용량','Sertraline','Escitalopram','Fluvoxamine','Clomipramine','ERP치료'],
+  '공황장애':['Escitalopram','Sertraline','Venlafaxine XR','Paroxetine','Clonazepam 단기','CBT'],
+  '사회불안장애':['Escitalopram','Sertraline','Venlafaxine XR','Paroxetine','Pregabalin','CBT'],
+  'PTSD':['Sertraline','Paroxetine','Venlafaxine XR','Prazosin(악몽)','CPT','EMDR'],
+  // ── 정신과 — 기타 ──
+  'ADHD':['Methylphenidate','Concerta','Atomoxetine','Bupropion','Lisdexamfetamine','Clonidine'],
+  '양극성장애':['Lithium','Valproate','Lamotrigine','Quetiapine','Aripiprazole','Olanzapine','Carbamazepine'],
+  '불면증':['Zolpidem','Trazodone','Melatonin','Lemborexant','Suvorexant','CBT-I','수면위생'],
+  '조현병':['Risperidone','Olanzapine','Aripiprazole','Quetiapine','Paliperidone LAI','Clozapine'],
+  // ── 내과 ──
+  '고혈압':['Amlodipine','Losartan','Candesartan','Valsartan','Lisinopril','Hydrochlorothiazide','Indapamide','Bisoprolol'],
+  '이상지질혈증':['Atorvastatin','Rosuvastatin','Ezetimibe','Fenofibrate','Pitavastatin','Icosapent ethyl'],
+  '제2형당뇨':['Metformin','Empagliflozin','Dapagliflozin','Sitagliptin','Semaglutide','Liraglutide','Glimepiride','Insulin'],
+  '갑상선기능저하증':['Levothyroxine(Synthroid)'],
+  '갑상선기능항진증':['Methimazole','PTU','방사성요오드','Propranolol'],
+  '통풍':['Febuxostat','Allopurinol','Colchicine','Naproxen','Prednisolone 단기'],
+  '빈혈':['철분제(Ferrous sulfate)','엽산','비타민B12','EPO'],
+  // ── 소화기 ──
+  '위식도역류질환':['Esomeprazole','Pantoprazole','Rabeprazole','Famotidine','Alginate(가비스콘)','생활습관교정'],
+  'GERD':['Esomeprazole','Pantoprazole','Rabeprazole','Famotidine','Alginate(가비스콘)'],
+  '과민성장증후군':['Trimebutine','Pinaverium','Rifaximin','Probiotics','저포드맵식이','Amitriptyline 저용량'],
+  'IBS':['Trimebutine','Pinaverium','Rifaximin','Probiotics','저포드맵식이'],
+  '기능성소화불량':['Mosapride','Itopride','Pantoprazole','Trimebutine'],
+  // ── 호흡기/알레르기 ──
+  '천식':['Salbutamol','Fluticasone+Salmeterol','Budesonide+Formoterol','Montelukast','Tiotropium'],
+  '알레르기비염':['Cetirizine','Fexofenadine','Loratadine','Montelukast','Fluticasone 비강스프레이','Azelastine 비강'],
+  '아토피피부염':['보습제','Hydrocortisone','Tacrolimus','Pimecrolimus','Dupilumab','Cetirizine'],
+  // ── 근골격 ──
+  '골관절염':['AAP 500mg','Loxoprofen','Celecoxib','Naproxen','관절강내HA주사','Duloxetine','물리치료'],
+  '골다공증':['Alendronate','Risedronate','Denosumab','칼슘+비타민D','Romosozumab'],
+  '류마티스관절염':['Methotrexate','Hydroxychloroquine','Sulfasalazine','Leflunomide','Adalimumab','Tofacitinib'],
+  '섬유근통':['Duloxetine','Pregabalin','Amitriptyline','Milnacipran','운동치료'],
+  // ── 비뇨기/생식 ──
+  '과민성방광':['Solifenacin','Mirabegron','Tolterodine','Oxybutynin'],
+  '전립선비대증':['Tamsulosin','Dutasteride','Finasteride','Silodosin'],
+  '다낭성난소증후군':['Metformin','경구피임약','Spironolactone','Letrozole','생활습관교정'],
+  // ── 자율신경/기타 ──
+  '실신(Vasovagal)':['수분·염분 섭취','탄력스타킹','Midodrine','Fludrocortisone','기립훈련'],
+  '자율신경실조':['수분·염분 섭취','Propranolol 저용량','Midodrine','Fludrocortisone','규칙 운동'],
+  // ── 임신 준비 ──
+  '엽산보충':['엽산 0.4~0.8mg','활성엽산(5-MTHF)','종합비타민'],
+  '철분보충':['Ferrous sulfate','Ferrous fumarate','비타민C 병용'],
+  '임신준비영양':['엽산','철분','비타민D','CoQ10','오메가3 DHA','아연'],
+  '남성가임력':['CoQ10','L-아르기닌','아연','셀레늄','비타민E','L-카르니틴'],
 };
 
 // ═══════════════════════════════════════════════════════════════
