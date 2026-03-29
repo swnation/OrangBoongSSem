@@ -3327,7 +3327,28 @@ const _AC_TREATMENTS = [
   '수술','시술','내시경','조직검사',
 ];
 
-function setupAutocomplete(inputId, list) {
+// 식약처 공공데이터 API (의약품 검색)
+const _DRUG_API_KEY = 'e2e1a2277cd6d60badb822ca35b3a1147b0d13dacec0f374b8684b85af4dac78';
+const _DRUG_API_URL = 'https://apis.data.go.kr/1471000/DrugPrdtPrmsnInfoService07/getDrugPrdtPrmsnInq07';
+let _drugSearchTimer = null;
+let _drugCache = {}; // cache recent searches
+
+async function searchDrugAPI(query) {
+  if (query.length < 2) return [];
+  if (_drugCache[query]) return _drugCache[query];
+  try {
+    const url = `${_DRUG_API_URL}?serviceKey=${_DRUG_API_KEY}&item_name=${encodeURIComponent(query)}&type=json&numOfRows=8`;
+    const r = await fetch(url, {signal: AbortSignal.timeout(3000)});
+    if (!r.ok) return [];
+    const d = await r.json();
+    const items = d?.body?.items || [];
+    const names = [...new Set(items.map(i => i.ITEM_NAME).filter(Boolean))].slice(0, 8);
+    _drugCache[query] = names;
+    return names;
+  } catch(e) { return []; }
+}
+
+function setupAutocomplete(inputId, list, useAPI=false) {
   const dlId = inputId + '-dl';
   let dl = document.getElementById(dlId);
   if (!dl) {
@@ -3341,8 +3362,20 @@ function setupAutocomplete(inputId, list) {
     input.addEventListener('input', () => {
       const q = input.value.toLowerCase().trim();
       if (q.length < 1) { dl.innerHTML = ''; return; }
-      const matches = list.filter(item => item.toLowerCase().includes(q)).slice(0, 8);
-      dl.innerHTML = matches.map(m => `<option value="${m}">`).join('');
+      // Local matches first
+      const localMatches = list.filter(item => item.toLowerCase().includes(q)).slice(0, 8);
+      dl.innerHTML = localMatches.map(m => `<option value="${m}">`).join('');
+      // API search for meds (debounced)
+      if (useAPI && q.length >= 2) {
+        clearTimeout(_drugSearchTimer);
+        _drugSearchTimer = setTimeout(async () => {
+          const apiResults = await searchDrugAPI(q);
+          if (apiResults.length) {
+            const combined = [...new Set([...localMatches, ...apiResults])].slice(0, 12);
+            dl.innerHTML = combined.map(m => `<option value="${m}">`).join('');
+          }
+        }, 300);
+      }
     });
   }
 }
@@ -3353,10 +3386,15 @@ renderView = function(view) {
   _origRenderView(view);
   if (view === 'log') {
     setTimeout(() => {
-      setupAutocomplete('med-other', _AC_MEDS);
+      setupAutocomplete('med-other', _AC_MEDS, true); // meds with API
       setupAutocomplete('sym-other', _AC_SYMPTOMS);
       setupAutocomplete('tx-other', _AC_TREATMENTS);
       setupAutocomplete('log-treatment', _AC_TREATMENTS);
+    }, 50);
+  }
+  if (view === 'meds') {
+    setTimeout(() => {
+      setupAutocomplete('dx-meds', _AC_MEDS, true);
     }, 50);
   }
 };
