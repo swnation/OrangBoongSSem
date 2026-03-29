@@ -975,18 +975,15 @@ function isTokenExpired() {
   return _tokenExpiresAt > 0 && Date.now() > _tokenExpiresAt;
 }
 
+let _tokenRefreshResolve = null;
+
 async function ensureValidToken() {
   if (!S.token) return false;
   if (!isTokenExpired()) return true;
   // Token expired — try silent refresh
+  if (!tokenClient) return false;
   return new Promise(resolve => {
-    if (!tokenClient) { resolve(false); return; }
-    const origCallback = handleToken;
-    tokenClient.callback = (resp) => {
-      origCallback(resp);
-      tokenClient.callback = origCallback;
-      resolve(!resp.error);
-    };
+    _tokenRefreshResolve = resolve;
     tokenClient.requestAccessToken({prompt: ''});
   });
 }
@@ -999,9 +996,16 @@ async function ensureValidToken() {
 })();
 
 function handleToken(resp) {
-  if (resp.error) { showToast('❌ 로그인 실패: ' + resp.error, 4000); return; }
+  if (resp.error) {
+    if (_tokenRefreshResolve) { _tokenRefreshResolve(false); _tokenRefreshResolve = null; }
+    showToast('❌ 로그인 실패: ' + resp.error, 4000);
+    return;
+  }
+  const isRefresh = !!S.token; // already had a token = this is a refresh
   S.token = resp.access_token;
   scheduleTokenRefresh(resp.expires_in || 3600);
+  if (_tokenRefreshResolve) { _tokenRefreshResolve(true); _tokenRefreshResolve = null; return; }
+  if (isRefresh) return; // silent refresh from timer — no UI reload needed
   setDriveStatus(true);
   const dc = document.getElementById('default-connect'); if(dc) dc.style.display='none';
   const locked = document.getElementById('sb-locked'); if(locked) locked.style.display='none';
@@ -1040,6 +1044,7 @@ async function driveSearch(name, parentId=null) {
   return d.files || [];
 }
 async function driveRead(fileId) {
+  if (isTokenExpired()) await ensureValidToken();
   const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
     {headers:{Authorization:'Bearer '+S.token}});
   return res.json();
@@ -1062,6 +1067,7 @@ async function driveUpdate(fileId, data) {
   const d=await res.json(); if(d.error) throw new Error(d.error.message); return d;
 }
 async function getOrCreateFolder(name) {
+  if (isTokenExpired()) await ensureValidToken();
   const q=`name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   const res=await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`,
     {headers:{Authorization:'Bearer '+S.token}});
@@ -2230,7 +2236,7 @@ function editLogEntry(idx) {
     const timeVal=entry.datetime.slice(11,16);
     const timeEl=document.getElementById('log-time');
     const timeUnk=document.getElementById('log-time-unknown');
-    if(timeVal==='시간미' || timeVal==='00:00') {
+    if(timeVal.startsWith('시간') || timeVal==='00:00') {
       if(timeUnk){timeUnk.checked=true;if(timeEl){timeEl.disabled=true;timeEl.style.opacity='.3';}}
     } else if(timeEl) { timeEl.value=timeVal; }
     // NRS or mood
