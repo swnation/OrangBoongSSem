@@ -2195,7 +2195,7 @@ async function saveLogEntry() {
   if(txInput&&txInput.value.trim()) treatments.push(txInput.value.trim());
   else document.querySelectorAll('.log-chip.sel[data-group="tx"]').forEach(el=>treatments.push(el.dataset.val));
   const memo=document.getElementById('log-memo')?.value.trim();
-  const editIdx=parseInt(document.getElementById('log-edit-idx')?.value||-1);
+  const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
   const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,symptoms,meds,treatments,memo};
   await ensureLogLoaded();
   const ds=D();
@@ -2405,7 +2405,7 @@ async function saveJournalLog() {
   const cats=[];document.querySelectorAll('.log-chip.sel[data-group="cat"]').forEach(el=>cats.push(el.dataset.val));
   const memo=document.getElementById('log-memo')?.value.trim();
   if(!memo){showToast('내용을 입력해 주세요.');if(btn)btn.disabled=false;if(sp)sp.style.display='none';return;}
-  const editIdx=parseInt(document.getElementById('log-edit-idx')?.value||-1);
+  const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
   const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:0,sites:[],symptoms:[],meds:[],treatments:[]};
   await ensureLogLoaded();
   const ds=D();
