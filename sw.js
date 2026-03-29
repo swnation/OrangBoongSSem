@@ -1,9 +1,9 @@
-const CACHE_NAME = 'orangi-health-v8a';
+const CACHE_NAME = 'orangi-health-v8b';
 const PRECACHE = [
-  '/index.html',
-  '/quick.html',
-  '/quick-manifest.json',
-  '/style.css',
+  './index.html',
+  './quick.html',
+  './quick-manifest.json',
+  './style.css',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap',
   'https://cdn.jsdelivr.net/npm/marked@15/marked.min.js',
   'https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js',

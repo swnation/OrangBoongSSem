@@ -619,6 +619,9 @@ function updateDomainUI() {
   document.documentElement.style.setProperty('--domain-color', dc.color);
   const tb = document.getElementById('topbar-domain');
   if (tb) { tb.textContent = `${dc.icon} ${dc.user} · ${dc.label}`; tb.style.display = 'inline'; }
+  // 붕룩이: 사이드바 라벨 변경
+  const navMeds = document.getElementById('nav-meds');
+  if (navMeds) navMeds.textContent = S.currentDomain === 'bungruki' ? '📋 임신 준비 관리' : '📋 질환 관리';
 }
 async function switchDomain(domainId) {
   if (S.generating) { showToast('AI 생성 중에는 도메인을 전환할 수 없습니다.'); return; }
@@ -1509,7 +1512,8 @@ function switchView(view, btn) {
   S.currentView=view;
   document.querySelectorAll('.sb-btn').forEach(b=>b.classList.remove('active'));
   const navBtn=document.getElementById('nav-'+view); if(navBtn) navBtn.classList.add('active');
-  const titles={home:'홈 — 누적 기록',session:'현재 세션',log:'📊 증상 기록',history:'세션 기록',templates:'질문 템플릿',meds:'📋 질환 관리',stats:'📈 통계 대시보드',crosslog:'🔗 교차 분석',usage:'💰 비용 추적'};
+  const medsTitle=S.currentDomain==='bungruki'?'📋 임신 준비 관리':'📋 질환 관리';
+  const titles={home:'홈 — 누적 기록',session:'현재 세션',log:'📊 증상 기록',history:'세션 기록',templates:'질문 템플릿',meds:medsTitle,stats:'📈 통계 대시보드',crosslog:'🔗 교차 분석',usage:'💰 비용 추적'};
   document.getElementById('topbar-title').textContent=titles[view]||'AI 협진';
   renderView(view);
   closeSidebar();
@@ -3643,8 +3647,11 @@ function getConditionMeds() {
 
 function renderMedsView() {
   const currentUser=DC().user;
+  const isBungruki=S.currentDomain==='bungruki';
   const allConditions=getAllUserConditions();
-  const statusLabels={active:'치료 중',remission:'관해',resolved:'완치',['self-stopped']:'자의 중단'};
+  const statusLabels=isBungruki
+    ?{active:'진행 중',remission:'완료',resolved:'완료',['self-stopped']:'보류'}
+    :{active:'치료 중',remission:'관해',resolved:'완치',['self-stopped']:'자의 중단'};
   const statusClass={active:'active',remission:'remission',resolved:'resolved',['self-stopped']:'self-stopped'};
 
   // Group by domain, current domain first
@@ -3665,11 +3672,11 @@ function renderMedsView() {
         <button class="accum-del" onclick="deleteConditionUnified('${c._domainId}',${c._idx})" title="삭제">🗑</button>
       </div>
       <div class="dx-body">
-        ${c.diagnosisDate?`<strong>진단:</strong> ${esc(c.diagnosisDate)}<br>`:''}
-        ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">현재 투약</div>
+        ${c.diagnosisDate?`<strong>${isBungruki?'시작':'진단'}:</strong> ${esc(c.diagnosisDate)}<br>`:''}
+        ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'현재 투약'}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">${c.medsList.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`).join('')}</div></div>`:''}
-        ${c.medications&&!c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">현재 투약</div>${esc(c.medications)}</div>`:''}
-        ${c.drugResponse?`<div class="dx-section"><div class="dx-section-title">약물 반응</div>${esc(c.drugResponse)}</div>`:''}
+        ${c.medications&&!c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'현재 투약'}</div>${esc(c.medications)}</div>`:''}
+        ${c.drugResponse?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'효과/반응':'약물 반응'}</div>${esc(c.drugResponse)}</div>`:''}
         ${c.course?`<div class="dx-section"><div class="dx-section-title">경과</div>${esc(c.course)}</div>`:''}
         ${c.notes?`<div class="dx-section"><div class="dx-section-title">메모</div>${esc(c.notes)}</div>`:''}
       </div>
@@ -3693,11 +3700,13 @@ function renderMedsView() {
 
   return `
     <div class="card">
-      <div class="card-title">📋 ${currentUser} — 통합 질환 관리
-        <button class="btn-accum-add" style="margin-left:auto;font-size:.72rem" onclick="openConditionForm()">+ 질환 추가</button>
+      <div class="card-title">📋 ${currentUser} — ${isBungruki?'임신 준비 관리':'통합 질환 관리'}
+        <button class="btn-accum-add" style="margin-left:auto;font-size:.72rem" onclick="openConditionForm()">+ ${isBungruki?'관리 항목 추가':'질환 추가'}</button>
       </div>
       <p style="font-size:.78rem;color:var(--mu);margin-bottom:14px">
-        ${currentUser}의 모든 도메인 질환을 통합 관리합니다. 등록된 질환은 AI 세션 시 자동으로 컨텍스트에 포함됩니다.
+        ${isBungruki
+          ?`${currentUser}의 임신 준비 과정에서 관리하는 항목들입니다. 등록된 항목은 AI 세션 시 자동으로 컨텍스트에 포함됩니다.`
+          :`${currentUser}의 모든 도메인 질환을 통합 관리합니다. 등록된 질환은 AI 세션 시 자동으로 컨텍스트에 포함됩니다.`}
       </p>
       ${getUnloadedUserDomains().length?`<p style="font-size:.72rem;color:var(--r3);margin-bottom:10px">⚠️ ${getUnloadedUserDomains().map(d=>d.icon+' '+d.label).join(', ')} 도메인이 아직 로드되지 않았습니다. 해당 도메인을 한번 방문하면 질환이 표시됩니다.</p>`:''}
       <div id="dx-form" style="display:none;margin-bottom:16px;padding:16px;background:var(--sf2);border-radius:10px;border:1.5px solid var(--bd)">
@@ -3705,8 +3714,8 @@ function renderMedsView() {
         <input type="hidden" id="dx-edit-domain" value="">
         <div style="display:flex;gap:10px">
           <div class="dx-form-group" style="flex:2">
-            <div class="dx-form-label">질환명 * <span style="font-size:.6rem;color:var(--mu2)">(검색하면 자동완성)</span></div>
-            <input class="dx-form-input" id="dx-name" placeholder="예: 편두통, 고혈압, 당뇨" oninput="onDxNameInput(this.value)">
+            <div class="dx-form-label">${isBungruki?'항목명':'질환명'} * <span style="font-size:.6rem;color:var(--mu2)">(검색하면 자동완성)</span></div>
+            <input class="dx-form-input" id="dx-name" placeholder="${isBungruki?'예: 엽산 보충, 정액검사, 체중 관리':'예: 편두통, 고혈압, 당뇨'}" oninput="onDxNameInput(this.value)">
           </div>
           <div class="dx-form-group" style="flex:1">
             <div class="dx-form-label">소속 도메인</div>
@@ -3719,19 +3728,19 @@ function renderMedsView() {
         <div id="dx-suggest" style="display:none;margin:-8px 0 12px;max-height:120px;overflow-y:auto;border:1.5px solid var(--bd);border-radius:6px;background:var(--sf)"></div>
         <div style="display:flex;gap:10px">
           <div class="dx-form-group" style="flex:1">
-            <div class="dx-form-label">진단 시기</div>
-            <input class="dx-form-input" id="dx-date" placeholder="예: 2023년, 2025-06">
+            <div class="dx-form-label">${isBungruki?'시작 시기':'진단 시기'}</div>
+            <input class="dx-form-input" id="dx-date" placeholder="${isBungruki?'예: 2026-03':'예: 2023년, 2025-06'}">
           </div>
           <div class="dx-form-group" style="flex:1">
             <div class="dx-form-label">현재 상태</div>
             <select class="dx-form-input" id="dx-status" style="cursor:pointer">
-              <option value="active">치료 중</option><option value="remission">관해</option>
-              <option value="resolved">완치/종결</option><option value="self-stopped">자의 중단</option>
+              <option value="active">${isBungruki?'진행 중':'치료 중'}</option><option value="remission">${isBungruki?'완료':'관해'}</option>
+              <option value="resolved">${isBungruki?'완료':'완치/종결'}</option><option value="self-stopped">${isBungruki?'보류':'자의 중단'}</option>
             </select>
           </div>
         </div>
         <div class="dx-form-group">
-          <div class="dx-form-label">투약 <span style="font-size:.6rem;color:var(--mu2)">(약품명 입력 후 +추가)</span></div>
+          <div class="dx-form-label">${isBungruki?'복용/보충제':'투약'} <span style="font-size:.6rem;color:var(--mu2)">(${isBungruki?'보충제/약품명':'약품명'} 입력 후 +추가)</span></div>
           <div id="dx-med-chips" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
           <div id="dx-med-suggest" style="display:none;margin-bottom:6px;padding:4px;border:1px solid var(--bd);border-radius:6px;background:var(--sf)">
             <div style="font-size:.62rem;color:var(--mu);margin-bottom:4px">💊 이 질환에 주로 사용되는 약</div>
@@ -3747,8 +3756,8 @@ function renderMedsView() {
           <input class="dx-form-input" id="dx-drug-change" type="date" style="width:160px">
         </div>
         <div class="dx-form-group">
-          <div class="dx-form-label">약물 반응 (효과, 부작용)</div>
-          <textarea class="dx-form-ta" id="dx-response" rows="2" placeholder="예: 혈압 130/80으로 안정, 어지러움 부작용 경미"></textarea>
+          <div class="dx-form-label">${isBungruki?'효과/반응':'약물 반응 (효과, 부작용)'}</div>
+          <textarea class="dx-form-ta" id="dx-response" rows="2" placeholder="${isBungruki?'예: 3개월 복용 중, 수치 개선':'예: 혈압 130/80으로 안정, 어지러움 부작용 경미'}"></textarea>
         </div>
         <div class="dx-form-group">
           <div class="dx-form-label">경과</div>
