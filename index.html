@@ -3181,8 +3181,7 @@ function renderMedsView() {
       <p style="font-size:.78rem;color:var(--mu);margin-bottom:14px">
         ${currentUser}의 모든 도메인 질환을 통합 관리합니다. 등록된 질환은 AI 세션 시 자동으로 컨텍스트에 포함됩니다.
       </p>
-      ${(()=>{const ul=getUnloadedUserDomains();return ul.length?`<p style="font-size:.72rem;color:var(--r3);margin-bottom:10px">⚠️ ${ul.map(d=>d.icon+' '+d.label).join(', ')} 도메인이 아직 로드되지 않았습니다. 해당 도메인을 한번 방문하면 질환이 표시됩니다.</p>`:'';})()
-      </p>
+      ${getUnloadedUserDomains().length?`<p style="font-size:.72rem;color:var(--r3);margin-bottom:10px">⚠️ ${getUnloadedUserDomains().map(d=>d.icon+' '+d.label).join(', ')} 도메인이 아직 로드되지 않았습니다. 해당 도메인을 한번 방문하면 질환이 표시됩니다.</p>`:''}
       <div id="dx-form" style="display:none;margin-bottom:16px;padding:16px;background:var(--sf2);border-radius:10px;border:1.5px solid var(--bd)">
         <input type="hidden" id="dx-edit-idx" value="-1">
         <input type="hidden" id="dx-edit-domain" value="">
