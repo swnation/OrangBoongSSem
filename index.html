@@ -838,7 +838,9 @@ async function loadDomainData(domainId) {
     } else {
       switchView('home');
     }
-    checkPriceUpdate(); // background price update
+    checkPriceUpdate();
+    migrateConditions();
+    checkDailyReminder();
   } catch(e) {
     // Attempt offline fallback from localStorage
     const cached = loadFromLocal(domainId);
@@ -916,7 +918,7 @@ function getPriceTable() { return DM()?.price_table || DEFAULT_PRICE_TABLE; }
 function calcCost(model,inT,outT) { const p=(getPriceTable())[model]||{in:0,out:0}; return (inT/1e6)*p.in+(outT/1e6)*p.out; }
 function recordUsage(aiId,model,inT,outT) {
   const m=DM(); if(!m?.usage_data) return;
-  const today=new Date().toISOString().slice(0,10);
+  const today=kstToday();
   if(!m.usage_data[today]) m.usage_data[today]={};
   if(!m.usage_data[today][aiId]) m.usage_data[today][aiId]={in:0,out:0,cost:0,model};
   m.usage_data[today][aiId].in+=inT; m.usage_data[today][aiId].out+=outT;
@@ -924,7 +926,7 @@ function recordUsage(aiId,model,inT,outT) {
   try { localStorage.setItem('om_usage_'+S.currentDomain, JSON.stringify(m.usage_data)); } catch(e) {}
 }
 function getSidebarCostToday() {
-  const today=new Date().toISOString().slice(0,10);
+  const today=kstToday();
   const usage=DM()?.usage_data?.[today];
   if(!usage) return 0;
   return Object.values(usage).reduce((s,v)=>s+(v.cost||0),0);
@@ -1087,17 +1089,25 @@ function buildUserPrompt(aiId, roundNum) {
 // ═══════════════════════════════════════════════════════════════
 // SESSION MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
-function startNewSession() {
-  _sessionFiles = []; // reset attachments
+function startNewSession(prefillQuestion) {
+  _sessionFiles = [];
   S.session = {
-    id:Date.now(), date:new Date().toISOString().split('T')[0],
-    question:'', rounds:[], currentRound:0, summary:null,
+    id:Date.now(), date:kstToday(),
+    question:prefillQuestion||'', rounds:[], currentRound:0, summary:null,
     new_consensus:[], new_discarded:[], updated_issues:[],
   };
   S._dirty = false;
   switchView('session');
   document.getElementById('session-round-badge').style.display='inline';
   document.getElementById('session-round-badge').textContent='R0';
+}
+
+function startSessionFromLogs() {
+  const summary = getRecentLogSummary();
+  if (!summary) { showToast('최근 7일 기록이 없습니다.'); return; }
+  const dc=DC();
+  const question=`${dc.label} 최근 기록 분석 요청:\n\n${summary}\n\n위 기록을 바탕으로 패턴 분석, 주요 변화, 주의 사항을 알려주세요.`;
+  startNewSession(question);
 }
 
 async function runRound(roundNum) {
@@ -1299,11 +1309,37 @@ JSON 형식 (각 문자열 100자 이내):
     const area=document.getElementById('summary-area');
     if(area){area.innerHTML=renderSummaryResult(parsed);area.scrollIntoView({behavior:'smooth'});}
     showToast('✅ 세션 저장 & Drive 동기화 완료!');
+    // Offer context auto-merge
+    if(parsed.new_consensus?.length||parsed.updated_issues?.length||parsed.final_recommendation) {
+      offerContextMerge(parsed);
+    }
   } catch(e) {
     showToast('❌ 요약 실패: '+e.message,5000);
   }
   if(finalBtn) finalBtn.disabled=false;
   if(finalSp) finalSp.style.display='none';
+}
+
+function offerContextMerge(parsed) {
+  const additions=[];
+  if(parsed.new_consensus?.length) additions.push('■ 새 합의: '+parsed.new_consensus.join('; '));
+  if(parsed.updated_issues?.length) additions.push('■ 미해결 쟁점: '+parsed.updated_issues.join('; '));
+  if(parsed.final_recommendation) additions.push('■ 권고: '+parsed.final_recommendation);
+  const addText='\n\n['+kstToday()+' 세션 반영]\n'+additions.join('\n');
+
+  showConfirmModal('📋 컨텍스트 자동 반영',
+    `<p style="font-size:.82rem;margin-bottom:10px">이번 세션 결과를 환자 컨텍스트에 추가할까요?</p>
+    <div style="background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;padding:10px;font-family:var(--mono);font-size:.72rem;line-height:1.6;max-height:200px;overflow-y:auto;white-space:pre-wrap;color:var(--gr)">${esc(addText)}</div>`,
+    [{label:'컨텍스트에 추가',action:`mergeToContext(\`${addText.replace(/`/g,"'")}\`)`,primary:true}]
+  );
+}
+
+async function mergeToContext(text) {
+  const m=DM(); if(!m) return;
+  m.patient_context=(m.patient_context||'')+text;
+  await saveMaster();
+  closeConfirmModal();
+  showToast('✅ 컨텍스트에 반영됨');
 }
 
 function renderSummaryResult(r) {
@@ -1387,6 +1423,7 @@ function renderHome() {
 
   return `
     <button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
+    <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
     <div class="card">
       <div class="card-title">🧠 누적 협진 지식 <span class="badge badge-green">Drive 동기화</span></div>
       <div class="accum-section">
@@ -1551,6 +1588,7 @@ function renderHistory() {
     <input type="date" id="hist-to" value="${_histDateTo}" class="dx-form-input" onchange="onHistDateFilter()" style="width:130px;font-size:.72rem">
     ${hasFilter?`<button class="btn-cancel" onclick="clearHistFilter()" style="font-size:.7rem;padding:4px 10px">✕ 초기화</button>`:''}
     <button class="btn-export" onclick="exportSessionsMD()">📄 MD 내보내기</button>
+    <button class="btn-export" onclick="exportPDF()">📑 PDF 리포트</button>
     <span style="font-size:.78rem;color:var(--mu)">${hasFilter?`${sessions.length}/${allSessions.length}건`:`총 ${allSessions.length}개`}</span>
   </div>` +
   sessions.map(s=>{
@@ -1685,13 +1723,13 @@ function renderStatsView() {
 
   // 30-day chart
   const dates=[];
-  for(let i=29;i>=0;i--){const d=new Date(now-i*86400000).toISOString().slice(0,10);dates.push(d);}
+  for(let i=29;i>=0;i--){dates.push(kstDaysAgo(i));}
   const maxNrs=10;
   const barHtml=dates.map(d=>{
     const data=byDate[d];
     const avgNrs=data?.nrs?.length?data.nrs.reduce((a,b)=>a+b,0)/data.nrs.length:0;
     const h=Math.max(2,Math.round((avgNrs/maxNrs)*60));
-    const isToday=d===now.toISOString().slice(0,10);
+    const isToday=d===kstToday();
     const dayName=['일','월','화','수','목','금','토'][new Date(d+'T12:00').getDay()];
     const color=avgNrs>0?nrsColor(avgNrs):'var(--bd)';
     const label=d.slice(8);
@@ -1754,7 +1792,10 @@ function renderStatsView() {
     <div style="display:flex;align-items:flex-end;gap:1px;padding:8px 0">${barHtml}</div>
   </div>
   ${topSyms.length?`<div class="card"><div class="card-title">증상 빈도 (30일)</div>${symHtml}</div>`:''}
-  ${topMeds.length?`<div class="card"><div class="card-title">투약 빈도 (30일)</div>${medHtml}</div>`:''}`;
+  ${topMeds.length?`<div class="card"><div class="card-title">투약 빈도 (30일)</div>${medHtml}</div>`:''}
+  ${lc.moodMode?'':renderCalendarHeatmap(logs,lc)}
+  ${renderTreatmentTracker()}
+  <div style="text-align:center;margin-top:8px"><button class="btn-export" onclick="exportPDF()">📑 PDF 리포트 생성</button></div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1845,8 +1886,8 @@ function renderCrossLogView() {
 
 // USAGE VIEW
 function renderUsageView() {
-  const todayStr=new Date().toISOString().slice(0,10);
-  const monthStr=new Date().toISOString().slice(0,7);
+  const todayStr=kstToday();
+  const monthStr=kstMonth();
   const now=new Date();
   const krw=usd=>`$${usd.toFixed(4)} (≈${Math.round(usd*1450).toLocaleString()}원)`;
   const krwShort=usd=>usd>0?`$${usd.toFixed(4)}`:'—';
@@ -1879,7 +1920,7 @@ function renderUsageView() {
   // ── 최근 14일 일별 차트 ──
   const last14=[];
   for(let i=13;i>=0;i--){
-    const d=new Date(now-i*86400000).toISOString().slice(0,10);
+    const d=kstDaysAgo(i);
     const data=allUsageByDate[d]||{cost:0,byAI:{}};
     last14.push({date:d,cost:data.cost,byAI:data.byAI});
   }
@@ -1996,11 +2037,11 @@ function renderUsageView() {
 // ═══════════════════════════════════════════════════════════════
 // LOG SYSTEM (domain-specific)
 // ═══════════════════════════════════════════════════════════════
-function getYM(d){return d.toISOString().slice(0,7);}
+function getYM(){return kstMonth();}
 function logFileName(ym){return `${DC().logPrefix}_${ym}.json`;}
 
 async function ensureLogLoaded() {
-  const ds=D(); const ym=getYM(new Date());
+  const ds=D(); const ym=getYM();
   if(ds.logMonth===ym && ds.logFileId!==undefined) return;
   ds.logMonth=ym;
   try {
@@ -2023,8 +2064,8 @@ async function setLogView(v){S.logView=v;await ensureLogLoaded();renderView('log
 function renderLog() {
   const dc=DC(); const lc=dc.logConfig;
   const now=new Date();
-  const dateStr=now.toISOString().slice(0,10);
-  const timeStr=now.toTimeString().slice(0,5);
+  const dateStr=kstToday();
+  const timeStr=kstTime();
   const viewTabs=['form','list'].map(v=>
     `<button class="log-vtab ${S.logView===v?'active':''}" onclick="setLogView('${v}')">${{form:'➕ 기록',list:'📋 목록'}[v]}</button>`).join('');
 
@@ -2184,7 +2225,7 @@ function renderLog() {
 function renderRecentLogs() {
   const ds=D();const lc=DC().logConfig;
   if(!ds.logData?.length) return '<div class="hint" style="padding:14px">오늘 기록 없음</div>';
-  const today=new Date().toISOString().slice(0,10);
+  const today=kstToday();
   const todayLogs=ds.logData.filter(l=>l.datetime.slice(0,10)===today).reverse();
   if(!todayLogs.length) return '<div class="hint" style="padding:14px">오늘 기록 없음</div>';
   return `<div class="card"><div class="card-title">오늘 (${todayLogs.length}건)</div>`+
@@ -2962,6 +3003,15 @@ function showToast(msg,dur=2800) {
   clearTimeout(_toastTimer);_toastTimer=setTimeout(()=>el.classList.remove('show'),dur);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// KST DATE UTILS — 모든 날짜를 한국 시간 기준으로 통일
+// ═══════════════════════════════════════════════════════════════
+function kstNow() { return new Date(Date.now() + 9*3600000); }
+function kstToday() { return kstNow().toISOString().slice(0,10); }
+function kstTime() { return kstNow().toISOString().slice(11,16); }
+function kstMonth() { return kstNow().toISOString().slice(0,7); }
+function kstDaysAgo(n) { return new Date(kstNow().getTime() - n*86400000).toISOString().slice(0,10); }
+
 function esc(s) {
   if(!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -3487,6 +3537,69 @@ saveMaster = async function() {
 // ═══════════════════════════════════════════════════════════════
 // PWA SERVICE WORKER REGISTRATION
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// DRUG NAME BILINGUAL MAPPING (한국어↔영어)
+// ═══════════════════════════════════════════════════════════════
+const _DRUG_NAMES = {
+  '타이레놀':'Acetaminophen','아세트아미노펜':'Acetaminophen','AAP':'Acetaminophen',
+  '이부프로펜':'Ibuprofen','부루펜':'Ibuprofen','애드빌':'Ibuprofen',
+  '나프록센':'Naproxen','낙센':'Naproxen',
+  '아스피린':'Aspirin',
+  '록소프로펜':'Loxoprofen','록소닌':'Loxoprofen',
+  '셀레콕시브':'Celecoxib','셀레브렉스':'Celecoxib',
+  '수마트립탄':'Sumatriptan','이미그란':'Sumatriptan',
+  '리자트립탄':'Rizatriptan','맥살트':'Rizatriptan',
+  '졸미트립탄':'Zolmitriptan',
+  '프로프라놀롤':'Propranolol','인데랄':'Propranolol',
+  '아테놀롤':'Atenolol','테놀민':'Atenolol',
+  '토피라메이트':'Topiramate','토파맥스':'Topiramate',
+  '발프로산':'Valproate','데파코트':'Valproate','데파킨':'Valproate',
+  '가바펜틴':'Gabapentin','뉴론틴':'Gabapentin',
+  '프레가발린':'Pregabalin','리리카':'Pregabalin',
+  '아미트립틸린':'Amitriptyline','에트라빌':'Amitriptyline',
+  '에스시탈로프람':'Escitalopram','렉사프로':'Escitalopram',
+  '설트랄린':'Sertraline','졸로프트':'Sertraline',
+  '플루옥세틴':'Fluoxetine','프로작':'Fluoxetine',
+  '벤라팍신':'Venlafaxine','이팩사':'Venlafaxine',
+  '데스벤라팍신':'Desvenlafaxine','프리스틱':'Desvenlafaxine',
+  '둘록세틴':'Duloxetine','심발타':'Duloxetine',
+  '부프로피온':'Bupropion','웰부트린':'Bupropion',
+  '미르타자핀':'Mirtazapine','레메론':'Mirtazapine',
+  '트라조돈':'Trazodone',
+  '리튬':'Lithium','리시움':'Lithium',
+  '퀘티아핀':'Quetiapine','세로퀄':'Quetiapine',
+  '아리피프라졸':'Aripiprazole','아빌리파이':'Aripiprazole',
+  '올란자핀':'Olanzapine','자이프렉사':'Olanzapine',
+  '리스페리돈':'Risperidone','리스페달':'Risperidone',
+  '아토목세틴':'Atomoxetine','스트라테라':'Atomoxetine',
+  '메틸페니데이트':'Methylphenidate','콘서타':'Concerta',
+  '암로디핀':'Amlodipine','노바스크':'Amlodipine',
+  '로사르탄':'Losartan','코자':'Losartan',
+  '칸데사르탄':'Candesartan','아타칸드':'Candesartan',
+  '메트포르민':'Metformin','글루코파지':'Metformin',
+  '페북소스타트':'Febuxostat','페브릭':'Febuxostat',
+  '콜히친':'Colchicine',
+  '오메프라졸':'Omeprazole','로섹':'Omeprazole',
+  '판토프라졸':'Pantoprazole','판토록':'Pantoprazole',
+  '세티리진':'Cetirizine','지르텍':'Cetirizine',
+  '몬테루카스트':'Montelukast','싱귤레어':'Montelukast',
+  '메토클로프라미드':'Metoclopramide','맥페란':'Metoclopramide',
+  '하이드록시진':'Hydroxyzine','유시락스':'Hydroxyzine',
+  '졸피뎀':'Zolpidem','스틸녹스':'Zolpidem',
+};
+
+// Expand autocomplete to include both names
+function expandDrugSearch(query) {
+  const q=query.toLowerCase();
+  const extra=[];
+  Object.entries(_DRUG_NAMES).forEach(([kr,en])=>{
+    if(kr.toLowerCase().includes(q)||en.toLowerCase().includes(q)) {
+      extra.push(kr,en);
+    }
+  });
+  return [...new Set(extra)];
+}
+
 // DISEASE DB + CONDITION-MED MAPPING (ICD-10 based)
 // ═══════════════════════════════════════════════════════════════
 const _AC_DISEASES = [
@@ -3698,8 +3811,9 @@ function setupAutocomplete(inputId, list, useAPI=false) {
     input.addEventListener('input', () => {
       const q = input.value.toLowerCase().trim();
       if (q.length < 1) { dl.innerHTML = ''; return; }
-      // Local matches first
-      const localMatches = list.filter(item => item.toLowerCase().includes(q)).slice(0, 8);
+      // Local matches + bilingual drug names
+      const bilingualHits = useAPI ? expandDrugSearch(q) : [];
+      const localMatches = [...new Set([...list.filter(item => item.toLowerCase().includes(q)), ...bilingualHits])].slice(0, 10);
       dl.innerHTML = localMatches.map(m => `<option value="${m}">`).join('');
       // API search for meds (debounced)
       if (useAPI && q.length >= 2) {
@@ -3734,6 +3848,201 @@ renderView = function(view) {
     }, 50);
   }
 };
+
+// ═══════════════════════════════════════════════════════════════
+// PDF REPORT EXPORT
+// ═══════════════════════════════════════════════════════════════
+function exportPDF() {
+  const dc=DC(); const ds=D(); const m=DM();
+  if(!m){showToast('데이터 없음');return;}
+  const logs=ds.logData||[];
+  const sessions=m.sessions||[];
+  const conditions=m.conditions||[];
+  const lc=dc.logConfig;
+
+  // Build report HTML
+  let html=`<html><head><meta charset="utf-8"><title>${dc.user} ${dc.label} 리포트</title>
+  <style>body{font-family:'맑은 고딕',sans-serif;font-size:11px;padding:20px;color:#333}
+  h1{font-size:18px;border-bottom:2px solid #2c5f8a;padding-bottom:6px;color:#2c5f8a}
+  h2{font-size:14px;color:#555;margin-top:16px}h3{font-size:12px;color:#777}
+  table{width:100%;border-collapse:collapse;margin:8px 0}th,td{border:1px solid #ddd;padding:4px 8px;text-align:left;font-size:10px}
+  th{background:#f5f5f5}.tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:9px;margin:1px}
+  .nrs{font-weight:bold}.footer{margin-top:20px;font-size:9px;color:#999;text-align:center}</style></head><body>`;
+
+  html+=`<h1>${dc.icon} ${dc.user} · ${dc.label} — 의료 리포트</h1>`;
+  html+=`<p>생성일: ${kstToday()} | 기간: 최근 30일</p>`;
+
+  // Conditions
+  if(conditions.length) {
+    html+=`<h2>등록 질환</h2><table><tr><th>질환</th><th>상태</th><th>투약</th></tr>`;
+    conditions.forEach(c=>{
+      const statusL={active:'치료 중',remission:'관해',resolved:'완치','self-stopped':'자의 중단'};
+      html+=`<tr><td>${c.name}</td><td>${statusL[c.status]||c.status}</td><td>${c.medsList?.join(', ')||c.medications||'-'}</td></tr>`;
+    });
+    html+=`</table>`;
+  }
+
+  // Log summary
+  const last30=logs.filter(l=>(Date.now()-new Date(l.datetime))<=30*86400000);
+  if(last30.length) {
+    html+=`<h2>증상 기록 (${last30.length}건)</h2><table><tr><th>날짜</th><th>시간</th>`;
+    html+=lc.moodMode?'<th>기분</th>':'<th>NRS</th>';
+    html+=`<th>증상</th><th>투약</th><th>메모</th></tr>`;
+    last30.forEach(l=>{
+      html+=`<tr><td>${l.datetime.slice(0,10)}</td><td>${l.datetime.slice(11,16)}</td>`;
+      html+=lc.moodMode?`<td>${l.mood||'-'}</td>`:`<td>${l.nrs>=0?l.nrs:'-'}</td>`;
+      html+=`<td>${(l.symptoms||[]).join(', ')||'-'}</td><td>${(l.meds||[]).join(', ')||'-'}</td><td>${l.memo||'-'}</td></tr>`;
+    });
+    html+=`</table>`;
+  }
+
+  // Recent sessions
+  const recentSess=sessions.slice(0,5);
+  if(recentSess.length) {
+    html+=`<h2>최근 세션 요약</h2>`;
+    recentSess.forEach(s=>{
+      html+=`<h3>${s.date} — ${(s.question||'').substring(0,80)}</h3>`;
+      if(s.summary) html+=`<p>${s.summary.session_summary||''}</p><p><strong>권고:</strong> ${s.summary.final_recommendation||''}</p>`;
+    });
+  }
+
+  html+=`<div class="footer">※ 이 리포트는 AI 협진 시스템에서 자동 생성되었습니다. 의료적 결정은 반드시 전문의와 상담하세요.<br>Orangi Health AI v8.3 | ${kstToday()}</div>`;
+  html+=`</body></html>`;
+
+  const w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>{w.print();},500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NRS CALENDAR HEATMAP (stats view enhancement)
+// ═══════════════════════════════════════════════════════════════
+function renderCalendarHeatmap(logs,lc) {
+  if(!logs.length) return '';
+  const byDate={};
+  logs.forEach(l=>{
+    const d=l.datetime.slice(0,10);
+    if(!byDate[d]) byDate[d]={nrs:[],count:0};
+    byDate[d].count++;
+    if(l.nrs>=0) byDate[d].nrs.push(l.nrs);
+  });
+
+  // Last 90 days
+  const cells=[];
+  for(let i=89;i>=0;i--){
+    const d=kstDaysAgo(i);
+    const data=byDate[d];
+    let color='var(--bd)';let title=d+': 기록없음';
+    if(data?.nrs?.length) {
+      const avg=data.nrs.reduce((a,b)=>a+b,0)/data.nrs.length;
+      color=avg<=2?'#2d8a5a':avg<=4?'#4ade80':avg<=6?'#fbbf24':avg<=8?'#f97316':'#ef4444';
+      title=`${d}: NRS ${avg.toFixed(1)} (${data.count}건)`;
+    } else if(data?.count) {
+      color='#93c5fd'; title=`${d}: ${data.count}건 (NRS 미기록)`;
+    }
+    cells.push(`<div style="width:10px;height:10px;border-radius:2px;background:${color}" title="${title}"></div>`);
+  }
+
+  return `<div class="card">
+    <div class="card-title">📅 90일 캘린더 히트맵</div>
+    <div style="display:flex;flex-wrap:wrap;gap:2px;padding:4px">${cells.join('')}</div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;font-size:.6rem;color:var(--mu)">
+      <span>⬜ 없음</span><span style="color:#2d8a5a">🟩 0-2</span><span style="color:#4ade80">🟢 3-4</span>
+      <span style="color:#fbbf24">🟡 5-6</span><span style="color:#f97316">🟠 7-8</span><span style="color:#ef4444">🔴 9-10</span>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TREATMENT CYCLE TRACKING
+// ═══════════════════════════════════════════════════════════════
+function getTreatmentHistory() {
+  const ds=D();
+  if(!ds.logData?.length) return [];
+  const txMap={};
+  ds.logData.forEach(l=>{
+    (l.treatments||[]).forEach(tx=>{
+      if(!txMap[tx]) txMap[tx]={name:tx,dates:[],count:0};
+      txMap[tx].dates.push(l.datetime.slice(0,10));
+      txMap[tx].count++;
+    });
+  });
+  return Object.values(txMap).filter(t=>t.count>=2).sort((a,b)=>b.count-a.count);
+}
+
+function renderTreatmentTracker() {
+  const txHistory=getTreatmentHistory();
+  if(!txHistory.length) return '';
+
+  const rows=txHistory.map(tx=>{
+    const sortedDates=tx.dates.sort();
+    const lastDate=sortedDates[sortedDates.length-1];
+    const daysSinceLast=Math.round((new Date(kstToday())-new Date(lastDate))/86400000);
+    // Calculate average interval
+    let avgInterval=0;
+    if(sortedDates.length>=2) {
+      const intervals=[];
+      for(let i=1;i<sortedDates.length;i++){
+        intervals.push(Math.round((new Date(sortedDates[i])-new Date(sortedDates[i-1]))/86400000));
+      }
+      avgInterval=Math.round(intervals.reduce((a,b)=>a+b,0)/intervals.length);
+    }
+    const nextEstimate=avgInterval>0?avgInterval-daysSinceLast:0;
+    const isOverdue=nextEstimate<0;
+
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)">
+      <div style="flex:1">
+        <div style="font-size:.82rem;font-weight:600">${esc(tx.name)}</div>
+        <div style="font-size:.68rem;color:var(--mu)">총 ${tx.count}회 | 마지막: ${lastDate} (${daysSinceLast}일 전)</div>
+      </div>
+      ${avgInterval>0?`<div style="text-align:right">
+        <div style="font-size:.72rem;color:var(--mu)">평균 주기: ${avgInterval}일</div>
+        <div style="font-size:.75rem;font-weight:600;color:${isOverdue?'var(--re)':'var(--gr)'}">
+          ${isOverdue?`⚠️ ${-nextEstimate}일 초과`:`다음 예상: ${nextEstimate}일 후`}
+        </div>
+      </div>`:''}</div>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="card-title">🔄 반복 시술 추적</div>
+    ${rows}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DATA MIGRATION (medications string → medsList array)
+// ═══════════════════════════════════════════════════════════════
+function migrateConditions() {
+  let migrated=0;
+  Object.values(S.domainState).forEach(ds=>{
+    if(!ds.master?.conditions) return;
+    ds.master.conditions.forEach(c=>{
+      if(!c.medsList && c.medications) {
+        c.medsList=c.medications.split(',').map(s=>s.trim()).filter(Boolean);
+        migrated++;
+      }
+    });
+  });
+  if(migrated) showToast(`📦 ${migrated}건 약물 데이터 마이그레이션 완료`);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DAILY LOG REMINDER (check on load)
+// ═══════════════════════════════════════════════════════════════
+function checkDailyReminder() {
+  const ds=D(); if(!ds.logData?.length) return;
+  const today=kstToday();
+  const hasToday=ds.logData.some(l=>l.datetime.slice(0,10)===today);
+  if(!hasToday) {
+    const lastLog=ds.logData[ds.logData.length-1];
+    const lastDate=lastLog?.datetime?.slice(0,10)||'';
+    const daysSince=lastDate?Math.round((new Date(today)-new Date(lastDate))/86400000):0;
+    if(daysSince>=1) {
+      setTimeout(()=>showToast(`📝 오늘 아직 기록이 없어요 (마지막: ${daysSince}일 전)`,4000),2000);
+    }
+  }
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
