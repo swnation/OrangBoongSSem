@@ -2162,7 +2162,8 @@ function renderLog() {
         <button onclick="addCustomChip('syms')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
       </div>
     </div>`:''}
-    ${lc.meds?.length||customMeds.length?`<div class="log-section-title">투약 <button onclick="openChipManager('meds')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div><div class="log-chips">${allMeds.map(s=>`<div class="log-chip" data-group="med" data-val="${s}" onclick="toggleChip(this,'sel-med')">${s}</div>`).join('')}
+    ${renderConditionMedSelector()}
+    ${lc.meds?.length||customMeds.length?`<div class="log-section-title">투약 (일반) <button onclick="openChipManager('meds')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div><div class="log-chips">${allMeds.map(s=>`<div class="log-chip" data-group="med" data-val="${s}" onclick="toggleChip(this,'sel-med')">${s}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="med-other" placeholder="직접 입력" style="width:100px">
         <button onclick="addCustomChip('meds')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
@@ -2409,10 +2410,58 @@ function _restoreDefaultChip(group, val) {
   renderView('log');
 }
 
+function _saveLogFormState() {
+  const state={};
+  state.date=document.getElementById('log-date')?.value||'';
+  state.time=document.getElementById('log-time')?.value||'';
+  state.timeUnknown=document.getElementById('log-time-unknown')?.checked||false;
+  state.nrs=document.getElementById('log-nrs')?.value||'5';
+  state.skipNrs=document.getElementById('log-skip-nrs')?.checked||false;
+  state.memo=document.getElementById('log-memo')?.value||'';
+  state.editIdx=document.getElementById('log-edit-idx')?.value||'-1';
+  state.treatment=document.getElementById('log-treatment')?.value||'';
+  // Selected chips
+  state.chips=[];
+  document.querySelectorAll('.log-chip.sel').forEach(c=>{
+    state.chips.push({side:c.dataset.side||'',group:c.dataset.group||'',val:c.dataset.val||'',cls:[...c.classList]});
+  });
+  // Mood
+  const moodSel=document.querySelector('#mood-chips .log-chip.sel');
+  state.mood=moodSel?{val:moodSel.dataset.val,level:moodSel.dataset.level}:null;
+  return state;
+}
+
+function _restoreLogFormState(state) {
+  if(!state) return;
+  setTimeout(()=>{
+    const d=document.getElementById('log-date');if(d&&state.date)d.value=state.date;
+    const t=document.getElementById('log-time');if(t&&state.time)t.value=state.time;
+    const tu=document.getElementById('log-time-unknown');if(tu){tu.checked=state.timeUnknown;if(state.timeUnknown&&t){t.disabled=true;t.style.opacity='.3';}}
+    const nrs=document.getElementById('log-nrs');const nrsV=document.getElementById('log-nrs-val');
+    if(nrs){nrs.value=state.nrs;}if(nrsV){nrsV.textContent=state.nrs;}
+    const skip=document.getElementById('log-skip-nrs');if(skip&&state.skipNrs){skip.checked=true;toggleNrsSkip(true);}
+    const memo=document.getElementById('log-memo');if(memo)memo.value=state.memo;
+    const editIdx=document.getElementById('log-edit-idx');if(editIdx)editIdx.value=state.editIdx;
+    const tx=document.getElementById('log-treatment');if(tx)tx.value=state.treatment;
+    // Restore chip selections
+    state.chips.forEach(ch=>{
+      const sel=ch.side?`[data-side="${ch.side}"][data-val="${ch.val}"]`:ch.group?`[data-group="${ch.group}"][data-val="${ch.val}"]`:'';
+      if(!sel)return;
+      const el=document.querySelector('.log-chip'+sel);
+      if(el) ch.cls.filter(c=>c.startsWith('sel')||c==='sel').forEach(c=>el.classList.add(c));
+    });
+    // Restore mood
+    if(state.mood){
+      document.querySelectorAll('#mood-chips .log-chip').forEach(c=>{
+        if(c.dataset.val===state.mood.val){c.classList.add('sel','sel-sym');c.dataset.level=state.mood.level;}
+      });
+    }
+  },10);
+}
+
 function addCustomChip(type) {
   const inputMap={meds:'med-other',syms:'sym-other',tx:'tx-other'};
   let inputId=inputMap[type];
-  // tx with free-text input uses log-treatment as source
   if(type==='tx'&&!document.getElementById(inputId)){inputId='log-treatment';}
   const el=document.getElementById(inputId);
   const val=(el?.value||'').trim();
@@ -2421,7 +2470,9 @@ function addCustomChip(type) {
   const list=JSON.parse(localStorage.getItem(key)||'[]');
   if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
   el.value='';
+  const saved=_saveLogFormState();
   renderView('log');
+  _restoreLogFormState(saved);
   showToast(`✅ "${val}" 고정됨`);
 }
 
@@ -2433,7 +2484,9 @@ function addCustomSite(side) {
   const list=JSON.parse(localStorage.getItem(key)||'[]');
   if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
   el.value='';
+  const saved=_saveLogFormState();
   renderView('log');
+  _restoreLogFormState(saved);
   showToast(`✅ "${val}" 고정됨`);
 }
 
@@ -3024,52 +3077,122 @@ function getFileContext() {
 // {id, name, diagnosisDate, status:'active'|'remission'|'resolved'|'self-stopped',
 //  medications:'텍스트', drugResponse:'텍스트', course:'텍스트', notes:'텍스트'}
 
+function renderConditionMedSelector() {
+  const condMeds=getConditionMeds();
+  if(!condMeds.length) return '';
+  return `<div class="log-section-title">질환별 투약</div>
+    <div style="margin-bottom:8px">
+    ${condMeds.map(cm=>`
+      <div style="margin-bottom:6px;border:1px solid var(--bd);border-radius:8px;padding:8px 10px;background:var(--sf)">
+        <div style="font-size:.72rem;font-weight:600;color:var(--ink);margin-bottom:4px">${cm.icon} ${esc(cm.condition)}</div>
+        <div class="log-chips" style="gap:4px">${cm.meds.map(m=>
+          `<div class="log-chip" data-group="med" data-val="${esc(m)}" onclick="toggleChip(this,'sel-med')" style="padding:3px 10px;font-size:.75rem">${esc(m)}</div>`
+        ).join('')}</div>
+      </div>`).join('')}
+    </div>`;
+}
+
 function getConditions() { return DM()?.conditions || []; }
 
+// Get ALL conditions for current user across all domains
+function getAllUserConditions() {
+  const currentUser=DC().user;
+  const result=[];
+  Object.entries(S.domainState).forEach(([domainId,ds])=>{
+    const dd=DOMAINS[domainId];
+    if(!dd||dd.user!==currentUser||!ds.master?.conditions) return;
+    ds.master.conditions.forEach((c,i)=>{
+      result.push({...c,_domainId:domainId,_domainLabel:dd.label,_domainIcon:dd.icon,_domainColor:dd.color,_idx:i});
+    });
+  });
+  return result;
+}
+
+// Get meds from all user conditions (for log form)
+function getConditionMeds() {
+  const all=getAllUserConditions().filter(c=>c.status==='active'||c.status==='remission');
+  const result=[];
+  all.forEach(c=>{
+    if(!c.medsList?.length) return;
+    result.push({condition:c.name,domain:c._domainLabel,icon:c._domainIcon,meds:c.medsList});
+  });
+  return result;
+}
+
 function renderMedsView() {
-  const m = DM(); if (!m) return '<div class="hint">데이터 로딩 중...</div>';
-  if (!m.conditions) m.conditions = [];
-  const dc = DC();
-  const conditions = m.conditions;
+  const currentUser=DC().user;
+  const allConditions=getAllUserConditions();
+  const statusLabels={active:'치료 중',remission:'관해',resolved:'완치',['self-stopped']:'자의 중단'};
+  const statusClass={active:'active',remission:'remission',resolved:'resolved',['self-stopped']:'self-stopped'};
 
-  const statusLabels = {active:'치료 중',remission:'관해',resolved:'완치',['self-stopped']:'자의 중단'};
-  const statusClass = {active:'active',remission:'remission',resolved:'resolved',['self-stopped']:'self-stopped'};
+  // Group by domain, current domain first
+  const grouped={};
+  allConditions.forEach(c=>{
+    if(!grouped[c._domainId]) grouped[c._domainId]={icon:c._domainIcon,label:c._domainLabel,color:c._domainColor,items:[]};
+    grouped[c._domainId].items.push(c);
+  });
+  const domainOrder=Object.keys(grouped).sort((a,b)=>a===S.currentDomain?-1:b===S.currentDomain?1:0);
 
-  const cards = conditions.map((c, i) => `
+  const renderCard=(c)=>`
     <div class="dx-card">
       <div class="dx-head">
         <span class="dx-name">${esc(c.name)}</span>
         <span class="dx-status ${statusClass[c.status]||'active'}">${statusLabels[c.status]||c.status}</span>
-        <button class="accum-del" onclick="editCondition(${i})" title="편집">✏️</button>
-        <button class="accum-del" onclick="deleteCondition(${i})" title="삭제">🗑</button>
+        <button class="accum-del" onclick="editConditionUnified('${c._domainId}',${c._idx})" title="편집">✏️</button>
+        <button class="accum-del" onclick="deleteConditionUnified('${c._domainId}',${c._idx})" title="삭제">🗑</button>
       </div>
       <div class="dx-body">
-        ${c.diagnosisDate ? `<strong>진단:</strong> ${esc(c.diagnosisDate)}<br>` : ''}
-        ${c.medications ? `<div class="dx-section"><div class="dx-section-title">현재 투약</div>${esc(c.medications)}</div>` : ''}
-        ${c.drugResponse ? `<div class="dx-section"><div class="dx-section-title">약물 반응</div>${esc(c.drugResponse)}</div>` : ''}
-        ${c.course ? `<div class="dx-section"><div class="dx-section-title">경과</div>${esc(c.course)}</div>` : ''}
-        ${c.notes ? `<div class="dx-section"><div class="dx-section-title">메모</div>${esc(c.notes)}</div>` : ''}
-        ${c.attachments?.length ? `<div class="dx-section"><div class="dx-section-title">첨부 파일</div>${c.attachments.map(f=>
-          `<span class="file-chip">${f.type?.startsWith('image/')?'🖼️':f.type?.includes('pdf')?'📄':'📃'} ${esc(f.name)}${f.webLink?` <a href="${f.webLink}" target="_blank" style="font-size:.65rem;color:var(--ac)">Drive 열기</a>`:''}</span>`
-        ).join(' ')}</div>` : ''}
+        ${c.diagnosisDate?`<strong>진단:</strong> ${esc(c.diagnosisDate)}<br>`:''}
+        ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">현재 투약</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${c.medsList.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`).join('')}</div></div>`:''}
+        ${c.medications&&!c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">현재 투약</div>${esc(c.medications)}</div>`:''}
+        ${c.drugResponse?`<div class="dx-section"><div class="dx-section-title">약물 반응</div>${esc(c.drugResponse)}</div>`:''}
+        ${c.course?`<div class="dx-section"><div class="dx-section-title">경과</div>${esc(c.course)}</div>`:''}
+        ${c.notes?`<div class="dx-section"><div class="dx-section-title">메모</div>${esc(c.notes)}</div>`:''}
       </div>
-    </div>`).join('');
+    </div>`;
+
+  const sections=domainOrder.map(domId=>{
+    const g=grouped[domId];
+    const isCurrent=domId===S.currentDomain;
+    return `<div style="margin-bottom:12px">
+      <button onclick="toggleCtxDomain('dx-g-${domId}')" style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;background:${isCurrent?g.color+'15':'var(--sf2)'};border:1.5px solid ${isCurrent?g.color:'var(--bd)'};border-radius:8px;cursor:pointer;font-family:var(--font);border-bottom-radius:${isCurrent?'0':'8px'}">
+        <span>${g.icon}</span>
+        <span style="font-size:.82rem;font-weight:600;color:${g.color}">${g.label}</span>
+        <span style="font-size:.68rem;color:var(--mu);margin-left:auto">${g.items.length}개</span>
+        <span style="font-size:.65rem;color:var(--mu)" id="dx-g-${domId}-arrow">${isCurrent?'▼':'▶'}</span>
+      </button>
+      <div id="dx-g-${domId}" style="display:${isCurrent?'block':'none'}">
+        ${g.items.map(c=>renderCard(c)).join('')}
+      </div>
+    </div>`;
+  }).join('');
 
   return `
     <div class="card">
-      <div class="card-title">📋 ${dc.user} · ${dc.label} — 질환 관리
+      <div class="card-title">📋 ${currentUser} — 통합 질환 관리
         <button class="btn-accum-add" style="margin-left:auto;font-size:.72rem" onclick="openConditionForm()">+ 질환 추가</button>
       </div>
       <p style="font-size:.78rem;color:var(--mu);margin-bottom:14px">
-        등록된 질환은 AI 세션 시 자동으로 컨텍스트에 포함됩니다.
+        ${currentUser}의 모든 도메인 질환을 통합 관리합니다. 등록된 질환은 AI 세션 시 자동으로 컨텍스트에 포함됩니다.
       </p>
-
       <div id="dx-form" style="display:none;margin-bottom:16px;padding:16px;background:var(--sf2);border-radius:10px;border:1.5px solid var(--bd)">
         <input type="hidden" id="dx-edit-idx" value="-1">
-        <div class="dx-form-group">
-          <div class="dx-form-label">질환명 *</div>
-          <input class="dx-form-input" id="dx-name" placeholder="예: 고혈압, 당뇨, 천식">
+        <input type="hidden" id="dx-edit-domain" value="">
+        <div style="display:flex;gap:10px">
+          <div class="dx-form-group" style="flex:2">
+            <div class="dx-form-label">질환명 * <span style="font-size:.6rem;color:var(--mu2)">(검색하면 자동완성)</span></div>
+            <input class="dx-form-input" id="dx-name" placeholder="예: 편두통, 고혈압, 당뇨" oninput="onDxNameInput(this.value)">
+          </div>
+          <div class="dx-form-group" style="flex:1">
+            <div class="dx-form-label">소속 도메인</div>
+            <select class="dx-form-input" id="dx-domain" style="cursor:pointer">
+              ${Object.entries(DOMAINS).filter(([,d])=>d.user===currentUser).map(([id,d])=>
+                `<option value="${id}" ${id===S.currentDomain?'selected':''}>${d.icon} ${d.label}</option>`).join('')}
+            </select>
+          </div>
         </div>
+        <div id="dx-suggest" style="display:none;margin:-8px 0 12px;max-height:120px;overflow-y:auto;border:1.5px solid var(--bd);border-radius:6px;background:var(--sf)"></div>
         <div style="display:flex;gap:10px">
           <div class="dx-form-group" style="flex:1">
             <div class="dx-form-label">진단 시기</div>
@@ -3078,16 +3201,22 @@ function renderMedsView() {
           <div class="dx-form-group" style="flex:1">
             <div class="dx-form-label">현재 상태</div>
             <select class="dx-form-input" id="dx-status" style="cursor:pointer">
-              <option value="active">치료 중</option>
-              <option value="remission">관해</option>
-              <option value="resolved">완치/종결</option>
-              <option value="self-stopped">자의 중단</option>
+              <option value="active">치료 중</option><option value="remission">관해</option>
+              <option value="resolved">완치/종결</option><option value="self-stopped">자의 중단</option>
             </select>
           </div>
         </div>
         <div class="dx-form-group">
-          <div class="dx-form-label">현재 투약 (약물명, 용량, 빈도)</div>
-          <textarea class="dx-form-ta" id="dx-meds" rows="2" placeholder="예: Amlodipine 5mg 1일 1회, Metformin 500mg 1일 2회"></textarea>
+          <div class="dx-form-label">투약 <span style="font-size:.6rem;color:var(--mu2)">(약품명 입력 후 +추가)</span></div>
+          <div id="dx-med-chips" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
+          <div id="dx-med-suggest" style="display:none;margin-bottom:6px;padding:4px;border:1px solid var(--bd);border-radius:6px;background:var(--sf)">
+            <div style="font-size:.62rem;color:var(--mu);margin-bottom:4px">💊 이 질환에 주로 사용되는 약</div>
+            <div id="dx-med-suggest-list" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <input class="dx-form-input" id="dx-med-input" placeholder="약품명 검색..." style="flex:1">
+            <button class="btn-accum-add" onclick="addDxMed()" style="padding:6px 12px;font-size:.75rem">+추가</button>
+          </div>
         </div>
         <div class="dx-form-group">
           <div class="dx-form-label">약물 반응 (효과, 부작용)</div>
@@ -3101,93 +3230,156 @@ function renderMedsView() {
           <div class="dx-form-label">메모</div>
           <textarea class="dx-form-ta" id="dx-notes" rows="1" placeholder="기타 참고사항"></textarea>
         </div>
-        <div class="dx-form-group">
-          <div class="dx-form-label">첨부 파일 (검사결과, 처방전 등)</div>
-          <div class="file-upload-area" onclick="document.getElementById('dx-file-input').click()">
-            <span style="font-size:1rem">📎</span>
-            <span class="file-upload-label">파일 첨부 (이미지, PDF, 문서)</span>
-            <input type="file" id="dx-file-input" multiple accept="image/*,.pdf,.doc,.docx,.txt" onchange="handleConditionFiles(this)">
-          </div>
-          <div id="dx-file-list" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div>
-        </div>
         <div style="display:flex;gap:8px">
           <button class="btn-accum-add" onclick="saveCondition()">💾 저장</button>
           <button class="btn-cancel" onclick="closeConditionForm()" style="font-size:.78rem">취소</button>
         </div>
       </div>
-
-      ${conditions.length ? cards : '<div class="hint" style="padding:14px">등록된 질환이 없습니다.<br>"+ 질환 추가"를 눌러 첫 질환을 등록하세요.</div>'}
+      ${allConditions.length?sections:'<div class="hint" style="padding:14px">등록된 질환이 없습니다.<br>"+ 질환 추가"를 눌러 첫 질환을 등록하세요.</div>'}
     </div>`;
 }
 
-function openConditionForm(idx) {
-  document.getElementById('dx-form').style.display = 'block';
-  document.getElementById('dx-edit-idx').value = idx !== undefined ? idx : -1;
-  _conditionFiles = []; // reset
-  const fileList = document.getElementById('dx-file-list');
-  if(fileList) fileList.innerHTML = '';
-  if (idx !== undefined) {
-    const c = getConditions()[idx];
-    if (!c) return;
-    document.getElementById('dx-name').value = c.name || '';
-    document.getElementById('dx-date').value = c.diagnosisDate || '';
-    document.getElementById('dx-status').value = c.status || 'active';
-    document.getElementById('dx-meds').value = c.medications || '';
-    document.getElementById('dx-response').value = c.drugResponse || '';
-    document.getElementById('dx-course').value = c.course || '';
-    document.getElementById('dx-notes').value = c.notes || '';
+let _dxMedsList=[]; // temp med list for form
+
+function onDxNameInput(val) {
+  const suggest=document.getElementById('dx-suggest');
+  if(!suggest||val.length<1){if(suggest)suggest.style.display='none';return;}
+  const q=val.toLowerCase();
+  const matches=_AC_DISEASES.filter(d=>d.toLowerCase().includes(q)).slice(0,8);
+  if(!matches.length){suggest.style.display='none';return;}
+  suggest.style.display='block';
+  suggest.innerHTML=matches.map(m=>`<div style="padding:6px 10px;cursor:pointer;font-size:.82rem;border-bottom:1px solid var(--bd)" onmouseover="this.style.background='var(--sf2)'" onmouseout="this.style.background=''" onclick="selectDxName('${esc(m)}')">${esc(m)}</div>`).join('');
+}
+
+function selectDxName(name) {
+  document.getElementById('dx-name').value=name;
+  document.getElementById('dx-suggest').style.display='none';
+  // Show related meds suggestion
+  showDxMedSuggestions(name);
+}
+
+function showDxMedSuggestions(diseaseName) {
+  const suggestArea=document.getElementById('dx-med-suggest');
+  const suggestList=document.getElementById('dx-med-suggest-list');
+  if(!suggestArea||!suggestList) return;
+  // Find matching disease in _DISEASE_MEDS (partial match)
+  let meds=[];
+  Object.entries(_DISEASE_MEDS).forEach(([k,v])=>{
+    if(diseaseName.includes(k)||k.includes(diseaseName)) meds=[...meds,...v];
+  });
+  meds=[...new Set(meds)];
+  if(!meds.length){suggestArea.style.display='none';return;}
+  suggestArea.style.display='block';
+  suggestList.innerHTML=meds.map(m=>`<span class="log-chip" style="padding:3px 10px;font-size:.75rem;cursor:pointer" onclick="addDxMedFromSuggest('${esc(m)}')">${esc(m)}</span>`).join('');
+}
+
+function addDxMedFromSuggest(med) {
+  if(!_dxMedsList.includes(med)){_dxMedsList.push(med);renderDxMedChips();}
+}
+
+function addDxMed() {
+  const input=document.getElementById('dx-med-input');
+  const val=(input?.value||'').trim();
+  if(!val) return;
+  if(!_dxMedsList.includes(val)){_dxMedsList.push(val);}
+  input.value='';
+  renderDxMedChips();
+}
+
+function removeDxMed(idx) {
+  _dxMedsList.splice(idx,1);
+  renderDxMedChips();
+}
+
+function renderDxMedChips() {
+  const el=document.getElementById('dx-med-chips');
+  if(!el) return;
+  el.innerHTML=_dxMedsList.map((m,i)=>`<span class="file-chip">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span></span>`).join('');
+}
+
+function openConditionForm(domainId, idx) {
+  document.getElementById('dx-form').style.display='block';
+  document.getElementById('dx-edit-idx').value=idx!==undefined?idx:-1;
+  document.getElementById('dx-edit-domain').value=domainId||S.currentDomain;
+  if(domainId) document.getElementById('dx-domain').value=domainId;
+  _conditionFiles=[];_dxMedsList=[];
+  const fileList=document.getElementById('dx-file-list');if(fileList)fileList.innerHTML='';
+  if(idx!==undefined && domainId) {
+    const ds=S.domainState[domainId];
+    const c=ds?.master?.conditions?.[idx];
+    if(!c) return;
+    document.getElementById('dx-name').value=c.name||'';
+    document.getElementById('dx-date').value=c.diagnosisDate||'';
+    document.getElementById('dx-status').value=c.status||'active';
+    document.getElementById('dx-response').value=c.drugResponse||'';
+    document.getElementById('dx-course').value=c.course||'';
+    document.getElementById('dx-notes').value=c.notes||'';
+    _dxMedsList=c.medsList?[...c.medsList]:(c.medications?c.medications.split(',').map(s=>s.trim()).filter(Boolean):[]);
+    renderDxMedChips();
+    showDxMedSuggestions(c.name);
   } else {
-    ['dx-name','dx-date','dx-meds','dx-response','dx-course','dx-notes'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
-    document.getElementById('dx-status').value = 'active';
+    ['dx-name','dx-date','dx-response','dx-course','dx-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('dx-status').value='active';
+    renderDxMedChips();
+    document.getElementById('dx-med-suggest').style.display='none';
   }
+  // Setup med input autocomplete
+  setTimeout(()=>setupAutocomplete('dx-med-input',_AC_MEDS,true),50);
+  document.getElementById('dx-form').scrollIntoView({behavior:'smooth'});
 }
 
-function closeConditionForm() {
-  document.getElementById('dx-form').style.display = 'none';
-}
-
-function editCondition(idx) { openConditionForm(idx); }
+function closeConditionForm(){document.getElementById('dx-form').style.display='none';}
+function editConditionUnified(domainId,idx){openConditionForm(domainId,idx);}
 
 async function saveCondition() {
-  const name = document.getElementById('dx-name').value.trim();
-  if (!name) { showToast('질환명을 입력하세요.'); return; }
-  const m = DM();
-  if (!m.conditions) m.conditions = [];
+  const name=document.getElementById('dx-name').value.trim();
+  if(!name){showToast('질환명을 입력하세요.');return;}
+  const targetDomain=document.getElementById('dx-domain').value||S.currentDomain;
+  const ds=S.domainState[targetDomain];
+  if(!ds?.master) {showToast('해당 도메인 데이터가 로드되지 않았습니다.');return;}
+  if(!ds.master.conditions) ds.master.conditions=[];
 
-  const data = {
-    id: Date.now(),
-    name,
-    diagnosisDate: document.getElementById('dx-date').value.trim(),
-    status: document.getElementById('dx-status').value,
-    medications: document.getElementById('dx-meds').value.trim(),
-    drugResponse: document.getElementById('dx-response').value.trim(),
-    course: document.getElementById('dx-course').value.trim(),
-    notes: document.getElementById('dx-notes').value.trim(),
-    attachments: _conditionFiles.map(f=>({name:f.name,type:f.type,driveId:f.driveId,webLink:f.webLink})),
+  const data={
+    id:Date.now(), name,
+    diagnosisDate:document.getElementById('dx-date').value.trim(),
+    status:document.getElementById('dx-status').value,
+    medsList:[..._dxMedsList],
+    medications:_dxMedsList.join(', '),
+    drugResponse:document.getElementById('dx-response').value.trim(),
+    course:document.getElementById('dx-course').value.trim(),
+    notes:document.getElementById('dx-notes').value.trim(),
+    attachments:_conditionFiles.map(f=>({name:f.name,type:f.type,driveId:f.driveId,webLink:f.webLink})),
   };
 
-  const editIdx = parseInt(document.getElementById('dx-edit-idx').value);
-  if (editIdx >= 0 && m.conditions[editIdx]) {
-    data.id = m.conditions[editIdx].id; // preserve ID
-    m.conditions[editIdx] = data;
+  const editDomain=document.getElementById('dx-edit-domain').value;
+  const editIdx=parseInt(document.getElementById('dx-edit-idx').value);
+  if(editIdx>=0 && editDomain && S.domainState[editDomain]?.master?.conditions?.[editIdx]) {
+    data.id=S.domainState[editDomain].master.conditions[editIdx].id;
+    if(editDomain===targetDomain) {
+      ds.master.conditions[editIdx]=data;
+    } else {
+      // Moved to different domain
+      S.domainState[editDomain].master.conditions.splice(editIdx,1);
+      ds.master.conditions.push(data);
+      try{await driveUpdate(S.domainState[editDomain].masterFileId,S.domainState[editDomain].master);}catch(e){}
+    }
   } else {
-    m.conditions.push(data);
+    ds.master.conditions.push(data);
   }
 
-  await saveMaster();
-  _conditionFiles = []; // clear after save
+  if(ds.masterFileId){try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){}}
+  _conditionFiles=[];_dxMedsList=[];
   closeConditionForm();
   renderView('meds');
   showToast('✅ 질환 정보 저장됨');
 }
 
-async function deleteCondition(idx) {
-  if (!confirm('이 질환 기록을 삭제하시겠습니까?')) return;
-  DM().conditions.splice(idx, 1);
-  await saveMaster();
+async function deleteConditionUnified(domainId,idx) {
+  if(!confirm('이 질환 기록을 삭제하시겠습니까?')) return;
+  const ds=S.domainState[domainId];
+  if(!ds?.master?.conditions) return;
+  ds.master.conditions.splice(idx,1);
+  if(ds.masterFileId){try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){}}
   renderView('meds');
   showToast('🗑 삭제됨');
 }
@@ -3281,6 +3473,73 @@ saveMaster = async function() {
 // ═══════════════════════════════════════════════════════════════
 // PWA SERVICE WORKER REGISTRATION
 // ═══════════════════════════════════════════════════════════════
+// DISEASE DB + CONDITION-MED MAPPING (ICD-10 based)
+// ═══════════════════════════════════════════════════════════════
+const _AC_DISEASES = [
+  // 신경
+  '편두통','만성편두통','난치성만성편두통','긴장형두통','군발두통','삼차신경통',
+  '대후두신경통','약물과용두통','외상후두통','경추성두통',
+  '뇌전증','파킨슨병','다발성경화증','길랭-바레증후군','말초신경병증',
+  // 정신
+  '주요우울장애(MDD)','기분부전장애','양극성장애','산후우울증',
+  '범불안장애(GAD)','공황장애','사회불안장애','강박장애(OCD)','PTSD',
+  'ADHD','불면증','수면무호흡증','하지불안증후군',
+  // 심혈관
+  '고혈압','저혈압','기립성저혈압','관상동맥질환','심부전','심방세동',
+  '승모판탈출증','대동맥판막질환','심근병증',
+  // 내분비·대사
+  '제1형당뇨','제2형당뇨','갑상선기능저하증','갑상선기능항진증',
+  '이상지질혈증','고요산혈증','통풍','쿠싱증후군','부신기능부전',
+  // 소화기
+  '위식도역류질환(GERD)','기능성소화불량','과민성장증후군(IBS)','크론병','궤양성대장염',
+  '위궤양','십이지장궤양','지방간','간경변','담석증','췌장염',
+  // 호흡기
+  '천식','만성폐쇄성폐질환(COPD)','알레르기비염','만성부비동염','폐렴','기관지확장증',
+  // 근골격
+  '류마티스관절염','골관절염','강직성척추염','섬유근통','골다공증',
+  '추간판탈출증','척추관협착증','회전근개파열','오십견','손목터널증후군',
+  // 비뇨생식
+  '과민성방광','요로감염','전립선비대증','다낭성난소증후군(PCOS)',
+  '자궁내막증','자궁근종','월경전증후군(PMS)',
+  // 피부
+  '아토피피부염','건선','두드러기','탈모(원형)','여드름','대상포진',
+  // 안과·이비인후
+  '녹내장','백내장','안구건조증','메니에르병','이석증(BPPV)','돌발성난청',
+  // 감염
+  '결핵','B형간염','C형간염','HIV',
+  // 자가면역
+  '전신성홍반루푸스(SLE)','쇼그렌증후군','베체트병','혈관염',
+  // 혈액·종양
+  '빈혈','철결핍빈혈','혈소판감소증','림프종','백혈병',
+  // 기타
+  '만성피로증후군','Vasovagal syncope','레이노현상','섬유근통',
+];
+
+// 질환 → 관련 약품 매핑 (자주 사용되는 약)
+const _DISEASE_MEDS = {
+  '편두통':['AAP','Loxoprofen','Sumatriptan','Rizatriptan','Propranolol','Topiramate','Amitriptyline','Valproate','Botox','CGRP mAb'],
+  '만성편두통':['Botox','Topiramate','Amitriptyline','CGRP mAb','Propranolol','Venlafaxine','Valproate'],
+  '난치성만성편두통':['Botox','CGRP mAb','Topiramate','GON block','Propranolol','Venlafaxine'],
+  '주요우울장애(MDD)':['Escitalopram','Sertraline','Venlafaxine','Duloxetine','Bupropion','Mirtazapine','Desvenlafaxine'],
+  '범불안장애(GAD)':['Escitalopram','Sertraline','Venlafaxine','Duloxetine','Buspirone','Hydroxyzine'],
+  '강박장애(OCD)':['Escitalopram','Sertraline','Fluoxetine','Fluvoxamine','Clomipramine'],
+  '공황장애':['Escitalopram','Sertraline','Paroxetine','Alprazolam','Clonazepam'],
+  'ADHD':['Methylphenidate','Concerta','Atomoxetine','Bupropion'],
+  '양극성장애':['Lithium','Valproate','Lamotrigine','Quetiapine','Aripiprazole','Olanzapine'],
+  '불면증':['Zolpidem','Trazodone','Melatonin','Hydroxyzine','Quetiapine'],
+  '고혈압':['Amlodipine','Losartan','Candesartan','Lisinopril','Propranolol','Atenolol','Hydrochlorothiazide'],
+  '이상지질혈증':['Atorvastatin','Rosuvastatin','Ezetimibe','Fenofibrate'],
+  '통풍':['Febuxostat','Allopurinol','Colchicine','Naproxen'],
+  '위식도역류질환(GERD)':['Omeprazole','Pantoprazole','Esomeprazole','Famotidine','Ranitidine'],
+  '천식':['Salbutamol','Fluticasone','Budesonide','Montelukast','Formoterol'],
+  '아토피피부염':['보습제','Hydrocortisone','Tacrolimus','Pimecrolimus','Cetirizine'],
+  '알레르기비염':['Cetirizine','Fexofenadine','Loratadine','Montelukast','Fluticasone 비강'],
+  '제2형당뇨':['Metformin','Glimepiride','Sitagliptin','Empagliflozin','Insulin'],
+  '골관절염':['AAP','Loxoprofen','Naproxen','Celecoxib','관절강내주사'],
+  '골다공증':['Alendronate','Risedronate','Denosumab','칼슘','비타민D'],
+  '류마티스관절염':['Methotrexate','Hydroxychloroquine','Sulfasalazine','Leflunomide','Adalimumab'],
+};
+
 // ═══════════════════════════════════════════════════════════════
 // AUTOCOMPLETE DATABASE (common Korean meds/symptoms/treatments)
 // ═══════════════════════════════════════════════════════════════
