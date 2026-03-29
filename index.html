@@ -3908,16 +3908,57 @@ let _drugCache = {}; // cache recent searches
 async function searchDrugAPI(query) {
   if (query.length < 2) return [];
   if (_drugCache[query]) return _drugCache[query];
+
+  // Determine if query is English or Korean
+  const isEng = /^[a-zA-Z]/.test(query);
+  const results = [];
+
   try {
-    const url = `${_DRUG_API_URL}?serviceKey=${_DRUG_API_KEY}&item_name=${encodeURIComponent(query)}&type=json&numOfRows=8`;
-    const r = await fetch(url, {signal: AbortSignal.timeout(3000)});
-    if (!r.ok) return [];
-    const d = await r.json();
-    const items = d?.body?.items || [];
-    const names = [...new Set(items.map(i => i.ITEM_NAME).filter(Boolean))].slice(0, 8);
-    _drugCache[query] = names;
-    return names;
-  } catch(e) { return []; }
+    // Search by product name (한글)
+    const url1 = `${_DRUG_API_URL}?serviceKey=${_DRUG_API_KEY}&item_name=${encodeURIComponent(query)}&type=json&numOfRows=10`;
+    const r1 = await fetch(url1, {signal: AbortSignal.timeout(3000)});
+    if (r1.ok) {
+      const d1 = await r1.json();
+      (d1?.body?.items || []).forEach(item => {
+        if (item.ITEM_NAME) results.push(item.ITEM_NAME);
+        // Learn ingredient mapping dynamically
+        if (item.ITEM_NAME && item.MAIN_ITEM_INGR) {
+          const ingr = item.MAIN_ITEM_INGR.split(',')[0].trim();
+          if (ingr && !_DRUG_NAMES[item.ITEM_NAME.split('(')[0].trim()]) {
+            _DRUG_NAMES[item.ITEM_NAME.split('(')[0].trim()] = ingr;
+          }
+        }
+      });
+    }
+  } catch(e) {}
+
+  // If English query, also search by ingredient name via bilingual mapping
+  if (isEng) {
+    try {
+      // Find Korean product names matching this English ingredient
+      const mapped = [];
+      Object.entries(_DRUG_NAMES).forEach(([kr, en]) => {
+        if (en.toLowerCase().includes(query.toLowerCase())) mapped.push(kr);
+      });
+      // Search API with first Korean match to find more products
+      if (mapped.length && results.length < 5) {
+        const url2 = `${_DRUG_API_URL}?serviceKey=${_DRUG_API_KEY}&item_name=${encodeURIComponent(mapped[0])}&type=json&numOfRows=5`;
+        const r2 = await fetch(url2, {signal: AbortSignal.timeout(3000)});
+        if (r2.ok) {
+          const d2 = await r2.json();
+          (d2?.body?.items || []).forEach(item => {
+            if (item.ITEM_NAME) results.push(item.ITEM_NAME);
+          });
+        }
+      }
+      // Also add the English names directly
+      mapped.forEach(kr => results.push(kr));
+    } catch(e) {}
+  }
+
+  const unique = [...new Set(results)].slice(0, 12);
+  _drugCache[query] = unique;
+  return unique;
 }
 
 function setupAutocomplete(inputId, list, useAPI=false) {
@@ -3939,15 +3980,21 @@ function setupAutocomplete(inputId, list, useAPI=false) {
       // Local matches + bilingual drug names
       const bilingualHits = useAPI ? expandDrugSearch(q) : [];
       const localMatches = [...new Set([...list.filter(item => item.toLowerCase().includes(q)), ...bilingualHits])].slice(0, 10);
-      dl.innerHTML = localMatches.map(m => `<option value="${m}">`).join('');
+      dl.innerHTML = localMatches.map(m => {
+        const en=_DRUG_NAMES[m]; // show English name if available
+        return `<option value="${m}"${en?' label="'+en+'"':''}>`;
+      }).join('');
       // API search for meds (debounced)
       if (useAPI && q.length >= 2) {
         clearTimeout(_drugSearchTimer);
         _drugSearchTimer = setTimeout(async () => {
           const apiResults = await searchDrugAPI(q);
           if (apiResults.length) {
-            const combined = [...new Set([...localMatches, ...apiResults])].slice(0, 12);
-            dl.innerHTML = combined.map(m => `<option value="${m}">`).join('');
+            const combined = [...new Set([...localMatches, ...apiResults])].slice(0, 15);
+            dl.innerHTML = combined.map(m => {
+              const en=_DRUG_NAMES[m]||_DRUG_NAMES[m.split('(')[0].trim()];
+              return `<option value="${m}"${en?' label="'+en+'"':''}>`;
+            }).join('');
           }
         }, 300);
       }
