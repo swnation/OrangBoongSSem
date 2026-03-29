@@ -109,6 +109,18 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
   .log-tag-med{background:#2a1a0a;color:#fbbf24}
   .log-tag-tx{background:#0d2a1a;color:#4ade80}
 }
+/* Settings panel */
+.settings-panel{display:none;padding:16px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:10px;margin:16px}
+.settings-panel.show{display:block}
+.settings-label{font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px}
+.settings-input{width:100%;border:1.5px solid var(--bd);border-radius:8px;padding:8px 12px;font-family:var(--font);font-size:.8rem;outline:none;background:var(--sf);color:var(--ink)}
+.settings-input:focus{border-color:var(--ac)}
+.settings-note{font-size:.68rem;color:var(--mu2);margin-top:4px;line-height:1.5}
+.sync-status{font-size:.68rem;font-family:var(--font);padding:3px 8px;border-radius:4px;display:inline-block;margin-top:6px}
+.sync-ok{background:#f0fdf4;color:#15803d}
+.sync-fail{background:#fff0f0;color:#c03030}
+.sync-ing{background:#eff6ff;color:#1d4ed8}
+.btn-gear{background:none;border:none;font-size:1rem;cursor:pointer;padding:4px;-webkit-tap-highlight-color:transparent}
 </style>
 </head>
 <body>
@@ -117,6 +129,18 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
     <span class="header-icon">🧠</span>
     <span class="header-title">두통 빠른 기록</span>
     <span class="header-count" id="pending-count" style="display:none"></span>
+    <button class="btn-gear" onclick="toggleSettings()">⚙️</button>
+  </div>
+  <div class="settings-panel" id="settings-panel">
+    <div class="settings-label">클라우드 동기화 URL</div>
+    <input class="settings-input" id="sync-url-input" placeholder="Google Apps Script 배포 URL 붙여넣기"
+      value="" onchange="saveSyncUrl(this.value)">
+    <div class="settings-note">설정하면 기록이 클라우드에 자동 저장되어 다른 기기에서도 확인할 수 있습니다.</div>
+    <div id="sync-status"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-sm" onclick="testSyncUrl()">연결 테스트</button>
+      <button class="btn-sm" onclick="syncAllToCloud()">전체 업로드</button>
+    </div>
   </div>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('form')">✏️ 기록</button>
@@ -399,8 +423,10 @@ function saveEntry() {
   if (editId) {
     const idx = logs.findIndex(l => String(l.id) === editId);
     if (idx >= 0) {
-      logs[idx] = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, symptoms, meds, treatments, memo };
+      const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, symptoms, meds, treatments, memo };
+      logs[idx] = updated;
       saveQuickLogs(logs);
+      cloudSave([updated]);
       showToast('✏️ 수정됨');
       renderForm();
       return;
@@ -417,6 +443,7 @@ function saveEntry() {
 
   logs.push(entry);
   saveQuickLogs(logs);
+  cloudSave([entry]);
   showToast('✅ 기록 저장됨');
   renderForm();
 }
@@ -475,9 +502,96 @@ function deleteEntry(id) {
   renderList();
 }
 
+// ── Cloud Sync ──
+const SYNC_URL_KEY = 'om_quick_sync_url';
+
+function getSyncUrl() { return localStorage.getItem(SYNC_URL_KEY) || ''; }
+function saveSyncUrl(url) { localStorage.setItem(SYNC_URL_KEY, url.trim()); }
+
+function toggleSettings() {
+  const panel = document.getElementById('settings-panel');
+  panel.classList.toggle('show');
+  if (panel.classList.contains('show')) {
+    document.getElementById('sync-url-input').value = getSyncUrl();
+  }
+}
+
+function setSyncStatus(msg, cls) {
+  document.getElementById('sync-status').innerHTML = msg ? `<span class="sync-status ${cls}">${msg}</span>` : '';
+}
+
+async function testSyncUrl() {
+  const url = getSyncUrl();
+  if (!url) { setSyncStatus('URL을 입력하세요', 'sync-fail'); return; }
+  setSyncStatus('연결 중...', 'sync-ing');
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.ok) setSyncStatus(`연결 성공 (${data.entries.length}건 저장됨)`, 'sync-ok');
+    else setSyncStatus('응답 오류', 'sync-fail');
+  } catch (e) { setSyncStatus('연결 실패: ' + e.message, 'sync-fail'); }
+}
+
+async function cloudSave(entries) {
+  const url = getSyncUrl();
+  if (!url || !entries.length) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'save', entries }),
+      redirect: 'follow'
+    });
+  } catch (e) { /* 오프라인이면 무시 — 로컬에 이미 저장됨 */ }
+}
+
+async function syncAllToCloud() {
+  const logs = getQuickLogs();
+  if (!logs.length) { showToast('업로드할 기록이 없습니다'); return; }
+  const url = getSyncUrl();
+  if (!url) { showToast('동기화 URL을 먼저 설정하세요'); return; }
+  setSyncStatus('업로드 중...', 'sync-ing');
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'save', entries: logs }),
+      redirect: 'follow'
+    });
+    setSyncStatus(`${logs.length}건 업로드 완료`, 'sync-ok');
+    showToast(`☁️ ${logs.length}건 업로드 완료`);
+  } catch (e) { setSyncStatus('업로드 실패', 'sync-fail'); }
+}
+
+async function fetchCloudStatus() {
+  const url = getSyncUrl();
+  if (!url) return;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.ok) return;
+    // 클라우드에서 synced 상태 업데이트
+    const logs = getQuickLogs();
+    let changed = false;
+    data.entries.forEach(ce => {
+      if (ce.synced) {
+        const local = logs.find(l => l.id === ce.id);
+        if (local && !local.synced) { local.synced = true; changed = true; }
+      }
+    });
+    if (changed) {
+      saveQuickLogs(logs);
+      renderRecentQuickLogs();
+      updatePendingCount();
+    }
+  } catch (e) { /* 무시 */ }
+}
+
 // ── Init ──
 renderForm();
 updatePendingCount();
+// 앱 시작 시 클라우드 상태 동기화
+fetchCloudStatus();
 
 // Register service worker
 if ('serviceWorker' in navigator) {

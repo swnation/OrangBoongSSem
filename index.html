@@ -875,10 +875,12 @@ async function loadDomainData(domainId) {
     checkPriceUpdate();
     migrateConditions();
     ensureLogLoaded().then(()=>{checkDailyReminder();checkWeeklyInsight();}).catch(()=>{});
-    // 빠른 기록 체크
-    _lastQuickLogCount=getPendingQuickLogs().length;
-    updateQuickLogBadge();
-    if(_lastQuickLogCount>0) setTimeout(()=>showToast(`📱 오랑이 빠른 기록 ${_lastQuickLogCount}건 미반영`,4000),2000);
+    // 빠른 기록 체크 (클라우드 우선, 로컬 폴백)
+    pollCloudQuickLogs().then(()=>{
+      _lastQuickLogCount=getPendingQuickLogs().length;
+      updateQuickLogBadge();
+      if(_lastQuickLogCount>0) setTimeout(()=>showToast(`📱 오랑이 빠른 기록 ${_lastQuickLogCount}건 미반영`,4000),2000);
+    });
   } catch(e) {
     // Attempt offline fallback from localStorage
     const cached = loadFromLocal(domainId);
@@ -2277,11 +2279,58 @@ function toggleChip(el,cls){el.classList.toggle('sel');el.classList.toggle(cls,e
 async function setLogView(v){S.logView=v;await ensureLogLoaded();renderView('log');}
 
 // ── 빠른 기록 (quick.html) 연동 ──
+let _quickLogCache = null; // 클라우드+로컬 병합 캐시
+
 function getQuickLogs() {
+  if (_quickLogCache) return _quickLogCache;
   try { return JSON.parse(localStorage.getItem('om_quick_logs') || '[]'); } catch { return []; }
 }
 function getPendingQuickLogs() { return getQuickLogs().filter(l => !l.synced); }
-function saveQuickLogs(logs) { localStorage.setItem('om_quick_logs', JSON.stringify(logs)); updateQuickLogBadge(); }
+function saveQuickLogs(logs) {
+  localStorage.setItem('om_quick_logs', JSON.stringify(logs));
+  _quickLogCache = logs;
+  updateQuickLogBadge();
+}
+
+function getQuickSyncUrl() { return localStorage.getItem('om_quick_sync_url') || ''; }
+
+async function fetchQuickLogsFromCloud() {
+  const url = getQuickSyncUrl();
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    return data.ok ? data.entries : null;
+  } catch { return null; }
+}
+
+async function markSyncedOnCloud(ids) {
+  const url = getQuickSyncUrl();
+  if (!url || !ids.length) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'markSynced', ids }),
+      redirect: 'follow'
+    });
+  } catch { /* 무시 */ }
+}
+
+function mergeQuickLogs(local, cloud) {
+  if (!cloud) return local;
+  const merged = [...local];
+  cloud.forEach(ce => {
+    const idx = merged.findIndex(l => l.id === ce.id);
+    if (idx >= 0) {
+      // 클라우드가 더 최신이면 업데이트
+      if (ce.synced && !merged[idx].synced) merged[idx].synced = true;
+    } else {
+      merged.push(ce);
+    }
+  });
+  return merged.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+}
 
 function updateQuickLogBadge() {
   const badge = document.getElementById('quick-log-badge');
@@ -2295,8 +2344,10 @@ function updateQuickLogBadge() {
   }
 }
 
-// 주기적 체크: 다른 탭(quick.html)에서 기록이 추가되었을 때 감지
+// 주기적 체크: 로컬 + 클라우드에서 새 기록 감지
 let _lastQuickLogCount = 0;
+let _cloudPollTimer = null;
+
 function checkQuickLogUpdates() {
   const pending = getPendingQuickLogs();
   const count = pending.length;
@@ -2304,13 +2355,27 @@ function checkQuickLogUpdates() {
     const newCount = count - _lastQuickLogCount;
     showToast(`📱 오랑이가 두통 ${newCount}건을 기록했습니다`, 4000);
     updateQuickLogBadge();
-    // 현재 log 뷰면 새로고침
     if (S.currentView === 'log') renderView('log');
   }
   _lastQuickLogCount = count;
   updateQuickLogBadge();
 }
-setInterval(checkQuickLogUpdates, 10000); // 10초마다 확인
+
+async function pollCloudQuickLogs() {
+  const cloud = await fetchQuickLogsFromCloud();
+  if (!cloud) return;
+  const local = JSON.parse(localStorage.getItem('om_quick_logs') || '[]');
+  const merged = mergeQuickLogs(local, cloud);
+  // 새 항목이 추가되었는지 확인
+  if (merged.length !== local.length || JSON.stringify(merged.map(l=>l.id)) !== JSON.stringify(local.map(l=>l.id))) {
+    saveQuickLogs(merged);
+  }
+  checkQuickLogUpdates();
+}
+
+// 로컬 체크: 10초, 클라우드 체크: 30초
+setInterval(checkQuickLogUpdates, 10000);
+setInterval(pollCloudQuickLogs, 30000);
 
 function renderQuickLogBanner() {
   if (S.currentDomain !== 'orangi-migraine') return '';
@@ -2446,6 +2511,7 @@ async function importQuickLog(id) {
     await saveLogData();
     entry.synced = true;
     saveQuickLogs(logs);
+    markSyncedOnCloud([id]);
     showToast('✅ 반영 완료');
     renderView('log');
   } catch (e) { showToast('❌ 저장 실패: ' + e.message, 4000); }
@@ -2459,6 +2525,7 @@ async function importAllQuickLogs() {
   if (!confirm(`빠른 기록 ${pending.length}건을 모두 반영할까요?`)) return;
   await ensureLogLoaded();
   const ds = D();
+  const syncedIds = [];
   for (let i = 0; i < pending.length; i++) {
     const entry = pending[i];
     ds.logData.push({
@@ -2473,11 +2540,13 @@ async function importAllQuickLogs() {
       memo: entry.memo || ''
     });
     entry.synced = true;
+    syncedIds.push(entry.id);
   }
   ds.logData.sort((a, b) => a.datetime.localeCompare(b.datetime));
   try {
     await saveLogData();
     saveQuickLogs(logs);
+    markSyncedOnCloud(syncedIds);
     showToast(`✅ ${pending.length}건 반영 완료`);
     renderView('log');
   } catch (e) { showToast('❌ 저장 실패: ' + e.message, 4000); }
@@ -2785,7 +2854,7 @@ async function saveLogEntry() {
   const _markQuickSynced=()=>{
     if(!quickId)return;
     const ql=getQuickLogs();const qi=ql.find(l=>String(l.id)===quickId);
-    if(qi){qi.synced=true;saveQuickLogs(ql);}
+    if(qi){qi.synced=true;saveQuickLogs(ql);markSyncedOnCloud([parseInt(quickId)]);}
   };
   if(editIdx>=0 && ds.logData[editIdx]) {
     ds.logData[editIdx]=entry;
@@ -3313,7 +3382,17 @@ function openKeys() {
       </div>
       <div class="key-note">💡 ${info.note}</div>
     </div><hr style="border:none;border-top:1px solid var(--bd);margin:4px 0">`;
-  }).join('');
+  }).join('') + `<div class="key-group">
+    <div class="key-row">
+      <div class="key-label">📱 빠른 기록 동기화 URL
+        ${localStorage.getItem('om_quick_sync_url')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
+      </div>
+    </div>
+    <div class="key-input-row">
+      <input class="key-input ${localStorage.getItem('om_quick_sync_url')?'set':''}" type="url" id="key-sync-url" value="${localStorage.getItem('om_quick_sync_url')||''}" placeholder="Google Apps Script 배포 URL">
+    </div>
+    <div class="key-note">💡 오랑이 빠른 기록(quick.html)을 다른 기기에서도 받아볼 수 있습니다. gas-quicklog.js를 Apps Script에 배포 후 URL을 입력하세요.</div>
+  </div>`;
   openModal('keys-modal');
 }
 
@@ -3326,6 +3405,10 @@ async function saveKeys() {
   });
   localStorage.setItem('om_keys',JSON.stringify(S.keys));
   localStorage.setItem('om_models',JSON.stringify(S.models));
+  // 동기화 URL 저장
+  const syncUrl=(document.getElementById('key-sync-url')?.value||'').trim();
+  if(syncUrl) localStorage.setItem('om_quick_sync_url',syncUrl);
+  else localStorage.removeItem('om_quick_sync_url');
   // Keys are stored in localStorage only (not in Drive) for security
   renderSidebarAIs();
   closeModal('keys-modal');
