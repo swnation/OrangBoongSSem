@@ -1,0 +1,16 @@
+{
+  "name": "두통 빠른 기록",
+  "short_name": "두통 기록",
+  "description": "오랑이 두통 빠른 기록 — 인증 없이 간편하게",
+  "start_url": "/quick.html",
+  "display": "standalone",
+  "background_color": "#f2f0eb",
+  "theme_color": "#c96442",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

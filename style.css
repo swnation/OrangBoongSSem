@@ -323,3 +323,23 @@ main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 .file-chip .file-remove{cursor:pointer;color:var(--mu2);font-size:.8rem}
 .file-chip .file-remove:hover{color:var(--re)}
 
+/* QUICK LOG BANNER */
+.quick-log-banner{background:var(--sf);border:1.5px solid #e89060;border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.qlb-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.qlb-icon{font-size:1.1rem}
+.qlb-title{font-size:.82rem;font-weight:600;flex:1;color:var(--ink)}
+.qlb-btn-all{background:#c96442;color:#fff;border:none;border-radius:7px;padding:6px 14px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .15s}
+.qlb-btn-all:hover{background:#a8522e}
+.qlb-list{display:flex;flex-direction:column;gap:8px}
+.qlb-item{background:var(--sf2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px}
+.qlb-item-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.qlb-actions{display:flex;gap:6px;margin-top:8px;justify-content:flex-end}
+.qlb-btn{background:none;border:1.5px solid var(--bd);border-radius:6px;padding:4px 12px;font-size:.72rem;cursor:pointer;color:var(--mu);font-family:var(--font);transition:all .15s}
+.qlb-btn:hover{border-color:var(--ac);color:var(--ac)}
+.qlb-btn.green{border-color:#2d6a4f;color:#2d6a4f}
+.qlb-btn.green:hover{background:#f0fdf4}
+.qlb-btn.del:hover{border-color:var(--re);color:var(--re)}
+[data-theme="dark"] .quick-log-banner{border-color:#a06040}
+[data-theme="dark"] .qlb-btn.green{border-color:#4a9a7a;color:#4a9a7a}
+[data-theme="dark"] .qlb-btn.green:hover{background:#0d2a1a}
+

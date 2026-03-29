@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#c96442">
+<title>🧠 두통 빠른 기록</title>
+<link rel="manifest" href="quick-manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f2f0eb;--sf:#fff;--sf2:#f9f7f4;
+  --bd:#e0dbd2;--bd2:#d0c9be;
+  --ink:#1a1917;--mu:#7a7672;--mu2:#a09b96;
+  --ac:#c96442;--gr:#2d6a4f;--re:#c03030;
+  --font:'IBM Plex Sans KR',sans-serif;
+  --mono:'IBM Plex Mono',monospace;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#0f1118;--sf:#1a1d28;--sf2:#22262f;
+    --bd:#2a2e3a;--bd2:#353a48;
+    --ink:#e4e2dd;--mu:#8a8682;--mu2:#5a5854;
+    --ac:#e07a55;--gr:#4a9a7a;--re:#e05050;
+  }
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14px}
+.app{height:100%;display:flex;flex-direction:column;overflow:hidden;max-width:500px;margin:0 auto}
+.header{background:var(--sf);border-bottom:1.5px solid var(--bd);padding:14px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.header-icon{font-size:1.3rem}
+.header-title{font-size:.95rem;font-weight:600;flex:1}
+.header-count{font-size:.7rem;font-family:var(--mono);background:var(--ac);color:#fff;padding:2px 8px;border-radius:10px}
+.tabs{display:flex;border-bottom:1.5px solid var(--bd);background:var(--sf);flex-shrink:0}
+.tab{flex:1;padding:10px;text-align:center;font-size:.82rem;font-weight:500;cursor:pointer;border:none;background:none;color:var(--mu);font-family:var(--font);transition:all .15s;border-bottom:2px solid transparent}
+.tab.active{color:var(--ac);border-bottom-color:var(--ac);font-weight:600}
+.body{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+
+/* Form */
+.section{margin-bottom:16px}
+.section-title{font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);margin-bottom:7px}
+.row{display:flex;gap:8px;align-items:center}
+.input{border:1.5px solid var(--bd);border-radius:8px;padding:8px 12px;font-family:var(--font);font-size:.85rem;outline:none;background:var(--sf);color:var(--ink);width:100%}
+.input:focus{border-color:var(--ac)}
+.input-sm{width:auto;flex:1}
+
+/* NRS */
+.nrs-wrap{display:flex;align-items:center;gap:12px}
+.nrs-wrap input[type=range]{flex:1;accent-color:var(--re);height:28px}
+.nrs-val{font-size:1.5rem;font-weight:700;min-width:32px;text-align:center}
+.nrs-skip{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--mu);margin-top:4px}
+.nrs-skip input{accent-color:var(--ac)}
+
+/* Chips */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:6px 14px;border-radius:20px;border:1.5px solid var(--bd);font-size:.82rem;cursor:pointer;transition:all .15s;user-select:none;background:var(--sf2);-webkit-tap-highlight-color:transparent}
+.chip:active{transform:scale(.96)}
+.chip.sel{font-weight:600;color:#fff}
+.chip.sel-left{background:#3b82f6;border-color:#3b82f6}
+.chip.sel-right{background:#ef4444;border-color:#ef4444}
+.chip.sel-sym{background:#8b5cf6;border-color:#8b5cf6}
+.chip.sel-med{background:#f59e0b;border-color:#f59e0b;color:var(--ink)}
+.chip.sel-tx{background:#10b981;border-color:#10b981}
+.other-row{display:flex;gap:6px;margin-top:6px}
+.other-input{flex:1;border:1.5px solid var(--bd);border-radius:8px;padding:6px 10px;font-family:var(--font);font-size:.8rem;outline:none;background:var(--sf);color:var(--ink)}
+.other-input:focus{border-color:var(--ac)}
+.btn-other-add{background:var(--ac);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.78rem;font-weight:600;cursor:pointer;white-space:nowrap}
+
+.memo{width:100%;border:1.5px solid var(--bd);border-radius:8px;padding:8px 12px;font-family:var(--font);font-size:.85rem;resize:none;outline:none;background:var(--sf2);color:var(--ink);min-height:60px}
+.memo:focus{border-color:var(--ac)}
+
+.btn-save{width:100%;background:var(--ac);color:#fff;border:none;border-radius:10px;padding:14px;font-size:.95rem;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .2s;margin-top:8px}
+.btn-save:active{transform:scale(.98);background:#a8522e}
+
+/* List */
+.log-item{background:var(--sf);border:1.5px solid var(--bd);border-radius:9px;padding:12px 14px;margin-bottom:8px}
+.log-item-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.log-item-date{font-size:.72rem;font-family:var(--mono);color:var(--mu2)}
+.log-item-nrs{font-size:.78rem;font-weight:700;padding:2px 8px;border-radius:4px;color:#fff}
+.log-item-badge{font-size:.6rem;font-family:var(--mono);padding:2px 6px;border-radius:3px;margin-left:auto}
+.log-item-badge.pending{background:#fff7ed;color:#c2410c}
+.log-item-badge.synced{background:#f0fdf4;color:#15803d}
+.log-item-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px}
+.log-tag{font-size:.68rem;padding:2px 7px;border-radius:3px}
+.log-tag-site{background:#eff6ff;color:#1d4ed8}
+.log-tag-sym{background:#faf5ff;color:#7c3aed}
+.log-tag-med{background:#fffbeb;color:#b45309}
+.log-tag-tx{background:#f0fdf4;color:#15803d}
+.log-item-memo{font-size:.8rem;color:var(--mu);line-height:1.5;margin-top:4px}
+.log-item-actions{display:flex;gap:8px;margin-top:8px;justify-content:flex-end}
+.btn-sm{background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;color:var(--mu);font-family:var(--font)}
+.btn-sm:hover{border-color:var(--ac);color:var(--ac)}
+.btn-sm.del:hover{border-color:var(--re);color:var(--re)}
+
+.empty{text-align:center;color:var(--mu2);font-size:.85rem;padding:40px 20px;line-height:1.7}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:10px 20px;border-radius:8px;font-size:.82rem;z-index:999;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+
+@media(prefers-color-scheme:dark){
+  .log-item-badge.pending{background:#2a1a0a;color:#fb923c}
+  .log-item-badge.synced{background:#0d2a1a;color:#4ade80}
+  .log-tag-site{background:#1a2540;color:#60a5fa}
+  .log-tag-sym{background:#1a0d2a;color:#a78bfa}
+  .log-tag-med{background:#2a1a0a;color:#fbbf24}
+  .log-tag-tx{background:#0d2a1a;color:#4ade80}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <span class="header-icon">🧠</span>
+    <span class="header-title">두통 빠른 기록</span>
+    <span class="header-count" id="pending-count" style="display:none"></span>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('form')">✏️ 기록</button>
+    <button class="tab" onclick="switchTab('list')">📋 목록</button>
+  </div>
+  <div class="body" id="tab-form">
+    <!-- form is rendered by JS -->
+  </div>
+  <div class="body" id="tab-list" style="display:none">
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ── Config (matches orangi-migraine logConfig) ──
+const SITES = {
+  left: ['미간','눈썹위','관자놀이','후두부','기타'],
+  right: ['미간','눈썹위','관자놀이','후두부','기타']
+};
+const SYMPTOMS = ['구역','어지러움','손발저림','빛과민','소리과민','식은땀','심계항진','실신전조'];
+const MEDS = ['AAP 500mg','Loxoprofen','타 NSAID','Metoclopramide'];
+const TREATMENTS = ['GON block','LON block','SPG block'];
+
+const LS_KEY = 'om_quick_logs';
+
+// ── Helpers ──
+function kstNow() {
+  const d = new Date(Date.now() + 9*3600000);
+  return { date: d.toISOString().slice(0,10), time: d.toISOString().slice(11,16) };
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function getQuickLogs() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }
+  catch { return []; }
+}
+
+function saveQuickLogs(logs) {
+  localStorage.setItem(LS_KEY, JSON.stringify(logs));
+  updatePendingCount();
+}
+
+function nrsColor(n) {
+  if (n <= 3) return '#2d8a5a';
+  if (n <= 6) return '#e67e22';
+  return '#c03030';
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function updatePendingCount() {
+  const logs = getQuickLogs();
+  const pending = logs.filter(l => !l.synced).length;
+  const el = document.getElementById('pending-count');
+  if (pending > 0) {
+    el.textContent = pending + '건 미반영';
+    el.style.display = '';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ── Tab switching ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', (tab==='form' && i===0) || (tab==='list' && i===1));
+  });
+  document.getElementById('tab-form').style.display = tab==='form' ? '' : 'none';
+  document.getElementById('tab-list').style.display = tab==='list' ? '' : 'none';
+  if (tab==='list') renderList();
+}
+
+// ── Chip toggle ──
+function toggleChip(el, cls) {
+  el.classList.toggle('sel');
+  el.classList.toggle(cls, el.classList.contains('sel'));
+}
+
+function addOtherChip(inputId, containerId, group, cls) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  const container = document.getElementById(containerId);
+  const chip = document.createElement('span');
+  chip.className = 'chip sel ' + cls;
+  chip.dataset.val = val;
+  chip.dataset.group = group;
+  chip.textContent = val;
+  chip.onclick = function() { toggleChip(this, cls); };
+  container.appendChild(chip);
+  input.value = '';
+}
+
+// ── Form render ──
+function renderForm(entry) {
+  const now = kstNow();
+  const e = entry || {};
+  const isEdit = !!entry;
+  const nrs = e.nrs ?? 5;
+  const skipNrs = e.nrs === -1;
+
+  const siteChips = (side, items) => items.map(s => {
+    const sel = e.sites?.includes((side==='left'?'왼쪽':'오른쪽')+' '+s);
+    return `<span class="chip ${sel?'sel sel-'+side:''}" data-val="${esc(s)}" data-side="${side}" onclick="toggleChip(this,'sel-${side}')">${esc(s)}</span>`;
+  }).join('');
+
+  const symChips = SYMPTOMS.map(s => {
+    const sel = e.symptoms?.includes(s);
+    return `<span class="chip ${sel?'sel sel-sym':''}" data-val="${esc(s)}" data-group="sym" onclick="toggleChip(this,'sel-sym')">${esc(s)}</span>`;
+  }).join('');
+
+  const medChips = MEDS.map(m => {
+    const sel = e.meds?.includes(m);
+    return `<span class="chip ${sel?'sel sel-med':''}" data-val="${esc(m)}" data-group="med" onclick="toggleChip(this,'sel-med')">${esc(m)}</span>`;
+  }).join('');
+
+  const txChips = TREATMENTS.map(t => {
+    const sel = e.treatments?.includes(t);
+    return `<span class="chip ${sel?'sel sel-tx':''}" data-val="${esc(t)}" data-group="tx" onclick="toggleChip(this,'sel-tx')">${esc(t)}</span>`;
+  }).join('');
+
+  const datetime = e.datetime || '';
+  const dateVal = datetime ? datetime.split('T')[0] : now.date;
+  const timeRaw = datetime ? datetime.split('T')[1] : now.time;
+  const timeUnknown = timeRaw === '시간미상';
+  const timeVal = timeUnknown ? now.time : timeRaw;
+
+  document.getElementById('tab-form').innerHTML = `
+    ${isEdit ? `<input type="hidden" id="q-edit-id" value="${e.id}">` : ''}
+    <div class="section">
+      <div class="section-title">날짜 / 시간</div>
+      <div class="row">
+        <input type="date" class="input input-sm" id="q-date" value="${dateVal}">
+        <input type="time" class="input input-sm" id="q-time" value="${timeVal}" ${timeUnknown?'disabled':''}>
+      </div>
+      <label class="nrs-skip"><input type="checkbox" id="q-time-unknown" ${timeUnknown?'checked':''} onchange="document.getElementById('q-time').disabled=this.checked"> 시간 모름</label>
+    </div>
+
+    <div class="section">
+      <div class="section-title">통증 강도 (NRS)</div>
+      <div class="nrs-wrap">
+        <input type="range" id="q-nrs" min="0" max="10" value="${skipNrs?5:nrs}" ${skipNrs?'disabled':''} oninput="document.getElementById('q-nrs-val').textContent=this.value;document.getElementById('q-nrs-val').style.color=nrsColor(+this.value)">
+        <span class="nrs-val" id="q-nrs-val" style="color:${skipNrs?'var(--mu2)':nrsColor(skipNrs?5:nrs)}">${skipNrs?'-':nrs}</span>
+      </div>
+      <label class="nrs-skip"><input type="checkbox" id="q-skip-nrs" ${skipNrs?'checked':''} onchange="toggleNrsSkip(this.checked)"> 기록 안함</label>
+    </div>
+
+    <div class="section">
+      <div class="section-title">부위 — 왼쪽</div>
+      <div class="chips">${siteChips('left', SITES.left)}</div>
+    </div>
+    <div class="section">
+      <div class="section-title">부위 — 오른쪽</div>
+      <div class="chips">${siteChips('right', SITES.right)}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">증상</div>
+      <div class="chips" id="sym-chips">${symChips}</div>
+      <div class="other-row">
+        <input class="other-input" id="sym-other" placeholder="기타 증상">
+        <button class="btn-other-add" onclick="addOtherChip('sym-other','sym-chips','sym','sel-sym')">+</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">약물</div>
+      <div class="chips" id="med-chips">${medChips}</div>
+      <div class="other-row">
+        <input class="other-input" id="med-other" placeholder="기타 약물">
+        <button class="btn-other-add" onclick="addOtherChip('med-other','med-chips','med','sel-med')">+</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">시술</div>
+      <div class="chips" id="tx-chips">${txChips}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">메모</div>
+      <textarea class="memo" id="q-memo" rows="3" placeholder="상태, 트리거 등 자유 기록">${esc(e.memo||'')}</textarea>
+    </div>
+
+    <button class="btn-save" onclick="saveEntry()">${isEdit ? '✏️ 수정 완료' : '💾 기록 저장'}</button>
+  `;
+}
+
+function toggleNrsSkip(skip) {
+  const slider = document.getElementById('q-nrs');
+  const val = document.getElementById('q-nrs-val');
+  slider.disabled = skip;
+  if (skip) {
+    val.textContent = '-';
+    val.style.color = 'var(--mu2)';
+  } else {
+    val.textContent = slider.value;
+    val.style.color = nrsColor(+slider.value);
+  }
+}
+
+// ── Save ──
+function saveEntry() {
+  const date = document.getElementById('q-date').value;
+  if (!date) { showToast('날짜를 선택하세요'); return; }
+  const timeUnknown = document.getElementById('q-time-unknown').checked;
+  const time = timeUnknown ? '시간미상' : (document.getElementById('q-time').value || '00:00');
+
+  let nrs = -1;
+  if (!document.getElementById('q-skip-nrs').checked) {
+    nrs = parseInt(document.getElementById('q-nrs').value);
+  }
+
+  const sites = [];
+  document.querySelectorAll('.chip.sel[data-side]').forEach(el =>
+    sites.push((el.dataset.side==='left'?'왼쪽':'오른쪽')+' '+el.dataset.val)
+  );
+  const symptoms = [];
+  document.querySelectorAll('.chip.sel[data-group="sym"]').forEach(el => symptoms.push(el.dataset.val));
+  const meds = [];
+  document.querySelectorAll('.chip.sel[data-group="med"]').forEach(el => meds.push(el.dataset.val));
+  const treatments = [];
+  document.querySelectorAll('.chip.sel[data-group="tx"]').forEach(el => treatments.push(el.dataset.val));
+  const memo = document.getElementById('q-memo')?.value.trim() || '';
+
+  const editId = document.getElementById('q-edit-id')?.value;
+  const logs = getQuickLogs();
+
+  if (editId) {
+    const idx = logs.findIndex(l => String(l.id) === editId);
+    if (idx >= 0) {
+      logs[idx] = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, symptoms, meds, treatments, memo };
+      saveQuickLogs(logs);
+      showToast('✏️ 수정됨');
+      renderForm();
+      return;
+    }
+  }
+
+  const entry = {
+    id: Date.now(),
+    datetime: `${date}T${time}`,
+    nrs, sites, symptoms, meds, treatments, memo,
+    synced: false,
+    createdAt: new Date().toISOString()
+  };
+
+  logs.push(entry);
+  saveQuickLogs(logs);
+  showToast('✅ 기록 저장됨');
+  renderForm();
+}
+
+// ── List ──
+function renderList() {
+  const logs = getQuickLogs().slice().reverse();
+  if (!logs.length) {
+    document.getElementById('tab-list').innerHTML = '<div class="empty">아직 기록이 없어요.<br>두통이 생기면 ✏️ 기록 탭에서 빠르게 남겨보세요.</div>';
+    return;
+  }
+  document.getElementById('tab-list').innerHTML = logs.map(l => {
+    const dt = l.datetime.split('T');
+    const dateStr = dt[0];
+    const timeStr = dt[1] === '시간미상' ? '시간미상' : dt[1];
+    const tags = [
+      ...l.sites.map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
+      ...l.symptoms.map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
+      ...l.meds.map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
+      ...l.treatments.map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
+    ].join('');
+    const nrsHtml = l.nrs >= 0
+      ? `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`
+      : '';
+    const badge = l.synced
+      ? '<span class="log-item-badge synced">반영됨</span>'
+      : '<span class="log-item-badge pending">미반영</span>';
+    return `<div class="log-item">
+      <div class="log-item-head">
+        <span class="log-item-date">${dateStr} ${timeStr}</span>
+        ${nrsHtml} ${badge}
+      </div>
+      ${tags ? `<div class="log-item-tags">${tags}</div>` : ''}
+      ${l.memo ? `<div class="log-item-memo">${esc(l.memo)}</div>` : ''}
+      <div class="log-item-actions">
+        <button class="btn-sm" onclick="editEntry(${l.id})">수정</button>
+        <button class="btn-sm del" onclick="deleteEntry(${l.id})">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function editEntry(id) {
+  const logs = getQuickLogs();
+  const entry = logs.find(l => l.id === id);
+  if (!entry) return;
+  switchTab('form');
+  setTimeout(() => renderForm(entry), 50);
+}
+
+function deleteEntry(id) {
+  if (!confirm('삭제할까요?')) return;
+  const logs = getQuickLogs().filter(l => l.id !== id);
+  saveQuickLogs(logs);
+  showToast('🗑 삭제됨');
+  renderList();
+}
+
+// ── Init ──
+renderForm();
+updatePendingCount();
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
