@@ -3,336 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Orangi Health AI 협진 시스템 v7.2</title>
+<title>Orangi Health AI 협진 시스템 v8.0</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2c5f8a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 <script src="https://accounts.google.com/gsi/client" async></script>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --sb:#12171f;--sb2:#1c2330;--sb3:#252d3a;
-  --bg:#f2f0eb;--sf:#fff;--sf2:#f9f7f4;
-  --bd:#e0dbd2;--bd2:#d0c9be;
-  --ink:#1a1917;--mu:#7a7672;--mu2:#a09b96;
-  --r1:#3b82f6;--r2:#8b5cf6;--r3:#f59e0b;
-  --ac:#2c5f8a;--gr:#2d6a4f;--re:#c03030;
-  --font:'IBM Plex Sans KR',sans-serif;
-  --mono:'IBM Plex Mono',monospace;
-  --serif:'DM Serif Display',serif;
-  --domain-color:#c96442;
-}
-[data-theme="dark"]{
-  --bg:#0f1118;--sf:#1a1d28;--sf2:#22262f;
-  --bd:#2a2e3a;--bd2:#353a48;
-  --ink:#e4e2dd;--mu:#8a8682;--mu2:#5a5854;
-  --ac:#5a9fd4;--gr:#4a9a7a;--re:#e05050;
-}
-html,body{height:100%;overflow:hidden}
-body{font-family:var(--font);background:var(--bg);color:var(--ink);display:flex;font-size:14px;transition:background .3s,color .3s}
-
-/* SIDEBAR */
-aside{width:236px;min-width:236px;background:var(--sb);display:flex;flex-direction:column;height:100vh;overflow-y:auto;transition:transform .3s;z-index:100}
-.logo{padding:18px 18px 14px;border-bottom:1px solid #1e2a3a}
-.logo-title{font-family:var(--serif);color:#fff;font-size:1.05rem;line-height:1.35}
-.logo-sub{font-size:.67rem;color:#3d5068;margin-top:3px;font-family:var(--mono);letter-spacing:.06em}
-
-/* DOMAIN SELECTOR */
-.domain-selector{padding:10px 12px;border-bottom:1px solid #1e2a3a}
-.domain-btn{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;border:1.5px solid #2a3a50;background:transparent;color:#c0cad6;font-family:var(--font);font-size:.78rem;cursor:pointer;width:100%;text-align:left;transition:all .15s}
-.domain-btn:hover{border-color:#4a6a8a;background:#1a2535}
-.domain-btn .d-icon{font-size:1rem}
-.domain-btn .d-label{flex:1;font-weight:500}
-.domain-btn .d-arrow{font-size:.6rem;color:#4a6a8a}
-.domain-dropdown{display:none;padding:6px 0;margin-top:6px}
-.domain-dropdown.show{display:block}
-.domain-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:.75rem;color:#7a8fa5;transition:all .15s;border:none;background:none;width:100%;text-align:left;font-family:var(--font)}
-.domain-opt:hover{background:#1a2535;color:#c0cad6}
-.domain-opt.active{background:var(--sb3);color:#fff}
-.domain-opt .d-user{font-size:.6rem;color:#3d5068;font-family:var(--mono)}
-
-.sb-sect{padding:10px 0}
-.sb-lbl{font-size:.62rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#3d4f63;padding:0 18px;margin-bottom:5px}
-.sb-btn{display:flex;align-items:center;gap:9px;padding:8px 18px;cursor:pointer;border:none;background:none;width:100%;text-align:left;color:#7a8fa5;font-family:var(--font);font-size:.8rem;transition:background .15s}
-.sb-btn:hover{background:var(--sb2);color:#c0cad6}
-.sb-btn.active{background:var(--sb3);color:#fff}
-.sb-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.sb-badge{font-size:.65rem;font-family:var(--mono);background:#1a2535;color:#3d5a75;padding:1px 5px;border-radius:3px;margin-left:auto}
-.sb-div{height:1px;background:#1a2535;margin:4px 18px}
-.drive-status{padding:8px 18px;font-size:.72rem;display:flex;align-items:center;gap:7px}
-.drive-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.sb-foot{margin-top:auto;padding:12px 16px;border-top:1px solid #1a2535;display:flex;flex-direction:column;gap:6px}
-.sb-foot-btn{width:100%;background:none;border:1px solid #2a3a50;border-radius:6px;padding:6px 10px;color:#5a7a95;font-size:.72rem;cursor:pointer;font-family:var(--font);transition:all .2s;text-align:left}
-.sb-foot-btn:hover{background:#1c2a3a;color:#90b0cc}
-.theme-toggle{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:.72rem;color:#5a7a95;border:none;background:none;font-family:var(--font);width:100%}
-.theme-toggle:hover{color:#90b0cc}
-
-/* HAMBURGER - mobile */
-.hamburger{display:none;position:fixed;top:10px;left:10px;z-index:200;background:var(--sb);border:none;border-radius:8px;padding:8px 10px;cursor:pointer;color:#fff;font-size:1.1rem}
-.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90}
-
-/* MAIN */
-main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
-.topbar{background:var(--sf);border-bottom:1.5px solid var(--bd);padding:0 22px;display:flex;align-items:center;gap:0;flex-shrink:0;height:50px;transition:background .3s}
-.topbar-title{font-family:var(--serif);font-size:.95rem;color:var(--ink);margin-right:auto}
-.topbar-domain{font-size:.7rem;padding:3px 10px;border-radius:12px;font-weight:600;margin-left:12px;border:1.5px solid var(--domain-color);color:var(--domain-color)}
-.content{flex:1;overflow-y:auto;padding:18px 22px;transition:background .3s}
-
-/* CARDS */
-.card{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;padding:18px;margin-bottom:14px;transition:background .3s,border-color .3s}
-.card-title{font-family:var(--serif);font-size:.95rem;font-weight:400;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.badge{font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.05em;text-transform:uppercase}
-.badge-blue{background:#eff6ff;color:#1d4ed8}
-.badge-green{background:#f0fdf4;color:#15803d}
-.badge-orange{background:#fff7ed;color:#c2410c}
-.badge-purple{background:#faf5ff;color:#7c3aed}
-.badge-red{background:#fff0f0;color:#c03030}
-[data-theme="dark"] .badge-blue{background:#1a2540;color:#60a5fa}
-[data-theme="dark"] .badge-green{background:#0d2a1a;color:#4ade80}
-[data-theme="dark"] .badge-orange{background:#2a1a0a;color:#fb923c}
-[data-theme="dark"] .badge-purple{background:#1a0d2a;color:#a78bfa}
-[data-theme="dark"] .badge-red{background:#2a0d0d;color:#f87171}
-
-/* CONNECT */
-.connect-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:20px;text-align:center}
-.btn-connect{background:var(--ac);color:#fff;border:none;border-radius:10px;padding:13px 32px;font-size:.95rem;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .2s;display:flex;align-items:center;gap:10px}
-.btn-connect:hover{background:#1e4a72;transform:translateY(-1px)}
-
-/* HOME */
-.home-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-.accum-section{margin-bottom:8px}
-.accum-label{font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);margin-bottom:6px}
-.accum-list{display:flex;flex-direction:column;gap:4px}
-.accum-item{display:flex;align-items:flex-start;gap:6px;font-size:.82rem;line-height:1.6;padding:6px 10px;border-radius:6px;border-left:3px solid}
-.accum-item.consensus{border-color:var(--gr);background:#f0fdf4;color:#1a4a2a}
-.accum-item.discarded{border-color:var(--mu2);background:var(--sf2);color:var(--mu);text-decoration:line-through}
-.accum-item.unresolved{border-color:var(--r3);background:#fffbeb;color:#7a4a00}
-[data-theme="dark"] .accum-item.consensus{background:#0d2a1a;color:#4ade80}
-[data-theme="dark"] .accum-item.discarded{background:#1a1d28;color:#6a6860}
-[data-theme="dark"] .accum-item.unresolved{background:#2a1a0a;color:#fbbf24}
-.accum-text{flex:1}
-.accum-del{background:none;border:none;color:var(--mu2);cursor:pointer;font-size:.8rem;padding:1px 4px;border-radius:3px;flex-shrink:0;transition:color .15s}
-.accum-del:hover{color:var(--re)}
-.accum-add-row{display:flex;gap:8px;margin-top:8px}
-.accum-add-input{flex:1;border:1.5px solid var(--bd);border-radius:7px;padding:6px 10px;font-family:var(--font);font-size:.82rem;outline:none;background:var(--sf2);color:var(--ink)}
-.accum-add-input:focus{border-color:var(--ac)}
-.btn-accum-add{background:var(--ac);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:var(--font);white-space:nowrap}
-.accum-empty{font-size:.8rem;color:var(--mu2);font-style:italic;padding:8px 0}
-
-.btn-new-session{width:100%;background:var(--ink);color:#fff;border:none;border-radius:10px;padding:14px;font-size:.9rem;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .2s;display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:14px}
-.btn-new-session:hover{background:#333;transform:translateY(-1px)}
-[data-theme="dark"] .btn-new-session{background:#e4e2dd;color:#0f1118}
-.session-hist-item{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;padding:14px 16px;margin-bottom:8px;cursor:pointer;transition:border-color .2s}
-.session-hist-item:hover{border-color:var(--ac)}
-.hist-date{font-size:.72rem;color:var(--mu);font-family:var(--mono);margin-bottom:3px}
-.hist-q{font-size:.85rem;font-weight:500}
-.hist-meta{font-size:.72rem;color:var(--mu2);margin-top:4px}
-.hist-del{background:none;border:none;color:var(--mu2);cursor:pointer;font-size:.78rem;padding:2px 6px;border-radius:3px;float:right;transition:color .15s}
-.hist-del:hover{color:var(--re)}
-
-/* SESSION */
-.q-bar{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:14px}
-.q-label{font-size:.67rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);margin-bottom:5px}
-.q-bar textarea{width:100%;border:none;outline:none;font-family:var(--font);font-size:.9rem;line-height:1.55;resize:none;background:transparent;color:var(--ink)}
-.round-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 14px;background:var(--sb);border-radius:10px;flex-wrap:wrap}
-.round-pill{font-size:.72rem;font-weight:700;padding:5px 14px;border-radius:20px;border:1.5px solid;font-family:var(--mono);cursor:default}
-.round-pill.done{opacity:.5}.round-pill.active{color:#fff}.round-pill.waiting{background:transparent}
-.ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
-.ai-card{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;overflow:hidden;transition:border-color .3s}
-.ai-card.generating{border-color:#3b82f640;animation:pb 1.5s infinite}
-@keyframes pb{0%,100%{border-color:#3b82f640}50%{border-color:#3b82f6bb}}
-.ai-card.done{border-color:#10b98155}
-.ai-card.error{border-color:#ef444455}
-.ai-head{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid var(--bd);background:var(--sf2)}
-.ai-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.ai-name{font-size:.73rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
-.ai-role{font-size:.63rem;color:var(--mu2);font-family:var(--mono);margin-left:4px}
-.ai-chip{font-size:.62rem;font-family:var(--mono);padding:2px 6px;border-radius:3px;margin-left:auto}
-.ai-body{position:relative}
-.ai-body textarea{width:100%;border:none;outline:none;padding:11px 13px;font-family:var(--font);font-size:.84rem;line-height:1.65;resize:vertical;min-height:150px;background:transparent;color:var(--ink)}
-.ai-body textarea.gen{background:#f0f7ff;color:var(--mu)}
-[data-theme="dark"] .ai-body textarea.gen{background:#1a2030;color:#5a6a7a}
-/* Markdown rendered output */
-.ai-md{padding:11px 13px;font-size:.84rem;line-height:1.65;color:var(--ink);overflow-y:auto;max-height:400px}
-.ai-md h1,.ai-md h2,.ai-md h3{font-family:var(--serif);margin:10px 0 6px;font-weight:400}
-.ai-md h1{font-size:1rem}.ai-md h2{font-size:.92rem}.ai-md h3{font-size:.86rem}
-.ai-md ul,.ai-md ol{padding-left:18px;margin:4px 0}
-.ai-md li{margin-bottom:3px}
-.ai-md p{margin:4px 0}
-.ai-md strong{font-weight:600}
-.ai-md code{font-family:var(--mono);font-size:.8rem;background:var(--sf2);padding:1px 4px;border-radius:3px}
-.ai-md blockquote{border-left:3px solid var(--bd);padding-left:10px;color:var(--mu);margin:6px 0}
-.ai-toggle-view{position:absolute;top:4px;right:8px;background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;font-size:.62rem;cursor:pointer;color:var(--mu);z-index:1}
-
-.round-action-bar{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.btn-run-round{background:var(--ac);color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:.85rem;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .2s;display:flex;align-items:center;gap:8px;white-space:nowrap}
-.btn-run-round:hover:not(:disabled){background:#1e4a72}
-.btn-run-round:disabled{opacity:.5;cursor:not-allowed}
-.btn-run-round.green{background:var(--gr)}
-.btn-run-round.green:hover:not(:disabled){background:#1d4a35}
-.run-note{font-size:.75rem;color:var(--mu);flex:1}
-
-.final-card{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;padding:18px;margin-bottom:12px}
-.final-card h3{font-family:var(--serif);font-size:.95rem;font-weight:400;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.fcontent{font-size:.86rem;line-height:1.78;color:var(--ink)}
-.fcontent ul{padding-left:18px}.fcontent li{margin-bottom:4px}
-.divider{height:1px;background:var(--bd);margin:10px 0}
-
-/* BTNS */
-.btn-primary{background:var(--ink);color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:.85rem;font-weight:600;cursor:pointer;font-family:var(--font);transition:all .2s;display:flex;align-items:center;gap:8px}
-.btn-primary:hover:not(:disabled){background:#333}
-.btn-primary:disabled{opacity:.5;cursor:not-allowed}
-.spin{width:13px;height:13px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;display:none}
-@keyframes sp{to{transform:rotate(360deg)}}
-
-/* MODAL */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;display:none;align-items:center;justify-content:center}
-.overlay.show{display:flex}
-.modal{background:var(--sf);border-radius:12px;width:620px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden}
-.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bd)}
-.modal-head h3{font-family:var(--serif);font-size:1rem;font-weight:400}
-.modal-close{background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--mu);padding:4px}
-.modal-body{flex:1;overflow-y:auto;padding:18px 20px}
-.modal-foot{padding:12px 20px;border-top:1px solid var(--bd);display:flex;justify-content:flex-end;gap:10px}
-
-.key-group{margin-bottom:18px}
-.key-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
-.key-label{font-size:.78rem;font-weight:600;display:flex;align-items:center;gap:8px}
-.key-link{font-size:.7rem;color:var(--ac);text-decoration:none;margin-left:auto}
-.key-link:hover{text-decoration:underline}
-.key-input-row{display:flex;gap:8px}
-.key-input{flex:1;border:1.5px solid var(--bd);border-radius:7px;padding:8px 12px;font-family:var(--mono);font-size:.78rem;color:var(--ink);outline:none;transition:border-color .2s;background:var(--sf2)}
-.key-input:focus{border-color:var(--ac)}
-.key-input.set{border-color:#10b98155;background:#f0fdf4}
-[data-theme="dark"] .key-input.set{background:#0d2a1a}
-.key-note{font-size:.69rem;color:var(--mu2);line-height:1.5;margin-top:4px}
-.btn-vis{background:none;border:1px solid var(--bd);border-radius:5px;padding:6px 10px;font-size:.72rem;cursor:pointer;color:var(--mu);white-space:nowrap}
-.btn-save{background:var(--ink);color:#fff;border:none;border-radius:7px;padding:8px 20px;font-size:.82rem;font-weight:600;cursor:pointer;font-family:var(--font)}
-[data-theme="dark"] .btn-save{background:#e4e2dd;color:#0f1118}
-.btn-cancel{background:none;border:1.5px solid var(--bd);border-radius:7px;padding:8px 16px;font-size:.82rem;color:var(--mu);cursor:pointer;font-family:var(--font)}
-
-/* TOAST */
-.toast{position:fixed;bottom:24px;right:24px;background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;font-size:.82rem;z-index:9999;transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;max-width:90vw}
-.toast.show{transform:translateY(0);opacity:1}
-[data-theme="dark"] .toast{background:#e4e2dd;color:#0f1118}
-
-/* MISC */
-.hint{font-size:.8rem;color:var(--mu);padding:30px;text-align:center;font-style:italic;line-height:1.7}
-.err-box{background:#fff0f0;border:1px solid #ffc0c0;border-radius:8px;padding:11px 14px;color:var(--re);font-size:.82rem;margin-bottom:12px}
-.loading-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;color:var(--mu)}
-.loading-spin{width:28px;height:28px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:sp .8s linear infinite}
-.autosave-bar{font-size:.7rem;color:var(--gr);font-family:var(--mono);padding:4px 0;text-align:right;margin-top:-10px;margin-bottom:8px}
-
-/* TEMPLATES */
-.tmpl-list{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
-.tmpl-chip{background:var(--sf2);border:1.5px solid var(--bd);border-radius:20px;padding:5px 12px;font-size:.8rem;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px}
-.tmpl-chip:hover{border-color:var(--ac);color:var(--ac)}
-
-/* KEY TEST */
-.key-test-row{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
-.btn-test{background:none;border:1px solid var(--bd);border-radius:5px;padding:4px 10px;font-size:.7rem;cursor:pointer;color:var(--mu);transition:all .15s;white-space:nowrap}
-.btn-test:hover{border-color:var(--ac);color:var(--ac)}
-.key-masked{font-family:var(--mono);font-size:.72rem;color:var(--gr);background:#f0fdf4;padding:2px 8px;border-radius:4px}
-.key-test-result{font-size:.7rem;font-family:var(--mono);padding:2px 8px;border-radius:4px}
-.ktr-ok{background:#f0fdf4;color:#15803d}.ktr-fail{background:#fff0f0;color:var(--re)}.ktr-loading{background:#eff6ff;color:#1d4ed8}
-
-/* AI REGEN */
-.ai-regen{background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.68rem;cursor:pointer;color:var(--mu);transition:all .15s;margin-left:4px}
-.ai-regen:hover:not(:disabled){border-color:var(--ac);color:var(--ac)}
-.ai-regen:disabled{opacity:.35;cursor:not-allowed}
-
-/* LOG */
-.log-form{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;padding:18px;margin-bottom:14px}
-.log-section-title{font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);margin:12px 0 7px}
-.log-chips{display:flex;flex-wrap:wrap;gap:7px}
-.log-chip{padding:5px 13px;border-radius:20px;border:1.5px solid var(--bd);font-size:.82rem;cursor:pointer;transition:all .15s;user-select:none;background:var(--sf2)}
-.log-chip:hover{border-color:var(--ac)}
-.log-chip.sel{font-weight:600;color:#fff}
-.log-chip.sel-left{background:#3b82f6;border-color:#3b82f6}
-.log-chip.sel-right{background:#ef4444;border-color:#ef4444}
-.log-chip.sel-sym{background:#8b5cf6;border-color:#8b5cf6}
-.log-chip.sel-med{background:#f59e0b;border-color:#f59e0b;color:var(--ink)}
-.log-chip.sel-tx{background:#10b981;border-color:#10b981}
-.log-nrs{display:flex;align-items:center;gap:12px;padding:4px 0}
-.log-nrs input[type=range]{flex:1;accent-color:var(--re)}
-.log-nrs-val{font-size:1.3rem;font-weight:700;color:var(--re);min-width:28px;text-align:center}
-.log-other-input{border:1.5px solid var(--bd);border-radius:7px;padding:6px 10px;font-size:.82rem;font-family:var(--font);outline:none;background:var(--sf);color:var(--ink);width:140px}
-.log-other-input:focus{border-color:var(--ac)}
-.log-memo{width:100%;border:1.5px solid var(--bd);border-radius:7px;padding:8px 11px;font-family:var(--font);font-size:.83rem;resize:none;outline:none;background:var(--sf2);color:var(--ink)}
-.log-memo:focus{border-color:var(--ac)}
-.btn-log-save{background:var(--re);color:#fff;border:none;border-radius:9px;padding:12px 28px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .2s;display:flex;align-items:center;gap:8px}
-.btn-log-save:hover:not(:disabled){background:#a02020;transform:translateY(-1px)}
-.btn-log-save:disabled{opacity:.5;cursor:not-allowed}
-.log-item{background:var(--sf);border:1.5px solid var(--bd);border-radius:9px;padding:12px 15px;margin-bottom:7px;display:flex;align-items:flex-start;gap:12px}
-.log-item-time{font-size:.72rem;font-family:var(--mono);color:var(--mu2);min-width:70px;padding-top:1px}
-.log-item-body{flex:1}
-.log-item-nrs{display:inline-block;font-size:.8rem;font-weight:700;padding:1px 8px;border-radius:4px;margin-right:6px}
-.log-item-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
-.log-tag{font-size:.7rem;padding:2px 7px;border-radius:3px}
-.log-del{background:none;border:none;color:var(--mu2);cursor:pointer;font-size:.85rem;padding:2px 5px;border-radius:3px;flex-shrink:0;margin-left:auto}
-.log-del:hover{color:var(--re)}
-.log-view-tabs{display:flex;gap:6px;margin-bottom:14px}
-.log-vtab{background:none;border:1.5px solid var(--bd);border-radius:7px;padding:6px 14px;font-size:.78rem;cursor:pointer;font-family:var(--font);color:var(--mu);transition:all .15s}
-.log-vtab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
-.nrs-bar-wrap{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.nrs-bar{height:8px;border-radius:4px;min-width:4px;transition:width .3s}
-.week-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--bd)}
-.week-date{font-size:.75rem;font-family:var(--mono);color:var(--mu);min-width:60px}
-.week-events{flex:1;display:flex;flex-wrap:wrap;gap:4px}
-.week-ev{font-size:.7rem;padding:2px 7px;border-radius:4px}
-
-/* EXPORT BUTTONS */
-.export-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
-.btn-export{background:none;border:1.5px solid var(--bd);border-radius:7px;padding:6px 14px;font-size:.75rem;cursor:pointer;color:var(--mu);font-family:var(--font);transition:all .15s}
-.btn-export:hover{border-color:var(--ac);color:var(--ac)}
-
-/* RESPONSIVE */
-@media(max-width:960px){
-  .ai-grid{grid-template-columns:1fr}
-  .home-grid{grid-template-columns:1fr}
-}
-@media(max-width:768px){
-  aside{position:fixed;left:0;top:0;transform:translateX(-100%)}
-  aside.open{transform:translateX(0)}
-  .hamburger{display:block}
-  .sidebar-overlay.show{display:block}
-  main{width:100%}
-  .topbar{padding:0 14px;padding-left:50px}
-  .content{padding:14px}
-  .modal{width:95vw}
-}
-
-/* CONDITION REGISTRY */
-.dx-card{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:10px;transition:border-color .2s}
-.dx-card:hover{border-color:var(--ac)}
-.dx-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.dx-name{font-size:.92rem;font-weight:600;flex:1}
-.dx-status{font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:.03em}
-.dx-status.active{background:#f0fdf4;color:#15803d}
-.dx-status.remission{background:#eff6ff;color:#1d4ed8}
-.dx-status.resolved{background:var(--sf2);color:var(--mu2)}
-.dx-status.self-stopped{background:#fffbeb;color:#b45309}
-.dx-body{font-size:.8rem;line-height:1.7;color:var(--mu)}
-.dx-body strong{color:var(--ink);font-weight:600}
-.dx-section{margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)}
-.dx-section-title{font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mu2);margin-bottom:4px}
-.dx-med-item{padding:4px 0;display:flex;align-items:baseline;gap:6px}
-.dx-med-name{font-weight:600;color:var(--ink)}
-.dx-med-detail{color:var(--mu);font-size:.78rem}
-.dx-form-group{margin-bottom:12px}
-.dx-form-label{font-size:.7rem;font-weight:600;color:var(--mu);margin-bottom:4px}
-.dx-form-input{width:100%;border:1.5px solid var(--bd);border-radius:7px;padding:7px 10px;font-family:var(--font);font-size:.82rem;outline:none;background:var(--sf2);color:var(--ink)}
-.dx-form-input:focus{border-color:var(--ac)}
-.dx-form-ta{width:100%;border:1.5px solid var(--bd);border-radius:7px;padding:7px 10px;font-family:var(--font);font-size:.82rem;outline:none;background:var(--sf2);color:var(--ink);resize:vertical;min-height:60px}
-
-/* FILE UPLOAD */
-.file-upload-area{border:1.5px dashed var(--bd);border-radius:8px;padding:10px 14px;margin-top:8px;cursor:pointer;transition:border-color .2s;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.file-upload-area:hover{border-color:var(--ac)}
-.file-upload-label{font-size:.78rem;color:var(--mu)}
-.file-upload-area input[type=file]{display:none}
-.file-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:.72rem;background:var(--sf2);border:1px solid var(--bd);color:var(--ink)}
-.file-chip .file-remove{cursor:pointer;color:var(--mu2);font-size:.8rem}
-.file-chip .file-remove:hover{color:var(--re)}
-
-</style>
+<script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 </head>
 <body>
 
@@ -344,7 +24,7 @@ main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 <aside id="sidebar">
   <div class="logo">
     <div class="logo-title">Orangi Health<br>AI 협진 시스템</div>
-    <div class="logo-sub">MULTI-DOMAIN v7.5</div>
+    <div class="logo-sub">MULTI-DOMAIN v8.0</div>
   </div>
 
   <!-- DOMAIN SELECTOR -->
@@ -391,6 +71,8 @@ main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
       </button>
       <button class="sb-btn" onclick="switchView('templates',this)" id="nav-templates">📌 질문 템플릿</button>
       <button class="sb-btn" onclick="switchView('meds',this)" id="nav-meds">📋 질환 관리</button>
+      <button class="sb-btn" onclick="switchView('stats',this)" id="nav-stats">📈 통계 대시보드</button>
+      <button class="sb-btn" onclick="switchView('crosslog',this)" id="nav-crosslog">🔗 교차 분석</button>
       <button class="sb-btn" onclick="switchView('usage',this)" id="nav-usage">
         💰 비용 추적
         <span class="sb-badge" id="sb-today-cost" style="display:inline"></span>
@@ -1037,7 +719,7 @@ async function driveSearch(name, parentId=null) {
   if (isTokenExpired()) await ensureValidToken();
   let q = `name='${name}' and trashed=false`;
   if (parentId) q += ` and '${parentId}' in parents`;
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,modifiedTime)`,
+  const res = await fetchWithRetry(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,modifiedTime)`,
     {headers:{Authorization:'Bearer '+S.token}});
   const d = await res.json();
   if (d.error) throw new Error(d.error.message);
@@ -1045,7 +727,7 @@ async function driveSearch(name, parentId=null) {
 }
 async function driveRead(fileId) {
   if (isTokenExpired()) await ensureValidToken();
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+  const res = await fetchWithRetry(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
     {headers:{Authorization:'Bearer '+S.token}});
   return res.json();
 }
@@ -1056,13 +738,13 @@ async function driveCreate(name, data, parentId=null) {
   if(parentId) metaObj.parents=[parentId];
   const meta=JSON.stringify(metaObj);
   const body=`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(data)}\r\n--${boundary}--`;
-  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
+  const res = await fetchWithRetry('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
     method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':`multipart/related; boundary=${boundary}`},body});
   const d=await res.json(); if(d.error) throw new Error(d.error.message); return d.id;
 }
 async function driveUpdate(fileId, data) {
   if (isTokenExpired()) await ensureValidToken();
-  const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{
+  const res = await fetchWithRetry(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{
     method:'PATCH',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/json'},body:JSON.stringify(data)});
   const d=await res.json(); if(d.error) throw new Error(d.error.message); return d;
 }
@@ -1211,6 +893,24 @@ async function manualBackup() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// RETRY WRAPPER
+// ═══════════════════════════════════════════════════════════════
+async function fetchWithRetry(url, opts, maxRetries=2) {
+  for (let i=0; i<=maxRetries; i++) {
+    try {
+      const res = await fetch(url, opts);
+      if (res.status === 429 || res.status >= 500) {
+        if (i < maxRetries) { await new Promise(r=>setTimeout(r, (i+1)*2000)); continue; }
+      }
+      return res;
+    } catch(e) {
+      if (i < maxRetries) { await new Promise(r=>setTimeout(r, (i+1)*2000)); continue; }
+      throw e;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // COST TRACKING
 // ═══════════════════════════════════════════════════════════════
 function getPriceTable() { return DM()?.price_table || DEFAULT_PRICE_TABLE; }
@@ -1247,43 +947,111 @@ function getRoleSystem(aiId) {
 규칙: ① 팩트/해석/전략 분리 ② 확정/추정/가설 구분 ③ 금지표현 사용 금지 ④ 불필요한 수식어 없이 내용만 ⑤ 항목당 1-2문장 압축`;
 }
 
+// Non-streaming fallback (used by summary, price update, etc.)
 async function callAI(aiId, system, user) {
+  return await callAIStream(aiId, system, user, ()=>{});
+}
+
+// Streaming AI call — onChunk(accumulatedText) called on each chunk
+async function callAIStream(aiId, system, user, onChunk) {
   const key=S.keys[aiId]; const model=S.models[aiId]||DEFAULT_MODELS[aiId];
   if(!key) throw new Error(`${AI_DEFS[aiId]?.name} API 키 미설정. 🔑 설정에서 입력하세요.`);
 
   if(aiId==='claude') {
-    const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+    const r=await fetchWithRetry('https://api.anthropic.com/v1/messages',{method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model,max_tokens:6000,system,messages:[{role:'user',content:user}]})});
-    const d=await r.json(); if(d.error) throw new Error('Claude: '+d.error.message);
-    recordUsage(aiId,model,d.usage?.input_tokens||0,d.usage?.output_tokens||0);
-    return d.content.map(c=>c.text||'').join('');
+      body:JSON.stringify({model,max_tokens:6000,stream:true,system,messages:[{role:'user',content:user}]})});
+    if(!r.ok){const d=await r.json();throw new Error('Claude: '+(d.error?.message||r.status));}
+    let text='',inT=0,outT=0;
+    const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){
+      const{done,value}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop()||'';
+      for(const line of lines){
+        if(!line.startsWith('data: '))continue;
+        try{const ev=JSON.parse(line.slice(6));
+          if(ev.type==='content_block_delta'&&ev.delta?.text){text+=ev.delta.text;onChunk(text);}
+          if(ev.type==='message_delta'&&ev.usage){outT=ev.usage.output_tokens||0;}
+          if(ev.type==='message_start'&&ev.message?.usage){inT=ev.message.usage.input_tokens||0;}
+        }catch(e){}
+      }
+    }
+    recordUsage(aiId,model,inT,outT);
+    return text;
   }
+
   if(aiId==='gpt') {
-    const r=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',
+    const r=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{method:'POST',
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
-      body:JSON.stringify({model,max_completion_tokens:4000,messages:[{role:'system',content:system},{role:'user',content:user}]})});
-    const d=await r.json(); if(d.error) throw new Error('GPT: '+d.error.message);
-    recordUsage(aiId,model,d.usage?.prompt_tokens||0,d.usage?.completion_tokens||0);
-    return d.choices[0].message.content;
+      body:JSON.stringify({model,max_completion_tokens:4000,stream:true,stream_options:{include_usage:true},
+        messages:[{role:'system',content:system},{role:'user',content:user}]})});
+    if(!r.ok){const d=await r.json();throw new Error('GPT: '+(d.error?.message||r.status));}
+    let text='',inT=0,outT=0;
+    const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){
+      const{done,value}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop()||'';
+      for(const line of lines){
+        if(!line.startsWith('data: ')||line==='data: [DONE]')continue;
+        try{const ev=JSON.parse(line.slice(6));
+          if(ev.choices?.[0]?.delta?.content){text+=ev.choices[0].delta.content;onChunk(text);}
+          if(ev.usage){inT=ev.usage.prompt_tokens||0;outT=ev.usage.completion_tokens||0;}
+        }catch(e){}
+      }
+    }
+    recordUsage(aiId,model,inT,outT);
+    return text;
   }
+
   if(aiId==='gemini') {
-    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+    const r=await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`,
       {method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({system_instruction:{parts:[{text:system}]},contents:[{parts:[{text:user}]}],generationConfig:{maxOutputTokens:8192}})});
-    const d=await r.json(); if(d.error) throw new Error('Gemini: '+d.error.message);
-    recordUsage(aiId,model,d.usageMetadata?.promptTokenCount||0,d.usageMetadata?.candidatesTokenCount||0);
-    const parts=d.candidates?.[0]?.content?.parts||[];
-    return parts.filter(p=>p.text&&!p.thought).map(p=>p.text).join('')||parts.map(p=>p.text||'').join('');
+    if(!r.ok){const d=await r.json();throw new Error('Gemini: '+(d.error?.message||r.status));}
+    let text='',inT=0,outT=0;
+    const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){
+      const{done,value}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop()||'';
+      for(const line of lines){
+        if(!line.startsWith('data: '))continue;
+        try{const ev=JSON.parse(line.slice(6));
+          const parts=ev.candidates?.[0]?.content?.parts||[];
+          const chunk=parts.filter(p=>p.text&&!p.thought).map(p=>p.text).join('');
+          if(chunk){text+=chunk;onChunk(text);}
+          if(ev.usageMetadata){inT=ev.usageMetadata.promptTokenCount||0;outT=ev.usageMetadata.candidatesTokenCount||0;}
+        }catch(e){}
+      }
+    }
+    recordUsage(aiId,model,inT,outT);
+    return text;
   }
+
   if(aiId==='perp') {
-    const r=await fetch('https://api.perplexity.ai/chat/completions',{method:'POST',
+    const r=await fetchWithRetry('https://api.perplexity.ai/chat/completions',{method:'POST',
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
-      body:JSON.stringify({model,max_tokens:4000,messages:[{role:'system',content:system},{role:'user',content:user}]})});
-    const d=await r.json();
-    if(d.error) throw new Error('Perplexity: '+(typeof d.error==='string'?d.error:JSON.stringify(d.error)));
-    recordUsage(aiId,model,d.usage?.prompt_tokens||0,d.usage?.completion_tokens||0);
-    return d.choices[0].message.content;
+      body:JSON.stringify({model,max_tokens:4000,stream:true,
+        messages:[{role:'system',content:system},{role:'user',content:user}]})});
+    if(!r.ok){const d=await r.json();throw new Error('Perplexity: '+(d.error?.message||r.status));}
+    let text='',inT=0,outT=0;
+    const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){
+      const{done,value}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop()||'';
+      for(const line of lines){
+        if(!line.startsWith('data: ')||line==='data: [DONE]')continue;
+        try{const ev=JSON.parse(line.slice(6));
+          if(ev.choices?.[0]?.delta?.content){text+=ev.choices[0].delta.content;onChunk(text);}
+          if(ev.usage){inT=ev.usage.prompt_tokens||0;outT=ev.usage.completion_tokens||0;}
+        }catch(e){}
+      }
+    }
+    recordUsage(aiId,model,inT,outT);
+    return text;
   }
   throw new Error('알 수 없는 AI: '+aiId);
 }
@@ -1354,10 +1122,16 @@ async function runRound(roundNum) {
 
   await Promise.all(Object.keys(AI_DEFS).map(async aiId=>{
     try {
-      const answer = await callAI(aiId, getRoleSystem(aiId), buildUserPrompt(aiId,roundNum));
+      const answer = await callAIStream(aiId, getRoleSystem(aiId), buildUserPrompt(aiId,roundNum), (chunk)=>{
+        // Real-time partial update (#9)
+        const ta=document.getElementById('ans-'+aiId);
+        if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
+      });
       S.session.rounds[roundNum-1].answers[aiId]=answer;
       const ta=document.getElementById('ans-'+aiId);
       if(ta){ta.value=answer;ta.classList.remove('gen');}
+      // Show markdown render after completion
+      updateAICardMD(aiId, answer);
       setCardStatus(aiId,'done');
     } catch(e) {
       const msg='⚠️ 오류: '+e.message;
@@ -1389,10 +1163,14 @@ async function regenOne(aiId) {
   setCardStatus(aiId,'loading');
   if(!S.session.rounds[curRound-1]) S.session.rounds[curRound-1]={round:curRound,answers:{}};
   try {
-    const answer=await callAI(aiId,getRoleSystem(aiId),buildUserPrompt(aiId,curRound));
+    const answer=await callAIStream(aiId,getRoleSystem(aiId),buildUserPrompt(aiId,curRound),(chunk)=>{
+      const ta=document.getElementById('ans-'+aiId);
+      if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
+    });
     S.session.rounds[curRound-1].answers[aiId]=answer;
     const ta=document.getElementById('ans-'+aiId);
     if(ta){ta.value=answer;ta.classList.remove('gen');}
+    updateAICardMD(aiId, answer);
     setCardStatus(aiId,'done');
     showToast(`✅ ${AI_DEFS[aiId].name} 재생성 완료`);
   } catch(e) {
@@ -1404,6 +1182,38 @@ async function regenOne(aiId) {
   }
   if(btn){btn.disabled=false;btn.textContent='↺ 재생성';}
   try { await saveMaster(); updateSidebarCost(); } catch(e) {}
+}
+
+// Partial DOM update: show markdown view after streaming (#9)
+function updateAICardMD(aiId, text) {
+  const body = document.querySelector(`[data-ai="${aiId}"] .ai-body`);
+  if(!body || !text) return;
+  // Add or update markdown view
+  let mdDiv = body.querySelector('.ai-md');
+  if(!mdDiv) {
+    mdDiv = document.createElement('div');
+    mdDiv.className = 'ai-md';
+    mdDiv.style.display = 'none';
+    body.appendChild(mdDiv);
+  }
+  mdDiv.innerHTML = renderMD(text);
+  // Add toggle button if not exists
+  let toggleBtn = body.querySelector('.ai-toggle-view');
+  if(!toggleBtn) {
+    toggleBtn = document.createElement('button');
+    toggleBtn.className = 'ai-toggle-view';
+    toggleBtn.textContent = 'MD';
+    toggleBtn.onclick = () => {
+      const ta = body.querySelector('textarea');
+      const md = body.querySelector('.ai-md');
+      if(!ta || !md) return;
+      const showMD = md.style.display === 'none';
+      ta.style.display = showMD ? 'none' : '';
+      md.style.display = showMD ? 'block' : 'none';
+      toggleBtn.textContent = showMD ? 'Raw' : 'MD';
+    };
+    body.insertBefore(toggleBtn, body.firstChild);
+  }
 }
 
 function setCardStatus(aiId,status) {
@@ -1518,20 +1328,14 @@ function renderSummaryResult(r) {
 // ═══════════════════════════════════════════════════════════════
 function renderMD(text) {
   if(!text) return '';
-  return text
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
-    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
-    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g,'<em>$1</em>')
-    .replace(/`(.+?)`/g,'<code>$1</code>')
-    .replace(/^- (.+)$/gm,'<li>$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm,'<li>$2</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g,'<ul>$&</ul>')
-    .replace(/^> (.+)$/gm,'<blockquote>$1</blockquote>')
-    .replace(/\n{2,}/g,'<br><br>')
-    .replace(/\n/g,'<br>');
+  if(typeof marked !== 'undefined') {
+    try {
+      marked.setOptions({breaks:true, gfm:true, headerIds:false, mangle:false});
+      return DOMPurify ? DOMPurify.sanitize(marked.parse(text)) : marked.parse(text);
+    } catch(e) {}
+  }
+  // Fallback if marked.js not loaded
+  return esc(text).replace(/\n/g,'<br>');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1542,7 +1346,7 @@ function switchView(view, btn) {
   S.currentView=view;
   document.querySelectorAll('.sb-btn').forEach(b=>b.classList.remove('active'));
   const navBtn=document.getElementById('nav-'+view); if(navBtn) navBtn.classList.add('active');
-  const titles={home:'홈 — 누적 기록',session:'현재 세션',log:'📊 증상 기록',history:'세션 기록',templates:'질문 템플릿',meds:'📋 질환 관리',usage:'💰 비용 추적'};
+  const titles={home:'홈 — 누적 기록',session:'현재 세션',log:'📊 증상 기록',history:'세션 기록',templates:'질문 템플릿',meds:'📋 질환 관리',stats:'📈 통계 대시보드',crosslog:'🔗 교차 분석',usage:'💰 비용 추적'};
   document.getElementById('topbar-title').textContent=titles[view]||'AI 협진';
   renderView(view);
   closeSidebar();
@@ -1555,6 +1359,8 @@ function renderView(view) {
   else if(view==='history') area.innerHTML=renderHistory();
   else if(view==='templates') area.innerHTML=renderTemplates();
   else if(view==='meds') area.innerHTML=renderMedsView();
+  else if(view==='stats') area.innerHTML=renderStatsView();
+  else if(view==='crosslog') area.innerHTML=renderCrossLogView();
   else if(view==='usage') area.innerHTML=renderUsageView();
   else area.innerHTML='<div class="hint">뷰를 선택하세요.</div>';
 }
@@ -1658,7 +1464,9 @@ function renderSession() {
       <div class="q-label" style="color:var(--domain-color)">● 오늘의 질문</div>
       ${tmplHtml}
       <textarea id="q-input" rows="2" placeholder="질문을 입력하세요..."
-        ${curRound>0?'readonly style="color:var(--mu)"':''}>${esc(sess.question||'')}</textarea>
+        ${curRound>=4?'readonly style="color:var(--mu)"':''}
+        oninput="if(S.session)S.session.question=this.value">${esc(sess.question||'')}</textarea>
+      ${curRound>0&&curRound<4?'<div style="font-size:.65rem;color:var(--r3);margin-top:2px">💡 질문을 수정하면 다음 라운드에 반영됩니다</div>':''}
       ${curRound===0?`
       <div class="file-upload-area" onclick="document.getElementById('q-file-input').click()">
         <span style="font-size:1rem">📎</span>
@@ -1704,22 +1512,48 @@ function renderActionBar(curRound) {
 }
 
 // HISTORY VIEW
-function renderHistory() {
-  const sessions=DM()?.sessions||[];
-  if(!sessions.length) return '<div class="hint">저장된 세션이 없어요.</div>';
-  if(S.viewingHistIdx!==null && sessions[S.viewingHistIdx]) return renderHistDetail(sessions[S.viewingHistIdx],S.viewingHistIdx);
+let _histSearch='';
+let _histDateFrom='';
+let _histDateTo='';
+function filterSessions(sessions) {
+  let filtered=sessions;
+  if(_histSearch) {
+    const q=_histSearch.toLowerCase();
+    filtered=filtered.filter(s=>(s.question||'').toLowerCase().includes(q)||(s.summary?.session_summary||'').toLowerCase().includes(q));
+  }
+  if(_histDateFrom) filtered=filtered.filter(s=>s.date>=_histDateFrom);
+  if(_histDateTo) filtered=filtered.filter(s=>s.date<=_histDateTo);
+  return filtered;
+}
+function onHistSearch(){_histSearch=document.getElementById('hist-search')?.value||'';renderView('history');}
+function onHistDateFilter(){_histDateFrom=document.getElementById('hist-from')?.value||'';_histDateTo=document.getElementById('hist-to')?.value||'';renderView('history');}
+function clearHistFilter(){_histSearch='';_histDateFrom='';_histDateTo='';renderView('history');}
 
-  return `<div class="export-bar">
-    <span style="font-size:.87rem;color:var(--mu)">총 ${sessions.length}개</span>
+function renderHistory() {
+  const allSessions=DM()?.sessions||[];
+  if(!allSessions.length) return '<div class="hint">저장된 세션이 없어요.</div>';
+  if(S.viewingHistIdx!==null && allSessions[S.viewingHistIdx]) return renderHistDetail(allSessions[S.viewingHistIdx],S.viewingHistIdx);
+
+  const sessions=filterSessions(allSessions);
+  const hasFilter=_histSearch||_histDateFrom||_histDateTo;
+
+  return `<div class="export-bar" style="flex-wrap:wrap;gap:8px">
+    <input class="accum-add-input" id="hist-search" value="${esc(_histSearch)}" placeholder="🔍 질문/요약 검색..." oninput="onHistSearch()" style="flex:2;min-width:160px">
+    <input type="date" id="hist-from" value="${_histDateFrom}" class="dx-form-input" onchange="onHistDateFilter()" style="width:130px;font-size:.72rem">
+    <span style="font-size:.72rem;color:var(--mu)">~</span>
+    <input type="date" id="hist-to" value="${_histDateTo}" class="dx-form-input" onchange="onHistDateFilter()" style="width:130px;font-size:.72rem">
+    ${hasFilter?`<button class="btn-cancel" onclick="clearHistFilter()" style="font-size:.7rem;padding:4px 10px">✕ 초기화</button>`:''}
     <button class="btn-export" onclick="exportSessionsMD()">📄 MD 내보내기</button>
+    <span style="font-size:.78rem;color:var(--mu)">${hasFilter?`${sessions.length}/${allSessions.length}건`:`총 ${allSessions.length}개`}</span>
   </div>` +
-  sessions.map((s,i)=>`
-    <div class="session-hist-item" onclick="viewSession(${i})">
-      <button class="hist-del" onclick="event.stopPropagation();deleteSession(${i})">🗑</button>
+  sessions.map(s=>{
+    const realIdx=allSessions.indexOf(s);
+    return `<div class="session-hist-item" onclick="viewSession(${realIdx})">
+      <button class="hist-del" onclick="event.stopPropagation();deleteSession(${realIdx})">🗑</button>
       <div class="hist-date">${s.date} · R${s.rounds?.length||0}</div>
       <div class="hist-q">${esc((s.question||'').substring(0,100))}</div>
       ${s.summary?`<div class="hist-meta">${esc((s.summary.session_summary||'').substring(0,80))}</div>`:''}
-    </div>`).join('');
+    </div>`;}).join('');
 }
 function viewSession(idx) { S.viewingHistIdx=idx; switchView('history'); }
 
@@ -1816,6 +1650,185 @@ function useTemplateInSession(idx) {
   const t=DM()?.templates?.[idx]; if(!t) return;
   if(!S.session) startNewSession(); else switchView('session');
   setTimeout(()=>{const el=document.getElementById('q-input');if(el)el.value=t;},50);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// STATS DASHBOARD (#3)
+// ═══════════════════════════════════════════════════════════════
+function renderStatsView() {
+  const ds=D(); const lc=DC().logConfig; const dc=DC();
+  const logs=ds.logData||[];
+  if(!logs.length) return `<div class="hint">📈 통계를 보려면 먼저 기록을 쌓아주세요.<br><button class="btn-cancel" onclick="switchView('log')" style="margin-top:10px">📊 기록하러 가기</button></div>`;
+
+  const now=new Date();
+  const last30=logs.filter(l=>(now-new Date(l.datetime))<=30*86400000);
+  const last7=logs.filter(l=>(now-new Date(l.datetime))<=7*86400000);
+
+  // NRS/Mood trend (last 30 days)
+  const byDate={};
+  last30.forEach(l=>{
+    const d=l.datetime.slice(0,10);
+    if(!byDate[d]) byDate[d]={nrs:[],count:0,symptoms:{},meds:{},mood:{}};
+    byDate[d].count++;
+    if(lc.moodMode&&l.mood) { byDate[d].mood[l.mood]=(byDate[d].mood[l.mood]||0)+1; }
+    else if(l.nrs>0) byDate[d].nrs.push(l.nrs);
+    (l.symptoms||[]).forEach(s=>{byDate[d].symptoms[s]=(byDate[d].symptoms[s]||0)+1;});
+    (l.meds||[]).forEach(m=>{byDate[d].meds[m]=(byDate[d].meds[m]||0)+1;});
+  });
+
+  // 30-day chart
+  const dates=[];
+  for(let i=29;i>=0;i--){const d=new Date(now-i*86400000).toISOString().slice(0,10);dates.push(d);}
+  const maxNrs=10;
+  const barHtml=dates.map(d=>{
+    const data=byDate[d];
+    const avgNrs=data?.nrs?.length?data.nrs.reduce((a,b)=>a+b,0)/data.nrs.length:0;
+    const h=Math.max(2,Math.round((avgNrs/maxNrs)*60));
+    const isToday=d===now.toISOString().slice(0,10);
+    const dayName=['일','월','화','수','목','금','토'][new Date(d+'T12:00').getDay()];
+    const color=avgNrs>0?nrsColor(avgNrs):'var(--bd)';
+    const label=d.slice(8);
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0" title="${d}: ${avgNrs>0?'NRS '+avgNrs.toFixed(1):'기록없음'}${data?.count?' ('+data.count+'건)':''}">
+      <div style="font-size:.5rem;color:var(--mu2)">${avgNrs>0?avgNrs.toFixed(1):''}</div>
+      <div style="width:100%;max-width:14px;height:${h}px;background:${color};border-radius:2px"></div>
+      <div style="font-size:.5rem;color:${isToday?'var(--ac)':'var(--mu2)'};font-weight:${isToday?'700':'400'}">${label}</div>
+      <div style="font-size:.45rem;color:var(--mu2)">${dayName}</div>
+    </div>`;
+  }).join('');
+
+  // Symptom frequency
+  const symFreq={};
+  last30.forEach(l=>(l.symptoms||[]).forEach(s=>{symFreq[s]=(symFreq[s]||0)+1;}));
+  const topSyms=Object.entries(symFreq).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxSymF=topSyms[0]?.[1]||1;
+  const symHtml=topSyms.map(([s,c])=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+      <span style="font-size:.78rem;min-width:90px;text-align:right">${esc(s)}</span>
+      <div style="flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden">
+        <div style="width:${Math.round(c/maxSymF*100)}%;height:100%;background:#8b5cf6;border-radius:4px"></div>
+      </div>
+      <span style="font-size:.68rem;font-family:var(--mono);color:var(--mu);min-width:24px">${c}</span>
+    </div>`).join('');
+
+  // Med frequency
+  const medFreq={};
+  last30.forEach(l=>(l.meds||[]).forEach(m=>{medFreq[m]=(medFreq[m]||0)+1;}));
+  const topMeds=Object.entries(medFreq).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxMedF=topMeds[0]?.[1]||1;
+  const medHtml=topMeds.map(([m,c])=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+      <span style="font-size:.78rem;min-width:90px;text-align:right">${esc(m)}</span>
+      <div style="flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden">
+        <div style="width:${Math.round(c/maxMedF*100)}%;height:100%;background:#f59e0b;border-radius:4px"></div>
+      </div>
+      <span style="font-size:.68rem;font-family:var(--mono);color:var(--mu);min-width:24px">${c}</span>
+    </div>`).join('');
+
+  // Summary stats
+  const nrsAll=last30.flatMap(l=>lc.moodMode?[]:(l.nrs>0?[l.nrs]:[]));
+  const avgAll=nrsAll.length?(nrsAll.reduce((a,b)=>a+b,0)/nrsAll.length).toFixed(1):'-';
+  const nrs7=last7.flatMap(l=>lc.moodMode?[]:(l.nrs>0?[l.nrs]:[]));
+  const avg7=nrs7.length?(nrs7.reduce((a,b)=>a+b,0)/nrs7.length).toFixed(1):'-';
+  const medDays30=new Set(last30.filter(l=>(l.meds||[]).length>0).map(l=>l.datetime.slice(0,10))).size;
+
+  return `
+  <div class="card">
+    <div class="card-title">📈 ${dc.icon} ${dc.label} — 30일 요약</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      ${[['기록 수',last30.length+'건'],['7일 평균',lc.moodMode?'-':avg7],['30일 평균',lc.moodMode?'-':avgAll],['투약일',medDays30+'일']].map(([l,v])=>`
+        <div style="background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:.62rem;color:var(--mu);margin-bottom:3px">${l}</div>
+          <div style="font-size:1rem;font-weight:700">${v}</div>
+        </div>`).join('')}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">${lc.moodMode?'기분':'NRS'} 추세 (30일)</div>
+    <div style="display:flex;align-items:flex-end;gap:1px;padding:8px 0">${barHtml}</div>
+  </div>
+  ${topSyms.length?`<div class="card"><div class="card-title">증상 빈도 (30일)</div>${symHtml}</div>`:''}
+  ${topMeds.length?`<div class="card"><div class="card-title">투약 빈도 (30일)</div>${medHtml}</div>`:''}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CROSS-DOMAIN LOG ANALYSIS (#6)
+// ═══════════════════════════════════════════════════════════════
+function renderCrossLogView() {
+  const currentUser=DC().user;
+  const allLogs=[]; // {date, domain, domainLabel, icon, nrs, mood, symptoms, meds, memo}
+
+  Object.entries(S.domainState).forEach(([domainId, ds])=>{
+    const domDef=DOMAINS[domainId];
+    if(!domDef||domDef.user!==currentUser||!ds.logData?.length) return;
+    ds.logData.forEach(l=>{
+      allLogs.push({
+        date:l.datetime.slice(0,10), time:l.datetime.slice(11,16),
+        domain:domainId, label:domDef.label, icon:domDef.icon, color:domDef.color,
+        nrs:l.nrs||0, mood:l.mood||'',
+        symptoms:l.symptoms||[], meds:l.meds||[],
+        categories:l.categories||[], memo:l.memo||'',
+      });
+    });
+  });
+
+  if(!allLogs.length) return `<div class="hint">🔗 교차 분석을 위해 2개 이상의 도메인에서 기록을 쌓아주세요.</div>`;
+
+  // Group by date
+  const byDate={};
+  allLogs.forEach(l=>{
+    if(!byDate[l.date]) byDate[l.date]=[];
+    byDate[l.date].push(l);
+  });
+
+  const sortedDates=Object.keys(byDate).sort().reverse().slice(0,30);
+
+  const rows=sortedDates.map(date=>{
+    const dayLogs=byDate[date];
+    const dayName=['일','월','화','수','목','금','토'][new Date(date+'T12:00').getDay()];
+    const domainGroups={};
+    dayLogs.forEach(l=>{
+      if(!domainGroups[l.domain]) domainGroups[l.domain]={icon:l.icon,label:l.label,color:l.color,items:[]};
+      domainGroups[l.domain].items.push(l);
+    });
+
+    const groupHtml=Object.values(domainGroups).map(g=>{
+      const items=g.items.map(l=>{
+        const tags=[
+          l.mood?`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:'',
+          l.nrs>0?`<span class="log-tag" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS${l.nrs}</span>`:'',
+          ...l.symptoms.map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`),
+          ...l.meds.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`),
+          ...l.categories.map(c=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(c)}</span>`),
+        ].filter(Boolean).join('');
+        return `<div style="display:flex;align-items:flex-start;gap:6px;padding:2px 0">
+          ${l.time&&l.time!=='00:00'?`<span style="font-size:.65rem;font-family:var(--mono);color:var(--mu2);min-width:36px">${l.time}</span>`:''}
+          <div>${tags}${l.memo?`<span style="font-size:.72rem;color:var(--mu);margin-left:4px">${esc(l.memo.substring(0,60))}</span>`:''}</div>
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:6px"><div style="font-size:.68rem;font-weight:600;color:${g.color};margin-bottom:2px">${g.icon} ${g.label} (${g.items.length})</div>${items}</div>`;
+    }).join('');
+
+    return `<div class="card" style="padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-family:var(--mono);font-size:.78rem;font-weight:600">${date}</span>
+        <span style="font-size:.65rem;color:var(--mu2)">${dayName}</span>
+        <span style="font-size:.65rem;color:var(--mu);margin-left:auto">${dayLogs.length}건</span>
+      </div>
+      ${groupHtml}
+    </div>`;
+  }).join('');
+
+  // Correlation hint
+  const domains=Object.keys(S.domainState).filter(id=>DOMAINS[id]?.user===currentUser&&S.domainState[id]?.logData?.length);
+  return `
+  <div class="card">
+    <div class="card-title">🔗 ${currentUser} — 교차 도메인 타임라인</div>
+    <p style="font-size:.78rem;color:var(--mu);margin-bottom:10px">
+      ${domains.map(id=>`<span style="color:${DOMAINS[id].color};font-weight:600">${DOMAINS[id].icon} ${DOMAINS[id].label}</span>`).join(' · ')} — 최근 30일
+    </p>
+  </div>
+  ${rows}
+  ${!sortedDates.length?'<div class="hint">기록이 없습니다.</div>':''}`;
 }
 
 // USAGE VIEW
@@ -3128,6 +3141,15 @@ saveMaster = async function() {
     throw e;
   }
 };
+
+// ═══════════════════════════════════════════════════════════════
+// PWA SERVICE WORKER REGISTRATION
+// ═══════════════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
 
 </script>
 </body>

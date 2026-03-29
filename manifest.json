@@ -1,0 +1,16 @@
+{
+  "name": "Orangi Health AI 협진 시스템",
+  "short_name": "Orangi Health",
+  "description": "멀티 도메인 AI 협진 의료 기록 시스템",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#f2f0eb",
+  "theme_color": "#2c5f8a",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
