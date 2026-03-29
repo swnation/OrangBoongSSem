@@ -751,11 +751,11 @@ async function driveUpdate(fileId, data) {
 async function getOrCreateFolder(name) {
   if (isTokenExpired()) await ensureValidToken();
   const q=`name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  const res=await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`,
+  const res=await fetchWithRetry(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`,
     {headers:{Authorization:'Bearer '+S.token}});
   const d=await res.json(); if(d.error) throw new Error(d.error.message);
   if(d.files?.length>0) return d.files[0].id;
-  const cr=await fetch('https://www.googleapis.com/drive/v3/files?fields=id',{
+  const cr=await fetchWithRetry('https://www.googleapis.com/drive/v3/files?fields=id',{
     method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/json'},
     body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder'})});
   const cd=await cr.json(); if(cd.error) throw new Error(cd.error.message);
@@ -1525,7 +1525,14 @@ function filterSessions(sessions) {
   if(_histDateTo) filtered=filtered.filter(s=>s.date<=_histDateTo);
   return filtered;
 }
-function onHistSearch(){_histSearch=document.getElementById('hist-search')?.value||'';renderView('history');}
+function onHistSearch(){
+  const el=document.getElementById('hist-search');
+  const pos=el?.selectionStart||0;
+  _histSearch=el?.value||'';
+  renderView('history');
+  // Restore focus after re-render
+  setTimeout(()=>{const el2=document.getElementById('hist-search');if(el2){el2.focus();el2.selectionStart=el2.selectionEnd=pos;}},0);
+}
 function onHistDateFilter(){_histDateFrom=document.getElementById('hist-from')?.value||'';_histDateTo=document.getElementById('hist-to')?.value||'';renderView('history');}
 function clearHistFilter(){_histSearch='';_histDateFrom='';_histDateTo='';renderView('history');}
 
@@ -2835,7 +2842,7 @@ async function processFile(file, target) {
         const boundary = 'file_bound_'+Date.now();
         const meta = JSON.stringify({name: file.name, parents:[ds.folderId]});
         const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: ${file.type}\r\nContent-Transfer-Encoding: base64\r\n\r\n${base64}\r\n--${boundary}--`;
-        const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',{
+        const res = await fetchWithRetry('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',{
           method:'POST',headers:{Authorization:'Bearer '+S.token,'Content-Type':`multipart/related; boundary=${boundary}`},body});
         const d = await res.json();
         if(d.id) { fileObj.driveId = d.id; fileObj.webLink = d.webViewLink; }

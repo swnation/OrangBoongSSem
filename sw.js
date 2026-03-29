@@ -36,7 +36,21 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Cache-first for static assets
+  // Network-first for HTML/CSS (get latest, fallback to cache)
+  if (e.request.destination === 'document' || url.pathname.endsWith('.css') || url.pathname.endsWith('.html')) {
+    e.respondWith(
+      fetch(e.request).then(response => {
+        if (response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
+        }
+        return response;
+      }).catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Cache-first for static assets (fonts, CDN libs)
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
