@@ -64,7 +64,10 @@
         💬 현재 세션
         <span class="sb-badge" id="session-round-badge" style="display:none">R1</span>
       </button>
-      <button class="sb-btn" onclick="switchView('log',this)" id="nav-log">📊 증상 기록</button>
+      <button class="sb-btn" onclick="switchView('log',this)" id="nav-log">
+        📊 증상 기록
+        <span class="sb-badge quick-log-badge" id="quick-log-badge" style="display:none;background:#c96442;color:#fff">0</span>
+      </button>
       <button class="sb-btn" onclick="switchView('history',this)" id="nav-history">
         📅 세션 기록
         <span class="sb-badge" id="history-count">0</span>
@@ -872,6 +875,10 @@ async function loadDomainData(domainId) {
     checkPriceUpdate();
     migrateConditions();
     ensureLogLoaded().then(()=>{checkDailyReminder();checkWeeklyInsight();}).catch(()=>{});
+    // 빠른 기록 체크
+    _lastQuickLogCount=getPendingQuickLogs().length;
+    updateQuickLogBadge();
+    if(_lastQuickLogCount>0) setTimeout(()=>showToast(`📱 오랑이 빠른 기록 ${_lastQuickLogCount}건 미반영`,4000),2000);
   } catch(e) {
     // Attempt offline fallback from localStorage
     const cached = loadFromLocal(domainId);
@@ -2274,7 +2281,36 @@ function getQuickLogs() {
   try { return JSON.parse(localStorage.getItem('om_quick_logs') || '[]'); } catch { return []; }
 }
 function getPendingQuickLogs() { return getQuickLogs().filter(l => !l.synced); }
-function saveQuickLogs(logs) { localStorage.setItem('om_quick_logs', JSON.stringify(logs)); }
+function saveQuickLogs(logs) { localStorage.setItem('om_quick_logs', JSON.stringify(logs)); updateQuickLogBadge(); }
+
+function updateQuickLogBadge() {
+  const badge = document.getElementById('quick-log-badge');
+  if (!badge) return;
+  const count = getPendingQuickLogs().length;
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'inline';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// 주기적 체크: 다른 탭(quick.html)에서 기록이 추가되었을 때 감지
+let _lastQuickLogCount = 0;
+function checkQuickLogUpdates() {
+  const pending = getPendingQuickLogs();
+  const count = pending.length;
+  if (count > _lastQuickLogCount && _lastQuickLogCount >= 0) {
+    const newCount = count - _lastQuickLogCount;
+    showToast(`📱 오랑이가 두통 ${newCount}건을 기록했습니다`, 4000);
+    updateQuickLogBadge();
+    // 현재 log 뷰면 새로고침
+    if (S.currentView === 'log') renderView('log');
+  }
+  _lastQuickLogCount = count;
+  updateQuickLogBadge();
+}
+setInterval(checkQuickLogUpdates, 10000); // 10초마다 확인
 
 function renderQuickLogBanner() {
   if (S.currentDomain !== 'orangi-migraine') return '';

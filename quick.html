@@ -316,7 +316,44 @@ function renderForm(entry) {
     </div>
 
     <button class="btn-save" onclick="saveEntry()">${isEdit ? '✏️ 수정 완료' : '💾 기록 저장'}</button>
+    <div id="recent-quick-logs"></div>
   `;
+  renderRecentQuickLogs();
+}
+
+function renderRecentQuickLogs() {
+  const container = document.getElementById('recent-quick-logs');
+  if (!container) return;
+  const logs = getQuickLogs().slice(-5).reverse();
+  if (!logs.length) { container.innerHTML = ''; return; }
+  container.innerHTML = `
+    <div style="margin-top:20px;padding-top:14px;border-top:1.5px solid var(--bd)">
+      <div style="font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);margin-bottom:8px">최근 기록</div>
+      ${logs.map(l => {
+        const dt = l.datetime.split('T');
+        const timeStr = dt[1] === '시간미상' ? '시간미상' : dt[1];
+        const nrsHtml = l.nrs >= 0
+          ? `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`
+          : '';
+        const badge = l.synced
+          ? '<span class="log-item-badge synced">반영됨</span>'
+          : '<span class="log-item-badge pending">미반영</span>';
+        const tags = [
+          ...(l.sites||[]).map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
+          ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
+          ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
+          ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
+        ].join('');
+        return `<div class="log-item" style="opacity:${l.synced?'.6':'1'}">
+          <div class="log-item-head">
+            <span class="log-item-date">${dt[0].slice(5)} ${timeStr}</span>
+            ${nrsHtml} ${badge}
+          </div>
+          ${tags ? `<div class="log-item-tags">${tags}</div>` : ''}
+          ${l.memo ? `<div class="log-item-memo">${esc(l.memo)}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
 }
 
 function toggleNrsSkip(skip) {
@@ -407,7 +444,7 @@ function renderList() {
     const badge = l.synced
       ? '<span class="log-item-badge synced">반영됨</span>'
       : '<span class="log-item-badge pending">미반영</span>';
-    return `<div class="log-item">
+    return `<div class="log-item" style="${l.synced?'opacity:.6':''}">
       <div class="log-item-head">
         <span class="log-item-date">${dateStr} ${timeStr}</span>
         ${nrsHtml} ${badge}
