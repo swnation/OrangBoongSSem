@@ -2292,7 +2292,8 @@ function saveQuickLogs(logs) {
   updateQuickLogBadge();
 }
 
-function getQuickSyncUrl() { return localStorage.getItem('om_quick_sync_url') || ''; }
+const _DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbwjKIysyUDvwnCa9kazjhnleP4ku7Ld_ITARPiIOdyhdFSi7FME4t30TkeOuwVc7RLr_Q/exec';
+function getQuickSyncUrl() { return localStorage.getItem('om_quick_sync_url') || _DEFAULT_SYNC_URL; }
 
 async function fetchQuickLogsFromCloud() {
   const url = getQuickSyncUrl();
