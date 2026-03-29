@@ -1678,7 +1678,7 @@ function renderStatsView() {
     if(!byDate[d]) byDate[d]={nrs:[],count:0,symptoms:{},meds:{},mood:{}};
     byDate[d].count++;
     if(lc.moodMode&&l.mood) { byDate[d].mood[l.mood]=(byDate[d].mood[l.mood]||0)+1; }
-    else if(l.nrs>0) byDate[d].nrs.push(l.nrs);
+    else if(l.nrs>=0) byDate[d].nrs.push(l.nrs);
     (l.symptoms||[]).forEach(s=>{byDate[d].symptoms[s]=(byDate[d].symptoms[s]||0)+1;});
     (l.meds||[]).forEach(m=>{byDate[d].meds[m]=(byDate[d].meds[m]||0)+1;});
   });
@@ -1732,9 +1732,9 @@ function renderStatsView() {
     </div>`).join('');
 
   // Summary stats
-  const nrsAll=last30.flatMap(l=>lc.moodMode?[]:(l.nrs>0?[l.nrs]:[]));
+  const nrsAll=last30.flatMap(l=>lc.moodMode?[]:(l.nrs>=0?[l.nrs]:[]));
   const avgAll=nrsAll.length?(nrsAll.reduce((a,b)=>a+b,0)/nrsAll.length).toFixed(1):'-';
-  const nrs7=last7.flatMap(l=>lc.moodMode?[]:(l.nrs>0?[l.nrs]:[]));
+  const nrs7=last7.flatMap(l=>lc.moodMode?[]:(l.nrs>=0?[l.nrs]:[]));
   const avg7=nrs7.length?(nrs7.reduce((a,b)=>a+b,0)/nrs7.length).toFixed(1):'-';
   const medDays30=new Set(last30.filter(l=>(l.meds||[]).length>0).map(l=>l.datetime.slice(0,10))).size;
 
@@ -1771,7 +1771,7 @@ function renderCrossLogView() {
       allLogs.push({
         date:l.datetime.slice(0,10), time:l.datetime.slice(11,16),
         domain:domainId, label:domDef.label, icon:domDef.icon, color:domDef.color,
-        nrs:l.nrs||0, mood:l.mood||'',
+        nrs:l.nrs??-1, mood:l.mood||'',
         symptoms:l.symptoms||[], meds:l.meds||[],
         categories:l.categories||[], memo:l.memo||'',
       });
@@ -1802,7 +1802,7 @@ function renderCrossLogView() {
       const items=g.items.map(l=>{
         const tags=[
           l.mood?`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:'',
-          l.nrs>0?`<span class="log-tag" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS${l.nrs}</span>`:'',
+          l.nrs>=0?`<span class="log-tag" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS${l.nrs}</span>`:'',
           ...l.symptoms.map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`),
           ...l.meds.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`),
           ...l.categories.map(c=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(c)}</span>`),
@@ -2343,14 +2343,17 @@ function editLogEntry(idx) {
         if(c.dataset.val===s) c.classList.add('sel','sel-med');
       });
     });
-    // Treatments
+    // Treatments — chip 매칭 + 나머지는 free-text에 합침
+    const txFreeTexts=[];
     (entry.treatments||[]).forEach(s=>{
-      const txInput=document.getElementById('log-treatment');
-      if(txInput) txInput.value=s;
+      let matched=false;
       document.querySelectorAll('.log-chip[data-group="tx"]').forEach(c=>{
-        if(c.dataset.val===s) c.classList.add('sel','sel-tx');
+        if(c.dataset.val===s){c.classList.add('sel','sel-tx');matched=true;}
       });
+      if(!matched) txFreeTexts.push(s);
     });
+    const txInput=document.getElementById('log-treatment');
+    if(txInput && txFreeTexts.length) txInput.value=txFreeTexts.join(', ');
     // Memo
     const memoEl=document.getElementById('log-memo');
     if(memoEl) memoEl.value=entry.memo||'';
@@ -2690,7 +2693,7 @@ function exportLogCSV() {
   } else {
     csv='날짜,시간,NRS,부위,증상,투약,치료,메모\n';
     ds.logData.forEach(l=>{
-      csv+=`${l.datetime.slice(0,10)},${l.datetime.slice(11,16)},${l.nrs},"${(l.sites||[]).join(';')}","${(l.symptoms||[]).join(';')}","${(l.meds||[]).join(';')}","${(l.treatments||[]).join(';')}","${(l.memo||'').replace(/"/g,'""')}"\n`;
+      csv+=`${l.datetime.slice(0,10)},${l.datetime.slice(11,16)},${l.nrs>=0?l.nrs:''},"${(l.sites||[]).join(';')}","${(l.symptoms||[]).join(';')}","${(l.meds||[]).join(';')}","${(l.treatments||[]).join(';')}","${(l.memo||'').replace(/"/g,'""')}"\n`;
     });
   }
   downloadFile(`${DC().logPrefix}_${ds.logMonth}.csv`,'\uFEFF'+csv,'text/csv;charset=utf-8');
@@ -3416,6 +3419,8 @@ function setupAutocomplete(inputId, list, useAPI=false) {
   }
   const input = document.getElementById(inputId);
   if (input) {
+    if (input._acSetup) return; // prevent duplicate listeners
+    input._acSetup = true;
     input.setAttribute('list', dlId);
     input.addEventListener('input', () => {
       const q = input.value.toLowerCase().trim();
