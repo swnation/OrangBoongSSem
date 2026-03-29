@@ -233,17 +233,21 @@ function renderForm(entry) {
     return `<span class="chip ${sel?'sel sel-'+side:''}" data-val="${esc(s)}" data-side="${side}" onclick="toggleChip(this,'sel-${side}')">${esc(s)}</span>`;
   }).join('');
 
-  const symChips = SYMPTOMS.map(s => {
+  // 기본 증상 + 편집 시 커스텀 증상 복원
+  const extraSyms = (e.symptoms||[]).filter(s => !SYMPTOMS.includes(s));
+  const symChips = [...SYMPTOMS, ...extraSyms].map(s => {
     const sel = e.symptoms?.includes(s);
     return `<span class="chip ${sel?'sel sel-sym':''}" data-val="${esc(s)}" data-group="sym" onclick="toggleChip(this,'sel-sym')">${esc(s)}</span>`;
   }).join('');
 
-  const medChips = MEDS.map(m => {
+  const extraMeds = (e.meds||[]).filter(m => !MEDS.includes(m));
+  const medChips = [...MEDS, ...extraMeds].map(m => {
     const sel = e.meds?.includes(m);
     return `<span class="chip ${sel?'sel sel-med':''}" data-val="${esc(m)}" data-group="med" onclick="toggleChip(this,'sel-med')">${esc(m)}</span>`;
   }).join('');
 
-  const txChips = TREATMENTS.map(t => {
+  const extraTx = (e.treatments||[]).filter(t => !TREATMENTS.includes(t));
+  const txChips = [...TREATMENTS, ...extraTx].map(t => {
     const sel = e.treatments?.includes(t);
     return `<span class="chip ${sel?'sel sel-tx':''}" data-val="${esc(t)}" data-group="tx" onclick="toggleChip(this,'sel-tx')">${esc(t)}</span>`;
   }).join('');
@@ -392,10 +396,10 @@ function renderList() {
     const dateStr = dt[0];
     const timeStr = dt[1] === '시간미상' ? '시간미상' : dt[1];
     const tags = [
-      ...l.sites.map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
-      ...l.symptoms.map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
-      ...l.meds.map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
-      ...l.treatments.map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
+      ...(l.sites||[]).map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
+      ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
+      ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
+      ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
     ].join('');
     const nrsHtml = l.nrs >= 0
       ? `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`
