@@ -3808,10 +3808,15 @@ function renderMedsView() {
   });
   const domainOrder=Object.keys(grouped).sort((a,b)=>a===S.currentDomain?-1:b===S.currentDomain?1:0);
 
-  const renderCard=(c)=>`
-    <div class="dx-card">
+  const typeLabels={chronic:'만성',acute:'급성',preventive:'예방'};
+  const typeColors={chronic:'#1d4ed8',acute:'#c2410c',preventive:'#15803d'};
+  const renderCard=(c)=>{
+    const dt=c.diseaseType||_DISEASE_TYPE_MAP[c.name]||'chronic';
+    return `
+    <div class="dx-card" style="${dt==='acute'&&c.status==='resolved'?'opacity:.6':''}">
       <div class="dx-head">
         <span class="dx-name">${esc(c.name)}</span>
+        <span class="badge" style="background:${typeColors[dt]}15;color:${typeColors[dt]};font-size:.58rem;padding:1px 6px">${typeLabels[dt]||'만성'}</span>
         <span class="dx-status ${statusClass[c.status]||'active'}">${statusLabels[c.status]||c.status}</span>
         ${c.drugChangeDate?`<button class="accum-del" onclick="compareDrugChange(${c._idx},'${c._domainId}')" title="변경 전후 비교" style="color:var(--ac)">📊</button>`:''}
         <button class="accum-del" onclick="editConditionUnified('${c._domainId}',${c._idx})" title="편집">✏️</button>
@@ -3826,7 +3831,7 @@ function renderMedsView() {
         ${c.course?`<div class="dx-section"><div class="dx-section-title">경과</div>${esc(c.course)}</div>`:''}
         ${c.notes?`<div class="dx-section"><div class="dx-section-title">메모</div>${esc(c.notes)}</div>`:''}
       </div>
-    </div>`;
+    </div>`;};
 
   const sections=domainOrder.map(domId=>{
     const g=grouped[domId];
@@ -3878,6 +3883,14 @@ function renderMedsView() {
             <input class="dx-form-input" id="dx-date" placeholder="${isBungruki?'예: 2026-03':'예: 2023년, 2025-06'}">
           </div>
           <div class="dx-form-group" style="flex:1">
+            <div class="dx-form-label">질환 유형</div>
+            <select class="dx-form-input" id="dx-type" style="cursor:pointer">
+              <option value="chronic">만성 (꾸준히 관리)</option>
+              <option value="acute">급성 (일시적)</option>
+              <option value="preventive">예방/관리</option>
+            </select>
+          </div>
+          <div class="dx-form-group" style="flex:1">
             <div class="dx-form-label">현재 상태</div>
             <select class="dx-form-input" id="dx-status" style="cursor:pointer">
               <option value="active">${isBungruki?'진행 중':'치료 중'}</option><option value="remission">${isBungruki?'완료':'관해'}</option>
@@ -3891,6 +3904,10 @@ function renderMedsView() {
           <div id="dx-med-suggest" style="display:none;margin-bottom:6px;padding:4px;border:1px solid var(--bd);border-radius:6px;background:var(--sf)">
             <div style="font-size:.62rem;color:var(--mu);margin-bottom:4px">💊 이 질환에 주로 사용되는 약</div>
             <div id="dx-med-suggest-list" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+          </div>
+          <div id="dx-med-ai-area" style="display:none;margin-bottom:6px">
+            <button class="btn-export" id="dx-ai-search-btn" onclick="aiSearchMeds()" style="font-size:.72rem">🔍 AI로 최신 약물 검색</button>
+            <div id="dx-ai-result" style="display:none;margin-top:6px;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--sf);font-size:.75rem"></div>
           </div>
           <div style="display:flex;gap:6px">
             <input class="dx-form-input" id="dx-med-input" placeholder="약품명 검색..." style="flex:1">
@@ -3944,16 +3961,78 @@ function selectDxName(name) {
 function showDxMedSuggestions(diseaseName) {
   const suggestArea=document.getElementById('dx-med-suggest');
   const suggestList=document.getElementById('dx-med-suggest-list');
+  const aiArea=document.getElementById('dx-med-ai-area');
   if(!suggestArea||!suggestList) return;
-  // Find matching disease in _DISEASE_MEDS (partial match)
+  // 질환 유형 자동 설정
+  const typeSelect=document.getElementById('dx-type');
+  if(typeSelect){
+    const autoType=Object.entries(_DISEASE_TYPE_MAP).find(([k])=>diseaseName.includes(k)||k.includes(diseaseName));
+    if(autoType) typeSelect.value=autoType[1];
+  }
+  // 내장 DB에서 매칭
   let meds=[];
   Object.entries(_DISEASE_MEDS).forEach(([k,v])=>{
     if(diseaseName.includes(k)||k.includes(diseaseName)) meds=[...meds,...v];
   });
   meds=[...new Set(meds)];
-  if(!meds.length){suggestArea.style.display='none';return;}
-  suggestArea.style.display='block';
-  suggestList.innerHTML=meds.map(m=>`<span class="log-chip" style="padding:3px 10px;font-size:.75rem;cursor:pointer" onclick="addDxMedFromSuggest('${esc(m)}')">${esc(m)}</span>`).join('');
+  if(meds.length){
+    suggestArea.style.display='block';
+    suggestList.innerHTML=meds.map(m=>`<span class="log-chip" style="padding:3px 10px;font-size:.75rem;cursor:pointer" onclick="addDxMedFromSuggest('${esc(m)}')">${esc(m)}</span>`).join('');
+  } else {
+    suggestArea.style.display='none';
+    // 내장 DB에 없으면 식약처 API로 검색 시도
+    searchDrugsByDisease(diseaseName);
+  }
+  // AI 검색 버튼 항상 표시
+  if(aiArea) aiArea.style.display='block';
+}
+
+// 식약처 API 역매핑: 질환명으로 관련 약품 검색
+async function searchDrugsByDisease(diseaseName) {
+  const suggestArea=document.getElementById('dx-med-suggest');
+  const suggestList=document.getElementById('dx-med-suggest-list');
+  if(!suggestArea||!suggestList) return;
+  try {
+    const url=`https://apis.data.go.kr/1471000/DrugPrdtPrmsnInfoService07/getDrugPrdtPrmsnDtlInq05?serviceKey=dMhMcgCRxP9q36yRWkf%2BSvpsQGZ%2BdneSi%2BVGVqk4mpBKyOD8O7RIB3dTZvINaXbsPUqPeJ0KL3fwHmN7S4ARLQ%3D%3D&type=json&pageNo=1&numOfRows=15&efcy_qesitm=${encodeURIComponent(diseaseName)}`;
+    const res=await fetchWithRetry(url);
+    const data=await res.json();
+    const items=data?.body?.items||[];
+    if(!items.length) return;
+    const meds=[...new Set(items.map(i=>i.ITEM_NAME?.split('(')[0]?.trim()).filter(Boolean))].slice(0,10);
+    if(!meds.length) return;
+    suggestArea.style.display='block';
+    suggestList.innerHTML=`<div style="font-size:.6rem;color:var(--ac);width:100%;margin-bottom:2px">📡 식약처 API 검색 결과</div>`+
+      meds.map(m=>`<span class="log-chip" style="padding:3px 10px;font-size:.75rem;cursor:pointer" onclick="addDxMedFromSuggest('${esc(m)}')">${esc(m)}</span>`).join('');
+  } catch(e) { /* 식약처 API 실패시 무시 */ }
+}
+
+// AI (Perplexity) 검색
+async function aiSearchMeds() {
+  const name=document.getElementById('dx-name')?.value.trim();
+  if(!name){showToast('질환명을 먼저 입력하세요');return;}
+  if(!S.keys?.perp){showToast('Perplexity API 키가 필요합니다 (API 키 설정)');return;}
+  const btn=document.getElementById('dx-ai-search-btn');
+  const result=document.getElementById('dx-ai-result');
+  if(btn){btn.disabled=true;btn.textContent='🔍 검색 중...';}
+  if(result){result.style.display='block';result.innerHTML='<span style="color:var(--ac)">검색 중...</span>';}
+  try {
+    const answer=await callAI('perp',
+      '한국 의료 기준으로 답변. 약품명은 성분명(영문)으로.',
+      `"${name}" 질환의 현재 표준 치료약물 목록을 간결하게 나열해줘. 1차/2차/3차 치료로 분류. 최신 가이드라인 기준.`
+    );
+    if(result){
+      result.innerHTML=DOMPurify.sanitize(marked.parse(answer||'결과 없음'));
+      // 약물명 추출하여 클릭 가능 칩으로 변환
+      const medNames=answer.match(/[A-Z][a-z]+(?:\/[A-Z][a-z]+)*/g);
+      if(medNames?.length){
+        const unique=[...new Set(medNames)].filter(m=>m.length>3).slice(0,15);
+        result.innerHTML+=`<div style="margin-top:6px;border-top:1px solid var(--bd);padding-top:6px"><div style="font-size:.6rem;color:var(--mu);margin-bottom:4px">클릭하여 추가:</div><div style="display:flex;flex-wrap:wrap;gap:3px">${unique.map(m=>`<span class="log-chip" style="padding:2px 8px;font-size:.72rem;cursor:pointer" onclick="addDxMedFromSuggest('${esc(m)}')">${esc(m)}</span>`).join('')}</div></div>`;
+      }
+    }
+  } catch(e) {
+    if(result) result.innerHTML=`<span style="color:var(--re)">검색 실패: ${esc(e.message)}</span>`;
+  }
+  if(btn){btn.disabled=false;btn.textContent='🔍 AI로 최신 약물 검색';}
 }
 
 function addDxMedFromSuggest(med) {
@@ -3994,6 +4073,7 @@ function openConditionForm(domainId, idx) {
     document.getElementById('dx-name').value=c.name||'';
     document.getElementById('dx-date').value=c.diagnosisDate||'';
     document.getElementById('dx-status').value=c.status||'active';
+    const dxType=document.getElementById('dx-type');if(dxType)dxType.value=c.diseaseType||_DISEASE_TYPE_MAP[c.name]||'chronic';
     document.getElementById('dx-drug-change').value=c.drugChangeDate||'';
     document.getElementById('dx-response').value=c.drugResponse||'';
     document.getElementById('dx-course').value=c.course||'';
@@ -4025,6 +4105,7 @@ async function saveCondition() {
 
   const data={
     id:Date.now(), name,
+    diseaseType:document.getElementById('dx-type')?.value||'chronic',
     diagnosisDate:document.getElementById('dx-date').value.trim(),
     status:document.getElementById('dx-status').value,
     medsList:[..._dxMedsList],
@@ -4397,6 +4478,51 @@ const _AC_DISEASES = [
 ];
 
 // 질환 → 관련 약품 매핑 (자주 사용되는 약)
+// ── 질환 유형 분류 ──
+const _DISEASE_TYPES = {
+  chronic:'만성',acute:'급성',preventive:'예방/관리'
+};
+const _DISEASE_TYPE_MAP = {
+  // 만성 (C)
+  '편두통':'chronic','만성편두통':'chronic','난치성만성편두통':'chronic','긴장형두통':'chronic',
+  '주요우울장애':'chronic','MDD':'chronic','우울장애':'chronic','기분부전장애':'chronic',
+  '범불안장애':'chronic','GAD':'chronic','강박장애':'chronic','OCD':'chronic',
+  '공황장애':'chronic','사회불안장애':'chronic','PTSD':'chronic',
+  'ADHD':'chronic','양극성장애':'chronic','불면증':'chronic','조현병':'chronic',
+  '고혈압':'chronic','이상지질혈증':'chronic','제2형당뇨':'chronic','제1형당뇨':'chronic',
+  '갑상선기능저하증':'chronic','갑상선기능항진증':'chronic',
+  '천식':'chronic','만성폐쇄성폐질환':'chronic','COPD':'chronic',
+  '위식도역류질환':'chronic','GERD':'chronic','과민성장증후군':'chronic','IBS':'chronic',
+  '크론병':'chronic','궤양성대장염':'chronic','기능성소화불량':'chronic',
+  '류마티스관절염':'chronic','골관절염':'chronic','강직성척추염':'chronic','섬유근통':'chronic','골다공증':'chronic',
+  '과민성방광':'chronic','전립선비대증':'chronic','다낭성난소증후군':'chronic','PCOS':'chronic',
+  '알레르기비염':'chronic','아토피피부염':'chronic','건선':'chronic',
+  '자율신경실조':'chronic','실신(Vasovagal)':'chronic',
+  '간질환':'chronic','지방간':'chronic','간경변':'chronic','만성신장질환':'chronic','CKD':'chronic',
+  '심방세동':'chronic','심부전':'chronic','관상동맥질환':'chronic',
+  '파킨슨병':'chronic','알츠하이머':'chronic','간질':'chronic','뇌전증':'chronic',
+  '루푸스':'chronic','쇼그렌증후군':'chronic','베체트병':'chronic',
+  // 급성 (A)
+  '군발두통':'acute',
+  '감기':'acute','급성상기도감염':'acute','독감':'acute','인플루엔자':'acute','코로나19':'acute',
+  '급성기관지염':'acute','폐렴':'acute','부비동염':'acute','급성부비동염':'acute',
+  '급성위장염':'acute','장염':'acute','식중독':'acute',
+  '요로감염':'acute','UTI':'acute','방광염':'acute','신우신염':'acute',
+  '중이염':'acute','외이도염':'acute','결막염':'acute','다래끼':'acute',
+  '대상포진':'acute','연조직염':'acute','봉와직염':'acute','농양':'acute',
+  '급성통풍':'acute','통풍':'acute',
+  '요추염좌':'acute','근막통증증후군':'acute','급성요통':'acute','늑골골절':'acute',
+  '편도염':'acute','인두염':'acute','후두염':'acute',
+  '두드러기':'acute','접촉성피부염':'acute','벌레물림':'acute',
+  '치질':'acute','항문열상':'acute',
+  '구내염':'acute','치수염':'acute',
+  '눈다래끼':'acute','각막염':'acute',
+  // 예방/관리 (P)
+  '엽산보충':'preventive','철분보충':'preventive','임신준비영양':'preventive','남성가임력':'preventive',
+  '예방접종':'preventive','건강검진':'preventive','영양관리':'preventive',
+  '체중관리':'preventive','운동관리':'preventive','수면관리':'preventive',
+};
+
 const _DISEASE_MEDS = {
   // ── 두통 ──
   '편두통':['AAP 500mg','Loxoprofen','Naproxen','Sumatriptan','Rizatriptan','Propranolol','Topiramate','Amitriptyline','Valproate','Botox','CGRP mAb(Aimovig/Ajovy/Emgality)','Rimegepant','Atogepant'],
@@ -4404,12 +4530,11 @@ const _DISEASE_MEDS = {
   '난치성만성편두통':['Botox','CGRP mAb','GON block','SPG block','Propranolol','Topiramate','Venlafaxine','Atogepant','Rimegepant','신경자극술(VNS/ONS)'],
   '긴장형두통':['AAP 500mg','Ibuprofen','Naproxen','Amitriptyline','물리치료','스트레스 관리'],
   '군발두통':['산소요법(O2 15L)','Sumatriptan SC','Verapamil','Galcanezumab','Lithium','Prednisone 단기'],
-  // ── 정신과 — 우울 ──
+  // ── 정신과 ──
   '주요우울장애':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine XR','Duloxetine','Bupropion XL','Mirtazapine','Desvenlafaxine','Vortioxetine','Aripiprazole 보조','CBT'],
   'MDD':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine XR','Duloxetine','Bupropion XL','Mirtazapine','Desvenlafaxine','Vortioxetine','Aripiprazole 보조','CBT'],
   '우울장애':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine XR','Duloxetine','Bupropion XL','Mirtazapine','CBT'],
   '기분부전장애':['Sertraline','Escitalopram','Duloxetine','Bupropion','CBT'],
-  // ── 정신과 — 불안 ──
   '범불안장애':['Escitalopram','Sertraline','Venlafaxine XR','Duloxetine','Buspirone','Pregabalin','Hydroxyzine','CBT'],
   'GAD':['Escitalopram','Sertraline','Venlafaxine XR','Duloxetine','Buspirone','Pregabalin','CBT'],
   '강박장애':['Fluoxetine 고용량','Sertraline','Escitalopram','Fluvoxamine','Clomipramine','ERP치료'],
@@ -4417,15 +4542,19 @@ const _DISEASE_MEDS = {
   '공황장애':['Escitalopram','Sertraline','Venlafaxine XR','Paroxetine','Clonazepam 단기','CBT'],
   '사회불안장애':['Escitalopram','Sertraline','Venlafaxine XR','Paroxetine','Pregabalin','CBT'],
   'PTSD':['Sertraline','Paroxetine','Venlafaxine XR','Prazosin(악몽)','CPT','EMDR'],
-  // ── 정신과 — 기타 ──
   'ADHD':['Methylphenidate','Concerta','Atomoxetine','Bupropion','Lisdexamfetamine','Clonidine'],
   '양극성장애':['Lithium','Valproate','Lamotrigine','Quetiapine','Aripiprazole','Olanzapine','Carbamazepine'],
   '불면증':['Zolpidem','Trazodone','Melatonin','Lemborexant','Suvorexant','CBT-I','수면위생'],
   '조현병':['Risperidone','Olanzapine','Aripiprazole','Quetiapine','Paliperidone LAI','Clozapine'],
-  // ── 내과 ──
+  // ── 심혈관 ──
   '고혈압':['Amlodipine','Losartan','Candesartan','Valsartan','Lisinopril','Hydrochlorothiazide','Indapamide','Bisoprolol'],
   '이상지질혈증':['Atorvastatin','Rosuvastatin','Ezetimibe','Fenofibrate','Pitavastatin','Icosapent ethyl'],
+  '심방세동':['Apixaban','Rivaroxaban','Edoxaban','Warfarin','Bisoprolol','Flecainide','Amiodarone'],
+  '심부전':['Sacubitril/Valsartan','Empagliflozin','Bisoprolol','Carvedilol','Spironolactone','Furosemide'],
+  '관상동맥질환':['Aspirin','Clopidogrel','Atorvastatin','Bisoprolol','ACE억제제','Nitroglycerin'],
+  // ── 내분비/대사 ──
   '제2형당뇨':['Metformin','Empagliflozin','Dapagliflozin','Sitagliptin','Semaglutide','Liraglutide','Glimepiride','Insulin'],
+  '제1형당뇨':['Insulin(속효성)','Insulin(지속형)','CGM','인슐린펌프'],
   '갑상선기능저하증':['Levothyroxine(Synthroid)'],
   '갑상선기능항진증':['Methimazole','PTU','방사성요오드','Propranolol'],
   '통풍':['Febuxostat','Allopurinol','Colchicine','Naproxen','Prednisolone 단기'],
@@ -4436,27 +4565,78 @@ const _DISEASE_MEDS = {
   '과민성장증후군':['Trimebutine','Pinaverium','Rifaximin','Probiotics','저포드맵식이','Amitriptyline 저용량'],
   'IBS':['Trimebutine','Pinaverium','Rifaximin','Probiotics','저포드맵식이'],
   '기능성소화불량':['Mosapride','Itopride','Pantoprazole','Trimebutine'],
+  '위궤양':['Esomeprazole','Pantoprazole','Sucralfate','제균치료(H.pylori)'],
+  '크론병':['Mesalazine','Azathioprine','Infliximab','Adalimumab','Budesonide','Methotrexate'],
+  '궤양성대장염':['Mesalazine','Prednisolone','Azathioprine','Infliximab','Vedolizumab','Tofacitinib'],
+  '지방간':['체중감량','운동','Vitamin E','Pioglitazone','Semaglutide'],
+  '간경변':['이뇨제(Spironolactone+Furosemide)','Lactulose','Rifaximin','Propranolol','간이식 평가'],
+  '담석증':['Ursodeoxycholic acid','복강경 담낭절제술','진통제'],
   // ── 호흡기/알레르기 ──
   '천식':['Salbutamol','Fluticasone+Salmeterol','Budesonide+Formoterol','Montelukast','Tiotropium'],
+  '만성폐쇄성폐질환':['Tiotropium','Umeclidinium+Vilanterol','Budesonide+Formoterol','Roflumilast','산소치료'],
+  'COPD':['Tiotropium','Umeclidinium+Vilanterol','Budesonide+Formoterol','Roflumilast'],
   '알레르기비염':['Cetirizine','Fexofenadine','Loratadine','Montelukast','Fluticasone 비강스프레이','Azelastine 비강'],
   '아토피피부염':['보습제','Hydrocortisone','Tacrolimus','Pimecrolimus','Dupilumab','Cetirizine'],
+  '건선':['보습제','Calcipotriol','Betamethasone','Methotrexate','Adalimumab','Secukinumab','Apremilast'],
   // ── 근골격 ──
   '골관절염':['AAP 500mg','Loxoprofen','Celecoxib','Naproxen','관절강내HA주사','Duloxetine','물리치료'],
   '골다공증':['Alendronate','Risedronate','Denosumab','칼슘+비타민D','Romosozumab'],
   '류마티스관절염':['Methotrexate','Hydroxychloroquine','Sulfasalazine','Leflunomide','Adalimumab','Tofacitinib'],
+  '강직성척추염':['Celecoxib','Naproxen','Adalimumab','Secukinumab','Sulfasalazine','물리치료'],
   '섬유근통':['Duloxetine','Pregabalin','Amitriptyline','Milnacipran','운동치료'],
+  '추간판탈출증':['AAP','NSAIDs','Pregabalin','근이완제','경막외주사','물리치료'],
+  '오십견':['NSAIDs','관절강내스테로이드','물리치료','도수치료'],
   // ── 비뇨기/생식 ──
   '과민성방광':['Solifenacin','Mirabegron','Tolterodine','Oxybutynin'],
   '전립선비대증':['Tamsulosin','Dutasteride','Finasteride','Silodosin'],
   '다낭성난소증후군':['Metformin','경구피임약','Spironolactone','Letrozole','생활습관교정'],
-  // ── 자율신경/기타 ──
+  'PCOS':['Metformin','경구피임약','Spironolactone','Letrozole','생활습관교정'],
+  '요로감염':['Cephalexin','Cefpodoxime','Ciprofloxacin','Nitrofurantoin','수분섭취'],
+  'UTI':['Cephalexin','Cefpodoxime','Ciprofloxacin','Nitrofurantoin'],
+  // ── 신경과 ──
+  '뇌전증':['Levetiracetam','Valproate','Lamotrigine','Carbamazepine','Oxcarbazepine','Topiramate'],
+  '파킨슨병':['Levodopa/Carbidopa','Pramipexole','Ropinirole','Rasagiline','Amantadine','Entacapone'],
+  '알츠하이머':['Donepezil','Rivastigmine','Memantine','Galantamine','Lecanemab'],
+  // ── 자율신경 ──
   '실신(Vasovagal)':['수분·염분 섭취','탄력스타킹','Midodrine','Fludrocortisone','기립훈련'],
   '자율신경실조':['수분·염분 섭취','Propranolol 저용량','Midodrine','Fludrocortisone','규칙 운동'],
-  // ── 임신 준비 ──
+  // ── 자가면역 ──
+  '루푸스':['Hydroxychloroquine','Prednisolone','Azathioprine','Mycophenolate','Belimumab'],
+  '쇼그렌증후군':['인공눈물','Pilocarpine','Hydroxychloroquine','Cyclosporine 점안'],
+  '베체트병':['Colchicine','Prednisolone','Azathioprine','Apremilast','Adalimumab'],
+  // ── 만성신장 ──
+  '만성신장질환':['ACE억제제/ARB','SGLT2억제제','이뇨제','탄산칼슘','EPO','저단백식이'],
+  'CKD':['ACE억제제/ARB','SGLT2억제제','이뇨제','탄산칼슘','EPO'],
+  // ── 급성 감염 ──
+  '감기':['AAP','Pseudoephedrine','Dextromethorphan','항히스타민','수분/휴식'],
+  '급성상기도감염':['AAP','Ibuprofen','항히스타민','진해거담제','수분/휴식'],
+  '독감':['Oseltamivir(타미플루)','AAP','수분/휴식'],
+  '인플루엔자':['Oseltamivir(타미플루)','Baloxavir','AAP','수분/휴식'],
+  '코로나19':['Nirmatrelvir/Ritonavir(팍스로비드)','AAP','Dexamethasone(중증)','수분/휴식'],
+  '폐렴':['Amoxicillin/Clavulanate','Levofloxacin','Azithromycin','Ceftriaxone'],
+  '급성기관지염':['Dextromethorphan','Ambroxol','AAP','항생제(세균성)'],
+  '부비동염':['Amoxicillin/Clavulanate','비강스프레이','AAP','식염수세척'],
+  '급성위장염':['수분/전해질보충','Loperamide','Probiotics','금식→경구식이'],
+  '장염':['수분/전해질보충','Loperamide','Probiotics'],
+  '식중독':['수분보충','정장제','항생제(필요시)'],
+  '편도염':['Amoxicillin','Penicillin V','AAP','NSAIDs'],
+  '중이염':['Amoxicillin','Amoxicillin/Clavulanate','AAP','경과관찰'],
+  '대상포진':['Valacyclovir','Famciclovir','AAP','Pregabalin(신경통)','리도카인패치'],
+  '결막염':['인공눈물','항생제점안(세균성)','항히스타민점안(알러지성)','냉찜질'],
+  '두드러기':['Cetirizine','Fexofenadine','Loratadine','Prednisolone 단기','Epinephrine(아나필락시스)'],
+  '접촉성피부염':['Hydrocortisone','보습제','항히스타민','원인물질 회피'],
+  '구내염':['Triamcinolone 구강연고','Chlorhexidine 가글','AAP','비타민B'],
+  '치질':['좌욕','Diosmin+Hesperidin','연고(리도카인)','변비예방','수술(중증)'],
+  '급성요통':['AAP','NSAIDs','근이완제','물리치료','활동유지'],
+  '근막통증증후군':['NSAIDs','Tizanidine','트리거포인트주사','물리치료','스트레칭'],
+  // ── 예방/관리 ──
   '엽산보충':['엽산 0.4~0.8mg','활성엽산(5-MTHF)','종합비타민'],
   '철분보충':['Ferrous sulfate','Ferrous fumarate','비타민C 병용'],
   '임신준비영양':['엽산','철분','비타민D','CoQ10','오메가3 DHA','아연'],
   '남성가임력':['CoQ10','L-아르기닌','아연','셀레늄','비타민E','L-카르니틴'],
+  '예방접종':['독감백신','폐렴구균','대상포진(Shingrix)','코로나19','Tdap','HPV'],
+  '영양관리':['종합비타민','비타민D','오메가3','칼슘','마그네슘','Probiotics'],
+  '체중관리':['식이조절','운동처방','GLP-1(Semaglutide)','Orlistat','행동치료'],
 };
 
 // ═══════════════════════════════════════════════════════════════
