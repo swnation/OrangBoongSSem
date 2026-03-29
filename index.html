@@ -1033,7 +1033,7 @@ async function callAIStream(aiId, system, user, onChunk) {
   if(aiId==='perp') {
     const r=await fetchWithRetry('https://api.perplexity.ai/chat/completions',{method:'POST',
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
-      body:JSON.stringify({model,max_tokens:4000,stream:true,
+      body:JSON.stringify({model,max_tokens:4000,stream:true,stream_options:{include_usage:true},
         messages:[{role:'system',content:system},{role:'user',content:user}]})});
     if(!r.ok){const d=await r.json();throw new Error('Perplexity: '+(d.error?.message||r.status));}
     let text='',inT=0,outT=0;
@@ -1330,7 +1330,7 @@ function renderMD(text) {
   if(!text) return '';
   if(typeof marked !== 'undefined') {
     try {
-      marked.setOptions({breaks:true, gfm:true, headerIds:false, mangle:false});
+      marked.setOptions({breaks:true, gfm:true});
       return DOMPurify ? DOMPurify.sanitize(marked.parse(text)) : marked.parse(text);
     } catch(e) {}
   }
@@ -1465,7 +1465,7 @@ function renderSession() {
       ${tmplHtml}
       <textarea id="q-input" rows="2" placeholder="질문을 입력하세요..."
         ${curRound>=4?'readonly style="color:var(--mu)"':''}
-        oninput="if(S.session)S.session.question=this.value">${esc(sess.question||'')}</textarea>
+        oninput="if(S.session){S.session.question=this.value;S._dirty=true;}">${esc(sess.question||'')}</textarea>
       ${curRound>0&&curRound<4?'<div style="font-size:.65rem;color:var(--r3);margin-top:2px">💡 질문을 수정하면 다음 라운드에 반영됩니다</div>':''}
       ${curRound===0?`
       <div class="file-upload-area" onclick="document.getElementById('q-file-input').click()">
