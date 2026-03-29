@@ -134,8 +134,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
   <div class="settings-panel" id="settings-panel">
     <div class="settings-label">클라우드 동기화 URL</div>
     <input class="settings-input" id="sync-url-input" placeholder="Google Apps Script 배포 URL 붙여넣기"
-      value="" onchange="saveSyncUrl(this.value)">
-    <div class="settings-note">설정하면 기록이 클라우드에 자동 저장되어 다른 기기에서도 확인할 수 있습니다.</div>
+      onchange="saveSyncUrl(this.value)">
+    <div class="settings-note">기록 저장 시 클라우드에 자동 업로드됩니다. 다른 기기에서도 확인 가능.</div>
+    <div id="sync-indicator" style="font-size:.7rem;margin-top:4px"></div>
     <div id="sync-status"></div>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn-sm" onclick="testSyncUrl()">연결 테스트</button>
@@ -514,6 +515,8 @@ function toggleSettings() {
   panel.classList.toggle('show');
   if (panel.classList.contains('show')) {
     document.getElementById('sync-url-input').value = getSyncUrl();
+    document.getElementById('sync-indicator').innerHTML = getSyncUrl()
+      ? '<span style="color:#2d6a4f">☁️ 동기화 활성</span>' : '<span style="color:#c03030">동기화 꺼짐</span>';
   }
 }
 
@@ -537,13 +540,15 @@ async function cloudSave(entries) {
   const url = getSyncUrl();
   if (!url || !entries.length) return;
   try {
-    await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action: 'save', entries }),
       redirect: 'follow'
     });
-  } catch (e) { /* 오프라인이면 무시 — 로컬에 이미 저장됨 */ }
+    if (res.ok) showToast('☁️ 클라우드 저장 완료');
+    else showToast('⚠️ 클라우드 저장 실패', 3000);
+  } catch (e) { showToast('📴 오프라인 — 로컬만 저장됨'); }
 }
 
 async function syncAllToCloud() {
