@@ -160,14 +160,18 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 
 // ── Config (matches orangi-migraine logConfig) ──
 const SITES = {
-  left: ['미간','눈썹위','관자놀이','후두부','기타'],
-  right: ['미간','눈썹위','관자놀이','후두부','기타']
+  left: ['미간','눈썹위','관자놀이','후두부'],
+  right: ['미간','눈썹위','관자놀이','후두부']
 };
 const SYMPTOMS = ['구역','어지러움','손발저림','빛과민','소리과민','식은땀','심계항진','실신전조'];
 const MEDS = ['AAP 500mg','Loxoprofen','타 NSAID','Metoclopramide'];
 const TREATMENTS = ['GON block','LON block','SPG block'];
 
 const LS_KEY = 'om_quick_logs';
+
+// ── 커스텀 칩 영구 저장 ──
+function getCustom(key) { try { return JSON.parse(localStorage.getItem('om_qc_'+key) || '[]'); } catch { return []; } }
+function saveCustom(key, arr) { localStorage.setItem('om_qc_'+key, JSON.stringify(arr)); }
 
 // ── Helpers ──
 function kstNow() {
@@ -195,11 +199,12 @@ function nrsColor(n) {
   return '#c03030';
 }
 
-function showToast(msg) {
+function showToast(msg, dur) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2000);
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('show'), dur || 2500);
 }
 
 function updatePendingCount() {
@@ -243,6 +248,26 @@ function addOtherChip(inputId, containerId, group, cls) {
   chip.onclick = function() { toggleChip(this, cls); };
   container.appendChild(chip);
   input.value = '';
+  // 커스텀 칩 영구 저장
+  const customs = getCustom(group);
+  if (!customs.includes(val)) { customs.push(val); saveCustom(group, customs); }
+}
+
+function addSiteChip(inputId, containerId, side) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  const container = document.getElementById(containerId);
+  const chip = document.createElement('span');
+  chip.className = 'chip sel sel-' + side;
+  chip.dataset.val = val;
+  chip.dataset.side = side;
+  chip.textContent = val;
+  chip.onclick = function() { toggleChip(this, 'sel-' + side); };
+  container.appendChild(chip);
+  input.value = '';
+  const customs = getCustom('site-' + side);
+  if (!customs.includes(val)) { customs.push(val); saveCustom('site-' + side, customs); }
 }
 
 // ── Form render ──
@@ -253,26 +278,33 @@ function renderForm(entry) {
   const nrs = e.nrs ?? 5;
   const skipNrs = e.nrs === -1;
 
-  const siteChips = (side, items) => items.map(s => {
-    const sel = e.sites?.includes((side==='left'?'왼쪽':'오른쪽')+' '+s);
-    return `<span class="chip ${sel?'sel sel-'+side:''}" data-val="${esc(s)}" data-side="${side}" onclick="toggleChip(this,'sel-${side}')">${esc(s)}</span>`;
-  }).join('');
+  const siteChips = (side, items) => {
+    const customs = getCustom('site-' + side);
+    const all = [...items, ...customs];
+    return all.map(s => {
+      const sel = e.sites?.includes((side==='left'?'왼쪽':'오른쪽')+' '+s);
+      return `<span class="chip ${sel?'sel sel-'+side:''}" data-val="${esc(s)}" data-side="${side}" onclick="toggleChip(this,'sel-${side}')">${esc(s)}</span>`;
+    }).join('');
+  };
 
-  // 기본 증상 + 편집 시 커스텀 증상 복원
-  const extraSyms = (e.symptoms||[]).filter(s => !SYMPTOMS.includes(s));
-  const symChips = [...SYMPTOMS, ...extraSyms].map(s => {
+  // 기본 + 커스텀(영구 저장) + 편집 시 항목 복원
+  const customSyms = getCustom('sym');
+  const extraSyms = (e.symptoms||[]).filter(s => !SYMPTOMS.includes(s) && !customSyms.includes(s));
+  const symChips = [...SYMPTOMS, ...customSyms, ...extraSyms].map(s => {
     const sel = e.symptoms?.includes(s);
     return `<span class="chip ${sel?'sel sel-sym':''}" data-val="${esc(s)}" data-group="sym" onclick="toggleChip(this,'sel-sym')">${esc(s)}</span>`;
   }).join('');
 
-  const extraMeds = (e.meds||[]).filter(m => !MEDS.includes(m));
-  const medChips = [...MEDS, ...extraMeds].map(m => {
+  const customMeds = getCustom('med');
+  const extraMeds = (e.meds||[]).filter(m => !MEDS.includes(m) && !customMeds.includes(m));
+  const medChips = [...MEDS, ...customMeds, ...extraMeds].map(m => {
     const sel = e.meds?.includes(m);
     return `<span class="chip ${sel?'sel sel-med':''}" data-val="${esc(m)}" data-group="med" onclick="toggleChip(this,'sel-med')">${esc(m)}</span>`;
   }).join('');
 
-  const extraTx = (e.treatments||[]).filter(t => !TREATMENTS.includes(t));
-  const txChips = [...TREATMENTS, ...extraTx].map(t => {
+  const customTx = getCustom('tx');
+  const extraTx = (e.treatments||[]).filter(t => !TREATMENTS.includes(t) && !customTx.includes(t));
+  const txChips = [...TREATMENTS, ...customTx, ...extraTx].map(t => {
     const sel = e.treatments?.includes(t);
     return `<span class="chip ${sel?'sel sel-tx':''}" data-val="${esc(t)}" data-group="tx" onclick="toggleChip(this,'sel-tx')">${esc(t)}</span>`;
   }).join('');
@@ -305,11 +337,19 @@ function renderForm(entry) {
 
     <div class="section">
       <div class="section-title">부위 — 왼쪽</div>
-      <div class="chips">${siteChips('left', SITES.left)}</div>
+      <div class="chips" id="site-left-chips">${siteChips('left', SITES.left)}</div>
+      <div class="other-row">
+        <input class="other-input" id="site-left-other" placeholder="직접 입력">
+        <button class="btn-other-add" onclick="addSiteChip('site-left-other','site-left-chips','left')">+</button>
+      </div>
     </div>
     <div class="section">
       <div class="section-title">부위 — 오른쪽</div>
-      <div class="chips">${siteChips('right', SITES.right)}</div>
+      <div class="chips" id="site-right-chips">${siteChips('right', SITES.right)}</div>
+      <div class="other-row">
+        <input class="other-input" id="site-right-other" placeholder="직접 입력">
+        <button class="btn-other-add" onclick="addSiteChip('site-right-other','site-right-chips','right')">+</button>
+      </div>
     </div>
 
     <div class="section">
@@ -333,6 +373,10 @@ function renderForm(entry) {
     <div class="section">
       <div class="section-title">시술</div>
       <div class="chips" id="tx-chips">${txChips}</div>
+      <div class="other-row">
+        <input class="other-input" id="tx-other" placeholder="직접 입력">
+        <button class="btn-other-add" onclick="addOtherChip('tx-other','tx-chips','tx','sel-tx')">+</button>
+      </div>
     </div>
 
     <div class="section">
@@ -340,7 +384,7 @@ function renderForm(entry) {
       <textarea class="memo" id="q-memo" rows="3" placeholder="상태, 트리거 등 자유 기록">${esc(e.memo||'')}</textarea>
     </div>
 
-    <button class="btn-save" onclick="saveEntry()">${isEdit ? '✏️ 수정 완료' : '💾 기록 저장'}</button>
+    <button class="btn-save" id="q-save-btn" onclick="this.disabled=true;this.textContent='저장 중...';saveEntry().finally(()=>{const b=document.getElementById('q-save-btn');if(b){b.disabled=false;b.textContent='💾 기록 저장';}})">${isEdit ? '✏️ 수정 완료' : '💾 기록 저장'}</button>
     <div id="recent-quick-logs"></div>
   `;
   renderRecentQuickLogs();
@@ -395,7 +439,7 @@ function toggleNrsSkip(skip) {
 }
 
 // ── Save ──
-function saveEntry() {
+async function saveEntry() {
   const date = document.getElementById('q-date').value;
   if (!date) { showToast('날짜를 선택하세요'); return; }
   const timeUnknown = document.getElementById('q-time-unknown').checked;
@@ -427,8 +471,9 @@ function saveEntry() {
       const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, symptoms, meds, treatments, memo };
       logs[idx] = updated;
       saveQuickLogs(logs);
-      cloudSave([updated]);
-      showToast('✏️ 수정됨');
+      showToast('💾 저장 중...');
+      const ok = await cloudSave([updated]);
+      showToast(ok ? '✅ 수정 완료 + ☁️ 업로드됨' : '✅ 수정 완료 (오프라인)');
       renderForm();
       return;
     }
@@ -444,8 +489,9 @@ function saveEntry() {
 
   logs.push(entry);
   saveQuickLogs(logs);
-  cloudSave([entry]);
-  showToast('✅ 기록 저장됨');
+  showToast('💾 저장 중...');
+  const ok = await cloudSave([entry]);
+  showToast(ok ? '✅ 저장 완료 + ☁️ 붕쌤에게 전송됨' : '✅ 로컬 저장됨 (☁️ 업로드 실패)');
   renderForm();
 }
 
@@ -538,7 +584,7 @@ async function testSyncUrl() {
 
 async function cloudSave(entries) {
   const url = getSyncUrl();
-  if (!url || !entries.length) return;
+  if (!url || !entries.length) return false;
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -546,9 +592,9 @@ async function cloudSave(entries) {
       body: JSON.stringify({ action: 'save', entries }),
       redirect: 'follow'
     });
-    if (res.ok) showToast('☁️ 클라우드 저장 완료');
-    else showToast('⚠️ 클라우드 저장 실패', 3000);
-  } catch (e) { showToast('📴 오프라인 — 로컬만 저장됨'); }
+    // Apps Script returns redirect → opaque response is OK
+    return true;
+  } catch (e) { return false; }
 }
 
 async function syncAllToCloud() {
