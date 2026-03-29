@@ -468,7 +468,7 @@ async function saveEntry() {
   if (editId) {
     const idx = logs.findIndex(l => String(l.id) === editId);
     if (idx >= 0) {
-      const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, symptoms, meds, treatments, memo };
+      const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, symptoms, meds, treatments, memo, synced: false };
       logs[idx] = updated;
       saveQuickLogs(logs);
       showToast('💾 저장 중...');
@@ -592,8 +592,9 @@ async function cloudSave(entries) {
       body: JSON.stringify({ action: 'save', entries }),
       redirect: 'follow'
     });
-    // Apps Script returns redirect → opaque response is OK
-    return true;
+    // Apps Script redirects → check final response
+    if (res.ok || res.type === 'opaqueredirect' || res.redirected) return true;
+    return false;
   } catch (e) { return false; }
 }
 
@@ -627,7 +628,7 @@ async function fetchCloudStatus() {
     let changed = false;
     data.entries.forEach(ce => {
       if (ce.synced) {
-        const local = logs.find(l => l.id === ce.id);
+        const local = logs.find(l => String(l.id) === String(ce.id));
         if (local && !local.synced) { local.synced = true; changed = true; }
       }
     });

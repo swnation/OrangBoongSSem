@@ -2314,8 +2314,7 @@ async function markSyncedOnCloud(ids) {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action: 'markSynced', ids }),
-      redirect: 'follow',
-      mode: 'no-cors'
+      redirect: 'follow'
     });
   } catch(e) { console.warn('markSynced failed:', e); }
 }
@@ -2324,7 +2323,7 @@ function mergeQuickLogs(local, cloud) {
   if (!cloud) return local;
   const merged = [...local];
   cloud.forEach(ce => {
-    const idx = merged.findIndex(l => l.id === ce.id);
+    const idx = merged.findIndex(l => String(l.id) === String(ce.id));
     if (idx >= 0) {
       // 클라우드가 더 최신이면 업데이트
       if (ce.synced && !merged[idx].synced) merged[idx].synced = true;
@@ -2370,8 +2369,8 @@ async function pollCloudQuickLogs() {
   if (!cloud || !cloud.length) return;
   const local = JSON.parse(localStorage.getItem('om_quick_logs') || '[]');
   const merged = mergeQuickLogs(local, cloud);
-  const localIds = new Set(local.map(l=>l.id));
-  const newFromCloud = merged.filter(l=>!localIds.has(l.id));
+  const localIds = new Set(local.map(l=>String(l.id)));
+  const newFromCloud = merged.filter(l=>!localIds.has(String(l.id)));
   if (merged.length !== local.length || newFromCloud.length > 0) {
     _quickLogCache = null; // 캐시 초기화
     localStorage.setItem('om_quick_logs', JSON.stringify(merged));
@@ -2453,32 +2452,49 @@ function reviewQuickLog(id) {
       if (nrsSlider) { nrsSlider.value = entry.nrs; }
       if (nrsVal) { nrsVal.textContent = entry.nrs; }
     }
-    // 칩 선택: 부위
+    // 칩 선택 + 매칭 안 되는 값은 직접입력 필드에 추가
+    const _unmatchedSites={left:[],right:[]};
     (entry.sites || []).forEach(s => {
       const side = s.startsWith('왼쪽') ? 'left' : 'right';
       const val = s.replace(/^(왼쪽|오른쪽)\s*/, '');
+      let matched=false;
       document.querySelectorAll(`.log-chip[data-side="${side}"]`).forEach(el => {
-        if (el.dataset.val === val && !el.classList.contains('sel')) toggleChip(el, 'sel-' + side);
+        if (el.dataset.val === val && !el.classList.contains('sel')) { toggleChip(el, 'sel-' + side); matched=true; }
       });
+      if(!matched) _unmatchedSites[side].push(val);
     });
+    const slo=document.getElementById('site-left-other');if(slo&&_unmatchedSites.left.length)slo.value=_unmatchedSites.left.join(', ');
+    const sro=document.getElementById('site-right-other');if(sro&&_unmatchedSites.right.length)sro.value=_unmatchedSites.right.join(', ');
     // 칩 선택: 증상
+    const _unmatchedSym=[];
     (entry.symptoms || []).forEach(s => {
+      let matched=false;
       document.querySelectorAll('.log-chip[data-group="sym"]').forEach(el => {
-        if (el.dataset.val === s && !el.classList.contains('sel')) toggleChip(el, 'sel-sym');
+        if (el.dataset.val === s && !el.classList.contains('sel')) { toggleChip(el, 'sel-sym'); matched=true; }
       });
+      if(!matched) _unmatchedSym.push(s);
     });
+    const so=document.getElementById('sym-other');if(so&&_unmatchedSym.length)so.value=_unmatchedSym.join(', ');
     // 칩 선택: 약물
+    const _unmatchedMed=[];
     (entry.meds || []).forEach(m => {
+      let matched=false;
       document.querySelectorAll('.log-chip[data-group="med"]').forEach(el => {
-        if (el.dataset.val === m && !el.classList.contains('sel')) toggleChip(el, 'sel-med');
+        if (el.dataset.val === m && !el.classList.contains('sel')) { toggleChip(el, 'sel-med'); matched=true; }
       });
+      if(!matched) _unmatchedMed.push(m);
     });
+    const mo=document.getElementById('med-other');if(mo&&_unmatchedMed.length)mo.value=_unmatchedMed.join(', ');
     // 칩 선택: 시술
+    const _unmatchedTx=[];
     (entry.treatments || []).forEach(t => {
+      let matched=false;
       document.querySelectorAll('.log-chip[data-group="tx"]').forEach(el => {
-        if (el.dataset.val === t && !el.classList.contains('sel')) toggleChip(el, 'sel-tx');
+        if (el.dataset.val === t && !el.classList.contains('sel')) { toggleChip(el, 'sel-tx'); matched=true; }
       });
+      if(!matched) _unmatchedTx.push(t);
     });
+    const txo=document.getElementById('tx-other');if(txo&&_unmatchedTx.length)txo.value=_unmatchedTx.join(', ');
     // 메모
     const memo = document.getElementById('log-memo');
     if (memo) memo.value = entry.memo || '';
@@ -3013,6 +3029,7 @@ function _saveLogFormState() {
   state.skipNrs=document.getElementById('log-skip-nrs')?.checked||false;
   state.memo=document.getElementById('log-memo')?.value||'';
   state.editIdx=document.getElementById('log-edit-idx')?.value||'-1';
+  state.quickId=document.getElementById('log-quick-id')?.value||'';
   state.treatment=document.getElementById('log-treatment')?.value||'';
   // Selected chips
   state.chips=[];
@@ -3036,6 +3053,7 @@ function _restoreLogFormState(state) {
     const skip=document.getElementById('log-skip-nrs');if(skip&&state.skipNrs){skip.checked=true;toggleNrsSkip(true);}
     const memo=document.getElementById('log-memo');if(memo)memo.value=state.memo;
     const editIdx=document.getElementById('log-edit-idx');if(editIdx)editIdx.value=state.editIdx;
+    if(state.quickId){let qid=document.getElementById('log-quick-id');if(!qid){qid=document.createElement('input');qid.type='hidden';qid.id='log-quick-id';editIdx?.parentNode?.appendChild(qid);}qid.value=state.quickId;}
     const tx=document.getElementById('log-treatment');if(tx)tx.value=state.treatment;
     // Restore chip selections
     state.chips.forEach(ch=>{
