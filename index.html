@@ -2074,16 +2074,26 @@ function renderLog() {
   // ── 마음관리 모드 (moodMode) ──
   const allMoodOpts=['😞 우울','😶 무감정','😐 보통','🙂 양호','😊 좋음'];
   const visMoodOpts=allMoodOpts.map((s,i)=>({s,i})).filter(({s})=>!_hiddenMood.includes(s));
+  const skipNrsHtml = `<label style="display:flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer;font-size:.73rem;color:var(--mu)">
+    <input type="checkbox" id="log-skip-nrs" onchange="toggleNrsSkip(this.checked)"> 기록 안함
+  </label>`;
+
   const moodHtml = lc.moodMode ? `
     <div class="log-section-title">${lc.nrsLabel} <button onclick="openChipManager('mood')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
-    <div class="log-chips" id="mood-chips">
-      ${visMoodOpts.map(({s,i})=>`<div class="log-chip" data-group="mood" data-val="${s}" onclick="selectMood(this,${i})">${s}</div>`).join('')}
-    </div>` : `
+    <div id="nrs-area">
+      <div class="log-chips" id="mood-chips">
+        ${visMoodOpts.map(({s,i})=>`<div class="log-chip" data-group="mood" data-val="${s}" onclick="selectMood(this,${i})">${s}</div>`).join('')}
+      </div>
+    </div>
+    ${skipNrsHtml}` : `
     <div class="log-section-title">${lc.nrsLabel}</div>
-    <div class="log-nrs">
-      <input type="range" min="0" max="10" value="5" id="log-nrs" oninput="document.getElementById('log-nrs-val').textContent=this.value">
-      <div class="log-nrs-val" id="log-nrs-val">5</div>
-    </div>`;
+    <div id="nrs-area">
+      <div class="log-nrs">
+        <input type="range" min="0" max="10" value="5" id="log-nrs" oninput="document.getElementById('log-nrs-val').textContent=this.value">
+        <div class="log-nrs-val" id="log-nrs-val">5</div>
+      </div>
+    </div>
+    ${skipNrsHtml}`;
 
   // 부위: 기본 + 커스텀
   const customSitesL = JSON.parse(localStorage.getItem('om_custom_sites_left_'+S.currentDomain) || '[]');
@@ -2181,7 +2191,7 @@ function renderRecentLogs() {
       <div class="log-item-time">${l.datetime.slice(11,16)!=='00:00'?l.datetime.slice(11,16):''}</div>
       <div class="log-item-body">
         ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
-          `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`}
+          (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`:'')}
         ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
         <div class="log-item-tags">
           ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
@@ -2205,7 +2215,7 @@ function renderLogList() {
         <div class="log-item-time">${l.datetime.slice(5,10)}${timeStr!=='00:00'?'<br>'+timeStr:''}</div>
         <div class="log-item-body">
           ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
-            `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`}
+            (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`:'')}
           ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
           <div class="log-item-tags">
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
@@ -2228,14 +2238,16 @@ async function saveLogEntry() {
   const timeUnknown=document.getElementById('log-time-unknown')?.checked;
   const time=timeUnknown?'시간미상':(document.getElementById('log-time')?.value||'00:00');
 
-  // NRS or mood
-  let nrs=0; let mood='';
-  if(lc.moodMode) {
+  // NRS or mood (-1 = 기록 안함)
+  let nrs=-1; let mood='';
+  if(document.getElementById('log-skip-nrs')?.checked) {
+    nrs=-1; mood='';
+  } else if(lc.moodMode) {
     const sel=document.querySelector('#mood-chips .log-chip.sel');
     mood=sel?.dataset.val||'';
-    nrs=sel?parseInt(sel.dataset.level)*2.5:0;
+    nrs=sel?parseInt(sel.dataset.level)*2.5:-1;
   } else {
-    nrs=parseInt(document.getElementById('log-nrs')?.value||0);
+    nrs=parseInt(document.getElementById('log-nrs')?.value??-1);
   }
 
   const sites=[];
@@ -2296,16 +2308,20 @@ function editLogEntry(idx) {
     if(timeVal.startsWith('시간') || timeVal==='00:00') {
       if(timeUnk){timeUnk.checked=true;if(timeEl){timeEl.disabled=true;timeEl.style.opacity='.3';}}
     } else if(timeEl) { timeEl.value=timeVal; }
-    // NRS or mood
-    if(lc.moodMode && entry.mood) {
+    // NRS or mood — handle skip (-1)
+    const isSkipped=entry.nrs<0 && !entry.mood;
+    if(isSkipped) {
+      const skip=document.getElementById('log-skip-nrs');
+      if(skip){skip.checked=true;toggleNrsSkip(true);}
+    } else if(lc.moodMode && entry.mood) {
       document.querySelectorAll('#mood-chips .log-chip').forEach(c=>{
-        if(c.dataset.val===entry.mood){c.classList.add('sel','sel-sym');c.dataset.level=Math.round((entry.nrs||5)/2.5);}
+        if(c.dataset.val===entry.mood){c.classList.add('sel','sel-sym');c.dataset.level=Math.round(Math.max(0,entry.nrs||0)/2.5);}
       });
-    } else if(!lc.moodMode) {
+    } else if(!lc.moodMode && entry.nrs>=0) {
       const nrsEl=document.getElementById('log-nrs');
       const nrsVal=document.getElementById('log-nrs-val');
-      if(nrsEl){nrsEl.value=entry.nrs||5;}
-      if(nrsVal){nrsVal.textContent=entry.nrs||5;}
+      if(nrsEl){nrsEl.value=entry.nrs;}
+      if(nrsVal){nrsVal.textContent=entry.nrs;}
     }
     // Sites
     (entry.sites||[]).forEach(s=>{
@@ -2349,7 +2365,19 @@ function cancelLogEdit() {
 }
 
 // ── Mood selector (마음관리용) ──
+function toggleNrsSkip(checked) {
+  const area=document.getElementById('nrs-area');
+  if(area){area.style.opacity=checked?'.3':'1';area.style.pointerEvents=checked?'none':'auto';}
+  if(checked) {
+    // Deselect any mood chips
+    document.querySelectorAll('#mood-chips .log-chip').forEach(c=>c.classList.remove('sel','sel-sym'));
+  }
+}
+
 function selectMood(el, level) {
+  // Uncheck "기록 안함" if selecting mood
+  const skip=document.getElementById('log-skip-nrs');
+  if(skip?.checked){skip.checked=false;toggleNrsSkip(false);}
   document.querySelectorAll('#mood-chips .log-chip').forEach(c=>c.classList.remove('sel','sel-sym'));
   el.classList.add('sel','sel-sym');
   el.dataset.level = level;
@@ -2608,8 +2636,8 @@ function getRecentLogSummary() {
   }
 
   // Standard mode (편두통)
-  const lines=week.map(l=>`${l.datetime.slice(5,16)} ${(l.sites||[]).join('+')||'-'} NRS${l.nrs}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')).join('\n');
-  const nrsVals=week.map(l=>l.nrs).filter(n=>n>0);
+  const lines=week.map(l=>`${l.datetime.slice(5,16)} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' NRS'+l.nrs:''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')).join('\n');
+  const nrsVals=week.map(l=>l.nrs).filter(n=>n>=0);
   const avg=nrsVals.length?(nrsVals.reduce((a,b)=>a+b,0)/nrsVals.length).toFixed(1):'-';
   return `[최근 7일 기록]\n${lines}\n평균NRS: ${avg}`;
 }
