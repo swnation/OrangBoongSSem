@@ -2462,10 +2462,10 @@ function openChipManager(type) {
   const customKey=`om_custom_${type}_`+S.currentDomain;
   const customList=JSON.parse(localStorage.getItem(customKey)||'[]');
   const hidden=getHiddenChips();
-  const group=type==='meds'?'med':'sym';
+  const group=type==='meds'?'med':type==='tx'?'tx':'sym';
   const hiddenList=hidden[group]||[];
-  const defaultList=(type==='meds'?(lc.meds||[]).filter(m=>m!=='기타'):(lc.symptoms||[]));
-  const label=type==='meds'?'투약':'증상';
+  const defaultList=type==='meds'?(lc.meds||[]).filter(m=>m!=='기타'):type==='tx'?(lc.treatments||[]):(lc.symptoms||[]);
+  const label=type==='meds'?'투약':type==='tx'?'치료/시술':'증상';
   const defaultRows=defaultList.map(item=>{
     const isHidden=hiddenList.includes(item);
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
@@ -2509,7 +2509,7 @@ async function saveJournalLog() {
   const memo=document.getElementById('log-memo')?.value.trim();
   if(!memo){showToast('내용을 입력해 주세요.');if(btn)btn.disabled=false;if(sp)sp.style.display='none';return;}
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
-  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:0,sites:[],symptoms:[],meds:[],treatments:[]};
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:-1,sites:[],symptoms:[],meds:[],treatments:[]};
   await ensureLogLoaded();
   const ds=D();
   if(editIdx>=0 && ds.logData[editIdx]) {
