@@ -158,11 +158,11 @@
 // VERSION — 새 버전 추가 시 여기 맨 위에 한 줄 추가, 6번째부터는 자동 제거
 // ═══════════════════════════════════════════════════════════════
 const APP_VERSION = [
+  {v:'v8.4', date:'2026-03-29', note:'디베이트 · 빠른질문 · 조기요약 · 기록필터 · 인사이트 · 붕룩이타임라인'},
   {v:'v8.3', date:'2026-03-29', note:'KST 통일 · 약품 한영 310쌍 · PDF · 캘린더 히트맵 · 시술 추적'},
   {v:'v8.2', date:'2026-03-29', note:'통합 질환 관리 · ICD-10 검색 · 질환별 투약 · 식약처 API'},
   {v:'v8.1', date:'2026-03-29', note:'직접입력 · 자동완성 · 교차 분석 · 컨텍스트 통합'},
   {v:'v8.0', date:'2026-03-29', note:'AI 스트리밍 · 통계 대시보드 · PWA · 파일 분리'},
-  {v:'v7.6', date:'2026-03-29', note:'세션 복구 · 오프라인 캐시 · 로그 편집 · 키 보안'},
 ].slice(0,5);
 
 // Auto-render changelog + update sidebar version
@@ -868,8 +868,7 @@ async function loadDomainData(domainId) {
     }
     checkPriceUpdate();
     migrateConditions();
-    // Load log data first, then check reminder
-    ensureLogLoaded().then(()=>checkDailyReminder()).catch(()=>{});
+    ensureLogLoaded().then(()=>{checkDailyReminder();checkWeeklyInsight();}).catch(()=>{});
   } catch(e) {
     // Attempt offline fallback from localStorage
     const cached = loadFromLocal(domainId);
@@ -972,6 +971,20 @@ function updateSidebarCost() {
 // ═══════════════════════════════════════════════════════════════
 function getRoleSystem(aiId) {
   const dc = DC();
+  const mode=S.session?.mode||'normal';
+
+  if(mode==='debate') {
+    const reversed=S.session?.debateReversed;
+    const debateRoles={
+      gpt: reversed?'반대 측 — 쟁점에 대해 "아니다" 근거를 최대한 수집·반박':'찬성 측 — 쟁점에 대해 "맞다" 근거를 최대한 수집·주장',
+      gemini: reversed?'찬성 측 — 쟁점에 대해 "맞다" 근거를 최대한 수집·주장':'반대 측 — 쟁점에 대해 "아니다" 근거를 최대한 수집·반박',
+      claude: '심판 — 양측 논거 강도 평가, 과단정 체크, 잠정 결론 도출, SSOT 원칙 위반 여부 체크',
+      perp: '팩트체크 — 양측이 인용한 수치/문헌/가이드라인 검증, 출처 명시',
+    };
+    return `${dc.user} ${dc.label} 디베이트 — ${AI_DEFS[aiId].name} 역할: ${debateRoles[aiId]||'분석'}.
+규칙: ① 자신의 역할에 충실 ② 근거 기반 논증 ③ 감정적 주장 금지 ④ 출처 명시 ⑤ 불확실한 부분 명시`;
+  }
+
   const role = dc.aiRoles[aiId] || 'AI 분석';
   return `${dc.user} ${dc.label} 협진 AI — ${AI_DEFS[aiId].name} 역할: ${role}.
 규칙: ① 팩트/해석/전략 분리 ② 확정/추정/가설 구분 ③ 금지표현 사용 금지 ④ 불필요한 수식어 없이 내용만 ⑤ 항목당 1-2문장 압축`;
@@ -1086,6 +1099,25 @@ async function callAIStream(aiId, system, user, onChunk) {
   throw new Error('알 수 없는 AI: '+aiId);
 }
 
+// Continue session — allow follow-up questions in same session
+function continueSession() {
+  if(!S.session) return;
+  S.session.currentRound=S.session.rounds.length; // resume from last round
+  S.session.summary=null;
+  S._dirty=true;
+  switchView('session');
+  showToast('🔄 이어서 질문할 수 있습니다. 질문 수정 후 다음 라운드를 시작하세요.');
+}
+
+// Continue from history — start new session with previous context
+function continueFromHistory(idx) {
+  const sessions=DM()?.sessions||[];
+  const prev=sessions[idx];
+  if(!prev) return;
+  const prevCtx=`[이전 세션 맥락 — ${prev.date}]\n질문: ${prev.question}\n${prev.summary?'요약: '+prev.summary.session_summary+'\n권고: '+(prev.summary.final_recommendation||''):''}`;
+  startNewSession(`${prevCtx}\n\n[후속 질문]\n`);
+}
+
 function buildUserPrompt(aiId, roundNum) {
   const m = DM(); const sess = S.session;
   const accum = m.accumulated;
@@ -1118,12 +1150,14 @@ function buildUserPrompt(aiId, roundNum) {
 // ═══════════════════════════════════════════════════════════════
 // SESSION MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
-function startNewSession(prefillQuestion) {
+function startNewSession(prefillQuestion, mode) {
   _sessionFiles = [];
   S.session = {
     id:Date.now(), date:kstToday(),
     question:prefillQuestion||'', rounds:[], currentRound:0, summary:null,
     new_consensus:[], new_discarded:[], updated_issues:[],
+    mode: mode||'normal', // 'normal','debate','quick'
+    debateReversed: false,
   };
   S._dirty = false;
   switchView('session');
@@ -1137,6 +1171,64 @@ function startSessionFromLogs() {
   const dc=DC();
   const question=`${dc.label} 최근 기록 분석 요청:\n\n${summary}\n\n위 기록을 바탕으로 패턴 분석, 주요 변화, 주의 사항을 알려주세요.`;
   startNewSession(question);
+}
+
+// Session mode suggestion (keyword-based, no AI)
+function suggestSessionMode(question) {
+  if(!question||question.length<5) return null;
+  const q=question.toLowerCase();
+  const debateKw=['인가?','해도 되나','할까?','vs','찬반','맞나','괜찮은가','중단해도','시작해야','유지 vs','변경','해야 하나','괜찮을까','가능한가','안전한가'];
+  const quickKw=['몇 번','몇 일','언제','용량','뭐였지','알려줘','얼마','몇 mg','몇 시'];
+  if(debateKw.some(k=>q.includes(k))) return 'debate';
+  if(quickKw.some(k=>q.includes(k))) return 'quick';
+  return null;
+}
+
+// Quick question — single AI call
+async function runQuickQuestion(aiId) {
+  if(S.generating) return;
+  const q=document.getElementById('q-input')?.value?.trim();
+  if(!q){showToast('❌ 질문을 입력해 주세요.');return;}
+  if(!S.keys[aiId]){showToast(`❌ ${AI_DEFS[aiId].name} API 키 없음`);return;}
+  S.session.question=q;
+  S.generating=true; S._dirty=true;
+  S.session.currentRound=1;
+  if(!S.session.rounds[0]) S.session.rounds[0]={round:1,answers:{}};
+  document.getElementById('session-round-badge').textContent='Q';
+  setCardStatus(aiId,'loading');
+  // Hide other AI cards
+  Object.keys(AI_DEFS).forEach(id=>{
+    const card=document.querySelector(`[data-ai="${id}"]`);
+    if(card) card.style.display=id===aiId?'':'none';
+  });
+  try {
+    const answer=await callAIStream(aiId,getRoleSystem(aiId),buildUserPrompt(aiId,1),(chunk)=>{
+      const ta=document.getElementById('ans-'+aiId);
+      if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
+    });
+    S.session.rounds[0].answers[aiId]=answer;
+    const ta=document.getElementById('ans-'+aiId);
+    if(ta){ta.value=answer;ta.classList.remove('gen');}
+    updateAICardMD(aiId,answer);
+    setCardStatus(aiId,'done');
+  } catch(e) {
+    S.session.rounds[0].answers[aiId]='⚠️ 오류: '+e.message;
+    setCardStatus(aiId,'error');
+  }
+  S.generating=false;
+  // Save as quick session
+  S.session.currentRound=4; S._dirty=false;
+  const m=DM();
+  m.sessions.unshift({...S.session, _quickAI:aiId});
+  await saveMaster();
+  updateHistCount();updateSidebarCost();
+  document.getElementById('session-round-badge').textContent='완료';
+  const actionBar=document.getElementById('action-bar');
+  if(actionBar) actionBar.innerHTML=`<div class="round-action-bar" style="border-color:#10b98155;background:#f0fdf4">
+    <span style="color:var(--gr);font-size:.85rem;font-weight:600">✅ 빠른 질문 완료</span>
+    <button class="btn-run-round green" onclick="startNewSession()" style="margin-left:auto">새 세션</button>
+  </div>`;
+  showToast('✅ 빠른 질문 완료 & 저장됨');
 }
 
 async function runRound(roundNum) {
@@ -1458,6 +1550,8 @@ function renderHome() {
   return `
     <button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
     <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
+    ${renderInsightCard()}
+    ${renderBungrukiTimeline()}
     <div class="card">
       <div class="card-title">🧠 누적 협진 지식 <span class="badge badge-green">Drive 동기화</span></div>
       <div class="accum-section">
@@ -1484,10 +1578,37 @@ function renderHome() {
 }
 
 // SESSION VIEW
+function getDebateRole(aiId,reversed) {
+  const roles=reversed
+    ?{gpt:'반대 측',gemini:'찬성 측',claude:'심판',perp:'팩트체크'}
+    :{gpt:'찬성 측',gemini:'반대 측',claude:'심판',perp:'팩트체크'};
+  return roles[aiId]||'';
+}
+function getDebateRoleColor(aiId) {
+  const colors={gpt:'#10a37f',gemini:'#4285f4',claude:'#c96442',perp:'#20808d'};
+  return colors[aiId]||'var(--mu)';
+}
+
 function renderSession() {
   if(!S.session) return `<div class="hint">홈에서 "새 세션 시작"을 눌러 주세요.</div>`;
   const sess=S.session; const curRound=sess.currentRound;
   const dc=DC();
+  const mode=sess.mode||'normal';
+
+  // Mode selector (only at R0)
+  const modeSelector = curRound===0 ? `<div style="display:flex;gap:6px;margin-bottom:12px">
+    ${[['normal','⚡ 일반 협진'],['debate','⚔️ 디베이트'],['quick','💬 빠른 질문']].map(([m,label])=>
+      `<button class="log-vtab ${mode===m?'active':''}" onclick="S.session.mode='${m}';renderView('session')">${label}</button>`).join('')}
+  </div>` : '';
+
+  // Debate reverse toggle
+  const debateToggle = mode==='debate'&&curRound===0 ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+    <span style="font-size:.72rem;color:var(--mu)">역할 배치:</span>
+    <span style="font-size:.75rem;font-weight:600;color:#10a37f">GPT=${sess.debateReversed?'반대':'찬성'}</span>
+    <span style="font-size:.75rem;color:var(--mu)">vs</span>
+    <span style="font-size:.75rem;font-weight:600;color:#4285f4">Gemini=${sess.debateReversed?'찬성':'반대'}</span>
+    <button class="btn-cancel" onclick="S.session.debateReversed=!S.session.debateReversed;renderView('session')" style="font-size:.68rem;padding:3px 10px;margin-left:auto">↔ 반전</button>
+  </div>` : '';
 
   const aiCards=Object.entries(AI_DEFS).map(([id,def])=>{
     const ans=curRound>0?(sess.rounds[curRound-1]?.answers?.[id]||''):'';
@@ -1495,12 +1616,13 @@ function renderSession() {
     const curModel=S.models[id]||DEFAULT_MODELS[id];
     const modelOpts=(MODEL_OPTIONS[id]||[]).map(m=>
       `<option value="${m.value}" ${curModel===m.value?'selected':''}>${m.label}</option>`).join('');
+    const debateLabel=mode==='debate'?`<span style="font-size:.6rem;padding:1px 6px;border-radius:3px;background:${getDebateRoleColor(id)}20;color:${getDebateRoleColor(id)};font-weight:700;margin-left:4px">${getDebateRole(id,sess.debateReversed)}</span>`:'';
     return `
-    <div class="ai-card ${isError?'error':''}" data-ai="${id}">
+    <div class="ai-card ${isError?'error':''}" data-ai="${id}" ${mode==='quick'&&curRound===0?'style="opacity:.6"':''}>
       <div class="ai-head">
         <div class="ai-dot" style="background:${def.color}"></div>
         <span class="ai-name" style="color:${def.color}">${def.name}</span>
-        <span class="ai-role">${dc.aiRoles[id]||''}</span>
+        <span class="ai-role">${mode==='debate'?'':dc.aiRoles[id]||''}</span>${debateLabel}
         <span id="chip-${id}" class="ai-chip"></span>
         ${curRound>0?`<button class="ai-regen" id="regen-${id}" onclick="regenOne('${id}')"
           ${isError?'style="border-color:#ef4444;color:#ef4444;font-weight:600"':''}>↺ ${isError?'재시도':'재생성'}</button>`:''}
@@ -1530,12 +1652,14 @@ function renderSession() {
     <div class="tmpl-list">${templates.map((t,i)=>`<div class="tmpl-chip" onclick="loadTemplate(${i})">${esc(t.substring(0,40))}</div>`).join('')}</div></div>`:'';
 
   return `
+    ${modeSelector}
     <div class="q-bar">
-      <div class="q-label" style="color:var(--domain-color)">● 오늘의 질문</div>
+      <div class="q-label" style="color:var(--domain-color)">● ${mode==='debate'?'쟁점':mode==='quick'?'빠른 질문':'오늘의 질문'}</div>
       ${tmplHtml}
-      <textarea id="q-input" rows="2" placeholder="질문을 입력하세요..."
+      <textarea id="q-input" rows="2" placeholder="${mode==='debate'?'쟁점을 입력하세요 (예: Venlafaxine 중단 유지해도 되는가?)':mode==='quick'?'질문을 입력하세요...':'질문을 입력하세요...'}"
         ${curRound>=4?'readonly style="color:var(--mu)"':''}
-        oninput="if(S.session){S.session.question=this.value;S._dirty=true;}">${esc(sess.question||'')}</textarea>
+        oninput="if(S.session){S.session.question=this.value;S._dirty=true;}updateModeSuggestion(this.value)">${esc(sess.question||'')}</textarea>
+      <div id="mode-suggest" style="font-size:.65rem;color:var(--r3);margin-top:2px"></div>
       ${curRound>0&&curRound<4?'<div style="font-size:.65rem;color:var(--r3);margin-top:2px">💡 질문을 수정하면 다음 라운드에 반영됩니다</div>':''}
       ${curRound===0?`
       <div class="file-upload-area" onclick="document.getElementById('q-file-input').click()">
@@ -1547,11 +1671,12 @@ function renderSession() {
       <div style="margin-top:8px;text-align:right"><button class="btn-accum-add" style="font-size:.72rem;padding:4px 12px" onclick="saveAsTemplate()">📌 템플릿 저장</button></div>
       `:curRound<4&&sess._attachments?.length?`<div style="margin-top:6px;font-size:.72rem;color:var(--mu)">📎 첨부 ${sess._attachments.length}건</div>`:''}
     </div>
-    <div class="round-bar">
-      <span style="font-size:.72rem;color:#5a7a95;font-family:var(--mono)">진행:</span>
+    ${debateToggle}
+    ${mode!=='quick'?`<div class="round-bar">
+      <span style="font-size:.72rem;color:#5a7a95;font-family:var(--mono)">${mode==='debate'?'⚔️ 디베이트':'진행'}:</span>
       ${roundDots}
       <span style="font-size:.72rem;color:#3a5a6a;margin-left:auto;font-family:var(--mono)">${curRound===0?'시작 전':curRound===4?'완료':`R${curRound} 완료`}</span>
-    </div>
+    </div>`:''}
     <div id="autosave-bar" class="autosave-bar"></div>
     <div id="action-bar">${renderActionBar(curRound)}</div>
     <div class="ai-grid">${aiCards}</div>
@@ -1559,7 +1684,27 @@ function renderSession() {
 }
 
 function renderActionBar(curRound) {
-  if(curRound===4) return `<div class="round-action-bar" style="border-color:#10b98155;background:#f0fdf4"><span style="color:var(--gr);font-size:.85rem;font-weight:600">✅ 세션 완료</span><button class="btn-run-round green" onclick="startNewSession()" style="margin-left:auto">새 세션</button></div>`;
+  const mode=S.session?.mode||'normal';
+
+  // Quick question mode
+  if(mode==='quick') {
+    if(curRound>=4) return `<div class="round-action-bar" style="border-color:#10b98155;background:#f0fdf4"><span style="color:var(--gr);font-size:.85rem;font-weight:600">✅ 빠른 질문 완료</span><button class="btn-run-round green" onclick="startNewSession()" style="margin-left:auto">새 세션</button></div>`;
+    return `<div class="round-action-bar" style="flex-wrap:wrap;gap:6px">
+      <span style="font-size:.75rem;color:var(--mu)">AI 선택:</span>
+      ${Object.entries(AI_DEFS).map(([id,def])=>`<button class="btn-run-round" onclick="runQuickQuestion('${id}')" style="background:${def.color};padding:8px 16px;font-size:.8rem">${def.name}</button>`).join('')}
+    </div>`;
+  }
+
+  // Completed
+  if(curRound===4) {
+    return `<div class="round-action-bar" style="border-color:#10b98155;background:#f0fdf4">
+      <span style="color:var(--gr);font-size:.85rem;font-weight:600">✅ 세션 완료</span>
+      <button class="btn-run-round" onclick="continueSession()" style="background:var(--ac);margin-left:auto">🔄 이어서 질문</button>
+      <button class="btn-run-round green" onclick="startNewSession()">새 세션</button>
+    </div>`;
+  }
+
+  // R3 done
   if(curRound===3) {
     const hasErr=Object.keys(AI_DEFS).some(id=>(S.session.rounds[2]?.answers?.[id]||'').startsWith('⚠️'));
     return `<div class="round-action-bar">
@@ -1568,17 +1713,37 @@ function renderActionBar(curRound) {
       <span class="run-note">각 AI 카드에서 개별 재생성도 가능합니다</span>
     </div>`;
   }
+
+  // R1 or R2 done — add early summary option
   if(curRound>0) {
     const next=curRound+1;
     const labels={2:'🔄 R2 크로스체크',3:'🔄 R3 최종 수렴'};
     const hasErr=Object.keys(AI_DEFS).some(id=>(S.session.rounds[curRound-1]?.answers?.[id]||'').startsWith('⚠️'));
-    return `<div class="round-action-bar">
-      <button class="btn-run-round" id="run-btn" onclick="runRound(${next})">${labels[next]}</button>
+    return `<div class="round-action-bar" style="flex-wrap:wrap">
+      <button class="btn-run-round" id="run-btn" onclick="runRound(${next})">${labels[next]||'다음'}</button>
+      <button class="btn-run-round green" onclick="runFinalSummary()" style="font-size:.78rem;padding:8px 14px">✅ 여기서 요약 & 종료</button>
       ${hasErr?`<button class="btn-run-round" onclick="runRound(${curRound})" style="background:#5a5a7a">🔁 R${curRound} 오류 재실행</button>`:''}
-      <span class="run-note">AI들이 서로의 답변을 분석합니다</span>
+      <span class="run-note">${mode==='debate'?'또는 심판 판정으로 종료':'AI들이 서로의 답변을 분석합니다'}</span>
     </div>`;
   }
-  return `<div class="round-action-bar"><button class="btn-run-round" id="run-btn" onclick="runRound(1)">⚡ R1 시작 — 4개 AI 동시 답변</button><span class="run-note">독립 분석 시작</span></div>`;
+
+  // R0 start
+  const startLabel=mode==='debate'?'⚔️ R1 시작 — 찬성/반대/팩트체크':'⚡ R1 시작 — 4개 AI 동시 답변';
+  return `<div class="round-action-bar"><button class="btn-run-round" id="run-btn" onclick="runRound(1)">${startLabel}</button><span class="run-note">${mode==='debate'?'디베이트 시작':'독립 분석 시작'}</span></div>`;
+}
+
+// Mode suggestion UI update
+function updateModeSuggestion(q) {
+  const el=document.getElementById('mode-suggest');
+  if(!el||S.session?.currentRound>0) return;
+  const suggest=suggestSessionMode(q);
+  if(suggest==='debate'&&S.session?.mode!=='debate') {
+    el.innerHTML='💡 이 질문은 <a href="#" onclick="S.session.mode=\'debate\';renderView(\'session\');return false" style="color:var(--ac);text-decoration:underline">⚔️ 디베이트 모드</a>가 효과적일 수 있어요';
+  } else if(suggest==='quick'&&S.session?.mode!=='quick') {
+    el.innerHTML='💡 <a href="#" onclick="S.session.mode=\'quick\';renderView(\'session\');return false" style="color:var(--ac);text-decoration:underline">💬 빠른 질문</a>으로도 충분할 수 있어요';
+  } else {
+    el.innerHTML='';
+  }
 }
 
 // HISTORY VIEW
@@ -1657,6 +1822,7 @@ function renderHistDetail(s,idx) {
   return `
     <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px">
       <button class="btn-cancel" onclick="S.viewingHistIdx=null;renderView('history')">← 목록</button>
+      <button class="btn-accum-add" onclick="continueFromHistory(${S.viewingHistIdx})" style="font-size:.75rem">🔄 이어서 질문</button>
       <span style="font-size:.87rem;font-weight:600">${s.date}</span>
     </div>
     <div class="card"><div class="card-title">질문</div><div style="font-size:.87rem;line-height:1.7">${esc(s.question||'')}</div></div>
@@ -2281,11 +2447,49 @@ function renderRecentLogs() {
     </div>`).join('')+'</div>';
 }
 
+let _logFilter={med:'',sym:'',cat:''};
+function setLogFilter(type,val){_logFilter[type]=val;renderView('log');}
+function clearLogFilter(){_logFilter={med:'',sym:'',cat:''};renderView('log');}
+
+function renderLogFilter(logs) {
+  const allMeds=new Set(); const allSyms=new Set(); const allCats=new Set();
+  logs.forEach(l=>{
+    (l.meds||[]).forEach(m=>allMeds.add(m));
+    (l.symptoms||[]).forEach(s=>allSyms.add(s));
+    (l.categories||[]).forEach(c=>allCats.add(c));
+  });
+  const hasFilter=_logFilter.med||_logFilter.sym||_logFilter.cat;
+  if(!allMeds.size&&!allSyms.size&&!allCats.size) return '';
+  return `<div style="margin-bottom:10px;padding:8px 12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:.68rem;font-weight:700;color:var(--mu)">🔍 필터:</span>
+      ${allMeds.size?`<select onchange="setLogFilter('med',this.value)" style="font-size:.7rem;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;background:var(--sf);color:var(--ink)">
+        <option value="">전체 투약</option>${[...allMeds].map(m=>`<option value="${esc(m)}" ${_logFilter.med===m?'selected':''}>${esc(m)}</option>`).join('')}</select>`:''}
+      ${allSyms.size?`<select onchange="setLogFilter('sym',this.value)" style="font-size:.7rem;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;background:var(--sf);color:var(--ink)">
+        <option value="">전체 증상</option>${[...allSyms].map(s=>`<option value="${esc(s)}" ${_logFilter.sym===s?'selected':''}>${esc(s)}</option>`).join('')}</select>`:''}
+      ${allCats.size?`<select onchange="setLogFilter('cat',this.value)" style="font-size:.7rem;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;background:var(--sf);color:var(--ink)">
+        <option value="">전체 카테고리</option>${[...allCats].map(c=>`<option value="${esc(c)}" ${_logFilter.cat===c?'selected':''}>${esc(c)}</option>`).join('')}</select>`:''}
+      ${hasFilter?`<button onclick="clearLogFilter()" style="font-size:.65rem;background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;cursor:pointer;color:var(--re)">✕ 초기화</button>`:''}
+    </div>
+  </div>`;
+}
+
+function filterLogs(logs) {
+  return logs.filter(l=>{
+    if(_logFilter.med&&!(l.meds||[]).includes(_logFilter.med)) return false;
+    if(_logFilter.sym&&!(l.symptoms||[]).includes(_logFilter.sym)) return false;
+    if(_logFilter.cat&&!(l.categories||[]).includes(_logFilter.cat)) return false;
+    return true;
+  });
+}
+
 function renderLogList() {
   const ds=D(); if(!ds.logData?.length) return '<div class="hint">이번 달 기록 없음</div>';
-  return `<div class="card"><div class="card-title">📋 ${ds.logMonth} 전체 (${ds.logData.length}건)</div>`+
-    [...ds.logData].reverse().map((l,ri)=>{
-      const realIdx=ds.logData.length-1-ri;
+  const filtered=filterLogs(ds.logData);
+  const hasFilter=_logFilter.med||_logFilter.sym||_logFilter.cat;
+  return renderLogFilter(ds.logData)+`<div class="card"><div class="card-title">📋 ${ds.logMonth} ${hasFilter?`필터 결과 (${filtered.length}/${ds.logData.length}건)`:`전체 (${ds.logData.length}건)`}</div>`+
+    [...filtered].reverse().map((l,ri)=>{
+      const realIdx=ds.logData.indexOf(l);
       const timeStr=l.datetime.slice(11,16);
       return `<div class="log-item">
         <div class="log-item-time">${l.datetime.slice(5,10)}${timeStr!=='00:00'?'<br>'+timeStr:''}</div>
@@ -3227,6 +3431,7 @@ function renderMedsView() {
       <div class="dx-head">
         <span class="dx-name">${esc(c.name)}</span>
         <span class="dx-status ${statusClass[c.status]||'active'}">${statusLabels[c.status]||c.status}</span>
+        ${c.drugChangeDate?`<button class="accum-del" onclick="compareDrugChange(${c._idx},'${c._domainId}')" title="변경 전후 비교" style="color:var(--ac)">📊</button>`:''}
         <button class="accum-del" onclick="editConditionUnified('${c._domainId}',${c._idx})" title="편집">✏️</button>
         <button class="accum-del" onclick="deleteConditionUnified('${c._domainId}',${c._idx})" title="삭제">🗑</button>
       </div>
@@ -3307,6 +3512,10 @@ function renderMedsView() {
             <input class="dx-form-input" id="dx-med-input" placeholder="약품명 검색..." style="flex:1">
             <button class="btn-accum-add" onclick="addDxMed()" style="padding:6px 12px;font-size:.75rem">+추가</button>
           </div>
+        </div>
+        <div class="dx-form-group">
+          <div class="dx-form-label">마지막 약물 변경일 <span style="font-size:.6rem;color:var(--mu2)">(전후 비교에 사용)</span></div>
+          <input class="dx-form-input" id="dx-drug-change" type="date" style="width:160px">
         </div>
         <div class="dx-form-group">
           <div class="dx-form-label">약물 반응 (효과, 부작용)</div>
@@ -3401,6 +3610,7 @@ function openConditionForm(domainId, idx) {
     document.getElementById('dx-name').value=c.name||'';
     document.getElementById('dx-date').value=c.diagnosisDate||'';
     document.getElementById('dx-status').value=c.status||'active';
+    document.getElementById('dx-drug-change').value=c.drugChangeDate||'';
     document.getElementById('dx-response').value=c.drugResponse||'';
     document.getElementById('dx-course').value=c.course||'';
     document.getElementById('dx-notes').value=c.notes||'';
@@ -3435,6 +3645,7 @@ async function saveCondition() {
     status:document.getElementById('dx-status').value,
     medsList:[..._dxMedsList],
     medications:_dxMedsList.join(', '),
+    drugChangeDate:document.getElementById('dx-drug-change')?.value||'',
     drugResponse:document.getElementById('dx-response').value.trim(),
     course:document.getElementById('dx-course').value.trim(),
     notes:document.getElementById('dx-notes').value.trim(),
@@ -4249,6 +4460,137 @@ function checkDailyReminder() {
       setTimeout(()=>showToast(`📝 오늘 아직 기록이 없어요 (마지막: ${daysSince}일 전)`,4000),2000);
     }
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TIME-SERIES INSIGHT (주 1회 자동 패턴 감지)
+// ═══════════════════════════════════════════════════════════════
+async function checkWeeklyInsight() {
+  const m=DM(); if(!m||!S.keys?.claude) return;
+  const lastCheck=m.lastInsightDate||'';
+  const daysSince=lastCheck?Math.round((new Date(kstToday())-new Date(lastCheck))/86400000):8;
+  if(daysSince<7) return;
+
+  const logSummary=getRecentLogSummary();
+  if(!logSummary) return;
+
+  try {
+    const result=await callAI('claude',
+      '당신은 의료 데이터 패턴 분석 전문가입니다. 3줄 이내로 핵심만.',
+      `최근 14일 기록:\n${logSummary}\n\n특이 패턴, 추세 변화, 주의 사항이 있으면 3줄 이내로 알려주세요. 없으면 "특이사항 없음"만.`
+    );
+    m.lastInsight=result;
+    m.lastInsightDate=kstToday();
+    await saveMaster();
+  } catch(e) {}
+}
+
+function renderInsightCard() {
+  const m=DM();
+  if(!m?.lastInsight||m.lastInsight.includes('특이사항 없음')) return '';
+  return `<div class="card" style="border-color:var(--r3);background:#fffbeb">
+    <div class="card-title">💡 주간 인사이트 <span class="badge badge-orange">${m.lastInsightDate||''}</span>
+      <button class="accum-del" onclick="DM().lastInsight=null;renderView('home')" style="margin-left:auto">✕</button>
+    </div>
+    <div style="font-size:.84rem;line-height:1.7">${esc(m.lastInsight)}</div>
+    <div style="margin-top:8px"><button class="btn-accum-add" onclick="startNewSession(DM().lastInsight)" style="font-size:.72rem">💬 이 주제로 세션 시작</button></div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRUG CHANGE BEFORE/AFTER COMPARISON
+// ═══════════════════════════════════════════════════════════════
+function compareDrugChange(condIdx, domainId) {
+  const ds=S.domainState[domainId||S.currentDomain];
+  const cond=ds?.master?.conditions?.[condIdx];
+  if(!cond?.drugChangeDate) {
+    showToast('약물 변경 날짜가 기록되지 않았습니다.');
+    return;
+  }
+  const changeDate=cond.drugChangeDate;
+  const logs=ds.logData||[];
+  const lc=DC().logConfig;
+
+  const before=logs.filter(l=>{
+    const d=l.datetime.slice(0,10);
+    const diff=Math.round((new Date(changeDate)-new Date(d))/86400000);
+    return diff>0&&diff<=14;
+  });
+  const after=logs.filter(l=>{
+    const d=l.datetime.slice(0,10);
+    const diff=Math.round((new Date(d)-new Date(changeDate))/86400000);
+    return diff>=0&&diff<=14;
+  });
+
+  const avgNrs=(arr)=>{const v=arr.filter(l=>l.nrs>=0).map(l=>l.nrs);return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1):'-';};
+  const medDays=(arr)=>new Set(arr.filter(l=>(l.meds||[]).length).map(l=>l.datetime.slice(0,10))).size;
+  const maxNrs=(arr)=>{const v=arr.filter(l=>l.nrs>=0).map(l=>l.nrs);return v.length?Math.max(...v):'-';};
+
+  const bAvg=avgNrs(before),aAvg=avgNrs(after);
+  const bMax=maxNrs(before),aMax=maxNrs(after);
+  const bMed=medDays(before),aMed=medDays(after);
+
+  const arrow=(b,a)=>{if(b==='-'||a==='-')return'→';const diff=a-b;return diff>0?'↑':'↓';};
+  const color=(b,a,lower)=>{if(b==='-'||a==='-')return'var(--mu)';return (lower?(a<b):(a>b))?'var(--gr)':'var(--re)';};
+
+  showConfirmModal(`📊 ${esc(cond.name)} — 약물 변경 전후 비교`,
+    `<p style="font-size:.78rem;color:var(--mu);margin-bottom:10px">변경일: ${changeDate} | 전후 14일 비교</p>
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;text-align:center">
+      <div style="font-size:.72rem;font-weight:700;color:var(--mu)">변경 전 (${before.length}건)</div>
+      <div></div>
+      <div style="font-size:.72rem;font-weight:700;color:var(--mu)">변경 후 (${after.length}건)</div>
+      ${[['평균 NRS',bAvg,aAvg,true],['최대 NRS',bMax,aMax,true],['투약일',bMed,aMed,true]].map(([label,b,a,lower])=>`
+        <div style="padding:8px;background:var(--sf2);border-radius:6px"><div style="font-size:.65rem;color:var(--mu)">${label}</div><div style="font-size:1.1rem;font-weight:700">${b}</div></div>
+        <div style="display:flex;align-items:center;font-size:1.2rem;color:${color(b,a,lower)}">${arrow(b,a)}</div>
+        <div style="padding:8px;background:var(--sf2);border-radius:6px"><div style="font-size:.65rem;color:var(--mu)">${label}</div><div style="font-size:1.1rem;font-weight:700">${a}</div></div>
+      `).join('')}
+    </div>`,
+    [{label:'닫기',action:'closeConfirmModal()',primary:true}]
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUNGRUKI TIMELINE (임신 준비 타임라인)
+// ═══════════════════════════════════════════════════════════════
+function renderBungrukiTimeline() {
+  if(S.currentDomain!=='bungruki') return '';
+  const ds=D();
+  if(!ds.logData?.length) return '';
+  const events=[...ds.logData].reverse().slice(0,30);
+  if(!events.length) return '';
+
+  const whoColors={오랑이:'#ec4899',붕쌤:'#06b6d4',함께:'#8b5cf6'};
+  const whoSide={오랑이:'left',붕쌤:'right',함께:'center'};
+
+  const items=events.map(l=>{
+    const who=l.who||'함께';
+    const side=whoSide[who]||'center';
+    const cats=(l.categories||[]).join(', ');
+    const color=whoColors[who]||'var(--mu)';
+    return `<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;${side==='right'?'flex-direction:row-reverse':''}">
+      <div style="flex:1;${side==='right'?'text-align:right':''}${side==='center'?';text-align:center':''}">
+        <div style="font-size:.68rem;font-family:var(--mono);color:var(--mu)">${l.datetime.slice(0,10)}</div>
+        <div style="font-size:.62rem;color:${color};font-weight:600">${who}</div>
+        ${cats?`<div style="font-size:.65rem;color:var(--ac);margin-top:2px">${esc(cats)}</div>`:''}
+        <div style="font-size:.78rem;margin-top:3px;line-height:1.5">${esc((l.memo||'').substring(0,100))}</div>
+      </div>
+      <div style="width:12px;display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+        <div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid var(--sf)"></div>
+        <div style="width:2px;flex:1;background:var(--bd)"></div>
+      </div>
+      <div style="flex:1"></div>
+    </div>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="card-title">🍼 붕룩이 타임라인</div>
+    <div style="display:flex;gap:16px;justify-content:center;margin-bottom:10px;font-size:.68rem">
+      <span style="color:#ec4899">● 오랑이</span>
+      <span style="color:#06b6d4">● 붕쌤</span>
+      <span style="color:#8b5cf6">● 함께</span>
+    </div>
+    ${items}
+  </div>`;
 }
 
 if ('serviceWorker' in navigator) {
