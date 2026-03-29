@@ -840,7 +840,8 @@ async function loadDomainData(domainId) {
     }
     checkPriceUpdate();
     migrateConditions();
-    checkDailyReminder();
+    // Load log data first, then check reminder
+    ensureLogLoaded().then(()=>checkDailyReminder()).catch(()=>{});
   } catch(e) {
     // Attempt offline fallback from localStorage
     const cached = loadFromLocal(domainId);
@@ -1320,27 +1321,32 @@ JSON 형식 (각 문자열 100자 이내):
   if(finalSp) finalSp.style.display='none';
 }
 
+let _pendingContextMerge='';
 function offerContextMerge(parsed) {
   const additions=[];
   if(parsed.new_consensus?.length) additions.push('■ 새 합의: '+parsed.new_consensus.join('; '));
   if(parsed.updated_issues?.length) additions.push('■ 미해결 쟁점: '+parsed.updated_issues.join('; '));
   if(parsed.final_recommendation) additions.push('■ 권고: '+parsed.final_recommendation);
-  const addText='\n\n['+kstToday()+' 세션 반영]\n'+additions.join('\n');
+  _pendingContextMerge='\n\n['+kstToday()+' 세션 반영]\n'+additions.join('\n');
 
   showConfirmModal('📋 컨텍스트 자동 반영',
     `<p style="font-size:.82rem;margin-bottom:10px">이번 세션 결과를 환자 컨텍스트에 추가할까요?</p>
-    <div style="background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;padding:10px;font-family:var(--mono);font-size:.72rem;line-height:1.6;max-height:200px;overflow-y:auto;white-space:pre-wrap;color:var(--gr)">${esc(addText)}</div>`,
-    [{label:'컨텍스트에 추가',action:`mergeToContext(\`${addText.replace(/`/g,"'")}\`)`,primary:true}]
+    <div style="background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;padding:10px;font-family:var(--mono);font-size:.72rem;line-height:1.6;max-height:200px;overflow-y:auto;white-space:pre-wrap;color:var(--gr)">${esc(_pendingContextMerge)}</div>`,
+    [{label:'컨텍스트에 추가',action:'applyContextMerge()',primary:true}]
   );
 }
 
-async function mergeToContext(text) {
+async function applyContextMerge() {
+  if(!_pendingContextMerge) return;
   const m=DM(); if(!m) return;
-  m.patient_context=(m.patient_context||'')+text;
+  m.patient_context=(m.patient_context||'')+_pendingContextMerge;
+  _pendingContextMerge='';
   await saveMaster();
   closeConfirmModal();
   showToast('✅ 컨텍스트에 반영됨');
 }
+
+
 
 function renderSummaryResult(r) {
   const steps=(r.next_steps||[]).map((s,i)=>`<li><strong>Step ${i+1}.</strong> ${esc(s)}</li>`).join('');
@@ -4082,6 +4088,7 @@ function exportPDF() {
   html+=`</body></html>`;
 
   const w=window.open('','_blank');
+  if(!w){showToast('⚠️ 팝업이 차단되었습니다. 팝업을 허용해 주세요.',4000);return;}
   w.document.write(html);
   w.document.close();
   setTimeout(()=>{w.print();},500);
