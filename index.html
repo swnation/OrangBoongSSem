@@ -1102,8 +1102,9 @@ async function callAIStream(aiId, system, user, onChunk) {
 // Continue session — allow follow-up questions in same session
 function continueSession() {
   if(!S.session) return;
-  S.session.currentRound=S.session.rounds.length; // resume from last round
+  S.session.currentRound=S.session.rounds.length;
   S.session.summary=null;
+  S.session._continued=true;
   S._dirty=true;
   switchView('session');
   showToast('🔄 이어서 질문할 수 있습니다. 질문 수정 후 다음 라운드를 시작하세요.');
@@ -1114,6 +1115,7 @@ function continueFromHistory(idx) {
   const sessions=DM()?.sessions||[];
   const prev=sessions[idx];
   if(!prev) return;
+  S.viewingHistIdx=null;
   const prevCtx=`[이전 세션 맥락 — ${prev.date}]\n질문: ${prev.question}\n${prev.summary?'요약: '+prev.summary.session_summary+'\n권고: '+(prev.summary.final_recommendation||''):''}`;
   startNewSession(`${prevCtx}\n\n[후속 질문]\n`);
 }
@@ -1638,10 +1640,11 @@ function renderSession() {
     </div>`;
   }).join('');
 
-  const roundDots=[1,2,3].map(n=>{
-    const colors={1:'var(--r1)',2:'var(--r2)',3:'var(--r3)'};
+  const maxRound=Math.max(3,sess.rounds.length+1);
+  const roundDots=Array.from({length:Math.min(maxRound,6)},(_,i)=>i+1).map(n=>{
+    const colors={1:'var(--r1)',2:'var(--r2)',3:'var(--r3)',4:'#8b5cf6',5:'#ec4899',6:'#06b6d4'};
     const state=curRound>n?'done':curRound===n?'active':'waiting';
-    const c=colors[n];
+    const c=colors[n]||'var(--ac)';
     const style=state==='active'?`background:${c};color:#fff;border-color:${c}`:state==='done'?`border-color:${c};color:${c}`:`border-color:#3a4a5a;color:#3a4a5a`;
     return `<span class="round-pill ${state}" style="${style}">R${n}${state==='done'?' ✓':''}</span>`;
   }).join('');
@@ -1704,8 +1707,8 @@ function renderActionBar(curRound) {
     </div>`;
   }
 
-  // R3 done
-  if(curRound===3) {
+  // R3 done (first time, not after continueSession)
+  if(curRound===3 && !S.session._continued) {
     const hasErr=Object.keys(AI_DEFS).some(id=>(S.session.rounds[2]?.answers?.[id]||'').startsWith('⚠️'));
     return `<div class="round-action-bar">
       <button class="btn-run-round green" id="final-btn" onclick="runFinalSummary()"><div class="spin" id="final-sp"></div>✅ 세션 종료 & 저장</button>
@@ -1714,13 +1717,14 @@ function renderActionBar(curRound) {
     </div>`;
   }
 
-  // R1 or R2 done — add early summary option
+  // R1+ done — next round + early summary option
   if(curRound>0) {
     const next=curRound+1;
     const labels={2:'🔄 R2 크로스체크',3:'🔄 R3 최종 수렴'};
+    const nextLabel=labels[next]||`🔄 R${next} 추가 분석`;
     const hasErr=Object.keys(AI_DEFS).some(id=>(S.session.rounds[curRound-1]?.answers?.[id]||'').startsWith('⚠️'));
     return `<div class="round-action-bar" style="flex-wrap:wrap">
-      <button class="btn-run-round" id="run-btn" onclick="runRound(${next})">${labels[next]||'다음'}</button>
+      <button class="btn-run-round" id="run-btn" onclick="runRound(${next})">${nextLabel}</button>
       <button class="btn-run-round green" onclick="runFinalSummary()" style="font-size:.78rem;padding:8px 14px">✅ 여기서 요약 & 종료</button>
       ${hasErr?`<button class="btn-run-round" onclick="runRound(${curRound})" style="background:#5a5a7a">🔁 R${curRound} 오류 재실행</button>`:''}
       <span class="run-note">${mode==='debate'?'또는 심판 판정으로 종료':'AI들이 서로의 답변을 분석합니다'}</span>
