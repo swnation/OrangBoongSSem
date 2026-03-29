@@ -826,8 +826,8 @@ let S = {
   generating: false,
   viewingHistIdx: null,
   logView: 'form',
-  logEditMode: false,
   _dirty: false, // unsaved session data
+  logEditMode: false,
 };
 
 // Shortcuts for current domain state
@@ -1056,7 +1056,7 @@ async function loadDomainData(domainId) {
       const def = getDefaultMaster();
       for (const k of Object.keys(def)) { if (!(k in ds.master)) ds.master[k] = def[k]; }
       if (!ds.master.accumulated) ds.master.accumulated = def.accumulated;
-      // localStorage 비용 캐시 병합 (Drive 저장 전 갱신 손실 복구)
+      // localStorage 비용 캐시 병합 (Drive 저장 전 페이지 갱신 시 손실 복구)
       try {
         const localUsage=JSON.parse(localStorage.getItem('om_usage_'+domainId)||'null');
         if(localUsage) {
@@ -1138,7 +1138,6 @@ function recordUsage(aiId,model,inT,outT) {
   if(!m.usage_data[today][aiId]) m.usage_data[today][aiId]={in:0,out:0,cost:0,model};
   m.usage_data[today][aiId].in+=inT; m.usage_data[today][aiId].out+=outT;
   m.usage_data[today][aiId].cost+=calcCost(model,inT,outT); m.usage_data[today][aiId].model=model;
-  // Drive 저장 전에 localStorage에 즉시 캐시 (페이지 갱신 시 손실 방지)
   try { localStorage.setItem('om_usage_'+S.currentDomain, JSON.stringify(m.usage_data)); } catch(e) {}
 }
 function getSidebarCostToday() {
@@ -1955,24 +1954,19 @@ function renderLog() {
     <div id="recent-logs">${renderJournalLogs()}</div>`;
   }
 
-  // ── 편집 모드 칩 렌더링 헬퍼 ──
-  const hidden=getHiddenChips();
-  const em=S.logEditMode;
-  function chipEl(group,val,onclick,isCustom=false) {
-    if(em) {
-      const delFn=isCustom?`removeCustomMed('${val.replace(/'/g,"\\'")}')`:`hideChip('${group}','${val.replace(/'/g,"\\'")}')`;
-      return `<div class="log-chip" data-group="${group}" data-val="${val}" style="opacity:.85" onclick="${delFn}">${val} <span style="color:#ef4444;font-size:.75rem;margin-left:2px">✕</span></div>`;
-    }
-    return `<div class="log-chip" data-group="${group}" data-val="${val}" onclick="${onclick}">${val}</div>`;
-  }
+  // ── 기본 칩 숨김 필터 ──
+  const _hidden=getHiddenChips();
+  const _hiddenMood=_hidden.mood||[];
+  const _hiddenSym=_hidden.sym||[];
+  const _hiddenMed=_hidden.med||[];
 
   // ── 마음관리 모드 (moodMode) ──
   const allMoodOpts=['😞 우울','😶 무감정','😐 보통','🙂 양호','😊 좋음'];
-  const visibleMoodOpts=allMoodOpts.map((s,i)=>({s,i})).filter(({s})=>!(hidden.mood||[]).includes(s));
+  const visMoodOpts=allMoodOpts.map((s,i)=>({s,i})).filter(({s})=>!_hiddenMood.includes(s));
   const moodHtml = lc.moodMode ? `
-    <div class="log-section-title">${lc.nrsLabel}</div>
+    <div class="log-section-title">${lc.nrsLabel} <button onclick="openChipManager('mood')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
     <div class="log-chips" id="mood-chips">
-      ${visibleMoodOpts.map(({s,i})=>chipEl('mood',s,`selectMood(this,${i})`)).join('')}
+      ${visMoodOpts.map(({s,i})=>`<div class="log-chip" data-group="mood" data-val="${s}" onclick="selectMood(this,${i})">${s}</div>`).join('')}
     </div>` : `
     <div class="log-section-title">${lc.nrsLabel}</div>
     <div class="log-nrs">
@@ -1986,12 +1980,13 @@ function renderLog() {
     <div class="log-section-title">부위 — 오른쪽</div>
     <div class="log-chips">${lc.sites.right.map(s=>`<div class="log-chip" data-side="right" data-val="${s}" onclick="toggleChip(this,'sel-right')">${s}</div>`).join('')}</div>` : '';
 
-  // 투약: 기본 약물 + 유저가 추가한 커스텀 약물 (숨긴 항목 제외)
+  // 투약: 기본(숨김 제외) + 커스텀
   const customMeds = JSON.parse(localStorage.getItem('om_custom_meds_'+S.currentDomain) || '[]');
-  const defaultMeds=(lc.meds||[]).filter(m=>m!=='기타'&&!(hidden.med||[]).includes(m));
-  const allMeds = [...defaultMeds, ...customMeds];
+  const allMeds = [...(lc.meds||[]).filter(m=>m!=='기타'&&!_hiddenMed.includes(m)), ...customMeds];
 
-  const visibleSyms=(lc.symptoms||[]).filter(s=>!(hidden.sym||[]).includes(s));
+  // 증상: 기본(숨김 제외) + 커스텀
+  const customSyms = JSON.parse(localStorage.getItem('om_custom_syms_'+S.currentDomain) || '[]');
+  const allSyms = [...(lc.symptoms||[]).filter(s=>!_hiddenSym.includes(s)), ...customSyms];
 
   // 증상: 기본 + 커스텀
   const customSyms = JSON.parse(localStorage.getItem('om_custom_syms_'+S.currentDomain) || '[]');
@@ -2003,14 +1998,8 @@ function renderLog() {
     : (lc.treatments?.length ? `<div class="log-section-title">치료/시술</div>
        <div class="log-chips">${lc.treatments.map(s=>`<div class="log-chip" data-group="tx" data-val="${s}" onclick="toggleChip(this,'sel-tx')">${s}</div>`).join('')}</div>` : '');
 
-  const editBar=`<div style="display:flex;justify-content:flex-end;gap:6px;padding:2px 0 6px">
-    ${em?`<button onclick="resetHiddenChips()" style="font-size:.72rem;padding:3px 10px;border-radius:5px;border:1px solid var(--bd);background:var(--sf2);color:var(--mu);cursor:pointer">↺ 기본값 복원</button>`:''}
-    <button onclick="toggleLogEditMode()" style="font-size:.72rem;padding:3px 10px;border-radius:5px;border:1px solid var(--bd);background:${em?'#fee2e2':'var(--sf2)'};color:${em?'#dc2626':'var(--mu)'};cursor:pointer">${em?'✓ 편집 완료':'✏️ 항목 편집'}</button>
-  </div>`;
-
   return `<div class="log-view-tabs">${viewTabs}</div>
   <div class="log-form">
-    ${editBar}
     <div style="display:flex;gap:12px;margin-bottom:2px">
       <div style="flex:1"><div class="log-section-title" style="margin-top:0">날짜</div>
         <input type="date" id="log-date" value="${dateStr}" class="dx-form-input"></div>
@@ -2022,18 +2011,23 @@ function renderLog() {
     </div>
     ${moodHtml}
     ${sitesHtml}
-    ${visibleSyms.length?`<div class="log-section-title">증상</div><div class="log-chips">${visibleSyms.map(s=>chipEl('sym',s,`toggleChip(this,'sel-sym')`)).join('')}</div>`:(lc.symptoms?.length&&em?`<div class="log-section-title">증상</div><div class="log-chips"><span style="font-size:.75rem;color:var(--mu)">모두 숨김 (↺ 복원으로 되돌리기)</span></div>`:'')}
-    ${allMeds.length||em?`<div class="log-section-title">투약</div><div class="log-chips">${defaultMeds.map(s=>chipEl('med',s,`toggleChip(this,'sel-med')`)).join('')}${customMeds.map(s=>chipEl('med',s,`toggleChip(this,'sel-med')`,true)).join('')}
-      ${!em?`<div style="display:flex;gap:4px;align-items:center">
+    ${lc.symptoms?.length||customSyms.length?`<div class="log-section-title">증상 <button onclick="openChipManager('syms')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div><div class="log-chips">${allSyms.map(s=>`<div class="log-chip" data-group="sym" data-val="${s}" onclick="toggleChip(this,'sel-sym')">${s}</div>`).join('')}
+      <div style="display:flex;gap:4px;align-items:center">
+        <input class="log-other-input" id="sym-other" placeholder="직접 입력" style="width:100px">
+        <button onclick="addCustomChip('syms')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
+      </div>
+    </div>`:''}
+    ${lc.meds?.length||customMeds.length?`<div class="log-section-title">투약 <button onclick="openChipManager('meds')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div><div class="log-chips">${allMeds.map(s=>`<div class="log-chip" data-group="med" data-val="${s}" onclick="toggleChip(this,'sel-med')">${s}</div>`).join('')}
+      <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="med-other" placeholder="직접 입력" style="width:100px">
-        <button onclick="addCustomMed()" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
-      </div>`:''}
+        <button onclick="addCustomChip('meds')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
+      </div>
     </div>`:''}
     ${treatmentHtml}
     <div class="log-section-title">메모</div>
     <textarea class="log-memo" id="log-memo" rows="2" placeholder="특이사항..."></textarea>
     <div style="display:flex;justify-content:flex-end;margin-top:14px">
-      ${em?'':`<button class="btn-log-save" id="log-save-btn" onclick="saveLogEntry()"><div class="spin" id="log-sp"></div> 💾 기록 저장</button>`}
+      <button class="btn-log-save" id="log-save-btn" onclick="saveLogEntry()"><div class="spin" id="log-sp"></div> 💾 기록 저장</button>
     </div>
   </div>
   <div id="recent-logs">${renderRecentLogs()}</div>`;
@@ -2138,6 +2132,28 @@ function selectMood(el, level) {
 }
 
 // ── Custom chips (meds & symptoms) ──
+// ── 기본 칩 숨김 관리 ──
+function getHiddenChips() {
+  try { return JSON.parse(localStorage.getItem('om_hidden_chips_'+S.currentDomain)||'{}'); } catch(e) { return {}; }
+}
+function _hideDefaultChip(group, val) {
+  const h=getHiddenChips();
+  if(!h[group]) h[group]=[];
+  if(!h[group].includes(val)) h[group].push(val);
+  localStorage.setItem('om_hidden_chips_'+S.currentDomain, JSON.stringify(h));
+  showToast(`"${val}" 숨김 처리됨`);
+  closeConfirmModal();
+  renderView('log');
+}
+function _restoreDefaultChip(group, val) {
+  const h=getHiddenChips();
+  if(h[group]) h[group]=h[group].filter(v=>v!==val);
+  localStorage.setItem('om_hidden_chips_'+S.currentDomain, JSON.stringify(h));
+  showToast(`"${val}" 복원됨`);
+  closeConfirmModal();
+  renderView('log');
+}
+
 function addCustomChip(type) {
   const inputId = type==='meds'?'med-other':'sym-other';
   const el=document.getElementById(inputId);
@@ -2152,16 +2168,53 @@ function addCustomChip(type) {
 }
 
 function openChipManager(type) {
-  const key=`om_custom_${type}_`+S.currentDomain;
-  const list=JSON.parse(localStorage.getItem(key)||'[]');
-  const label=type==='meds'?'커스텀 투약':'커스텀 증상';
-  if(!list.length){showToast('고정된 항목이 없습니다.');return;}
-  showConfirmModal(`✏️ ${label} 관리`,
-    `<div style="font-size:.82rem;margin-bottom:8px">삭제하려면 ✕를 누르세요:</div>` +
-    list.map((item,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
-      <span style="flex:1;font-size:.85rem">${esc(item)}</span>
-      <button onclick="_removeCustomChip('${type}',${i})" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--re)">✕ 삭제</button>
-    </div>`).join(''),
+  const lc=DC().logConfig;
+  // 기분 모드 처리
+  if(type==='mood') {
+    const allMoodOpts=['😞 우울','😶 무감정','😐 보통','🙂 양호','😊 좋음'];
+    const hidden=getHiddenChips(); const hiddenMood=hidden.mood||[];
+    const rows=allMoodOpts.map(item=>{
+      const isHidden=hiddenMood.includes(item);
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
+        <span style="flex:1;font-size:.85rem;${isHidden?'color:var(--mu2);text-decoration:line-through':''}">${esc(item)}</span>
+        <span style="font-size:.65rem;color:var(--mu2);margin-right:2px">${isHidden?'숨김':'기본'}</span>
+        ${isHidden
+          ?`<button onclick="_restoreDefaultChip('mood','${item.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--gr)">↺ 복원</button>`
+          :`<button onclick="_hideDefaultChip('mood','${item.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--re)">✕ 숨김</button>`}
+      </div>`;
+    }).join('');
+    showConfirmModal('✏️ 기분 항목 관리',
+      `<div style="font-size:.78rem;color:var(--mu);margin-bottom:8px">항목을 숨기거나 복원할 수 있어요.</div>`+rows,
+      [{label:'닫기',action:'closeConfirmModal()',primary:true}]
+    );
+    return;
+  }
+  const customKey=`om_custom_${type}_`+S.currentDomain;
+  const customList=JSON.parse(localStorage.getItem(customKey)||'[]');
+  const hidden=getHiddenChips();
+  const group=type==='meds'?'med':'sym';
+  const hiddenList=hidden[group]||[];
+  const defaultList=(type==='meds'?(lc.meds||[]).filter(m=>m!=='기타'):(lc.symptoms||[]));
+  const label=type==='meds'?'투약':'증상';
+  const defaultRows=defaultList.map(item=>{
+    const isHidden=hiddenList.includes(item);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
+      <span style="flex:1;font-size:.85rem;${isHidden?'color:var(--mu2);text-decoration:line-through':''}">${esc(item)}</span>
+      <span style="font-size:.65rem;color:var(--mu2);margin-right:2px">${isHidden?'숨김':'기본'}</span>
+      ${isHidden
+        ?`<button onclick="_restoreDefaultChip('${group}','${item.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--gr)">↺ 복원</button>`
+        :`<button onclick="_hideDefaultChip('${group}','${item.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--re)">✕ 숨김</button>`}
+    </div>`;
+  }).join('');
+  const customRows=customList.map((item,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
+    <span style="flex:1;font-size:.85rem">${esc(item)}</span>
+    <span style="font-size:.65rem;color:var(--mu2);margin-right:2px">추가</span>
+    <button onclick="_removeCustomChip('${type}',${i})" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--re)">✕ 삭제</button>
+  </div>`).join('');
+  showConfirmModal(`✏️ ${label} 항목 관리`,
+    `<div style="font-size:.78rem;color:var(--mu);margin-bottom:8px">기본 항목은 숨기거나 복원할 수 있고, 추가 항목은 삭제할 수 있어요.</div>`
+    + (defaultRows||'') + (customRows||'')
+    + (!defaultList.length&&!customList.length?'<div style="color:var(--mu);font-size:.82rem;padding:8px 0">항목이 없습니다.</div>':''),
     [{label:'닫기',action:'closeConfirmModal()',primary:true}]
   );
 }
@@ -2173,35 +2226,6 @@ function _removeCustomChip(type,idx) {
   localStorage.setItem(key,JSON.stringify(list));
   showToast(`🗑 "${removed}" 삭제됨`);
   closeConfirmModal();
-  renderView('log');
-}
-
-// ── 항목 편집 모드 (기본값 숨김/삭제) ──
-function getHiddenChips() {
-  try { return JSON.parse(localStorage.getItem('om_hidden_chips_'+S.currentDomain)||'{}'); } catch(e) { return {}; }
-}
-function hideChip(group, val) {
-  const h=getHiddenChips();
-  if(!h[group]) h[group]=[];
-  if(!h[group].includes(val)) h[group].push(val);
-  localStorage.setItem('om_hidden_chips_'+S.currentDomain, JSON.stringify(h));
-  renderView('log');
-  showToast(`"${val}" 숨김 처리됨`);
-}
-function removeCustomMed(val) {
-  const key='om_custom_meds_'+S.currentDomain;
-  const list=JSON.parse(localStorage.getItem(key)||'[]').filter(m=>m!==val);
-  localStorage.setItem(key, JSON.stringify(list));
-  renderView('log');
-  showToast(`"${val}" 삭제됨`);
-}
-function resetHiddenChips() {
-  localStorage.removeItem('om_hidden_chips_'+S.currentDomain);
-  renderView('log');
-  showToast('기본 항목 복원됨');
-}
-function toggleLogEditMode() {
-  S.logEditMode=!S.logEditMode;
   renderView('log');
 }
 
