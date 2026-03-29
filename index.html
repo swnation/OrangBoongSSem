@@ -436,7 +436,9 @@ main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
   <div class="modal">
     <div class="modal-head"><h3>🔑 API 키 설정</h3><button class="modal-close" onclick="closeModal('keys-modal')">✕</button></div>
     <div class="modal-body" id="keys-body"></div>
-    <div class="modal-foot">
+    <div class="modal-foot" style="flex-wrap:wrap">
+      <button class="btn-cancel" onclick="exportKeysEncrypted()" style="font-size:.72rem;margin-right:auto">🔐 키 백업</button>
+      <button class="btn-cancel" onclick="importKeysEncrypted()" style="font-size:.72rem">🔐 키 복원</button>
       <button class="btn-cancel" onclick="closeModal('keys-modal')">닫기</button>
       <button class="btn-save" onclick="saveKeys()">저장</button>
     </div>
@@ -942,6 +944,8 @@ updateDomainUI();
 // GOOGLE AUTH & DRIVE
 // ═══════════════════════════════════════════════════════════════
 let tokenClient;
+let _tokenExpiresAt = 0;
+let _tokenRefreshTimer = null;
 
 function signIn() {
   if (!window.google?.accounts?.oauth2) {
@@ -956,6 +960,37 @@ function signIn() {
   tokenClient.requestAccessToken();
 }
 
+function scheduleTokenRefresh(expiresInSec) {
+  if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
+  _tokenExpiresAt = Date.now() + expiresInSec * 1000;
+  // Refresh 5 minutes before expiry
+  const refreshIn = Math.max((expiresInSec - 300) * 1000, 60000);
+  _tokenRefreshTimer = setTimeout(() => {
+    if (!tokenClient) return;
+    tokenClient.requestAccessToken({prompt: ''});
+  }, refreshIn);
+}
+
+function isTokenExpired() {
+  return _tokenExpiresAt > 0 && Date.now() > _tokenExpiresAt;
+}
+
+async function ensureValidToken() {
+  if (!S.token) return false;
+  if (!isTokenExpired()) return true;
+  // Token expired — try silent refresh
+  return new Promise(resolve => {
+    if (!tokenClient) { resolve(false); return; }
+    const origCallback = handleToken;
+    tokenClient.callback = (resp) => {
+      origCallback(resp);
+      tokenClient.callback = origCallback;
+      resolve(!resp.error);
+    };
+    tokenClient.requestAccessToken({prompt: ''});
+  });
+}
+
 (function checkGSI() {
   if (window.google?.accounts?.oauth2) {
     const el = document.getElementById('gsi-status');
@@ -966,6 +1001,7 @@ function signIn() {
 function handleToken(resp) {
   if (resp.error) { showToast('❌ 로그인 실패: ' + resp.error, 4000); return; }
   S.token = resp.access_token;
+  scheduleTokenRefresh(resp.expires_in || 3600);
   setDriveStatus(true);
   const dc = document.getElementById('default-connect'); if(dc) dc.style.display='none';
   const locked = document.getElementById('sb-locked'); if(locked) locked.style.display='none';
@@ -994,6 +1030,7 @@ function updateDriveStatusFull() {
 }
 
 async function driveSearch(name, parentId=null) {
+  if (isTokenExpired()) await ensureValidToken();
   let q = `name='${name}' and trashed=false`;
   if (parentId) q += ` and '${parentId}' in parents`;
   const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,modifiedTime)`,
@@ -1008,6 +1045,7 @@ async function driveRead(fileId) {
   return res.json();
 }
 async function driveCreate(name, data, parentId=null) {
+  if (isTokenExpired()) await ensureValidToken();
   const boundary='om_bound_x7';
   const metaObj={name,mimeType:'application/json'};
   if(parentId) metaObj.parents=[parentId];
@@ -1018,6 +1056,7 @@ async function driveCreate(name, data, parentId=null) {
   const d=await res.json(); if(d.error) throw new Error(d.error.message); return d.id;
 }
 async function driveUpdate(fileId, data) {
+  if (isTokenExpired()) await ensureValidToken();
   const res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,{
     method:'PATCH',headers:{Authorization:'Bearer '+S.token,'Content-Type':'application/json'},body:JSON.stringify(data)});
   const d=await res.json(); if(d.error) throw new Error(d.error.message); return d;
@@ -1070,8 +1109,8 @@ async function loadDomainData(domainId) {
           });
         }
       } catch(e) {}
-      // Restore keys from Drive if local empty
-      if (ds.master._keys_encrypted) {
+      // Legacy: migrate old _keys_encrypted (base64, insecure) to localStorage only
+      if (ds.master._keys_encrypted && Object.keys(S.keys).length === 0) {
         try {
           const saved = JSON.parse(atob(ds.master._keys_encrypted));
           if(saved.keys) Object.keys(saved.keys).forEach(id=>{if(!S.keys[id]&&saved.keys[id])S.keys[id]=saved.keys[id];});
@@ -1079,6 +1118,9 @@ async function loadDomainData(domainId) {
           localStorage.setItem('om_keys',JSON.stringify(S.keys));
           localStorage.setItem('om_models',JSON.stringify(S.models));
         } catch(e) {}
+        // Remove insecure key storage from Drive
+        delete ds.master._keys_encrypted;
+        try { await driveUpdate(ds.masterFileId, ds.master); } catch(e) {}
       }
     } else {
       ds.master = getDefaultMaster();
@@ -1092,10 +1134,46 @@ async function loadDomainData(domainId) {
     renderSidebarAIs();
     updateHistCount();
     updateSidebarCost();
-    switchView('home');
+
+    // Restore in-progress session if exists
+    if (ds.master._inProgressSession && !S.session) {
+      const prev = ds.master._inProgressSession;
+      if (prev.currentRound > 0 && prev.currentRound < 4) {
+        S.session = prev;
+        S._dirty = false;
+        showToast('📌 이전 진행 중 세션이 복원되었습니다.', 3500);
+        document.getElementById('session-round-badge').style.display='inline';
+        document.getElementById('session-round-badge').textContent=`R${prev.currentRound}`;
+        switchView('session');
+      } else {
+        switchView('home');
+      }
+    } else {
+      switchView('home');
+    }
     checkPriceUpdate(); // background price update
   } catch(e) {
-    renderError('Drive 로드 실패: ' + e.message + '\n\n페이지를 새로고침하고 다시 연결해 주세요.');
+    // Attempt offline fallback from localStorage
+    const cached = loadFromLocal(domainId);
+    if (cached?.master) {
+      if (!S.domainState[domainId]) S.domainState[domainId] = {};
+      const ds = S.domainState[domainId];
+      ds.master = cached.master;
+      ds.masterFileId = null;
+      ds.logData = []; ds.logMonth = ''; ds.logFileId = null;
+      const cacheAge = Math.round((Date.now() - cached.timestamp) / 60000);
+      setDriveStatus(false);
+      document.getElementById('drive-status').innerHTML =
+        `<div class="drive-dot" style="background:#e67e22"></div>
+         <span style="font-size:.72rem;color:#e67e22">오프라인 모드 (${cacheAge}분 전 캐시)</span>`;
+      renderSidebarAIs();
+      updateHistCount();
+      updateSidebarCost();
+      switchView('home');
+      showToast('⚠️ Drive 연결 실패 — 로컬 캐시로 동작 중', 4000);
+    } else {
+      renderError('Drive 로드 실패: ' + e.message + '\n\n페이지를 새로고침하고 다시 연결해 주세요.');
+    }
   }
 }
 
@@ -1947,8 +2025,10 @@ function renderLog() {
       </div>
       <div class="log-section-title">내용</div>
       <textarea class="log-memo" id="log-memo" rows="4" placeholder="자유롭게 기록하세요..."></textarea>
-      <div style="display:flex;justify-content:flex-end;margin-top:14px">
-        <button class="btn-log-save" id="log-save-btn" onclick="saveJournalLog()"><div class="spin" id="log-sp"></div> 💾 기록 저장</button>
+      <input type="hidden" id="log-edit-idx" value="-1">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+        <button class="btn-cancel" id="log-cancel-edit" style="display:none;font-size:.78rem" onclick="cancelLogEdit()">편집 취소</button>
+        <button class="btn-log-save" id="log-save-btn" onclick="saveJournalLog()"><div class="spin" id="log-sp"></div> 💾 <span id="log-save-label">기록 저장</span></button>
       </div>
     </div>
     <div id="recent-logs">${renderJournalLogs()}</div>`;
@@ -1988,10 +2068,6 @@ function renderLog() {
   const customSyms = JSON.parse(localStorage.getItem('om_custom_syms_'+S.currentDomain) || '[]');
   const allSyms = [...(lc.symptoms||[]).filter(s=>!_hiddenSym.includes(s)), ...customSyms];
 
-  // 증상: 기본 + 커스텀
-  const customSyms = JSON.parse(localStorage.getItem('om_custom_syms_'+S.currentDomain) || '[]');
-  const allSyms = [...(lc.symptoms||[]), ...customSyms];
-
   const treatmentHtml = lc.treatments === null
     ? `<div class="log-section-title">치료/시술</div>
        <input class="dx-form-input" id="log-treatment" placeholder="예: 상담, CBT, 명상 등 자유 입력">`
@@ -2026,8 +2102,10 @@ function renderLog() {
     ${treatmentHtml}
     <div class="log-section-title">메모</div>
     <textarea class="log-memo" id="log-memo" rows="2" placeholder="특이사항..."></textarea>
-    <div style="display:flex;justify-content:flex-end;margin-top:14px">
-      <button class="btn-log-save" id="log-save-btn" onclick="saveLogEntry()"><div class="spin" id="log-sp"></div> 💾 기록 저장</button>
+    <input type="hidden" id="log-edit-idx" value="-1">
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+      <button class="btn-cancel" id="log-cancel-edit" style="display:none;font-size:.78rem" onclick="cancelLogEdit()">편집 취소</button>
+      <button class="btn-log-save" id="log-save-btn" onclick="saveLogEntry()"><div class="spin" id="log-sp"></div> 💾 <span id="log-save-label">기록 저장</span></button>
     </div>
   </div>
   <div id="recent-logs">${renderRecentLogs()}</div>`;
@@ -2053,6 +2131,7 @@ function renderRecentLogs() {
         </div>
         ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
       </div>
+      <button class="log-del" onclick="editLogEntry(${D().logData.indexOf(l)})" title="편집" style="color:var(--ac)">✏️</button>
       <button class="log-del" onclick="deleteLogEntry(${D().logData.indexOf(l)})">✕</button>
     </div>`).join('')+'</div>';
 }
@@ -2076,6 +2155,7 @@ function renderLogList() {
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
         </div>
+        <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
         <button class="log-del" onclick="deleteLogEntry(${realIdx})">✕</button>
       </div>`;
     }).join('')+'</div>';
@@ -2109,11 +2189,20 @@ async function saveLogEntry() {
   if(txInput&&txInput.value.trim()) treatments.push(txInput.value.trim());
   else document.querySelectorAll('.log-chip.sel[data-group="tx"]').forEach(el=>treatments.push(el.dataset.val));
   const memo=document.getElementById('log-memo')?.value.trim();
-  const entry={id:Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,symptoms,meds,treatments,memo};
+  const editIdx=parseInt(document.getElementById('log-edit-idx')?.value||-1);
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,symptoms,meds,treatments,memo};
   await ensureLogLoaded();
-  const ds=D();ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-  try{await saveLogData();showToast('✅ 기록 저장됨');renderView('log');}
-  catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
+  const ds=D();
+  if(editIdx>=0 && ds.logData[editIdx]) {
+    ds.logData[editIdx]=entry;
+    ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
+    try{await saveLogData();showToast('✅ 기록 수정됨');S.logEditMode=false;renderView('log');}
+    catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
+  } else {
+    ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
+    try{await saveLogData();showToast('✅ 기록 저장됨');renderView('log');}
+    catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
+  }
   if(btn)btn.disabled=false;if(sp)sp.style.display='none';
 }
 
@@ -2122,6 +2211,78 @@ async function deleteLogEntry(idx) {
   const ds=D();ds.logData.splice(idx,1);
   try{await saveLogData();showToast('🗑 삭제됨');renderView('log');}
   catch(e){showToast('삭제 실패',3000);}
+}
+
+function editLogEntry(idx) {
+  const ds=D(); const entry=ds.logData[idx]; if(!entry) return;
+  S.logView='form'; S.logEditMode=true;
+  renderView('log');
+  // Pre-populate form after render
+  setTimeout(()=>{
+    const lc=DC().logConfig;
+    document.getElementById('log-edit-idx').value=idx;
+    document.getElementById('log-date').value=entry.datetime.slice(0,10);
+    const cancelBtn=document.getElementById('log-cancel-edit');
+    if(cancelBtn) cancelBtn.style.display='inline';
+    const saveLabel=document.getElementById('log-save-label');
+    if(saveLabel) saveLabel.textContent='수정 저장';
+    // Time
+    const timeVal=entry.datetime.slice(11,16);
+    const timeEl=document.getElementById('log-time');
+    const timeUnk=document.getElementById('log-time-unknown');
+    if(timeVal==='시간미' || timeVal==='00:00') {
+      if(timeUnk){timeUnk.checked=true;if(timeEl){timeEl.disabled=true;timeEl.style.opacity='.3';}}
+    } else if(timeEl) { timeEl.value=timeVal; }
+    // NRS or mood
+    if(lc.moodMode && entry.mood) {
+      document.querySelectorAll('#mood-chips .log-chip').forEach(c=>{
+        if(c.dataset.val===entry.mood){c.classList.add('sel','sel-sym');c.dataset.level=Math.round((entry.nrs||5)/2.5);}
+      });
+    } else if(!lc.moodMode) {
+      const nrsEl=document.getElementById('log-nrs');
+      const nrsVal=document.getElementById('log-nrs-val');
+      if(nrsEl){nrsEl.value=entry.nrs||5;}
+      if(nrsVal){nrsVal.textContent=entry.nrs||5;}
+    }
+    // Sites
+    (entry.sites||[]).forEach(s=>{
+      const side=s.startsWith('왼쪽')?'left':'right';
+      const val=s.replace(/^(왼쪽|오른쪽)\s*/,'');
+      document.querySelectorAll(`.log-chip[data-side="${side}"]`).forEach(c=>{
+        if(c.dataset.val===val) c.classList.add('sel','sel-'+side);
+      });
+    });
+    // Symptoms
+    (entry.symptoms||[]).forEach(s=>{
+      document.querySelectorAll('.log-chip[data-group="sym"]').forEach(c=>{
+        if(c.dataset.val===s) c.classList.add('sel','sel-sym');
+      });
+    });
+    // Meds
+    (entry.meds||[]).forEach(s=>{
+      document.querySelectorAll('.log-chip[data-group="med"]').forEach(c=>{
+        if(c.dataset.val===s) c.classList.add('sel','sel-med');
+      });
+    });
+    // Treatments
+    (entry.treatments||[]).forEach(s=>{
+      const txInput=document.getElementById('log-treatment');
+      if(txInput) txInput.value=s;
+      document.querySelectorAll('.log-chip[data-group="tx"]').forEach(c=>{
+        if(c.dataset.val===s) c.classList.add('sel','sel-tx');
+      });
+    });
+    // Memo
+    const memoEl=document.getElementById('log-memo');
+    if(memoEl) memoEl.value=entry.memo||'';
+    // Scroll to form
+    document.querySelector('.log-form')?.scrollIntoView({behavior:'smooth'});
+  },50);
+}
+
+function cancelLogEdit() {
+  S.logEditMode=false;
+  renderView('log');
 }
 
 // ── Mood selector (마음관리용) ──
@@ -2238,12 +2399,48 @@ async function saveJournalLog() {
   const cats=[];document.querySelectorAll('.log-chip.sel[data-group="cat"]').forEach(el=>cats.push(el.dataset.val));
   const memo=document.getElementById('log-memo')?.value.trim();
   if(!memo){showToast('내용을 입력해 주세요.');if(btn)btn.disabled=false;if(sp)sp.style.display='none';return;}
-  const entry={id:Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:0,sites:[],symptoms:[],meds:[],treatments:[]};
+  const editIdx=parseInt(document.getElementById('log-edit-idx')?.value||-1);
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:0,sites:[],symptoms:[],meds:[],treatments:[]};
   await ensureLogLoaded();
-  const ds=D();ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-  try{await saveLogData();showToast('✅ 기록 저장됨');renderView('log');}
-  catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
+  const ds=D();
+  if(editIdx>=0 && ds.logData[editIdx]) {
+    ds.logData[editIdx]=entry;
+    ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
+    try{await saveLogData();showToast('✅ 기록 수정됨');S.logEditMode=false;renderView('log');}
+    catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
+  } else {
+    ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
+    try{await saveLogData();showToast('✅ 기록 저장됨');renderView('log');}
+    catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
+  }
   if(btn)btn.disabled=false;if(sp)sp.style.display='none';
+}
+
+function editJournalEntry(idx) {
+  const ds=D(); const entry=ds.logData[idx]; if(!entry) return;
+  S.logView='form'; S.logEditMode=true;
+  renderView('log');
+  setTimeout(()=>{
+    document.getElementById('log-edit-idx').value=idx;
+    document.getElementById('log-date').value=entry.datetime.slice(0,10);
+    const cancelBtn=document.getElementById('log-cancel-edit');
+    if(cancelBtn) cancelBtn.style.display='inline';
+    const saveLabel=document.getElementById('log-save-label');
+    if(saveLabel) saveLabel.textContent='수정 저장';
+    // Who selector
+    const whoEl=document.getElementById('log-who');
+    if(whoEl && entry.who) whoEl.value=entry.who;
+    // Categories
+    (entry.categories||[]).forEach(c=>{
+      document.querySelectorAll('.log-chip[data-group="cat"]').forEach(el=>{
+        if(el.dataset.val===c) el.classList.add('sel','sel-sym');
+      });
+    });
+    // Memo
+    const memoEl=document.getElementById('log-memo');
+    if(memoEl) memoEl.value=entry.memo||'';
+    document.querySelector('.log-form')?.scrollIntoView({behavior:'smooth'});
+  },50);
 }
 
 function renderJournalLogs() {
@@ -2260,6 +2457,7 @@ function renderJournalLogs() {
           ${(l.categories||[]).map(c=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(c)}</span>`).join('')}
           <div style="font-size:.82rem;margin-top:4px;line-height:1.65">${esc(l.memo||'')}</div>
         </div>
+        <button class="log-del" onclick="editJournalEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
         <button class="log-del" onclick="deleteLogEntry(${realIdx})">✕</button>
       </div>`;
     }).join('')+'</div>';
@@ -2448,14 +2646,62 @@ async function saveKeys() {
   });
   localStorage.setItem('om_keys',JSON.stringify(S.keys));
   localStorage.setItem('om_models',JSON.stringify(S.models));
-  const m=DM();
-  if(m){
-    m._keys_encrypted=btoa(JSON.stringify({keys:S.keys,models:S.models}));
-    try{await saveMaster();}catch(e){}
-  }
+  // Keys are stored in localStorage only (not in Drive) for security
   renderSidebarAIs();
   closeModal('keys-modal');
-  showToast('✅ API 키 & 모델 저장됨');
+  showToast('✅ API 키 & 모델 저장됨 (로컬 전용)');
+}
+
+// Encrypted key export/import using AES-GCM
+async function _deriveKey(passphrase) {
+  const enc=new TextEncoder();
+  const keyMaterial=await crypto.subtle.importKey('raw',enc.encode(passphrase),{name:'PBKDF2'},false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:enc.encode('orangi-health-v7'),iterations:100000,hash:'SHA-256'},
+    keyMaterial,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+
+async function exportKeysEncrypted() {
+  if(!Object.keys(S.keys).length){showToast('내보낼 키가 없습니다.');return;}
+  const pass=prompt('암호를 설정하세요 (키 복원 시 필요):');
+  if(!pass||pass.length<4){showToast('암호는 4자 이상이어야 합니다.');return;}
+  try {
+    const key=await _deriveKey(pass);
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const data=new TextEncoder().encode(JSON.stringify({keys:S.keys,models:S.models}));
+    const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,data);
+    const payload=btoa(String.fromCharCode(...iv)+String.fromCharCode(...new Uint8Array(encrypted)));
+    const blob=new Blob([payload],{type:'text/plain'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='orangi_keys_backup.enc';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+    showToast('🔐 키 백업 파일 저장됨');
+  } catch(e){showToast('❌ 내보내기 실패: '+e.message,4000);}
+}
+
+async function importKeysEncrypted() {
+  const input=document.createElement('input');input.type='file';input.accept='.enc';
+  input.onchange=async()=>{
+    const file=input.files[0];if(!file)return;
+    const pass=prompt('백업 파일의 암호를 입력하세요:');
+    if(!pass){showToast('암호가 필요합니다.');return;}
+    try {
+      const text=await file.text();
+      const raw=atob(text);
+      const iv=new Uint8Array(Array.from(raw.slice(0,12),c=>c.charCodeAt(0)));
+      const encrypted=new Uint8Array(Array.from(raw.slice(12),c=>c.charCodeAt(0)));
+      const key=await _deriveKey(pass);
+      const decrypted=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,encrypted);
+      const parsed=JSON.parse(new TextDecoder().decode(decrypted));
+      if(parsed.keys) Object.assign(S.keys,parsed.keys);
+      if(parsed.models) Object.assign(S.models,parsed.models);
+      localStorage.setItem('om_keys',JSON.stringify(S.keys));
+      localStorage.setItem('om_models',JSON.stringify(S.models));
+      renderSidebarAIs();
+      closeModal('keys-modal');openKeys();
+      showToast('🔐 키 복원 완료!');
+    } catch(e){showToast('❌ 복원 실패 — 암호가 틀리거나 파일이 손상되었습니다.',4000);}
+  };
+  input.click();
 }
 
 async function testKey(aiId) {
@@ -2533,9 +2779,6 @@ function loadOffline(key) {
   try { return JSON.parse(localStorage.getItem('om_offline_'+key)||'null'); } catch(e) { return null; }
 }
 // On Drive save failure, fallback to offline
-const _origDriveUpdate = driveUpdate;
-
-
 // ═══════════════════════════════════════════════════════════════
 // 📎 FILE ATTACHMENTS (Drive upload + AI context)
 // ═══════════════════════════════════════════════════════════════
