@@ -2964,7 +2964,7 @@ function showToast(msg,dur=2800) {
 
 function esc(s) {
   if(!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3108,6 +3108,11 @@ function getAllUserConditions() {
   return result;
 }
 
+function getUnloadedUserDomains() {
+  const currentUser=DC().user;
+  return Object.entries(DOMAINS).filter(([id,d])=>d.user===currentUser&&!S.domainState[id]?.master).map(([id,d])=>d);
+}
+
 // Get meds from all user conditions (for log form)
 function getConditionMeds() {
   const all=getAllUserConditions().filter(c=>c.status==='active'||c.status==='remission');
@@ -3156,7 +3161,7 @@ function renderMedsView() {
     const g=grouped[domId];
     const isCurrent=domId===S.currentDomain;
     return `<div style="margin-bottom:12px">
-      <button onclick="toggleCtxDomain('dx-g-${domId}')" style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;background:${isCurrent?g.color+'15':'var(--sf2)'};border:1.5px solid ${isCurrent?g.color:'var(--bd)'};border-radius:8px;cursor:pointer;font-family:var(--font);border-bottom-radius:${isCurrent?'0':'8px'}">
+      <button onclick="toggleCtxDomain('dx-g-${domId}')" style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;background:${isCurrent?g.color+'15':'var(--sf2)'};border:1.5px solid ${isCurrent?g.color:'var(--bd)'};border-radius:8px;cursor:pointer;font-family:var(--font);border-bottom-left-radius:${isCurrent?'0':'8px'};border-bottom-right-radius:${isCurrent?'0':'8px'}">
         <span>${g.icon}</span>
         <span style="font-size:.82rem;font-weight:600;color:${g.color}">${g.label}</span>
         <span style="font-size:.68rem;color:var(--mu);margin-left:auto">${g.items.length}개</span>
@@ -3175,6 +3180,8 @@ function renderMedsView() {
       </div>
       <p style="font-size:.78rem;color:var(--mu);margin-bottom:14px">
         ${currentUser}의 모든 도메인 질환을 통합 관리합니다. 등록된 질환은 AI 세션 시 자동으로 컨텍스트에 포함됩니다.
+      </p>
+      ${(()=>{const ul=getUnloadedUserDomains();return ul.length?`<p style="font-size:.72rem;color:var(--r3);margin-bottom:10px">⚠️ ${ul.map(d=>d.icon+' '+d.label).join(', ')} 도메인이 아직 로드되지 않았습니다. 해당 도메인을 한번 방문하면 질환이 표시됩니다.</p>`:'';})()
       </p>
       <div id="dx-form" style="display:none;margin-bottom:16px;padding:16px;background:var(--sf2);border-radius:10px;border:1.5px solid var(--bd)">
         <input type="hidden" id="dx-edit-idx" value="-1">
@@ -3358,10 +3365,18 @@ async function saveCondition() {
     if(editDomain===targetDomain) {
       ds.master.conditions[editIdx]=data;
     } else {
-      // Moved to different domain
-      S.domainState[editDomain].master.conditions.splice(editIdx,1);
+      // Moved to different domain — save old domain first, rollback on failure
+      const oldDs=S.domainState[editDomain];
+      const oldConditions=[...oldDs.master.conditions];
+      oldDs.master.conditions.splice(editIdx,1);
+      try {
+        if(oldDs.masterFileId) await driveUpdate(oldDs.masterFileId,oldDs.master);
+      } catch(e) {
+        oldDs.master.conditions=oldConditions; // rollback
+        showToast('⚠️ 이전 도메인 저장 실패 — 이동 취소됨',4000);
+        return;
+      }
       ds.master.conditions.push(data);
-      try{await driveUpdate(S.domainState[editDomain].masterFileId,S.domainState[editDomain].master);}catch(e){}
     }
   } else {
     ds.master.conditions.push(data);
