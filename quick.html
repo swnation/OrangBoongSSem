@@ -734,7 +734,7 @@ async function cloudSaveAll(logs) {
 
 // ── Cloud Sync ──
 const SYNC_URL_KEY = 'om_quick_sync_url';
-const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbwjKIysyUDvwnCa9kazjhnleP4ku7Ld_ITARPiIOdyhdFSi7FME4t30TkeOuwVc7RLr_Q/exec';
+const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzYF46qeLJRGIQsqfXbic6ITRGKr1eA9chrVJ8Fu5_gM7TDSYUFlpaWQGmSR9RdAACjzw/exec';
 
 function getSyncUrl() { return localStorage.getItem(SYNC_URL_KEY) || DEFAULT_SYNC_URL; }
 function saveSyncUrl(url) { localStorage.setItem(SYNC_URL_KEY, url.trim()); }
