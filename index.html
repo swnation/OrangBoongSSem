@@ -229,7 +229,7 @@ const DOMAINS = {
       '자율신경 증상 평가 — ANS/GI 동반 여부 및 의미',
     ],
     logConfig: {
-      sites: {left:['미간','눈썹위','관자놀이','후두부'], right:['미간','눈썹위','관자놀이','후두부']},
+      sites: {left:['미간','이마','눈썹부위','관자놀이','후두부'], right:['미간','이마','눈썹부위','관자놀이','후두부']},
       symptoms: ['구역','어지러움','손발저림','빛과민','소리과민','식은땀','심계항진','실신전조'],
       meds: ['AAP 500mg','Loxoprofen','타 NSAID','Metoclopramide'],
       treatments: ['GON block','LON block','SPG block'],
@@ -875,7 +875,7 @@ async function loadDomainData(domainId) {
     }
     checkPriceUpdate();
     migrateConditions();
-    ensureLogLoaded().then(()=>{checkDailyReminder();checkWeeklyInsight();}).catch(()=>{});
+    ensureLogLoaded().then(()=>{migrateSiteNames();checkDailyReminder();checkWeeklyInsight();}).catch(()=>{});
     // 빠른 기록 체크 (클라우드 우선, 로컬 폴백)
     pollCloudQuickLogs().then(()=>{
       _lastQuickLogCount=getPendingQuickLogs().length;
@@ -5134,6 +5134,28 @@ function renderTreatmentTracker() {
 // ═══════════════════════════════════════════════════════════════
 // DATA MIGRATION (medications string → medsList array)
 // ═══════════════════════════════════════════════════════════════
+// v9.0 부위명 마이그레이션: 미간→이마, 눈썹위→눈썹부위
+function migrateSiteNames() {
+  const renames={'미간':'이마','눈썹위':'눈썹부위'};
+  let count=0;
+  Object.values(S.domainState).forEach(ds=>{
+    (ds.logData||[]).forEach(l=>{
+      if(!l.sites?.length) return;
+      l.sites=l.sites.map(s=>{
+        for(const [from,to] of Object.entries(renames)){
+          if(s.includes(from)){count++;return s.replace(from,to);}
+        }
+        return s;
+      });
+    });
+  });
+  if(count) {
+    showToast(`📦 ${count}건 부위명 마이그레이션 완료 (미간→이마, 눈썹위→눈썹부위)`);
+    // Save
+    try { saveMaster().catch(()=>{}); saveLogData().catch(()=>{}); } catch(e){}
+  }
+}
+
 function migrateConditions() {
   let migrated=0;
   Object.values(S.domainState).forEach(ds=>{

@@ -160,8 +160,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 
 // ── Config (matches orangi-migraine logConfig) ──
 const SITES = {
-  left: ['미간','눈썹위','관자놀이','후두부'],
-  right: ['미간','눈썹위','관자놀이','후두부']
+  left: ['미간','이마','눈썹부위','관자놀이','후두부'],
+  right: ['미간','이마','눈썹부위','관자놀이','후두부']
 };
 const SYMPTOMS = ['구역','어지러움','손발저림','빛과민','소리과민','식은땀','심계항진','실신전조'];
 const MEDS = ['AAP 500mg','Loxoprofen','타 NSAID','Metoclopramide'];
@@ -187,6 +187,25 @@ function getQuickLogs() {
   try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }
   catch { return []; }
 }
+
+// v9.0 부위명 마이그레이션
+(function migrateSiteNames(){
+  if(localStorage.getItem('om_site_migrated')) return;
+  const logs=getQuickLogs();
+  const renames={'미간':'이마','눈썹위':'눈썹부위'};
+  let changed=false;
+  logs.forEach(l=>{
+    if(!l.sites?.length) return;
+    l.sites=l.sites.map(s=>{
+      for(const [from,to] of Object.entries(renames)){
+        if(s.includes(from)){changed=true;return s.replace(from,to);}
+      }
+      return s;
+    });
+  });
+  if(changed) localStorage.setItem(LS_KEY,JSON.stringify(logs));
+  localStorage.setItem('om_site_migrated','1');
+})();
 
 function saveQuickLogs(logs) {
   localStorage.setItem(LS_KEY, JSON.stringify(logs));
