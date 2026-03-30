@@ -57,8 +57,8 @@ aside{width:236px;min-width:236px;background:var(--sb);display:flex;flex-directi
 .theme-toggle:hover{color:#90b0cc}
 
 /* HAMBURGER - mobile */
-.hamburger{display:none;position:fixed;top:10px;left:10px;z-index:200;background:var(--sb);border:none;border-radius:8px;padding:8px 10px;cursor:pointer;color:#fff;font-size:1.1rem}
-.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:90}
+.hamburger{display:none;position:fixed;top:10px;left:10px;z-index:202;background:var(--sb);border:none;border-radius:8px;padding:8px 10px;cursor:pointer;color:#fff;font-size:1.1rem}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:101}
 
 /* MAIN */
 main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
@@ -193,11 +193,11 @@ main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 .key-input{flex:1;border:1.5px solid var(--bd);border-radius:7px;padding:8px 12px;font-family:var(--mono);font-size:.78rem;color:var(--ink);outline:none;transition:border-color .2s;background:var(--sf2)}
 .key-input:focus{border-color:var(--ac)}
 .key-input.set{border-color:#10b98155;background:#f0fdf4}
-[data-theme="dark"] .key-input.set{background:#0d2a1a}
+[data-theme="dark"] .key-input.set{background:#0d2a1a;color:#e4e2dd;border-color:#4a9a7a55}
 .key-note{font-size:.69rem;color:var(--mu2);line-height:1.5;margin-top:4px}
 .btn-vis{background:none;border:1px solid var(--bd);border-radius:5px;padding:6px 10px;font-size:.72rem;cursor:pointer;color:var(--mu);white-space:nowrap}
 .btn-save{background:var(--ink);color:#fff;border:none;border-radius:7px;padding:8px 20px;font-size:.82rem;font-weight:600;cursor:pointer;font-family:var(--font)}
-[data-theme="dark"] .btn-save{background:#e4e2dd;color:#0f1118}
+[data-theme="dark"] .btn-save{background:#5a9fd4;color:#fff}
 .btn-cancel{background:none;border:1.5px solid var(--bd);border-radius:7px;padding:8px 16px;font-size:.82rem;color:var(--mu);cursor:pointer;font-family:var(--font)}
 
 /* TOAST */
@@ -342,4 +342,96 @@ main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 [data-theme="dark"] .quick-log-banner{border-color:#a06040}
 [data-theme="dark"] .qlb-btn.green{border-color:#4a9a7a;color:#4a9a7a}
 [data-theme="dark"] .qlb-btn.green:hover{background:#0d2a1a}
+
+/* ═══ NEW FEATURES v9.0 ═══ */
+
+/* #1 Copy button on AI cards & final cards */
+.btn-copy{background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.62rem;cursor:pointer;color:var(--mu);transition:all .15s;margin-left:auto;white-space:nowrap}
+.btn-copy:hover{border-color:var(--ac);color:var(--ac)}
+.btn-copy.copied{border-color:var(--gr);color:var(--gr)}
+
+/* #2 Mobile toast fix */
+@media(max-width:640px){
+  .toast{right:12px;bottom:60px;max-width:calc(100vw - 24px);font-size:.78rem}
+  .ai-grid{grid-template-columns:1fr}
+  .home-grid{grid-template-columns:1fr}
+}
+
+/* #5 Autosave indicator enhanced */
+.autosave-pulse{animation:autopulse 1.5s ease-in-out}
+@keyframes autopulse{0%{color:var(--ac)}50%{color:var(--gr)}100%{color:var(--gr)}}
+
+/* #7 Undo button */
+.btn-undo{background:none;border:1px solid var(--bd);border-radius:6px;padding:5px 12px;font-size:.72rem;cursor:pointer;color:var(--mu);font-family:var(--font);transition:all .15s}
+.btn-undo:hover{border-color:var(--r3);color:var(--r3)}
+.btn-undo:disabled{opacity:.3;cursor:not-allowed}
+
+/* #8 AI Rating */
+.ai-rating{display:flex;gap:4px;margin-top:6px;justify-content:flex-end}
+.ai-rating button{background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;transition:all .15s}
+.ai-rating button:hover{border-color:var(--ac)}
+.ai-rating button.rated-up{border-color:var(--gr);color:var(--gr);background:#f0fdf4}
+.ai-rating button.rated-down{border-color:var(--re);color:var(--re);background:#fff0f0}
+[data-theme="dark"] .ai-rating button.rated-up{background:#0d2a1a}
+[data-theme="dark"] .ai-rating button.rated-down{background:#2a0d0d}
+
+/* #9 AI Selection toggle */
+.ai-toggle-check{display:flex;align-items:center;gap:4px;font-size:.68rem;color:#7a8fa5;cursor:pointer;padding:2px 4px}
+.ai-toggle-check input{cursor:pointer}
+
+/* #10 Timeline view */
+.timeline-card{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;padding:14px 16px;margin-bottom:8px;border-left:4px solid var(--domain-color)}
+.timeline-event{display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid var(--bd)}
+.timeline-event:last-child{border-bottom:none}
+.timeline-time{font-size:.68rem;font-family:var(--mono);color:var(--mu2);min-width:40px}
+.timeline-icon{font-size:.9rem;width:20px;text-align:center}
+.timeline-content{flex:1;font-size:.82rem;line-height:1.6}
+
+/* #13 PWA Install banner */
+.install-banner{background:linear-gradient(135deg,var(--ac),#1e4a72);color:#fff;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+.install-banner button{background:#fff;color:var(--ac);border:none;border-radius:7px;padding:8px 16px;font-size:.78rem;font-weight:600;cursor:pointer;font-family:var(--font);white-space:nowrap}
+.install-banner .install-dismiss{background:none;color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.3);font-size:.68rem;padding:4px 10px}
+
+/* #14 Offline indicator */
+.offline-bar{background:#fffbeb;border:1.5px solid #fbbf24;border-radius:8px;padding:8px 14px;margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:.78rem}
+[data-theme="dark"] .offline-bar{background:#2a1a0a;border-color:#b45309}
+
+/* #15 Stats enhancement - trend chart */
+.trend-chart{display:flex;align-items:flex-end;gap:1px;padding:8px 0;height:80px}
+.trend-bar{flex:1;min-width:0;border-radius:2px 2px 0 0;transition:height .3s;position:relative}
+.trend-bar:hover::after{content:attr(data-tip);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:2px 6px;border-radius:3px;font-size:.6rem;white-space:nowrap;z-index:10}
+
+/* #16 Weekly summary card */
+.weekly-summary-card{background:var(--sf);border:1.5px solid var(--ac);border-radius:10px;padding:16px;margin-bottom:14px}
+
+/* #17 Template suggestion */
+.tmpl-suggest{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:.78rem}
+[data-theme="dark"] .tmpl-suggest{background:#1a2540;border-color:#2a3a50}
+
+/* #18 Session share */
+.btn-share{background:none;border:1px solid var(--bd);border-radius:6px;padding:5px 12px;font-size:.72rem;cursor:pointer;color:var(--mu);font-family:var(--font);transition:all .15s}
+.btn-share:hover{border-color:var(--ac);color:var(--ac)}
+
+/* #19 API key rotation alert */
+.key-age-warn{font-size:.62rem;color:#b45309;background:#fffbeb;padding:2px 6px;border-radius:3px;margin-left:4px}
+[data-theme="dark"] .key-age-warn{background:#2a1a0a}
+
+/* #20 File attachment progress */
+.upload-progress{height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-top:4px}
+.upload-progress-bar{height:100%;background:var(--ac);border-radius:2px;transition:width .3s}
+
+/* Drug interaction warning */
+.drug-interaction-warn{background:#fff0f0;border:1.5px solid #fca5a5;border-radius:10px;padding:14px 16px;margin-bottom:14px}
+[data-theme="dark"] .drug-interaction-warn{background:#2a0d0d;border-color:#7f1d1d}
+.drug-interaction-warn .diw-title{font-size:.85rem;font-weight:600;color:var(--re);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.drug-interaction-warn .diw-item{font-size:.78rem;padding:4px 0;border-bottom:1px solid #fecaca;color:var(--ink)}
+[data-theme="dark"] .drug-interaction-warn .diw-item{border-color:#4a1d1d}
+
+/* Markdown table support */
+.ai-md table{border-collapse:collapse;margin:8px 0;width:100%}
+.ai-md th,.ai-md td{border:1px solid var(--bd);padding:4px 8px;font-size:.78rem}
+.ai-md th{background:var(--sf2);font-weight:600}
+
+/* Error box word break */
+.err-box{word-break:break-word}
 

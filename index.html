@@ -75,6 +75,7 @@
       <button class="sb-btn" onclick="switchView('templates',this)" id="nav-templates">📌 질문 템플릿</button>
       <button class="sb-btn" onclick="switchView('meds',this)" id="nav-meds">📋 질환 관리</button>
       <button class="sb-btn" onclick="switchView('stats',this)" id="nav-stats">📈 통계 대시보드</button>
+      <button class="sb-btn" onclick="switchView('timeline',this)" id="nav-timeline">📅 타임라인</button>
       <button class="sb-btn" onclick="switchView('crosslog',this)" id="nav-crosslog">🔗 교차 분석</button>
       <button class="sb-btn" onclick="switchView('usage',this)" id="nav-usage">
         💰 비용 추적
@@ -161,11 +162,11 @@
 // VERSION — 새 버전 추가 시 여기 맨 위에 한 줄 추가, 6번째부터는 자동 제거
 // ═══════════════════════════════════════════════════════════════
 const APP_VERSION = [
+  {v:'v9.0', date:'2026-03-29', note:'20개 신기능 · 약물상호작용 · Undo/Redo · AI평가 · AI선택 · 타임라인 · 암호화 · 충돌해결 · PWA설치 · 오프라인편집 · 통계강화 · 주간요약 · 템플릿추천 · 세션공유 · 키갱신알림 · 첨부UX · 버그수정'},
   {v:'v8.5', date:'2026-03-29', note:'두통 빠른 기록 (quick.html) · 인증 없는 독립 기록 · 메인 앱 연동/검토/반영'},
   {v:'v8.4', date:'2026-03-29', note:'디베이트 · 빠른질문 · 조기요약 · 기록필터 · 인사이트 · 붕룩이타임라인'},
   {v:'v8.3', date:'2026-03-29', note:'KST 통일 · 약품 한영 310쌍 · PDF · 캘린더 히트맵 · 시술 추적'},
   {v:'v8.2', date:'2026-03-29', note:'통합 질환 관리 · ICD-10 검색 · 질환별 투약 · 식약처 API'},
-  {v:'v8.1', date:'2026-03-29', note:'직접입력 · 자동완성 · 교차 분석 · 컨텍스트 통합'},
 ].slice(0,5);
 
 // Auto-render changelog + update sidebar version
@@ -1254,17 +1255,27 @@ async function runRound(roundNum) {
   if(roundNum===1 && _sessionFiles.length) {
     S.session._attachments = _sessionFiles.map(f=>({name:f.name,type:f.type,size:f.size,driveId:f.driveId,webLink:f.webLink}));
   }
-  const missingKeys = Object.keys(AI_DEFS).filter(id=>!S.keys[id]);
+  const enabledAIs = getEnabledAIs();
+  const missingKeys = enabledAIs.filter(id=>!S.keys[id]);
   if(missingKeys.length) { showToast('❌ API 키 없음: '+missingKeys.map(id=>AI_DEFS[id].name).join(', ')); return; }
+  if(!enabledAIs.length) { showToast('❌ 최소 1개 AI를 선택해주세요.'); return; }
+
+  // #7 Undo: save session snapshot before running
+  saveSessionSnapshot();
 
   S.generating = true; S._dirty = true;
   S.session.currentRound = roundNum;
   document.getElementById('session-round-badge').textContent = `R${roundNum}`;
   if(!S.session.rounds[roundNum-1]) S.session.rounds[roundNum-1]={round:roundNum,answers:{}};
-  Object.keys(AI_DEFS).forEach(id=>setCardStatus(id,'loading'));
+  enabledAIs.forEach(id=>setCardStatus(id,'loading'));
+  // Hide disabled AI cards
+  Object.keys(AI_DEFS).forEach(id=>{
+    const card=document.querySelector(`[data-ai="${id}"]`);
+    if(card) card.style.display=enabledAIs.includes(id)?'':'none';
+  });
   const runBtn=document.getElementById('run-btn'); if(runBtn) runBtn.disabled=true;
 
-  await Promise.all(Object.keys(AI_DEFS).map(async aiId=>{
+  await Promise.all(enabledAIs.map(async aiId=>{
     try {
       const answer = await callAIStream(aiId, getRoleSystem(aiId), buildUserPrompt(aiId,roundNum), (chunk)=>{
         // Real-time partial update (#9)
@@ -1290,7 +1301,7 @@ async function runRound(roundNum) {
   try {
     await saveMaster();
     const bar=document.getElementById('autosave-bar');
-    if(bar) bar.textContent=`✓ R${roundNum} 자동저장 ${new Date().toLocaleTimeString('ko-KR')}`;
+    if(bar) { bar.textContent=`✓ R${roundNum} 자동저장 ${new Date().toLocaleTimeString('ko-KR')}`; bar.classList.add('autosave-pulse'); setTimeout(()=>bar.classList.remove('autosave-pulse'),2000); }
   } catch(e){}
   const actionBar=document.getElementById('action-bar');
   if(actionBar) actionBar.innerHTML=renderActionBar(roundNum);
@@ -1490,11 +1501,11 @@ function renderSummaryResult(r) {
   const costBadge=todayCost>0?`<span style="font-size:.7rem;font-family:var(--mono);color:var(--mu);margin-left:auto">$${todayCost.toFixed(4)}</span>`:'';
 
   return `
-    <div class="final-card"><h3>📈 라운드 발전 <span class="badge badge-blue">Evolution</span></h3><div class="fcontent"><p>${esc(r.round_evolution||'')}</p></div></div>
-    <div class="final-card"><h3>✅ 세션 요약 ${costBadge}</h3><div class="fcontent"><p>${esc(r.session_summary||'')}</p></div></div>
-    ${newCon?`<div class="final-card"><h3>🆕 새 합의 <span class="badge badge-green">누적 저장</span></h3><div class="fcontent"><ul>${newCon}</ul></div></div>`:''}
-    ${issues?`<div class="final-card"><h3>🔍 미해결 쟁점 <span class="badge badge-orange">추적 중</span></h3><div class="fcontent"><ul>${issues}</ul></div></div>`:''}
-    <div class="final-card"><h3>🎯 최종 권고 <span class="badge badge-purple">Action</span></h3><div class="fcontent"><p>${esc(r.final_recommendation||'')}</p><div class="divider"></div><ul>${steps}</ul></div></div>
+    <div class="final-card"><h3>📈 라운드 발전 <span class="badge badge-blue">Evolution</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p>${esc(r.round_evolution||'')}</p></div></div>
+    <div class="final-card"><h3>✅ 세션 요약 ${costBadge}<button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p>${esc(r.session_summary||'')}</p></div></div>
+    ${newCon?`<div class="final-card"><h3>🆕 새 합의 <span class="badge badge-green">누적 저장</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><ul>${newCon}</ul></div></div>`:''}
+    ${issues?`<div class="final-card"><h3>🔍 미해결 쟁점 <span class="badge badge-orange">추적 중</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><ul>${issues}</ul></div></div>`:''}
+    <div class="final-card"><h3>🎯 최종 권고 <span class="badge badge-purple">Action</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p>${esc(r.final_recommendation||'')}</p><div class="divider"></div><ul>${steps}</ul></div></div>
     <p style="font-size:.7rem;color:var(--mu);text-align:center;padding:6px 0 16px">※ 의료적 결정은 반드시 전문의와 상담하세요.</p>`;
 }
 
@@ -1522,7 +1533,7 @@ function switchView(view, btn) {
   document.querySelectorAll('.sb-btn').forEach(b=>b.classList.remove('active'));
   const navBtn=document.getElementById('nav-'+view); if(navBtn) navBtn.classList.add('active');
   const medsTitle=S.currentDomain==='bungruki'?'📋 임신 준비 관리':'📋 질환 관리';
-  const titles={home:'홈 — 누적 기록',session:'현재 세션',log:'📊 증상 기록',history:'세션 기록',templates:'질문 템플릿',meds:medsTitle,stats:'📈 통계 대시보드',crosslog:'🔗 교차 분석',usage:'💰 비용 추적'};
+  const titles={home:'홈 — 누적 기록',session:'현재 세션',log:'📊 증상 기록',history:'세션 기록',templates:'질문 템플릿',meds:medsTitle,stats:'📈 통계 대시보드',timeline:'📅 타임라인',crosslog:'🔗 교차 분석',usage:'💰 비용 추적'};
   document.getElementById('topbar-title').textContent=titles[view]||'AI 협진';
   renderView(view);
   closeSidebar();
@@ -1536,6 +1547,7 @@ function renderView(view) {
   else if(view==='templates') area.innerHTML=renderTemplates();
   else if(view==='meds') { area.innerHTML=renderMedsView(); loadAllUserDomains().then(()=>{if(S.currentView==='meds')area.innerHTML=renderMedsView();}); }
   else if(view==='stats') area.innerHTML=renderStatsView();
+  else if(view==='timeline') { area.innerHTML=renderTimelineView(); loadAllUserDomains().then(()=>{if(S.currentView==='timeline')area.innerHTML=renderTimelineView();}); }
   else if(view==='crosslog') { area.innerHTML=renderCrossLogView(); loadAllUserDomains().then(()=>{if(S.currentView==='crosslog')area.innerHTML=renderCrossLogView();}); }
   else if(view==='usage') area.innerHTML=renderUsageView();
   else area.innerHTML='<div class="hint">뷰를 선택하세요.</div>';
@@ -1639,7 +1651,8 @@ function renderSession() {
         <span class="ai-name" style="color:${def.color}">${def.name}</span>
         <span class="ai-role">${mode==='debate'?'':dc.aiRoles[id]||''}</span>${debateLabel}
         <span id="chip-${id}" class="ai-chip"></span>
-        ${curRound>0?`<button class="ai-regen" id="regen-${id}" onclick="regenOne('${id}')"
+        ${curRound>0?`<button class="btn-copy" onclick="copyAIResponse('${id}')" style="margin-left:auto">📋</button>
+        <button class="ai-regen" id="regen-${id}" onclick="regenOne('${id}')"
           ${isError?'style="border-color:#ef4444;color:#ef4444;font-weight:600"':''}>↺ ${isError?'재시도':'재생성'}</button>`:''}
       </div>
       ${curRound>0?`<div style="padding:4px 13px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--bd);background:var(--sf2)">
@@ -1650,6 +1663,10 @@ function renderSession() {
         <textarea id="ans-${id}" class="${ans?(isError?'gen':''):'gen'}"
           placeholder="${curRound===0?'라운드 시작 시 자동 생성...':'생성 중...'}">${esc(ans)}</textarea>
       </div>
+      ${curRound>0&&curRound<5?`<div class="ai-rating" data-ai-rate="${id}">
+        <button onclick="rateAIResponse('${id}',1,this)" class="${getRating(id)===1?'rated-up':''}">👍</button>
+        <button onclick="rateAIResponse('${id}',-1,this)" class="${getRating(id)===-1?'rated-down':''}">👎</button>
+      </div>`:''}
     </div>`;
   }).join('');
 
@@ -1740,6 +1757,7 @@ function renderActionBar(curRound) {
       <button class="btn-run-round" id="run-btn" onclick="runRound(${next})">${nextLabel}</button>
       <button class="btn-run-round green" onclick="runFinalSummary()" style="font-size:.78rem;padding:8px 14px">✅ 여기서 요약 & 종료</button>
       ${hasErr?`<button class="btn-run-round" onclick="runRound(${curRound})" style="background:#5a5a7a">🔁 R${curRound} 오류 재실행</button>`:''}
+      <button class="btn-undo" onclick="undoSession()" ${_sessionHistory.length?'':'disabled'} title="이전 라운드로 되돌리기">↩ Undo</button>
       <span class="run-note">${mode==='debate'?'또는 심판 판정으로 종료':'AI들이 서로의 답변을 분석합니다'}</span>
     </div>`;
   }
@@ -1777,13 +1795,16 @@ function filterSessions(sessions) {
   if(_histDateTo) filtered=filtered.filter(s=>s.date<=_histDateTo);
   return filtered;
 }
+let _histSearchTimer;
 function onHistSearch(){
   const el=document.getElementById('hist-search');
   const pos=el?.selectionStart||0;
   _histSearch=el?.value||'';
-  renderView('history');
-  // Restore focus after re-render
-  setTimeout(()=>{const el2=document.getElementById('hist-search');if(el2){el2.focus();el2.selectionStart=el2.selectionEnd=pos;}},0);
+  clearTimeout(_histSearchTimer);
+  _histSearchTimer=setTimeout(()=>{
+    renderView('history');
+    setTimeout(()=>{const el2=document.getElementById('hist-search');if(el2){el2.focus();el2.selectionStart=el2.selectionEnd=pos;}},0);
+  },300);
 }
 function onHistDateFilter(){_histDateFrom=document.getElementById('hist-from')?.value||'';_histDateTo=document.getElementById('hist-to')?.value||'';renderView('history');}
 function clearHistFilter(){_histSearch='';_histDateFrom='';_histDateTo='';renderView('history');}
@@ -3371,13 +3392,14 @@ function exportLogCSV() {
 function renderSidebarAIs() {
   const list=document.getElementById('sb-ai-list');if(!list)return;
   const dc=DC();
+  if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,perp:true};
   list.innerHTML=Object.entries(AI_DEFS).map(([id,def])=>{
     const hasKey=!!S.keys[id];
-    const model=S.models[id]||DEFAULT_MODELS[id];
-    const modelShort=model.replace(/gemini-|claude-|gpt-/g,'').substring(0,12);
+    const enabled=S.aiEnabled[id]!==false;
     return `<div style="display:flex;align-items:center;gap:7px;padding:5px 18px">
-      <div style="width:6px;height:6px;border-radius:50%;background:${def.color}"></div>
-      <span style="font-size:.75rem;color:${hasKey?'#8fa0b5':'#3d4f63'}">${def.name}</span>
+      <label class="ai-toggle-check" title="세션에서 이 AI 사용"><input type="checkbox" ${enabled?'checked':''} onchange="toggleAIEnabled('${id}',this.checked)"></label>
+      <div style="width:6px;height:6px;border-radius:50%;background:${def.color};opacity:${enabled?1:.3}"></div>
+      <span style="font-size:.75rem;color:${hasKey&&enabled?'#8fa0b5':'#3d4f63'}">${def.name}</span>
       <span style="font-size:.6rem;color:#4a5a6a;font-family:var(--mono);margin-left:auto">${dc.aiRoles[id]||''}</span>
     </div>`;
   }).join('');
@@ -3572,12 +3594,21 @@ function changeAIModel(aiId,newModel) {
 // ═══════════════════════════════════════════════════════════════
 function openModal(id){document.getElementById(id)?.classList.add('show');}
 function closeModal(id){document.getElementById(id)?.classList.remove('show');}
+let _confirmActions = [];
 function showConfirmModal(title,body,buttons) {
   document.getElementById('confirm-title').textContent=title;
   document.getElementById('confirm-body').innerHTML=body;
-  document.getElementById('confirm-foot').innerHTML=buttons.map(b=>
-    `<button onclick="${b.action}" class="${b.primary?'btn-save':'btn-cancel'}"${b.color?` style="background:${b.color};color:#fff;border:none"`:''}>
-      ${b.label}</button>`).join('')+'<button class="btn-cancel" onclick="closeConfirmModal()">취소</button>';
+  _confirmActions = buttons.map(b => b.action);
+  document.getElementById('confirm-foot').innerHTML=buttons.map((b,i)=>
+    `<button data-confirm-idx="${i}" class="${b.primary?'btn-save':'btn-cancel'}"${b.color?` style="background:${b.color};color:#fff;border:none"`:''}>
+      ${esc(b.label)}</button>`).join('')+'<button class="btn-cancel" data-confirm-close="1">취소</button>';
+  // Event delegation for confirm modal buttons
+  document.getElementById('confirm-foot').onclick = function(e) {
+    const btn = e.target.closest('[data-confirm-idx]');
+    const closeBtn = e.target.closest('[data-confirm-close]');
+    if(btn) { const idx = parseInt(btn.dataset.confirmIdx); const action = _confirmActions[idx]; if(action) { try { new Function(action)(); } catch(err) { console.error('Confirm action error:', err); } } }
+    if(closeBtn) closeConfirmModal();
+  };
   openModal('confirm-modal');
 }
 function closeConfirmModal(){closeModal('confirm-modal');}
@@ -3587,6 +3618,15 @@ function showToast(msg,dur=2800) {
   const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');
   clearTimeout(_toastTimer);_toastTimer=setTimeout(()=>el.classList.remove('show'),dur);
 }
+
+// #3 ESC key closes modals
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape') {
+    if(document.getElementById('confirm-modal')?.classList.contains('show')) { closeConfirmModal(); return; }
+    if(document.getElementById('keys-modal')?.classList.contains('show')) { closeModal('keys-modal'); return; }
+    if(document.getElementById('ctx-modal')?.classList.contains('show')) { closeModal('ctx-modal'); return; }
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════
 // KST DATE UTILS — 모든 날짜를 한국 시간 기준으로 통일
@@ -3773,7 +3813,7 @@ async function loadAllUserDomains() {
         ds.masterFileId=await driveCreate(dc.masterFile,ds.master,folderId);
       }
       ds.logData=[];ds.logMonth='';ds.logFileId=null;
-    } catch(e) { /* skip failed domain */ }
+    } catch(e) { console.warn('Domain load failed:', domainId, e.message); }
   }
   _loadingAllDomains=false;
 }
@@ -3818,9 +3858,9 @@ function renderMedsView() {
         <span class="dx-name">${esc(c.name)}</span>
         <span class="badge" style="background:${typeColors[dt]}15;color:${typeColors[dt]};font-size:.58rem;padding:1px 6px">${typeLabels[dt]||'만성'}</span>
         <span class="dx-status ${statusClass[c.status]||'active'}">${statusLabels[c.status]||c.status}</span>
-        ${c.drugChangeDate?`<button class="accum-del" onclick="compareDrugChange(${c._idx},'${c._domainId}')" title="변경 전후 비교" style="color:var(--ac)">📊</button>`:''}
-        <button class="accum-del" onclick="editConditionUnified('${c._domainId}',${c._idx})" title="편집">✏️</button>
-        <button class="accum-del" onclick="deleteConditionUnified('${c._domainId}',${c._idx})" title="삭제">🗑</button>
+        ${c.drugChangeDate?`<button class="accum-del" onclick="compareDrugChange(${c._idx},'${esc(c._domainId)}')" title="변경 전후 비교" style="color:var(--ac)">📊</button>`:''}
+        <button class="accum-del" onclick="editConditionUnified('${esc(c._domainId)}',${c._idx})" title="편집">✏️</button>
+        <button class="accum-del" onclick="deleteConditionUnified('${esc(c._domainId)}',${c._idx})" title="삭제">🗑</button>
       </div>
       <div class="dx-body">
         ${c.diagnosisDate?`<strong>${isBungruki?'시작':'진단'}:</strong> ${esc(c.diagnosisDate)}<br>`:''}
@@ -4998,7 +5038,7 @@ function renderTreatmentTracker() {
   const rows=txHistory.map(tx=>{
     const sortedDates=tx.dates.sort();
     const lastDate=sortedDates[sortedDates.length-1];
-    const daysSinceLast=Math.round((new Date(kstToday())-new Date(lastDate))/86400000);
+    const daysSinceLast=Math.round((new Date(kstToday()+'T00:00:00')-new Date(lastDate+'T00:00:00'))/86400000);
     // Calculate average interval
     let avgInterval=0;
     if(sortedDates.length>=2) {
@@ -5057,7 +5097,7 @@ function checkDailyReminder() {
   if(!hasToday) {
     const lastLog=ds.logData[ds.logData.length-1];
     const lastDate=lastLog?.datetime?.slice(0,10)||'';
-    const daysSince=lastDate?Math.round((new Date(today)-new Date(lastDate))/86400000):0;
+    const daysSince=lastDate?Math.round((new Date(today+'T00:00:00')-new Date(lastDate+'T00:00:00'))/86400000):0;
     if(daysSince>=1) {
       setTimeout(()=>showToast(`📝 오늘 아직 기록이 없어요 (마지막: ${daysSince}일 전)`,4000),2000);
     }
@@ -5070,7 +5110,7 @@ function checkDailyReminder() {
 async function checkWeeklyInsight() {
   const m=DM(); if(!m||!S.keys?.claude) return;
   const lastCheck=m.lastInsightDate||'';
-  const daysSince=lastCheck?Math.round((new Date(kstToday())-new Date(lastCheck))/86400000):8;
+  const daysSince=lastCheck?Math.round((new Date(kstToday()+'T00:00:00')-new Date(lastCheck+'T00:00:00'))/86400000):8;
   if(daysSince<7) return;
 
   const logSummary=getRecentLogSummary();
