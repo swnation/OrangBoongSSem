@@ -97,11 +97,11 @@ function sendNotification(entry) {
     var fields = [
       { value: date + ' ' + time, prefix: '📅 ' },
       { value: 'NRS: ' + nrs + '/10', prefix: '😣 ' },
-      { value: (entry.sites || []).join(', '), prefix: '📍 ' },
-      { value: (entry.painType || []).join(', '), prefix: '🔥 ' },
-      { value: (entry.symptoms || []).join(', '), prefix: '⚡ ' },
-      { value: (entry.meds || []).join(', '), prefix: '💊 ' },
-      { value: (entry.treatments || []).join(', '), prefix: '🩺 ' },
+      { value: (entry.sites || []).filter(Boolean).join(', '), prefix: '📍 ' },
+      { value: (entry.painType || []).filter(Boolean).join(', '), prefix: '🔥 ' },
+      { value: (entry.symptoms || []).filter(Boolean).join(', '), prefix: '⚡ ' },
+      { value: (entry.meds || []).filter(Boolean).join(', '), prefix: '💊 ' },
+      { value: (entry.treatments || []).filter(Boolean).join(', '), prefix: '🩺 ' },
       { value: entry.memo || '', prefix: '📝 ' },
     ];
 
