@@ -1,10 +1,9 @@
-const CACHE_NAME = 'orangi-health-v9a';
+const CACHE_NAME = 'orangi-health-v9b';
 const PRECACHE = [
   './index.html',
   './quick.html',
   './quick-manifest.json',
   './style.css',
-  'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap',
   'https://cdn.jsdelivr.net/npm/marked@15/marked.min.js',
   'https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js',
 ];
@@ -28,13 +27,13 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Never cache API calls (Google Drive, AI APIs)
-  if (url.hostname.includes('googleapis.com') ||
-      url.hostname.includes('anthropic.com') ||
-      url.hostname.includes('openai.com') ||
-      url.hostname.includes('generativelanguage.googleapis.com') ||
-      url.hostname.includes('perplexity.ai') ||
-      url.hostname.includes('accounts.google.com')) {
+  // Never cache: Google auth/API, AI APIs, any google domain
+  if (url.hostname.includes('google') ||
+      url.hostname.includes('gstatic') ||
+      url.hostname.includes('googleapis') ||
+      url.hostname.includes('anthropic') ||
+      url.hostname.includes('openai') ||
+      url.hostname.includes('perplexity')) {
     return;
   }
 
