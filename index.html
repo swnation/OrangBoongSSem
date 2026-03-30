@@ -2452,16 +2452,12 @@ async function markSyncedOnCloud(ids) {
 
 function mergeQuickLogs(local, cloud) {
   if (!cloud) return local;
-  const deletedIds = new Set(JSON.parse(localStorage.getItem('om_quick_deleted')||'[]'));
-  const merged = [...local];
-  cloud.forEach(ce => {
-    if (deletedIds.has(String(ce.id))) return; // 삭제된 항목 무시
-    const idx = merged.findIndex(l => String(l.id) === String(ce.id));
-    if (idx >= 0) {
-      if (ce.synced && !merged[idx].synced) merged[idx].synced = true;
-    } else {
-      merged.push(ce);
-    }
+  // 클라우드가 진실: 클라우드 기반으로 병합
+  const cloudIds = new Set(cloud.map(c=>String(c.id)));
+  const merged = [...cloud];
+  // 로컬에만 있는 미전송 항목만 추가
+  local.forEach(l => {
+    if (!cloudIds.has(String(l.id)) && !l.synced) merged.push(l);
   });
   return merged.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
 }
@@ -2741,22 +2737,20 @@ async function discardQuickLog(id) {
   if (!confirm('이 빠른 기록을 삭제할까요?')) return;
   const logs = getQuickLogs().filter(l => l.id !== id);
   saveQuickLogs(logs);
-  // 삭제 ID 기록 (클라우드 복원 방지)
-  try { const d=JSON.parse(localStorage.getItem('om_quick_deleted')||'[]'); if(!d.includes(String(id))){d.push(String(id));localStorage.setItem('om_quick_deleted',JSON.stringify(d));} } catch(e){}
-  // 클라우드에서도 삭제
+  // 클라우드에 전체 목록 덮어쓰기 (삭제 확실 반영)
   try {
     const url = getQuickSyncUrl();
     if (url) {
       await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'delete', ids: [id] }),
+        body: JSON.stringify({ action: 'replaceAll', entries: logs }),
         redirect: 'follow'
       });
     }
   } catch (e) {}
   renderView('log');
-  showToast('🗑 삭제됨 (클라우드 포함)');
+  showToast('🗑 삭제됨');
 }
 
 function renderLog() {
