@@ -242,6 +242,7 @@ main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 .log-chip.sel-sym{background:#8b5cf6;border-color:#8b5cf6}
 .log-chip.sel-med{background:#f59e0b;border-color:#f59e0b;color:var(--ink)}
 .log-chip.sel-tx{background:#10b981;border-color:#10b981}
+.log-chip.sel-pain{background:#ec4899;border-color:#ec4899}
 .log-nrs{display:flex;align-items:center;gap:12px;padding:4px 0}
 .log-nrs input[type=range]{flex:1;accent-color:var(--re)}
 .log-nrs-val{font-size:1.3rem;font-weight:700;color:var(--re);min-width:28px;text-align:center}
