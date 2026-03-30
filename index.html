@@ -3441,6 +3441,13 @@ function openKeys() {
     <div class="key-note">💡 오랑이 빠른 기록(quick.html)을 다른 기기에서도 받아볼 수 있습니다. gas-quicklog.js를 Apps Script에 배포 후 URL을 입력하세요.</div>
   </div>`;
   openModal('keys-modal');
+  // #19 키 갱신 알림
+  const warnHtml=renderKeyAgeWarnings();
+  if(warnHtml) {
+    const warnDiv=document.createElement('div');
+    warnDiv.innerHTML=warnHtml;
+    document.getElementById('keys-body').prepend(warnDiv);
+  }
 }
 
 async function saveKeys() {
@@ -3450,6 +3457,13 @@ async function saveKeys() {
     const m=document.getElementById('model-'+id)?.value;
     if(m) S.models[id]=m;
   });
+  // #19 키 설정 시간 기록
+  if(!S.keysSetAt) try { S.keysSetAt=JSON.parse(localStorage.getItem('keysSetAt'))||{}; } catch(e){ S.keysSetAt={}; }
+  Object.keys(KEY_INFO).forEach(id=>{
+    if(S.keys[id]&&!S.keysSetAt[id]) S.keysSetAt[id]=Date.now();
+    if(!S.keys[id]) delete S.keysSetAt[id];
+  });
+  localStorage.setItem('keysSetAt',JSON.stringify(S.keysSetAt));
   localStorage.setItem('om_keys',JSON.stringify(S.keys));
   localStorage.setItem('om_models',JSON.stringify(S.models));
   // 동기화 URL 저장
@@ -5235,11 +5249,230 @@ function renderBungrukiTimeline() {
   </div>`;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// #1 AI 응답 복사 버튼
+// ═══════════════════════════════════════════════════════════════
+function copyCardText(btn) {
+  const card=btn.closest('.final-card');
+  if(!card) return;
+  const content=card.querySelector('.fcontent');
+  if(!content) return;
+  const text=content.innerText||content.textContent;
+  navigator.clipboard.writeText(text).then(()=>{
+    btn.textContent='✅ 복사됨';
+    setTimeout(()=>{btn.textContent='📋 복사';},1500);
+  }).catch(()=>showToast('❌ 복사 실패'));
+}
+
+function copyAIResponse(aiId) {
+  const ta=document.getElementById('ans-'+aiId);
+  if(!ta||!ta.value) { showToast('복사할 내용이 없습니다.'); return; }
+  navigator.clipboard.writeText(ta.value).then(()=>{
+    showToast('📋 '+AI_DEFS[aiId].name+' 응답 복사됨');
+  }).catch(()=>showToast('❌ 복사 실패'));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// #7 세션 Undo
+// ═══════════════════════════════════════════════════════════════
+let _sessionHistory=[];
+
+function saveSessionSnapshot() {
+  if(!S.session) return;
+  try {
+    _sessionHistory.push(JSON.parse(JSON.stringify(S.session)));
+    if(_sessionHistory.length>10) _sessionHistory.shift();
+  } catch(e){}
+}
+
+function undoSession() {
+  if(!_sessionHistory.length) { showToast('되돌릴 기록이 없습니다.'); return; }
+  S.session=_sessionHistory.pop();
+  S._dirty=true;
+  renderView('session');
+  showToast('↩ 이전 상태로 복원됨');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// #8 AI 응답 평가
+// ═══════════════════════════════════════════════════════════════
+function rateAIResponse(aiId, rating, btn) {
+  if(!S.session) return;
+  if(!S.session.ratings) S.session.ratings={};
+  const cur=S.session.ratings[aiId];
+  if(cur===rating) { delete S.session.ratings[aiId]; } // toggle off
+  else { S.session.ratings[aiId]=rating; }
+  S._dirty=true;
+  // Update UI
+  const container=btn.closest('.ai-rating');
+  if(container) {
+    const btns=container.querySelectorAll('button');
+    btns[0].className=S.session.ratings[aiId]===1?'rated-up':'';
+    btns[1].className=S.session.ratings[aiId]===-1?'rated-down':'';
+  }
+  saveMaster().catch(()=>{});
+}
+
+function getRating(aiId) {
+  return S.session?.ratings?.[aiId]||0;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// #9 AI 선택 토글
+// ═══════════════════════════════════════════════════════════════
+function toggleAIEnabled(aiId, checked) {
+  if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,perp:true};
+  S.aiEnabled[aiId]=checked;
+  try { localStorage.setItem('aiEnabled',JSON.stringify(S.aiEnabled)); } catch(e){}
+  renderSidebarAIs();
+}
+
+function getEnabledAIs() {
+  if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,perp:true};
+  return Object.keys(AI_DEFS).filter(id=>S.aiEnabled[id]!==false);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// #10 환자 타임라인 뷰
+// ═══════════════════════════════════════════════════════════════
+function renderTimelineView() {
+  const currentUser=DC().user;
+  const events=[];
+
+  // Collect logs and sessions from all loaded domains
+  Object.entries(S.domainState).forEach(([domainId,ds])=>{
+    const dd=DOMAINS[domainId];
+    if(!dd||dd.user!==currentUser||!ds.master) return;
+    const icon=dd.icon;const label=dd.label;const color=dd.color;
+
+    // Log entries
+    (ds.logData||[]).forEach(log=>{
+      if(log.nrs>=0) {
+        events.push({date:log.date,type:'log',domain:label,icon,color,
+          text:`NRS ${log.nrs} — ${(log.symptoms||[]).join(', ')||'기록'}`,
+          detail:(log.medications||[]).join(', ')});
+      }
+    });
+    // Sessions
+    (ds.master?.sessions||[]).forEach(sess=>{
+      events.push({date:sess.date,type:'session',domain:label,icon,color,
+        text:sess.question?(sess.question.substring(0,60)+'...'):'세션',
+        detail:`R${sess.rounds?.length||0} · ${Object.keys(sess.rounds?.[0]?.answers||{}).length}개 AI`});
+    });
+  });
+
+  // Also include current domain's log data
+  const m=DM();
+  if(m) {
+    const dd=DC();
+    (D().logData||[]).forEach(log=>{
+      if(log.nrs>=0 && !events.find(e=>e.date===log.date&&e.type==='log'&&e.domain===dd.label)) {
+        events.push({date:log.date,type:'log',domain:dd.label,icon:dd.icon,color:dd.color,
+          text:`NRS ${log.nrs} — ${(log.symptoms||[]).join(', ')||'기록'}`,
+          detail:(log.medications||[]).join(', ')});
+      }
+    });
+  }
+
+  if(!events.length) return '<div class="hint">데이터를 로딩 중입니다... 잠시만 기다려 주세요.</div>';
+
+  events.sort((a,b)=>b.date.localeCompare(a.date));
+
+  const items=events.slice(0,50).map(e=>{
+    const typeIcon=e.type==='log'?'📊':'💬';
+    return `<div class="timeline-card">
+      <div class="timeline-event" style="border-left:3px solid ${e.color}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:.68rem;color:var(--mu);font-family:var(--mono)">${e.date}</span>
+          <span style="font-size:.72rem">${typeIcon} ${e.icon} ${esc(e.domain)}</span>
+        </div>
+        <div style="font-size:.82rem;font-weight:500;color:var(--ink)">${esc(e.text)}</div>
+        ${e.detail?`<div style="font-size:.7rem;color:var(--mu);margin-top:2px">${esc(e.detail)}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="card-title">📅 전체 타임라인 <span class="badge badge-blue">${events.length}건</span></div>
+    ${items}
+    ${events.length>50?`<div style="text-align:center;padding:8px;font-size:.72rem;color:var(--mu)">최근 50건만 표시됩니다.</div>`:''}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// #13 PWA 설치 안내
+// ═══════════════════════════════════════════════════════════════
+let deferredPrompt=null;
+window.addEventListener('beforeinstallprompt',(e)=>{
+  e.preventDefault();
+  deferredPrompt=e;
+  showInstallBanner();
+});
+
+function showInstallBanner() {
+  if(!deferredPrompt) return;
+  if(localStorage.getItem('pwa-install-dismissed')) return;
+  let banner=document.getElementById('install-banner');
+  if(banner) return;
+  banner=document.createElement('div');
+  banner.id='install-banner';
+  banner.className='install-banner';
+  banner.innerHTML=`<span>📲 홈 화면에 추가하면 더 빠르게 이용할 수 있어요!</span>
+    <button onclick="installApp()">설치</button>
+    <button onclick="dismissInstall()" style="background:transparent;color:var(--mu)">닫기</button>`;
+  document.body.appendChild(banner);
+}
+
+function installApp() {
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(r=>{
+    if(r.outcome==='accepted') showToast('✅ 앱이 설치되었습니다!');
+    deferredPrompt=null;
+    dismissInstall();
+  });
+}
+
+function dismissInstall() {
+  const banner=document.getElementById('install-banner');
+  if(banner) banner.remove();
+  try { localStorage.setItem('pwa-install-dismissed','1'); } catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// #19 API 키 갱신 알림
+// ═══════════════════════════════════════════════════════════════
+function checkKeyAge() {
+  if(!S.keysSetAt) {
+    try { S.keysSetAt=JSON.parse(localStorage.getItem('keysSetAt'))||{}; } catch(e){ S.keysSetAt={}; }
+  }
+  const now=Date.now();
+  const warns=[];
+  Object.keys(S.keys).forEach(id=>{
+    if(!S.keys[id]) return;
+    const setAt=S.keysSetAt[id];
+    if(!setAt) { S.keysSetAt[id]=now; return; }
+    const days=Math.floor((now-setAt)/(1000*60*60*24));
+    if(days>=90) warns.push({id,days});
+  });
+  try { localStorage.setItem('keysSetAt',JSON.stringify(S.keysSetAt)); } catch(e){}
+  return warns;
+}
+
+function renderKeyAgeWarnings() {
+  const warns=checkKeyAge();
+  if(!warns.length) return '';
+  return warns.map(w=>`<div class="key-age-warn">⚠️ ${AI_DEFS[w.id]?.name||w.id} API 키가 ${w.days}일 전에 설정되었습니다. 보안을 위해 갱신을 권장합니다.</div>`).join('');
+}
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+// Load aiEnabled from localStorage on startup
+try { const ae=localStorage.getItem('aiEnabled'); if(ae) S.aiEnabled=JSON.parse(ae); } catch(e){}
 
 </script>
 </body>
