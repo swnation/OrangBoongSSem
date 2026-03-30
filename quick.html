@@ -683,19 +683,36 @@ function renderList() {
     const badge = l.synced
       ? '<span class="log-item-badge synced">반영됨</span>'
       : '<span class="log-item-badge pending">미반영</span>';
-    return `<div class="log-item" style="${l.synced?'opacity:.6':''}">
+    return `<div class="log-item" style="${l.synced?'opacity:.7':''}" ${l.synced?`onclick="toggleLogDetail(${l.id})"`:''}>
       <div class="log-item-head">
         <span class="log-item-date">${dateStr} ${timeStr}</span>
         ${nrsHtml} ${badge}
       </div>
       ${tags ? `<div class="log-item-tags">${tags}</div>` : ''}
       ${l.memo ? `<div class="log-item-memo">${esc(l.memo)}</div>` : ''}
-      ${l.synced?`<div class="log-item-actions"><span style="font-size:.68rem;color:var(--mu)">✅ 반영 완료 (수정 불가)</span></div>`:`<div class="log-item-actions">
+      ${l.synced?`<div id="log-detail-${l.id}" class="log-detail" style="display:none">
+        <div style="font-size:.72rem;color:var(--mu);border-top:1px solid var(--bd);padding-top:8px;margin-top:6px">
+          ${(l.sites||[]).length?`<div><strong>부위:</strong> ${(l.sites||[]).map(s=>esc(s)).join(', ')}</div>`:''}
+          ${(l.symptoms||[]).length?`<div><strong>증상:</strong> ${(l.symptoms||[]).map(s=>esc(s)).join(', ')}</div>`:''}
+          ${(l.meds||[]).length?`<div><strong>투약:</strong> ${(l.meds||[]).map(m=>esc(m)).join(', ')}</div>`:''}
+          ${(l.treatments||[]).length?`<div><strong>치료:</strong> ${(l.treatments||[]).map(t=>esc(t)).join(', ')}</div>`:''}
+          ${l.memo?`<div><strong>메모:</strong> ${esc(l.memo)}</div>`:''}
+          <div style="color:var(--mu2);margin-top:4px">✅ 반영 완료 · 수정 불가</div>
+        </div>
+      </div>
+      <div class="log-item-actions"><span style="font-size:.68rem;color:var(--ac);cursor:pointer">탭하여 상세 보기</span></div>`
+      :`<div class="log-item-actions">
         <button class="btn-sm" onclick="editEntry(${l.id})">수정</button>
         <button class="btn-sm del" onclick="deleteEntry(${l.id})">삭제</button>
       </div>`}
     </div>`;
   }).join('');
+}
+
+function toggleLogDetail(id) {
+  const el = document.getElementById('log-detail-' + id);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 function editEntry(id) {
