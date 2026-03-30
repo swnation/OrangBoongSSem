@@ -5935,7 +5935,9 @@ function detectConflict(local, remote) {
   return false;
 }
 
+let _conflictDomainId=null;
 function showConflictModal(local, remote, domainId) {
+  _conflictDomainId=domainId;
   const localDate=local._lastModified?new Date(local._lastModified).toLocaleString('ko-KR'):'알 수 없음';
   const remoteDate=remote._lastModified?new Date(remote._lastModified).toLocaleString('ko-KR'):'알 수 없음';
   const localSessions=local.sessions?.length||0;
@@ -5959,9 +5961,9 @@ function showConflictModal(local, remote, domainId) {
       </div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn-save" onclick="resolveConflict('local','${esc(domainId)}')" style="flex:1">📱 현재 기기 유지</button>
-      <button class="btn-save" onclick="resolveConflict('remote','${esc(domainId)}')" style="flex:1;background:#f59e0b">☁️ 클라우드 사용</button>
-      <button class="btn-save" onclick="resolveConflict('merge','${esc(domainId)}')" style="flex:1;background:#8b5cf6">🔀 병합 시도</button>
+      <button class="btn-save" onclick="resolveConflict('local',_conflictDomainId)" style="flex:1">📱 현재 기기 유지</button>
+      <button class="btn-save" onclick="resolveConflict('remote',_conflictDomainId)" style="flex:1;background:#f59e0b">☁️ 클라우드 사용</button>
+      <button class="btn-save" onclick="resolveConflict('merge',_conflictDomainId)" style="flex:1;background:#8b5cf6">🔀 병합 시도</button>
     </div>
     <button class="btn-cancel" onclick="closeModal('conflict-modal')" style="width:100%;margin-top:8px">나중에 결정</button>
   </div>`;
