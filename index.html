@@ -2912,11 +2912,11 @@ async function saveLogEntry() {
   if(editIdx>=0 && ds.logData[editIdx]) {
     ds.logData[editIdx]=entry;
     ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-    try{await saveLogData();_markQuickSynced();showToast('✅ 기록 수정됨');S.logEditMode=false;renderView('log');}
+    try{await saveLogData();_markQuickSynced();sendLogNotification(entry);showToast('✅ 기록 수정됨');S.logEditMode=false;renderView('log');}
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   } else {
     ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-    try{await saveLogData();_markQuickSynced();showToast('✅ 기록 저장됨');renderView('log');}
+    try{await saveLogData();_markQuickSynced();sendLogNotification(entry);showToast('✅ 기록 저장됨');renderView('log');}
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   }
   if(btn)btn.disabled=false;if(sp)sp.style.display='none';
@@ -5710,6 +5710,42 @@ function renderUploadProgress(fileName, percent) {
       <span style="font-size:.68rem;color:var(--mu)">${percent}%</span>`;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// PWA 푸시 알림 (기록 저장 시)
+// ═══════════════════════════════════════════════════════════════
+function requestNotificationPermission() {
+  if(!('Notification' in window)) return;
+  if(Notification.permission==='default') {
+    Notification.requestPermission();
+  }
+}
+
+function sendLogNotification(entry) {
+  if(!('Notification' in window)||Notification.permission!=='granted') return;
+  const lc=DC().logConfig;
+  const dc=DC();
+  const nrsText=entry.nrs>=0?`NRS ${entry.nrs}/10`:(entry.mood||'기록');
+  const syms=(entry.symptoms||[]).join(', ');
+  const meds=(entry.meds||[]).join(', ');
+  const lines=[nrsText];
+  if(syms) lines.push(syms);
+  if(meds) lines.push('💊 '+meds);
+
+  try {
+    const n=new Notification(`${dc.icon} ${dc.label} 기록 완료`,{
+      body:lines.join('\n'),
+      icon:"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>",
+      tag:'log-'+entry.id,
+      vibrate:[200,100,200],
+      silent:false
+    });
+    n.onclick=()=>{ window.focus(); n.close(); };
+  } catch(e){}
+}
+
+// 로그인 후 알림 권한 요청
+document.addEventListener('DOMContentLoaded',()=>{ requestNotificationPermission(); });
 
 // ═══════════════════════════════════════════════════════════════
 // #6 약물 상호작용 체커
