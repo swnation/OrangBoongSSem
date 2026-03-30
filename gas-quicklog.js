@@ -17,7 +17,7 @@
  * cleanOldEmails()를 트리거(매일 1회)로 설정하면 7일 지난 알림 메일 자동 삭제
  */
 
-var NOTIFY_EMAIL = 'OrangBoongSSem@gmail.com';
+var NOTIFY_EMAIL = PropertiesService.getScriptProperties().getProperty('NOTIFY_EMAIL') || 'OrangBoongSSem@gmail.com';
 
 function doPost(e) {
   try {
@@ -91,30 +91,29 @@ function sendNotification(entry) {
     var date = dt[0] || '';
     var time = dt[1] || '';
     var nrs = entry.nrs >= 0 ? entry.nrs : '-';
-    var sites = (entry.sites || []).join(', ');
-    var painType = (entry.painType || []).join(', ');
-    var symptoms = (entry.symptoms || []).join(', ');
-    var meds = (entry.meds || []).join(', ');
-    var treatments = (entry.treatments || []).join(', ');
-    var memo = entry.memo || '';
 
     var subject = '🤕 오랑이 두통 NRS ' + nrs + ' · ' + date.slice(5) + ' ' + time;
 
+    var fields = [
+      { value: date + ' ' + time, prefix: '📅 ' },
+      { value: 'NRS: ' + nrs + '/10', prefix: '😣 ' },
+      { value: (entry.sites || []).join(', '), prefix: '📍 ' },
+      { value: (entry.painType || []).join(', '), prefix: '🔥 ' },
+      { value: (entry.symptoms || []).join(', '), prefix: '⚡ ' },
+      { value: (entry.meds || []).join(', '), prefix: '💊 ' },
+      { value: (entry.treatments || []).join(', '), prefix: '🩺 ' },
+      { value: entry.memo || '', prefix: '📝 ' },
+    ];
+
     var lines = [];
-    lines.push('📅 ' + date + ' ' + time);
-    lines.push('😣 NRS: ' + nrs + '/10');
-    if (sites) lines.push('📍 ' + sites);
-    if (painType) lines.push('🔥 ' + painType);
-    if (symptoms) lines.push('⚡ ' + symptoms);
-    if (meds) lines.push('💊 ' + meds);
-    if (treatments) lines.push('🩺 ' + treatments);
-    if (memo) lines.push('📝 ' + memo);
+    fields.forEach(function(field) {
+      if (field.value) lines.push(field.prefix + field.value);
+    });
     lines.push('');
     lines.push('— Orangi Health 자동 알림');
 
     MailApp.sendEmail(NOTIFY_EMAIL, subject, lines.join('\n'));
   } catch (err) {
-    // 이메일 실패해도 기록 저장은 유지
     Logger.log('Email failed: ' + err.message);
   }
 }
@@ -130,8 +129,8 @@ function sendNotification(entry) {
 function cleanOldEmails() {
   try {
     var threads = GmailApp.search('from:me subject:오랑이 두통 older_than:7d');
-    for (var i = 0; i < threads.length; i++) {
-      threads[i].moveToTrash();
+    if (threads.length > 0) {
+      GmailApp.moveThreadsToTrash(threads);
     }
     Logger.log('Cleaned ' + threads.length + ' old notification emails');
   } catch (err) {
