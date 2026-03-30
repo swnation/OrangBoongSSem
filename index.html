@@ -2640,13 +2640,25 @@ async function importAllQuickLogs() {
   } catch (e) { showToast('❌ 저장 실패: ' + e.message, 4000); }
 }
 
-// 빠른 기록 삭제
-function discardQuickLog(id) {
+// 빠른 기록 삭제 (로컬 + 클라우드)
+async function discardQuickLog(id) {
   if (!confirm('이 빠른 기록을 삭제할까요?')) return;
   const logs = getQuickLogs().filter(l => l.id !== id);
   saveQuickLogs(logs);
+  // 클라우드에서도 삭제
+  try {
+    const url = getQuickSyncUrl();
+    if (url) {
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'delete', ids: [id] }),
+        redirect: 'follow'
+      });
+    }
+  } catch (e) {}
   renderView('log');
-  showToast('🗑 삭제됨');
+  showToast('🗑 삭제됨 (클라우드 포함)');
 }
 
 function renderLog() {
@@ -5774,11 +5786,17 @@ function renderUploadProgress(fileName, percent) {
 function requestNotificationPermission() {
   if(!('Notification' in window)) return;
   if(Notification.permission==='default') {
-    Notification.requestPermission();
+    Notification.requestPermission().then(p=>{
+      if(p==='granted') showToast('🔔 알림이 활성화되었습니다');
+    });
   }
 }
 
-function sendLogNotification(entry) {
+// 사용자 인터랙션 시 알림 권한 요청 (모바일은 인터랙션 필요)
+document.addEventListener('click',function _reqNotif(){
+  requestNotificationPermission();
+  document.removeEventListener('click',_reqNotif);
+},{once:true});
   if(!('Notification' in window)||Notification.permission!=='granted') return;
   const lc=DC().logConfig;
   const dc=DC();
