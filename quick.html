@@ -279,85 +279,94 @@ function renderHeadDiagram() {
   const el=document.getElementById('head-diagram');
   if(!el) return;
   el.innerHTML=`
-  <div style="display:flex;justify-content:center;gap:12px;align-items:flex-start;padding:8px 0">
+  <div style="display:flex;justify-content:center;gap:8px;align-items:flex-start;padding:8px 0">
     <div style="text-align:center">
-      <svg viewBox="0 0 220 260" width="190" style="max-width:55vw">
-        <!-- Head outline -->
-        <ellipse cx="110" cy="115" rx="85" ry="100" fill="var(--sf2)" stroke="var(--bd2)" stroke-width="2.5"/>
-        <!-- Eyes -->
-        <ellipse cx="78" cy="132" rx="16" ry="9" fill="var(--sf)" stroke="var(--bd2)" stroke-width="2"/>
-        <circle cx="78" cy="132" r="4" fill="var(--bd2)"/>
-        <ellipse cx="142" cy="132" rx="16" ry="9" fill="var(--sf)" stroke="var(--bd2)" stroke-width="2"/>
-        <circle cx="142" cy="132" r="4" fill="var(--bd2)"/>
-        <!-- Nose -->
-        <path d="M 110 122 L 105 150 Q 110 155 115 150 Z" fill="var(--sf2)" stroke="var(--bd2)" stroke-width="1.5"/>
-        <!-- Mouth -->
-        <path d="M 96 168 Q 110 176 124 168" fill="none" stroke="var(--bd2)" stroke-width="1.5"/>
-        <!-- Eyebrows -->
-        <path d="M 58 118 Q 78 108 98 116" fill="none" stroke="var(--bd2)" stroke-width="2.5" stroke-linecap="round"/>
-        <path d="M 122 116 Q 142 108 162 118" fill="none" stroke="var(--bd2)" stroke-width="2.5" stroke-linecap="round"/>
+      <svg viewBox="0 0 240 280" width="200" style="max-width:56vw">
+        <!-- Head shape (more realistic) -->
+        <path d="M 120 18 C 60 18, 22 65, 22 120 C 22 155, 30 180, 50 200 Q 60 215, 70 230 L 80 245 L 160 245 L 170 230 Q 180 215, 190 200 C 210 180, 218 155, 218 120 C 218 65, 180 18, 120 18 Z" fill="#fde8d8" stroke="#c9a88c" stroke-width="2"/>
+        <!-- Hair -->
+        <path d="M 120 18 C 60 18, 22 65, 22 105 C 35 60, 65 28, 120 25 C 175 28, 205 60, 218 105 C 218 65, 180 18, 120 18 Z" fill="#5a3825" opacity=".25"/>
         <!-- Ears -->
-        <ellipse cx="26" cy="125" rx="8" ry="16" fill="var(--sf2)" stroke="var(--bd2)" stroke-width="1.5"/>
-        <ellipse cx="194" cy="125" rx="8" ry="16" fill="var(--sf2)" stroke="var(--bd2)" stroke-width="1.5"/>
+        <path d="M 22 115 C 12 108, 8 125, 12 138 C 15 148, 22 145, 22 135" fill="#fde8d8" stroke="#c9a88c" stroke-width="1.5"/>
+        <path d="M 218 115 C 228 108, 232 125, 228 138 C 225 148, 218 145, 218 135" fill="#fde8d8" stroke="#c9a88c" stroke-width="1.5"/>
+        <!-- Eyes (almond shape) -->
+        <path d="M 65 138 Q 82 128, 100 138 Q 82 144, 65 138 Z" fill="#fff" stroke="#8a7060" stroke-width="1.5"/>
+        <circle cx="83" cy="137" r="5" fill="#3a2518"/>
+        <circle cx="84" cy="135" r="1.5" fill="#fff"/>
+        <path d="M 140 138 Q 158 128, 175 138 Q 158 144, 140 138 Z" fill="#fff" stroke="#8a7060" stroke-width="1.5"/>
+        <circle cx="157" cy="137" r="5" fill="#3a2518"/>
+        <circle cx="158" cy="135" r="1.5" fill="#fff"/>
+        <!-- Eyebrows -->
+        <path d="M 62 125 Q 82 115, 102 123" fill="none" stroke="#5a3825" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 138 123 Q 158 115, 178 125" fill="none" stroke="#5a3825" stroke-width="3" stroke-linecap="round"/>
+        <!-- Nose -->
+        <path d="M 120 130 L 115 158 Q 120 164, 125 158 Z" fill="none" stroke="#c9a88c" stroke-width="1.5"/>
+        <path d="M 112 158 Q 120 162, 128 158" fill="none" stroke="#c9a88c" stroke-width="1.5"/>
+        <!-- Mouth -->
+        <path d="M 102 180 Q 120 190, 138 180" fill="none" stroke="#c9967a" stroke-width="2" stroke-linecap="round"/>
+        <!-- Center line (subtle) -->
+        <line x1="120" y1="25" x2="120" y2="200" stroke="#c9a88c" stroke-width="0.5" stroke-dasharray="4" opacity=".3"/>
 
         <!-- LEFT 관자놀이 -->
-        <rect id="hd-l-temple" x="22" y="90" width="30" height="30" rx="8" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','관자놀이')"/>
-        <text x="37" y="108" text-anchor="middle" font-size="9" font-weight="600" fill="#3b82f6" style="pointer-events:none">관자</text>
-        <text x="37" y="117" text-anchor="middle" font-size="9" font-weight="600" fill="#3b82f6" style="pointer-events:none">놀이</text>
+        <rect id="hd-l-temple" x="18" y="100" width="35" height="34" rx="8" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','관자놀이')"/>
+        <text x="35" y="120" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">관자</text>
+        <text x="35" y="131" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">놀이</text>
 
         <!-- LEFT 눈썹부위 -->
-        <rect id="hd-l-brow" x="54" y="98" width="30" height="22" rx="6" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','눈썹부위')"/>
-        <text x="69" y="113" text-anchor="middle" font-size="8" font-weight="600" fill="#3b82f6" style="pointer-events:none">눈썹</text>
+        <rect id="hd-l-brow" x="56" y="108" width="34" height="22" rx="6" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','눈썹부위')"/>
+        <text x="73" y="123" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">눈썹</text>
 
         <!-- LEFT 이마 -->
-        <rect id="hd-l-forehead" x="55" y="52" width="36" height="30" rx="8" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','이마')"/>
-        <text x="73" y="72" text-anchor="middle" font-size="10" font-weight="600" fill="#3b82f6" style="pointer-events:none">이마</text>
+        <rect id="hd-l-forehead" x="58" y="55" width="42" height="34" rx="8" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','이마')"/>
+        <text x="79" y="77" text-anchor="middle" font-size="11" font-weight="700" fill="#3b82f6" style="pointer-events:none">이마</text>
 
         <!-- RIGHT 관자놀이 -->
-        <rect id="hd-r-temple" x="168" y="90" width="30" height="30" rx="8" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','관자놀이')"/>
-        <text x="183" y="108" text-anchor="middle" font-size="9" font-weight="600" fill="#ef4444" style="pointer-events:none">관자</text>
-        <text x="183" y="117" text-anchor="middle" font-size="9" font-weight="600" fill="#ef4444" style="pointer-events:none">놀이</text>
+        <rect id="hd-r-temple" x="187" y="100" width="35" height="34" rx="8" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','관자놀이')"/>
+        <text x="204" y="120" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">관자</text>
+        <text x="204" y="131" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">놀이</text>
 
         <!-- RIGHT 눈썹부위 -->
-        <rect id="hd-r-brow" x="136" y="98" width="30" height="22" rx="6" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','눈썹부위')"/>
-        <text x="151" y="113" text-anchor="middle" font-size="8" font-weight="600" fill="#ef4444" style="pointer-events:none">눈썹</text>
+        <rect id="hd-r-brow" x="150" y="108" width="34" height="22" rx="6" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','눈썹부위')"/>
+        <text x="167" y="123" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">눈썹</text>
 
         <!-- RIGHT 이마 -->
-        <rect id="hd-r-forehead" x="129" y="52" width="36" height="30" rx="8" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','이마')"/>
-        <text x="147" y="72" text-anchor="middle" font-size="10" font-weight="600" fill="#ef4444" style="pointer-events:none">이마</text>
+        <rect id="hd-r-forehead" x="140" y="55" width="42" height="34" rx="8" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','이마')"/>
+        <text x="161" y="77" text-anchor="middle" font-size="11" font-weight="700" fill="#ef4444" style="pointer-events:none">이마</text>
 
         <!-- CENTER 미간 -->
-        <rect id="hd-c-glabella" x="92" y="108" width="36" height="22" rx="8" fill="rgba(168,85,247,.12)" stroke="#a855f7" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('both','미간')"/>
-        <text x="110" y="123" text-anchor="middle" font-size="10" font-weight="700" fill="#a855f7" style="pointer-events:none">미간</text>
+        <rect id="hd-c-glabella" x="98" y="118" width="44" height="24" rx="8" fill="rgba(168,85,247,.15)" stroke="#a855f7" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('both','미간')"/>
+        <text x="120" y="135" text-anchor="middle" font-size="11" font-weight="800" fill="#a855f7" style="pointer-events:none">미간</text>
 
-        <!-- Side labels -->
-        <text x="37" y="245" text-anchor="middle" font-size="11" fill="#3b82f6" font-weight="700">← 왼쪽</text>
-        <text x="183" y="245" text-anchor="middle" font-size="11" fill="#ef4444" font-weight="700">오른쪽 →</text>
-        <text x="110" y="245" text-anchor="middle" font-size="9" fill="var(--mu)">정면</text>
+        <text x="35" y="268" text-anchor="middle" font-size="11" fill="#3b82f6" font-weight="700">← 왼쪽</text>
+        <text x="204" y="268" text-anchor="middle" font-size="11" fill="#ef4444" font-weight="700">오른쪽 →</text>
+        <text x="120" y="268" text-anchor="middle" font-size="9" fill="var(--mu)">정면</text>
       </svg>
     </div>
     <div style="text-align:center">
-      <svg viewBox="0 0 160 260" width="120" style="max-width:35vw">
-        <!-- Head back -->
-        <ellipse cx="80" cy="110" rx="65" ry="80" fill="var(--sf2)" stroke="var(--bd2)" stroke-width="2.5"/>
+      <svg viewBox="0 0 170 280" width="125" style="max-width:36vw">
+        <!-- Head back (realistic) -->
+        <path d="M 85 20 C 35 20, 10 70, 10 120 C 10 160, 25 185, 45 205 L 55 220 L 60 245 L 110 245 L 115 220 L 125 205 C 145 185, 160 160, 160 120 C 160 70, 135 20, 85 20 Z" fill="#fde8d8" stroke="#c9a88c" stroke-width="2"/>
+        <!-- Hair back -->
+        <path d="M 85 20 C 35 20, 10 70, 10 110 C 25 55, 50 28, 85 25 C 120 28, 145 55, 160 110 C 160 70, 135 20, 85 20 Z" fill="#5a3825" opacity=".3"/>
         <!-- Neck -->
-        <rect x="55" y="180" width="50" height="35" rx="8" fill="var(--sf2)" stroke="var(--bd2)" stroke-width="2"/>
-        <!-- Hair -->
-        <path d="M 20 85 Q 40 25 80 15 Q 120 25 140 85" fill="none" stroke="var(--bd2)" stroke-width="2"/>
+        <path d="M 60 220 L 55 260 L 115 260 L 110 220" fill="#fde8d8" stroke="#c9a88c" stroke-width="1.5"/>
+        <!-- Ears -->
+        <path d="M 10 115 C 2 108, -2 125, 3 138 C 6 145, 10 142, 10 132" fill="#fde8d8" stroke="#c9a88c" stroke-width="1.5"/>
+        <path d="M 160 115 C 168 108, 172 125, 167 138 C 164 145, 160 142, 160 132" fill="#fde8d8" stroke="#c9a88c" stroke-width="1.5"/>
         <!-- Center line -->
-        <line x1="80" y1="30" x2="80" y2="170" stroke="var(--bd)" stroke-width="1" stroke-dasharray="4"/>
+        <line x1="85" y1="25" x2="85" y2="200" stroke="#c9a88c" stroke-width="0.5" stroke-dasharray="4" opacity=".3"/>
 
         <!-- LEFT 후두부 -->
-        <rect id="hd-l-occipital" x="22" y="110" width="50" height="40" rx="10" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','후두부')"/>
-        <text x="47" y="134" text-anchor="middle" font-size="11" font-weight="700" fill="#3b82f6" style="pointer-events:none">후두부</text>
+        <rect id="hd-l-occipital" x="16" y="115" width="60" height="48" rx="12" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','후두부')"/>
+        <text x="46" y="144" text-anchor="middle" font-size="12" font-weight="800" fill="#3b82f6" style="pointer-events:none">후두부</text>
 
         <!-- RIGHT 후두부 -->
-        <rect id="hd-r-occipital" x="88" y="110" width="50" height="40" rx="10" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','후두부')"/>
-        <text x="113" y="134" text-anchor="middle" font-size="11" font-weight="700" fill="#ef4444" style="pointer-events:none">후두부</text>
+        <rect id="hd-r-occipital" x="94" y="115" width="60" height="48" rx="12" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','후두부')"/>
+        <text x="124" y="144" text-anchor="middle" font-size="12" font-weight="800" fill="#ef4444" style="pointer-events:none">후두부</text>
 
-        <text x="47" y="245" text-anchor="middle" font-size="11" fill="#3b82f6" font-weight="700">← 왼</text>
-        <text x="113" y="245" text-anchor="middle" font-size="11" fill="#ef4444" font-weight="700">오 →</text>
-        <text x="80" y="245" text-anchor="middle" font-size="9" fill="var(--mu)">뒷면</text>
+        <text x="46" y="268" text-anchor="middle" font-size="11" fill="#3b82f6" font-weight="700">← 왼</text>
+        <text x="124" y="268" text-anchor="middle" font-size="11" fill="#ef4444" font-weight="700">오 →</text>
+        <text x="85" y="268" text-anchor="middle" font-size="9" fill="var(--mu)">뒷면</text>
       </svg>
     </div>
   </div>`;

@@ -704,11 +704,17 @@ async function ensureValidToken() {
   });
 }
 
-(function checkGSI() {
+(function checkGSI(attempts) {
+  if(!attempts) attempts=0;
   if (window.google?.accounts?.oauth2) {
     const el = document.getElementById('gsi-status');
     if (el) { el.textContent = '✓ 준비됨 — 위 버튼을 눌러 로그인하세요'; el.style.color = '#2d6a4f'; }
-  } else setTimeout(checkGSI, 500);
+  } else if(attempts<30) {
+    setTimeout(()=>checkGSI(attempts+1), 500);
+  } else {
+    const el = document.getElementById('gsi-status');
+    if (el) { el.innerHTML = '⚠️ Google 인증 로드 실패 — <a href="javascript:location.reload()" style="color:var(--ac)">새로고침</a>'; el.style.color = '#c03030'; }
+  }
 })();
 
 function handleToken(resp) {
