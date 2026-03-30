@@ -629,7 +629,7 @@ async function saveEntry() {
     datetime: `${date}T${time}`,
     nrs, sites, symptoms, meds, treatments, memo,
     synced: false,
-    createdAt: new Date().toISOString()
+    createdAt: new Date(Date.now() + 9*3600000).toISOString()
   };
 
   logs.push(entry);
