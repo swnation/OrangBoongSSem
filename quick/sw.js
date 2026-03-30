@@ -1,7 +1,7 @@
-const CACHE_NAME = 'orangi-health-v9d';
+const CACHE_NAME = 'orangi-quick-v1';
 const PRECACHE = [
-  './index.html',
-  './style.css',
+  './',
+  '../style.css',
   'https://cdn.jsdelivr.net/npm/marked@15/marked.min.js',
   'https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js',
 ];
@@ -24,18 +24,10 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-
-  // Never cache: Google auth/API, AI APIs, any google domain
-  if (url.hostname.includes('google') ||
-      url.hostname.includes('gstatic') ||
-      url.hostname.includes('googleapis') ||
-      url.hostname.includes('anthropic') ||
-      url.hostname.includes('openai') ||
-      url.hostname.includes('perplexity')) {
+  if (url.hostname.includes('google') || url.hostname.includes('gstatic') ||
+      url.hostname.includes('googleapis') || url.hostname.includes('script')) {
     return;
   }
-
-  // Network-first for HTML/CSS (get latest, fallback to cache)
   if (e.request.destination === 'document' || url.pathname.endsWith('.css') || url.pathname.endsWith('.html')) {
     e.respondWith(
       fetch(e.request).then(response => {
@@ -48,18 +40,7 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-
-  // Cache-first for static assets (fonts, CDN libs)
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(response => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
-        }
-        return response;
-      }).catch(() => cached || new Response('Offline', {status:503, statusText:'Service Unavailable'}));
-    })
+    caches.match(e.request).then(cached => cached || fetch(e.request))
   );
 });

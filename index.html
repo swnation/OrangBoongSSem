@@ -973,7 +973,7 @@ async function codeBackupToDrive() {
     // index.html — 현재 실행 중인 전체 HTML
     files['index.html'] = document.documentElement.outerHTML ? null : null; // placeholder
     // style.css, quick.html 등은 fetch로 가져옴
-    const filesToFetch = ['index.html','style.css','quick.html','sw.js','manifest.json','quick-manifest.json','CLAUDE.md'];
+    const filesToFetch = ['index.html','style.css','quick/index.html','sw.js','manifest.json','quick/manifest.json','CLAUDE.md'];
     for (const fname of filesToFetch) {
       try {
         const res = await fetch('./' + fname, {cache:'no-store'});
