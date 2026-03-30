@@ -95,13 +95,15 @@ saveMaster = async function() { await _origSaveMasterFn(); cacheToLocal(...); };
 ```
 
 ## 백업 브랜치
+**규칙: 최근 5개 버전은 항상 백업 브랜치를 유지한다. 새 버전 백업 시 가장 오래된 것을 삭제.**
 ```
+backup/v9.0  ← 20개 신기능 · 약물상호작용 · 푸시알림 · 인터랙티브 머리그림
+backup/v8.4  ← 디베이트/빠른질문/인사이트/세션이어하기
 backup/v8.3  ← KST/한영매핑/PDF/캘린더/시술추적
 backup/v8.2  ← 질환 관리 통합/ICD-10/질환별 투약
 backup/v8.1  ← UX 개선/직접입력/자동완성/컨텍스트통합
-backup/v8.0  ← 스트리밍/통계/PWA/파일분리
-backup/v7.6  ← 초기 안정 버전
 ```
+> ※ backup/v8.0, backup/v7.6은 5개 초과로 삭제 대상 (GitHub에서 수동 삭제)
 
 ## 작업 시 주의사항
 1. `esc()` 함수는 `'`(단일 인용부호)도 이스케이프함 (`&#39;`)
@@ -114,3 +116,4 @@ backup/v7.6  ← 초기 안정 버전
 8. 자동완성 리스너 중복 방지: `input._acSetup` 플래그 확인
 9. API 키는 localStorage에만 저장 (Drive 동기화 안 함)
 10. 버전 업 시 `APP_VERSION` 배열에 새 항목 추가 필수
+11. 버전 업 시 `backup/vX.X` 브랜치 생성 필수, **최근 5개만 유지** (가장 오래된 것 삭제)
