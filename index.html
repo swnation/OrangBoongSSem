@@ -231,6 +231,7 @@ const DOMAINS = {
     ],
     logConfig: {
       sites: {left:['미간','이마','눈썹부위','관자놀이','후두부'], right:['미간','이마','눈썹부위','관자놀이','후두부']},
+      painTypes: ['욱신거림','쥐어짜는','찌르는','묵직한','쑤시는','타는 듯한','전기 오는 듯한'],
       symptoms: ['구역','어지러움','손발저림','빛과민','소리과민','식은땀','심계항진','실신전조'],
       meds: ['AAP 500mg','Loxoprofen','타 NSAID','Metoclopramide'],
       treatments: ['GON block','LON block','SPG block'],
@@ -2832,19 +2833,29 @@ function renderLog() {
   const customSitesL = JSON.parse(localStorage.getItem('om_custom_sites_left_'+S.currentDomain) || '[]');
   const customSitesR = JSON.parse(localStorage.getItem('om_custom_sites_right_'+S.currentDomain) || '[]');
 
+  const painTypesHtml = lc.painTypes ? `
+    <div class="log-section-title">통증 종류</div>
+    <div class="log-chips">${lc.painTypes.map(p=>`<div class="log-chip" data-group="pain" data-val="${p}" onclick="toggleChip(this,'sel-pain')">${p}</div>`).join('')}</div>` : '';
+
   const sitesHtml = lc.sites ? `
-    <div class="log-section-title">부위 — 왼쪽</div>
-    <div class="log-chips">${[...lc.sites.left,...customSitesL].map(s=>`<div class="log-chip" data-side="left" data-val="${s}" onclick="toggleChip(this,'sel-left')">${s}</div>`).join('')}
-      <div style="display:flex;gap:4px;align-items:center">
-        <input class="log-other-input" id="site-left-other" placeholder="직접 입력" style="width:80px">
-        <button onclick="addCustomSite('left')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
+    <div class="log-section-title">부위 (그림 터치 또는 아래 선택)</div>
+    <div id="main-head-diagram"></div>
+    <div style="margin-top:4px">
+      <div style="font-size:.7rem;color:var(--mu);font-weight:600;margin-bottom:3px">왼쪽</div>
+      <div class="log-chips">${[...lc.sites.left,...customSitesL].map(s=>`<div class="log-chip" data-side="left" data-val="${s}" onclick="toggleChip(this,'sel-left');syncMainHeadDiagram()">${s}</div>`).join('')}
+        <div style="display:flex;gap:4px;align-items:center">
+          <input class="log-other-input" id="site-left-other" placeholder="직접 입력" style="width:80px">
+          <button onclick="addCustomSite('left')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
+        </div>
       </div>
     </div>
-    <div class="log-section-title">부위 — 오른쪽</div>
-    <div class="log-chips">${[...lc.sites.right,...customSitesR].map(s=>`<div class="log-chip" data-side="right" data-val="${s}" onclick="toggleChip(this,'sel-right')">${s}</div>`).join('')}
-      <div style="display:flex;gap:4px;align-items:center">
-        <input class="log-other-input" id="site-right-other" placeholder="직접 입력" style="width:80px">
-        <button onclick="addCustomSite('right')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
+    <div style="margin-top:4px">
+      <div style="font-size:.7rem;color:var(--mu);font-weight:600;margin-bottom:3px">오른쪽</div>
+      <div class="log-chips">${[...lc.sites.right,...customSitesR].map(s=>`<div class="log-chip" data-side="right" data-val="${s}" onclick="toggleChip(this,'sel-right');syncMainHeadDiagram()">${s}</div>`).join('')}
+        <div style="display:flex;gap:4px;align-items:center">
+          <input class="log-other-input" id="site-right-other" placeholder="직접 입력" style="width:80px">
+          <button onclick="addCustomSite('right')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
+        </div>
       </div>
     </div>` : '';
 
@@ -2890,6 +2901,7 @@ function renderLog() {
     </div>
     ${moodHtml}
     ${sitesHtml}
+    ${painTypesHtml}
     ${lc.symptoms?.length||customSyms.length?`<div class="log-section-title">증상 <button onclick="openChipManager('syms')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div><div class="log-chips">${allSyms.map(s=>`<div class="log-chip" data-group="sym" data-val="${s}" onclick="toggleChip(this,'sel-sym')">${s}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="sym-other" placeholder="직접 입력" style="width:100px">
@@ -3027,6 +3039,7 @@ async function saveLogEntry() {
   document.querySelectorAll('.log-chip.sel[data-side]').forEach(el=>sites.push((el.dataset.side==='left'?'왼쪽':'오른쪽')+' '+el.dataset.val));
   const siteLeftOther=document.getElementById('site-left-other')?.value.trim();if(siteLeftOther)sites.push('왼쪽 '+siteLeftOther);
   const siteRightOther=document.getElementById('site-right-other')?.value.trim();if(siteRightOther)sites.push('오른쪽 '+siteRightOther);
+  const painType=[];document.querySelectorAll('.log-chip.sel[data-group="pain"]').forEach(el=>painType.push(el.dataset.val));
   const symptoms=[];document.querySelectorAll('.log-chip.sel[data-group="sym"]').forEach(el=>symptoms.push(el.dataset.val));
   const symOther=document.getElementById('sym-other')?.value.trim();if(symOther)symptoms.push(symOther);
   const meds=[];document.querySelectorAll('.log-chip.sel[data-group="med"]').forEach(el=>meds.push(el.dataset.val));
@@ -3038,7 +3051,7 @@ async function saveLogEntry() {
   const txOther=document.getElementById('tx-other')?.value.trim();if(txOther)treatments.push(txOther);
   const memo=document.getElementById('log-memo')?.value.trim();
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
-  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,symptoms,meds,treatments,memo};
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,symptoms,meds,treatments,memo};
   await ensureLogLoaded();
   const ds=D();
   // 빠른 기록 연동: 저장 성공 시 synced 마킹
@@ -5060,10 +5073,13 @@ renderView = function(view) {
   _origRenderView(view);
   if (view === 'log') {
     setTimeout(() => {
-      setupAutocomplete('med-other', _AC_MEDS, true); // meds with API
+      setupAutocomplete('med-other', _AC_MEDS, true);
       setupAutocomplete('sym-other', _AC_SYMPTOMS);
       setupAutocomplete('tx-other', _AC_TREATMENTS);
       setupAutocomplete('log-treatment', _AC_TREATMENTS);
+      // 편두통 도메인: 머리 그림 삽입
+      const hdEl=document.getElementById('main-head-diagram');
+      if(hdEl&&DC().logConfig?.sites) { hdEl.innerHTML=getMainHeadSVG(); setTimeout(syncMainHeadDiagram,50); }
     }, 50);
   }
   if (view === 'meds') {
@@ -6721,6 +6737,102 @@ let _aiSuggestions=[];
 
 // Load aiEnabled from localStorage on startup
 try { const ae=localStorage.getItem('aiEnabled'); if(ae) S.aiEnabled=JSON.parse(ae); } catch(e){}
+
+// ═══════════════════════════════════════════════════════════════
+// 메인 사이트 머리 그림 (편두통 도메인 전용)
+// ═══════════════════════════════════════════════════════════════
+function getMainHeadSVG() {
+  const p='mhd-';
+  return `
+  <div style="display:flex;justify-content:center;gap:8px;align-items:flex-start;padding:4px 0">
+    <div style="text-align:center">
+      <svg viewBox="0 0 260 250" width="180" style="max-width:50vw">
+        <defs><radialGradient id="${p}skin"><stop offset="0%" stop-color="#fcebd5"/><stop offset="100%" stop-color="#f0d5b8"/></radialGradient></defs>
+        <ellipse cx="130" cy="108" rx="88" ry="102" fill="url(#${p}skin)" stroke="#9a8070" stroke-width="1.8"/>
+        <path d="M 52 140 Q 70 210, 130 220 Q 190 210, 208 140" fill="url(#${p}skin)" stroke="#9a8070" stroke-width="1.8"/>
+        <path d="M 43 100 C 32 92,28 115,34 130 C 37 138,43 134,43 126" fill="#f0d5b8" stroke="#9a8070" stroke-width="1.2"/>
+        <path d="M 217 100 C 228 92,232 115,226 130 C 223 138,217 134,217 126" fill="#f0d5b8" stroke="#9a8070" stroke-width="1.2"/>
+        <path d="M 50 70 Q 70 20, 130 12 Q 190 20, 210 70" fill="none" stroke="#7a6050" stroke-width="1.2" stroke-dasharray="3 2"/>
+        <path d="M 82 122 Q 97 113, 114 122 Q 97 127, 82 122 Z" fill="#fff" stroke="#6a5a50" stroke-width="1.2"/>
+        <circle cx="98" cy="121" r="5.5" fill="#2a1a0a"/><circle cx="99.5" cy="119.5" r="1.8" fill="#fff"/>
+        <path d="M 146 122 Q 163 113, 178 122 Q 163 127, 146 122 Z" fill="#fff" stroke="#6a5a50" stroke-width="1.2"/>
+        <circle cx="162" cy="121" r="5.5" fill="#2a1a0a"/><circle cx="163.5" cy="119.5" r="1.8" fill="#fff"/>
+        <path d="M 78 110 Q 98 100, 116 108" fill="none" stroke="#5a4030" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M 144 108 Q 162 100, 182 110" fill="none" stroke="#5a4030" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M 130 118 C 128 135, 122 148, 120 152 Q 130 158, 140 152 C 138 148, 132 135, 130 118" fill="none" stroke="#a08a78" stroke-width="1.2"/>
+        <ellipse cx="124" cy="152" rx="4" ry="2.5" fill="none" stroke="#a08a78" stroke-width="1"/><ellipse cx="136" cy="152" rx="4" ry="2.5" fill="none" stroke="#a08a78" stroke-width="1"/>
+        <path d="M 112 175 Q 122 180, 130 179 Q 138 180, 148 175" fill="none" stroke="#b08070" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="130" y1="15" x2="130" y2="195" stroke="#a08a78" stroke-width="0.4" stroke-dasharray="4 3" opacity=".35"/>
+        <rect id="${p}l-temple" x="34" y="90" width="38" height="36" rx="8" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleMainSite('left','관자놀이')"/>
+        <text x="53" y="111" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">관자</text><text x="53" y="122" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">놀이</text>
+        <rect id="${p}l-brow" x="72" y="95" width="34" height="20" rx="6" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleMainSite('left','눈썹부위')"/>
+        <text x="89" y="109" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">눈썹</text>
+        <rect id="${p}l-forehead" x="66" y="42" width="46" height="36" rx="10" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleMainSite('left','이마')"/>
+        <text x="89" y="65" text-anchor="middle" font-size="12" font-weight="700" fill="#3b82f6" style="pointer-events:none">이마</text>
+        <rect id="${p}r-temple" x="188" y="90" width="38" height="36" rx="8" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleMainSite('right','관자놀이')"/>
+        <text x="207" y="111" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">관자</text><text x="207" y="122" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">놀이</text>
+        <rect id="${p}r-brow" x="154" y="95" width="34" height="20" rx="6" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleMainSite('right','눈썹부위')"/>
+        <text x="171" y="109" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">눈썹</text>
+        <rect id="${p}r-forehead" x="148" y="42" width="46" height="36" rx="10" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleMainSite('right','이마')"/>
+        <text x="171" y="65" text-anchor="middle" font-size="12" font-weight="700" fill="#ef4444" style="pointer-events:none">이마</text>
+        <rect id="${p}c-glabella" x="106" y="100" width="48" height="22" rx="8" fill="rgba(168,85,247,.12)" stroke="#a855f7" stroke-width="2" style="cursor:pointer" onclick="toggleMainSite('both','미간')"/>
+        <text x="130" y="115" text-anchor="middle" font-size="11" font-weight="800" fill="#a855f7" style="pointer-events:none">미간</text>
+        <text x="53" y="243" text-anchor="middle" font-size="10" fill="#3b82f6" font-weight="700">← 왼쪽</text>
+        <text x="207" y="243" text-anchor="middle" font-size="10" fill="#ef4444" font-weight="700">오른쪽 →</text>
+      </svg>
+    </div>
+    <div style="text-align:center">
+      <svg viewBox="0 0 180 250" width="110" style="max-width:30vw">
+        <defs><radialGradient id="${p}skinb"><stop offset="0%" stop-color="#fcebd5"/><stop offset="100%" stop-color="#f0d5b8"/></radialGradient></defs>
+        <path d="M 90 15 C 35 15, 8 65, 8 115 C 8 155, 20 180, 42 200 L 52 215 L 58 230 L 122 230 L 128 215 L 138 200 C 160 180, 172 155, 172 115 C 172 65, 145 15, 90 15 Z" fill="url(#${p}skinb)" stroke="#9a8070" stroke-width="1.8"/>
+        <path d="M 90 15 C 35 15, 8 65, 12 100 Q 30 40, 90 22 Q 150 40, 168 100 C 172 65, 145 15, 90 15 Z" fill="#7a6050" opacity=".2"/>
+        <path d="M 58 218 L 55 245 L 125 245 L 122 218" fill="url(#${p}skinb)" stroke="#9a8070" stroke-width="1.2"/>
+        <path d="M 9 108 C 0 100,-3 118,3 132 C 6 140,10 136,10 128" fill="#f0d5b8" stroke="#9a8070" stroke-width="1"/>
+        <path d="M 171 108 C 180 100,183 118,177 132 C 174 140,170 136,170 128" fill="#f0d5b8" stroke="#9a8070" stroke-width="1"/>
+        <line x1="90" y1="22" x2="90" y2="200" stroke="#9a8070" stroke-width="0.4" stroke-dasharray="4 3" opacity=".35"/>
+        <rect id="${p}l-occipital" x="14" y="110" width="68" height="52" rx="14" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleMainSite('left','후두부')"/>
+        <text x="48" y="141" text-anchor="middle" font-size="13" font-weight="800" fill="#3b82f6" style="pointer-events:none">후두부</text>
+        <rect id="${p}r-occipital" x="98" y="110" width="68" height="52" rx="14" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleMainSite('right','후두부')"/>
+        <text x="132" y="141" text-anchor="middle" font-size="13" font-weight="800" fill="#ef4444" style="pointer-events:none">후두부</text>
+        <text x="48" y="243" text-anchor="middle" font-size="10" fill="#3b82f6" font-weight="700">← 왼</text>
+        <text x="132" y="243" text-anchor="middle" font-size="10" fill="#ef4444" font-weight="700">오 →</text>
+      </svg>
+    </div>
+  </div>`;
+}
+
+function toggleMainSite(side, site) {
+  if(side==='both') {
+    ['left','right'].forEach(s=>{
+      const chip=document.querySelector(`.log-chip[data-side="${s}"][data-val="${site}"]`);
+      if(chip) chip.click();
+    });
+  } else {
+    const chip=document.querySelector(`.log-chip[data-side="${side}"][data-val="${site}"]`);
+    if(chip) chip.click();
+  }
+  syncMainHeadDiagram();
+}
+
+function syncMainHeadDiagram() {
+  const p='mhd-';
+  const activeL=new Set();const activeR=new Set();
+  document.querySelectorAll('.log-chip.sel[data-side="left"]').forEach(c=>activeL.add(c.dataset.val));
+  document.querySelectorAll('.log-chip.sel[data-side="right"]').forEach(c=>activeR.add(c.dataset.val));
+  const map={'left-관자놀이':p+'l-temple','left-눈썹부위':p+'l-brow','left-이마':p+'l-forehead','left-후두부':p+'l-occipital',
+    'right-관자놀이':p+'r-temple','right-눈썹부위':p+'r-brow','right-이마':p+'r-forehead','right-후두부':p+'r-occipital','both-미간':p+'c-glabella'};
+  Object.entries(map).forEach(([key,id])=>{
+    const el=document.getElementById(id);if(!el) return;
+    const [side,site]=key.split('-');
+    let active=false;
+    if(side==='both') active=activeL.has(site)||activeR.has(site);
+    else if(side==='left') active=activeL.has(site);
+    else active=activeR.has(site);
+    const color=side==='right'?'239,68,68':side==='left'?'59,130,246':'168,85,247';
+    el.setAttribute('fill',active?`rgba(${color},.5)`:`rgba(${color},.12)`);
+    el.setAttribute('stroke-width',active?'3.5':'2');
+  });
+}
 
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

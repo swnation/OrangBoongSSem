@@ -64,6 +64,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .chip.sel-sym{background:#8b5cf6;border-color:#8b5cf6}
 .chip.sel-med{background:#f59e0b;border-color:#f59e0b;color:var(--ink)}
 .chip.sel-tx{background:#10b981;border-color:#10b981}
+.chip.sel-pain{background:#ec4899;border-color:#ec4899}
 .other-row{display:flex;gap:6px;margin-top:6px}
 .other-input{flex:1;border:1.5px solid var(--bd);border-radius:8px;padding:6px 10px;font-family:var(--font);font-size:.8rem;outline:none;background:var(--sf);color:var(--ink)}
 .other-input:focus{border-color:var(--ac)}
@@ -164,6 +165,7 @@ const SITES = {
   right: ['미간','이마','눈썹부위','관자놀이','후두부']
 };
 const SYMPTOMS = ['구역','어지러움','손발저림','빛과민','소리과민','식은땀','심계항진','실신전조'];
+const PAIN_TYPES = ['욱신거림','쥐어짜는','찌르는','묵직한','쑤시는','타는 듯한','전기 오는 듯한'];
 const MEDS = ['AAP 500mg','Loxoprofen','타 NSAID','Metoclopramide'];
 const TREATMENTS = ['GON block','LON block','SPG block'];
 
@@ -275,101 +277,99 @@ function addOtherChip(inputId, containerId, group, cls) {
 }
 
 // ── Interactive Head Diagram ──
-function renderHeadDiagram() {
-  const el=document.getElementById('head-diagram');
-  if(!el) return;
-  el.innerHTML=`
-  <div style="display:flex;justify-content:center;gap:8px;align-items:flex-start;padding:8px 0">
+function getHeadSVG(prefix) {
+  // Medical diagram style - clean line art with anatomical labels
+  return `
+  <div style="display:flex;justify-content:center;gap:8px;align-items:flex-start;padding:4px 0">
     <div style="text-align:center">
-      <svg viewBox="0 0 240 280" width="200" style="max-width:56vw">
-        <!-- Head shape (more realistic) -->
-        <path d="M 120 18 C 60 18, 22 65, 22 120 C 22 155, 30 180, 50 200 Q 60 215, 70 230 L 80 245 L 160 245 L 170 230 Q 180 215, 190 200 C 210 180, 218 155, 218 120 C 218 65, 180 18, 120 18 Z" fill="#fde8d8" stroke="#c9a88c" stroke-width="2"/>
-        <!-- Hair -->
-        <path d="M 120 18 C 60 18, 22 65, 22 105 C 35 60, 65 28, 120 25 C 175 28, 205 60, 218 105 C 218 65, 180 18, 120 18 Z" fill="#5a3825" opacity=".25"/>
+      <svg viewBox="0 0 260 250" width="195" style="max-width:55vw">
+        <defs><radialGradient id="${prefix}skin"><stop offset="0%" stop-color="#fcebd5"/><stop offset="100%" stop-color="#f0d5b8"/></radialGradient></defs>
+        <!-- Head -->
+        <ellipse cx="130" cy="108" rx="88" ry="102" fill="url(#${prefix}skin)" stroke="#9a8070" stroke-width="1.8"/>
+        <!-- Jaw -->
+        <path d="M 52 140 Q 70 210, 130 220 Q 190 210, 208 140" fill="url(#${prefix}skin)" stroke="#9a8070" stroke-width="1.8"/>
         <!-- Ears -->
-        <path d="M 22 115 C 12 108, 8 125, 12 138 C 15 148, 22 145, 22 135" fill="#fde8d8" stroke="#c9a88c" stroke-width="1.5"/>
-        <path d="M 218 115 C 228 108, 232 125, 228 138 C 225 148, 218 145, 218 135" fill="#fde8d8" stroke="#c9a88c" stroke-width="1.5"/>
-        <!-- Eyes (almond shape) -->
-        <path d="M 65 138 Q 82 128, 100 138 Q 82 144, 65 138 Z" fill="#fff" stroke="#8a7060" stroke-width="1.5"/>
-        <circle cx="83" cy="137" r="5" fill="#3a2518"/>
-        <circle cx="84" cy="135" r="1.5" fill="#fff"/>
-        <path d="M 140 138 Q 158 128, 175 138 Q 158 144, 140 138 Z" fill="#fff" stroke="#8a7060" stroke-width="1.5"/>
-        <circle cx="157" cy="137" r="5" fill="#3a2518"/>
-        <circle cx="158" cy="135" r="1.5" fill="#fff"/>
+        <path d="M 43 100 C 32 92,28 115,34 130 C 37 138,43 134,43 126" fill="#f0d5b8" stroke="#9a8070" stroke-width="1.2"/>
+        <path d="M 217 100 C 228 92,232 115,226 130 C 223 138,217 134,217 126" fill="#f0d5b8" stroke="#9a8070" stroke-width="1.2"/>
+        <!-- Hairline -->
+        <path d="M 50 70 Q 70 20, 130 12 Q 190 20, 210 70" fill="none" stroke="#7a6050" stroke-width="1.2" stroke-dasharray="3 2"/>
+        <!-- Eyes -->
+        <path d="M 82 122 Q 97 113, 114 122 Q 97 127, 82 122 Z" fill="#fff" stroke="#6a5a50" stroke-width="1.2"/>
+        <circle cx="98" cy="121" r="5.5" fill="#2a1a0a"/><circle cx="99.5" cy="119.5" r="1.8" fill="#fff"/>
+        <path d="M 146 122 Q 163 113, 178 122 Q 163 127, 146 122 Z" fill="#fff" stroke="#6a5a50" stroke-width="1.2"/>
+        <circle cx="162" cy="121" r="5.5" fill="#2a1a0a"/><circle cx="163.5" cy="119.5" r="1.8" fill="#fff"/>
         <!-- Eyebrows -->
-        <path d="M 62 125 Q 82 115, 102 123" fill="none" stroke="#5a3825" stroke-width="3" stroke-linecap="round"/>
-        <path d="M 138 123 Q 158 115, 178 125" fill="none" stroke="#5a3825" stroke-width="3" stroke-linecap="round"/>
+        <path d="M 78 110 Q 98 100, 116 108" fill="none" stroke="#5a4030" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M 144 108 Q 162 100, 182 110" fill="none" stroke="#5a4030" stroke-width="2.5" stroke-linecap="round"/>
         <!-- Nose -->
-        <path d="M 120 130 L 115 158 Q 120 164, 125 158 Z" fill="none" stroke="#c9a88c" stroke-width="1.5"/>
-        <path d="M 112 158 Q 120 162, 128 158" fill="none" stroke="#c9a88c" stroke-width="1.5"/>
+        <path d="M 130 118 C 128 135, 122 148, 120 152 Q 130 158, 140 152 C 138 148, 132 135, 130 118" fill="none" stroke="#a08a78" stroke-width="1.2"/>
+        <!-- Nostrils -->
+        <ellipse cx="124" cy="152" rx="4" ry="2.5" fill="none" stroke="#a08a78" stroke-width="1"/>
+        <ellipse cx="136" cy="152" rx="4" ry="2.5" fill="none" stroke="#a08a78" stroke-width="1"/>
         <!-- Mouth -->
-        <path d="M 102 180 Q 120 190, 138 180" fill="none" stroke="#c9967a" stroke-width="2" stroke-linecap="round"/>
-        <!-- Center line (subtle) -->
-        <line x1="120" y1="25" x2="120" y2="200" stroke="#c9a88c" stroke-width="0.5" stroke-dasharray="4" opacity=".3"/>
+        <path d="M 112 175 Q 122 180, 130 179 Q 138 180, 148 175" fill="none" stroke="#b08070" stroke-width="1.5" stroke-linecap="round"/>
+        <!-- Center line -->
+        <line x1="130" y1="15" x2="130" y2="195" stroke="#a08a78" stroke-width="0.4" stroke-dasharray="4 3" opacity=".35"/>
 
-        <!-- LEFT 관자놀이 -->
-        <rect id="hd-l-temple" x="18" y="100" width="35" height="34" rx="8" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','관자놀이')"/>
-        <text x="35" y="120" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">관자</text>
-        <text x="35" y="131" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">놀이</text>
+        <!-- Clickable regions -->
+        <rect id="${prefix}l-temple" x="34" y="90" width="38" height="36" rx="8" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','관자놀이')"/>
+        <text x="53" y="111" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">관자</text>
+        <text x="53" y="122" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">놀이</text>
 
-        <!-- LEFT 눈썹부위 -->
-        <rect id="hd-l-brow" x="56" y="108" width="34" height="22" rx="6" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','눈썹부위')"/>
-        <text x="73" y="123" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">눈썹</text>
+        <rect id="${prefix}l-brow" x="72" y="95" width="34" height="20" rx="6" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','눈썹부위')"/>
+        <text x="89" y="109" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">눈썹</text>
 
-        <!-- LEFT 이마 -->
-        <rect id="hd-l-forehead" x="58" y="55" width="42" height="34" rx="8" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','이마')"/>
-        <text x="79" y="77" text-anchor="middle" font-size="11" font-weight="700" fill="#3b82f6" style="pointer-events:none">이마</text>
+        <rect id="${prefix}l-forehead" x="66" y="42" width="46" height="36" rx="10" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','이마')"/>
+        <text x="89" y="65" text-anchor="middle" font-size="12" font-weight="700" fill="#3b82f6" style="pointer-events:none">이마</text>
 
-        <!-- RIGHT 관자놀이 -->
-        <rect id="hd-r-temple" x="187" y="100" width="35" height="34" rx="8" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','관자놀이')"/>
-        <text x="204" y="120" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">관자</text>
-        <text x="204" y="131" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">놀이</text>
+        <rect id="${prefix}r-temple" x="188" y="90" width="38" height="36" rx="8" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','관자놀이')"/>
+        <text x="207" y="111" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">관자</text>
+        <text x="207" y="122" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">놀이</text>
 
-        <!-- RIGHT 눈썹부위 -->
-        <rect id="hd-r-brow" x="150" y="108" width="34" height="22" rx="6" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','눈썹부위')"/>
-        <text x="167" y="123" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">눈썹</text>
+        <rect id="${prefix}r-brow" x="154" y="95" width="34" height="20" rx="6" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','눈썹부위')"/>
+        <text x="171" y="109" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">눈썹</text>
 
-        <!-- RIGHT 이마 -->
-        <rect id="hd-r-forehead" x="140" y="55" width="42" height="34" rx="8" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','이마')"/>
-        <text x="161" y="77" text-anchor="middle" font-size="11" font-weight="700" fill="#ef4444" style="pointer-events:none">이마</text>
+        <rect id="${prefix}r-forehead" x="148" y="42" width="46" height="36" rx="10" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','이마')"/>
+        <text x="171" y="65" text-anchor="middle" font-size="12" font-weight="700" fill="#ef4444" style="pointer-events:none">이마</text>
 
-        <!-- CENTER 미간 -->
-        <rect id="hd-c-glabella" x="98" y="118" width="44" height="24" rx="8" fill="rgba(168,85,247,.15)" stroke="#a855f7" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('both','미간')"/>
-        <text x="120" y="135" text-anchor="middle" font-size="11" font-weight="800" fill="#a855f7" style="pointer-events:none">미간</text>
+        <rect id="${prefix}c-glabella" x="106" y="100" width="48" height="22" rx="8" fill="rgba(168,85,247,.12)" stroke="#a855f7" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('both','미간')"/>
+        <text x="130" y="115" text-anchor="middle" font-size="11" font-weight="800" fill="#a855f7" style="pointer-events:none">미간</text>
 
-        <text x="35" y="268" text-anchor="middle" font-size="11" fill="#3b82f6" font-weight="700">← 왼쪽</text>
-        <text x="204" y="268" text-anchor="middle" font-size="11" fill="#ef4444" font-weight="700">오른쪽 →</text>
-        <text x="120" y="268" text-anchor="middle" font-size="9" fill="var(--mu)">정면</text>
+        <text x="53" y="243" text-anchor="middle" font-size="10" fill="#3b82f6" font-weight="700">← 왼쪽</text>
+        <text x="207" y="243" text-anchor="middle" font-size="10" fill="#ef4444" font-weight="700">오른쪽 →</text>
       </svg>
     </div>
     <div style="text-align:center">
-      <svg viewBox="0 0 170 280" width="125" style="max-width:36vw">
-        <!-- Head back (realistic) -->
-        <path d="M 85 20 C 35 20, 10 70, 10 120 C 10 160, 25 185, 45 205 L 55 220 L 60 245 L 110 245 L 115 220 L 125 205 C 145 185, 160 160, 160 120 C 160 70, 135 20, 85 20 Z" fill="#fde8d8" stroke="#c9a88c" stroke-width="2"/>
-        <!-- Hair back -->
-        <path d="M 85 20 C 35 20, 10 70, 10 110 C 25 55, 50 28, 85 25 C 120 28, 145 55, 160 110 C 160 70, 135 20, 85 20 Z" fill="#5a3825" opacity=".3"/>
+      <svg viewBox="0 0 180 250" width="120" style="max-width:34vw">
+        <defs><radialGradient id="${prefix}skinb"><stop offset="0%" stop-color="#fcebd5"/><stop offset="100%" stop-color="#f0d5b8"/></radialGradient></defs>
+        <!-- Head back -->
+        <path d="M 90 15 C 35 15, 8 65, 8 115 C 8 155, 20 180, 42 200 L 52 215 L 58 230 L 122 230 L 128 215 L 138 200 C 160 180, 172 155, 172 115 C 172 65, 145 15, 90 15 Z" fill="url(#${prefix}skinb)" stroke="#9a8070" stroke-width="1.8"/>
+        <!-- Hair -->
+        <path d="M 90 15 C 35 15, 8 65, 12 100 Q 30 40, 90 22 Q 150 40, 168 100 C 172 65, 145 15, 90 15 Z" fill="#7a6050" opacity=".2"/>
         <!-- Neck -->
-        <path d="M 60 220 L 55 260 L 115 260 L 110 220" fill="#fde8d8" stroke="#c9a88c" stroke-width="1.5"/>
+        <path d="M 58 218 L 55 245 L 125 245 L 122 218" fill="url(#${prefix}skinb)" stroke="#9a8070" stroke-width="1.2"/>
         <!-- Ears -->
-        <path d="M 10 115 C 2 108, -2 125, 3 138 C 6 145, 10 142, 10 132" fill="#fde8d8" stroke="#c9a88c" stroke-width="1.5"/>
-        <path d="M 160 115 C 168 108, 172 125, 167 138 C 164 145, 160 142, 160 132" fill="#fde8d8" stroke="#c9a88c" stroke-width="1.5"/>
-        <!-- Center line -->
-        <line x1="85" y1="25" x2="85" y2="200" stroke="#c9a88c" stroke-width="0.5" stroke-dasharray="4" opacity=".3"/>
+        <path d="M 9 108 C 0 100,-3 118,3 132 C 6 140,10 136,10 128" fill="#f0d5b8" stroke="#9a8070" stroke-width="1"/>
+        <path d="M 171 108 C 180 100,183 118,177 132 C 174 140,170 136,170 128" fill="#f0d5b8" stroke="#9a8070" stroke-width="1"/>
+        <line x1="90" y1="22" x2="90" y2="200" stroke="#9a8070" stroke-width="0.4" stroke-dasharray="4 3" opacity=".35"/>
 
-        <!-- LEFT 후두부 -->
-        <rect id="hd-l-occipital" x="16" y="115" width="60" height="48" rx="12" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','후두부')"/>
-        <text x="46" y="144" text-anchor="middle" font-size="12" font-weight="800" fill="#3b82f6" style="pointer-events:none">후두부</text>
+        <rect id="${prefix}l-occipital" x="14" y="110" width="68" height="52" rx="14" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','후두부')"/>
+        <text x="48" y="141" text-anchor="middle" font-size="13" font-weight="800" fill="#3b82f6" style="pointer-events:none">후두부</text>
 
-        <!-- RIGHT 후두부 -->
-        <rect id="hd-r-occipital" x="94" y="115" width="60" height="48" rx="12" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','후두부')"/>
-        <text x="124" y="144" text-anchor="middle" font-size="12" font-weight="800" fill="#ef4444" style="pointer-events:none">후두부</text>
+        <rect id="${prefix}r-occipital" x="98" y="110" width="68" height="52" rx="14" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','후두부')"/>
+        <text x="132" y="141" text-anchor="middle" font-size="13" font-weight="800" fill="#ef4444" style="pointer-events:none">후두부</text>
 
-        <text x="46" y="268" text-anchor="middle" font-size="11" fill="#3b82f6" font-weight="700">← 왼</text>
-        <text x="124" y="268" text-anchor="middle" font-size="11" fill="#ef4444" font-weight="700">오 →</text>
-        <text x="85" y="268" text-anchor="middle" font-size="9" fill="var(--mu)">뒷면</text>
+        <text x="48" y="243" text-anchor="middle" font-size="10" fill="#3b82f6" font-weight="700">← 왼</text>
+        <text x="132" y="243" text-anchor="middle" font-size="10" fill="#ef4444" font-weight="700">오 →</text>
       </svg>
     </div>
   </div>`;
+}
+
+function renderHeadDiagram() {
+  const el=document.getElementById('head-diagram');
+  if(!el) return;
+  el.innerHTML=getHeadSVG('hd-');
 }
 
 const _hdMap={
@@ -377,6 +377,11 @@ const _hdMap={
   'right-관자놀이':'hd-r-temple','right-눈썹부위':'hd-r-brow','right-이마':'hd-r-forehead','right-후두부':'hd-r-occipital',
   'both-미간':'hd-c-glabella'
 };
+function getHdMap(prefix) {
+  const m={};
+  Object.entries(_hdMap).forEach(([k,v])=>{ m[k]=v.replace('hd-',prefix); });
+  return m;
+}
 
 function toggleHeadSite(side, site) {
   if(side==='both') {
@@ -453,6 +458,11 @@ function renderForm(entry) {
     return `<span class="chip ${sel?'sel sel-sym':''}" data-val="${esc(s)}" data-group="sym" onclick="toggleChip(this,'sel-sym')">${esc(s)}</span>`;
   }).join('');
 
+  const painTypeChips = PAIN_TYPES.map(p => {
+    const sel = e.painType?.includes(p);
+    return `<span class="chip ${sel?'sel sel-pain':''}" data-val="${esc(p)}" data-group="pain" onclick="toggleChip(this,'sel-pain')">${esc(p)}</span>`;
+  }).join('');
+
   const customMeds = getCustom('med');
   const extraMeds = (e.meds||[]).filter(m => !MEDS.includes(m) && !customMeds.includes(m));
   const medChips = [...MEDS, ...customMeds, ...extraMeds].map(m => {
@@ -512,6 +522,11 @@ function renderForm(entry) {
           <button class="btn-other-add" onclick="addSiteChip('site-right-other','site-right-chips','right')">+</button>
         </div>
       </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">통증 종류</div>
+      <div class="chips" id="pain-chips">${painTypeChips}</div>
     </div>
 
     <div class="section">
@@ -619,6 +634,8 @@ async function saveEntry() {
   document.querySelectorAll('.chip.sel[data-side]').forEach(el =>
     sites.push((el.dataset.side==='left'?'왼쪽':'오른쪽')+' '+el.dataset.val)
   );
+  const painType = [];
+  document.querySelectorAll('.chip.sel[data-group="pain"]').forEach(el => painType.push(el.dataset.val));
   const symptoms = [];
   document.querySelectorAll('.chip.sel[data-group="sym"]').forEach(el => symptoms.push(el.dataset.val));
   const meds = [];
@@ -633,7 +650,7 @@ async function saveEntry() {
   if (editId) {
     const idx = logs.findIndex(l => String(l.id) === editId);
     if (idx >= 0) {
-      const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, symptoms, meds, treatments, memo, synced: false };
+      const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, painType, symptoms, meds, treatments, memo, synced: false };
       logs[idx] = updated;
       saveQuickLogs(logs);
       showToast('💾 저장 중...');
@@ -647,7 +664,7 @@ async function saveEntry() {
   const entry = {
     id: Date.now(),
     datetime: `${date}T${time}`,
-    nrs, sites, symptoms, meds, treatments, memo,
+    nrs, sites, painType, symptoms, meds, treatments, memo,
     synced: false,
     createdAt: new Date(Date.now() + 9*3600000).toISOString()
   };
