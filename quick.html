@@ -686,10 +686,22 @@ function editEntry(id) {
   setTimeout(() => renderForm(entry), 50);
 }
 
-function deleteEntry(id) {
+async function deleteEntry(id) {
   if (!confirm('삭제할까요?')) return;
   const logs = getQuickLogs().filter(l => l.id !== id);
   saveQuickLogs(logs);
+  // 클라우드에서도 삭제
+  try {
+    const url = getSyncUrl();
+    if (url) {
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'delete', ids: [id] }),
+        redirect: 'follow'
+      });
+    }
+  } catch (e) {}
   showToast('🗑 삭제됨');
   renderList();
 }
@@ -768,28 +780,48 @@ async function fetchCloudStatus() {
     const res = await fetch(url);
     const data = await res.json();
     if (!data.ok) return;
-    // 클라우드에서 synced 상태 업데이트
-    const logs = getQuickLogs();
+    // 클라우드를 주 저장소로: 클라우드 데이터로 로컬 병합
+    const local = getQuickLogs();
+    const localIds = new Set(local.map(l => String(l.id)));
     let changed = false;
+
+    // 클라우드에서 synced 상태 업데이트 + 새 항목 가져오기
     data.entries.forEach(ce => {
-      if (ce.synced) {
-        const local = logs.find(l => String(l.id) === String(ce.id));
-        if (local && !local.synced) { local.synced = true; changed = true; }
+      const localEntry = local.find(l => String(l.id) === String(ce.id));
+      if (localEntry) {
+        if (ce.synced && !localEntry.synced) { localEntry.synced = true; changed = true; }
+      } else {
+        // 클라우드에만 있는 기록 → 로컬에 추가
+        local.push(ce);
+        changed = true;
       }
     });
+
+    // 클라우드에서 삭제된 항목 → 로컬에서도 제거
+    const cloudIds = new Set(data.entries.map(e => String(e.id)));
+    const beforeLen = local.length;
+    const filtered = local.filter(l => cloudIds.has(String(l.id)) || !l.synced);
+    if (filtered.length !== beforeLen) changed = true;
+
     if (changed) {
-      saveQuickLogs(logs);
+      filtered.sort((a, b) => (a.datetime || '').localeCompare(b.datetime || ''));
+      saveQuickLogs(filtered);
       renderRecentQuickLogs();
       updatePendingCount();
+      if (filtered.length !== beforeLen) showToast('☁️ 클라우드 동기화 완료');
     }
-  } catch (e) { /* 무시 */ }
+  } catch (e) { /* 오프라인 — 로컬만 사용 */ }
 }
 
 // ── Init ──
 renderForm();
 updatePendingCount();
-// 앱 시작 시 클라우드 상태 동기화
+// 앱 시작 시 클라우드에서 전체 동기화
 fetchCloudStatus();
+// 포그라운드 복귀 시 재동기화
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) fetchCloudStatus();
+});
 
 // Register service worker
 if ('serviceWorker' in navigator) {
