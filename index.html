@@ -2833,9 +2833,15 @@ function renderLog() {
   const customSitesL = JSON.parse(localStorage.getItem('om_custom_sites_left_'+S.currentDomain) || '[]');
   const customSitesR = JSON.parse(localStorage.getItem('om_custom_sites_right_'+S.currentDomain) || '[]');
 
+  const customPainTypes = JSON.parse(localStorage.getItem('om_custom_pain_'+S.currentDomain) || '[]');
   const painTypesHtml = lc.painTypes ? `
     <div class="log-section-title">통증 종류</div>
-    <div class="log-chips">${lc.painTypes.map(p=>`<div class="log-chip" data-group="pain" data-val="${p}" onclick="toggleChip(this,'sel-pain')">${p}</div>`).join('')}</div>` : '';
+    <div class="log-chips">${[...lc.painTypes,...customPainTypes].map(p=>`<div class="log-chip" data-group="pain" data-val="${p}" onclick="toggleChip(this,'sel-pain')">${p}</div>`).join('')}
+      <div style="display:flex;gap:4px;align-items:center">
+        <input class="log-other-input" id="pain-other" placeholder="직접 입력" style="width:80px">
+        <button onclick="addCustomPainType()" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
+      </div>
+    </div>` : '';
 
   const sitesHtml = lc.sites ? `
     <div class="log-section-title">부위 (그림 터치 또는 아래 선택)</div>
@@ -3275,6 +3281,20 @@ function addCustomSite(side) {
   const val=(el?.value||'').trim();
   if(!val) return;
   const key='om_custom_sites_'+side+'_'+S.currentDomain;
+  const list=JSON.parse(localStorage.getItem(key)||'[]');
+  if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
+  el.value='';
+  const saved=_saveLogFormState();
+  renderView('log');
+  _restoreLogFormState(saved);
+  showToast(`✅ "${val}" 고정됨`);
+}
+
+function addCustomPainType() {
+  const el=document.getElementById('pain-other');
+  const val=(el?.value||'').trim();
+  if(!val) return;
+  const key='om_custom_pain_'+S.currentDomain;
   const list=JSON.parse(localStorage.getItem(key)||'[]');
   if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
   el.value='';
