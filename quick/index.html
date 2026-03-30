@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#c96442">
+<title>🧠 두통 빠른 기록</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f2f0eb;--sf:#fff;--sf2:#f9f7f4;
+  --bd:#e0dbd2;--bd2:#d0c9be;
+  --ink:#1a1917;--mu:#7a7672;--mu2:#a09b96;
+  --ac:#c96442;--gr:#2d6a4f;--re:#c03030;
+  --font:'IBM Plex Sans KR',sans-serif;
+  --mono:'IBM Plex Mono',monospace;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#0f1118;--sf:#1a1d28;--sf2:#22262f;
+    --bd:#2a2e3a;--bd2:#353a48;
+    --ink:#e4e2dd;--mu:#8a8682;--mu2:#5a5854;
+    --ac:#e07a55;--gr:#4a9a7a;--re:#e05050;
+  }
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14px}
+.app{height:100%;display:flex;flex-direction:column;overflow:hidden;max-width:500px;margin:0 auto}
+.header{background:var(--sf);border-bottom:1.5px solid var(--bd);padding:14px 18px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.header-icon{font-size:1.3rem}
+.header-title{font-size:.95rem;font-weight:600;flex:1}
+.header-count{font-size:.7rem;font-family:var(--mono);background:var(--ac);color:#fff;padding:2px 8px;border-radius:10px}
+.tabs{display:flex;border-bottom:1.5px solid var(--bd);background:var(--sf);flex-shrink:0}
+.tab{flex:1;padding:10px;text-align:center;font-size:.82rem;font-weight:500;cursor:pointer;border:none;background:none;color:var(--mu);font-family:var(--font);transition:all .15s;border-bottom:2px solid transparent}
+.tab.active{color:var(--ac);border-bottom-color:var(--ac);font-weight:600}
+.body{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+
+/* Form */
+.section{margin-bottom:16px}
+.section-title{font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);margin-bottom:7px}
+.row{display:flex;gap:8px;align-items:center}
+.input{border:1.5px solid var(--bd);border-radius:8px;padding:8px 12px;font-family:var(--font);font-size:.85rem;outline:none;background:var(--sf);color:var(--ink);width:100%}
+.input:focus{border-color:var(--ac)}
+.input-sm{width:auto;flex:1}
+
+/* NRS */
+.nrs-wrap{display:flex;align-items:center;gap:12px}
+.nrs-wrap input[type=range]{flex:1;accent-color:var(--re);height:28px}
+.nrs-val{font-size:1.5rem;font-weight:700;min-width:32px;text-align:center}
+.nrs-skip{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--mu);margin-top:4px}
+.nrs-skip input{accent-color:var(--ac)}
+
+/* Chips */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:6px 14px;border-radius:20px;border:1.5px solid var(--bd);font-size:.82rem;cursor:pointer;transition:all .15s;user-select:none;background:var(--sf2);-webkit-tap-highlight-color:transparent}
+.chip:active{transform:scale(.96)}
+.chip.sel{font-weight:600;color:#fff}
+.chip.sel-left{background:#3b82f6;border-color:#3b82f6}
+.chip.sel-right{background:#ef4444;border-color:#ef4444}
+.chip.sel-sym{background:#8b5cf6;border-color:#8b5cf6}
+.chip.sel-med{background:#f59e0b;border-color:#f59e0b;color:var(--ink)}
+.chip.sel-tx{background:#10b981;border-color:#10b981}
+.chip.sel-pain{background:#ec4899;border-color:#ec4899}
+.other-row{display:flex;gap:6px;margin-top:6px}
+.other-input{flex:1;border:1.5px solid var(--bd);border-radius:8px;padding:6px 10px;font-family:var(--font);font-size:.8rem;outline:none;background:var(--sf);color:var(--ink)}
+.other-input:focus{border-color:var(--ac)}
+.btn-other-add{background:var(--ac);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.78rem;font-weight:600;cursor:pointer;white-space:nowrap}
+
+.memo{width:100%;border:1.5px solid var(--bd);border-radius:8px;padding:8px 12px;font-family:var(--font);font-size:.85rem;resize:none;outline:none;background:var(--sf2);color:var(--ink);min-height:60px}
+.memo:focus{border-color:var(--ac)}
+
+.btn-save{width:100%;background:var(--ac);color:#fff;border:none;border-radius:10px;padding:14px;font-size:.95rem;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .2s;margin-top:8px}
+.btn-save:active{transform:scale(.98);background:#a8522e}
+
+/* List */
+.log-item{background:var(--sf);border:1.5px solid var(--bd);border-radius:9px;padding:12px 14px;margin-bottom:8px}
+.log-item-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.log-item-date{font-size:.72rem;font-family:var(--mono);color:var(--mu2)}
+.log-item-nrs{font-size:.78rem;font-weight:700;padding:2px 8px;border-radius:4px;color:#fff}
+.log-item-badge{font-size:.6rem;font-family:var(--mono);padding:2px 6px;border-radius:3px;margin-left:auto}
+.log-item-badge.pending{background:#fff7ed;color:#c2410c}
+.log-item-badge.synced{background:#f0fdf4;color:#15803d}
+.log-item-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px}
+.log-tag{font-size:.68rem;padding:2px 7px;border-radius:3px}
+.log-tag-site{background:#eff6ff;color:#1d4ed8}
+.log-tag-sym{background:#faf5ff;color:#7c3aed}
+.log-tag-med{background:#fffbeb;color:#b45309}
+.log-tag-tx{background:#f0fdf4;color:#15803d}
+.log-item-memo{font-size:.8rem;color:var(--mu);line-height:1.5;margin-top:4px}
+.log-item-actions{display:flex;gap:8px;margin-top:8px;justify-content:flex-end}
+.btn-sm{background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;color:var(--mu);font-family:var(--font)}
+.btn-sm:hover{border-color:var(--ac);color:var(--ac)}
+.btn-sm.del:hover{border-color:var(--re);color:var(--re)}
+
+.empty{text-align:center;color:var(--mu2);font-size:.85rem;padding:40px 20px;line-height:1.7}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:10px 20px;border-radius:8px;font-size:.82rem;z-index:999;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+
+@media(prefers-color-scheme:dark){
+  .log-item-badge.pending{background:#2a1a0a;color:#fb923c}
+  .log-item-badge.synced{background:#0d2a1a;color:#4ade80}
+  .log-tag-site{background:#1a2540;color:#60a5fa}
+  .log-tag-sym{background:#1a0d2a;color:#a78bfa}
+  .log-tag-med{background:#2a1a0a;color:#fbbf24}
+  .log-tag-tx{background:#0d2a1a;color:#4ade80}
+}
+/* Settings panel */
+.settings-panel{display:none;padding:16px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:10px;margin:16px}
+.settings-panel.show{display:block}
+.settings-label{font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px}
+.settings-input{width:100%;border:1.5px solid var(--bd);border-radius:8px;padding:8px 12px;font-family:var(--font);font-size:.8rem;outline:none;background:var(--sf);color:var(--ink)}
+.settings-input:focus{border-color:var(--ac)}
+.settings-note{font-size:.68rem;color:var(--mu2);margin-top:4px;line-height:1.5}
+.sync-status{font-size:.68rem;font-family:var(--font);padding:3px 8px;border-radius:4px;display:inline-block;margin-top:6px}
+.sync-ok{background:#f0fdf4;color:#15803d}
+.sync-fail{background:#fff0f0;color:#c03030}
+.sync-ing{background:#eff6ff;color:#1d4ed8}
+.btn-gear{background:none;border:none;font-size:1rem;cursor:pointer;padding:4px;-webkit-tap-highlight-color:transparent}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <span class="header-icon">🧠</span>
+    <span class="header-title">두통 빠른 기록</span>
+    <span class="header-count" id="pending-count" style="display:none"></span>
+    <button class="btn-gear" onclick="toggleSettings()">⚙️</button>
+  </div>
+  <div class="settings-panel" id="settings-panel">
+    <div class="settings-label">클라우드 동기화 URL</div>
+    <input class="settings-input" id="sync-url-input" placeholder="Google Apps Script 배포 URL 붙여넣기"
+      onchange="saveSyncUrl(this.value)">
+    <div class="settings-note">기록 저장 시 클라우드에 자동 업로드됩니다. 다른 기기에서도 확인 가능.</div>
+    <div id="sync-indicator" style="font-size:.7rem;margin-top:4px"></div>
+    <div id="sync-status"></div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-sm" onclick="testSyncUrl()">연결 테스트</button>
+      <button class="btn-sm" onclick="syncAllToCloud()">전체 업로드</button>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('form')">✏️ 기록</button>
+    <button class="tab" onclick="switchTab('list')">📋 목록</button>
+  </div>
+  <div class="body" id="tab-form">
+    <!-- form is rendered by JS -->
+  </div>
+  <div class="body" id="tab-list" style="display:none">
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+// ── Config (matches orangi-migraine logConfig) ──
+const SITES = {
+  left: ['미간','이마','눈썹부위','관자놀이','후두부'],
+  right: ['미간','이마','눈썹부위','관자놀이','후두부']
+};
+const SYMPTOMS = ['구역','어지러움','손발저림','빛과민','소리과민','식은땀','심계항진','실신전조'];
+const PAIN_TYPES = ['욱신거림','쥐어짜는','찌르는','묵직한','쑤시는','타는 듯한','전기 오는 듯한'];
+const MEDS = ['AAP 500mg','Loxoprofen','타 NSAID','Metoclopramide'];
+const TREATMENTS = ['GON block','LON block','SPG block'];
+
+const LS_KEY = 'om_quick_logs';
+
+// ── 커스텀 칩 영구 저장 ──
+function getCustom(key) { try { return JSON.parse(localStorage.getItem('om_qc_'+key) || '[]'); } catch { return []; } }
+function saveCustom(key, arr) { localStorage.setItem('om_qc_'+key, JSON.stringify(arr)); }
+
+// ── Helpers ──
+function kstNow() {
+  const d = new Date(Date.now() + 9*3600000);
+  return { date: d.toISOString().slice(0,10), time: d.toISOString().slice(11,16) };
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function getQuickLogs() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }
+  catch { return []; }
+}
+
+// v9.0 부위명 마이그레이션
+(function migrateSiteNames(){
+  if(localStorage.getItem('om_site_migrated')) return;
+  const logs=getQuickLogs();
+  const renames={'미간':'이마','눈썹위':'눈썹부위'};
+  let changed=false;
+  logs.forEach(l=>{
+    if(!l.sites?.length) return;
+    l.sites=l.sites.map(s=>{
+      for(const [from,to] of Object.entries(renames)){
+        if(s.includes(from)){changed=true;return s.replace(from,to);}
+      }
+      return s;
+    });
+  });
+  if(changed) localStorage.setItem(LS_KEY,JSON.stringify(logs));
+  localStorage.setItem('om_site_migrated','1');
+})();
+
+function saveQuickLogs(logs) {
+  localStorage.setItem(LS_KEY, JSON.stringify(logs));
+  updatePendingCount();
+}
+
+function nrsColor(n) {
+  if (n <= 3) return '#2d8a5a';
+  if (n <= 6) return '#e67e22';
+  return '#c03030';
+}
+
+function showToast(msg, dur) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => t.classList.remove('show'), dur || 2500);
+}
+
+function updatePendingCount() {
+  const logs = getQuickLogs();
+  const pending = logs.filter(l => !l.synced).length;
+  const el = document.getElementById('pending-count');
+  if (pending > 0) {
+    el.textContent = pending + '건 미반영';
+    el.style.display = '';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ── Tab switching ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', (tab==='form' && i===0) || (tab==='list' && i===1));
+  });
+  document.getElementById('tab-form').style.display = tab==='form' ? '' : 'none';
+  document.getElementById('tab-list').style.display = tab==='list' ? '' : 'none';
+  if (tab==='list') renderList();
+}
+
+// ── Chip toggle ──
+function toggleChip(el, cls) {
+  el.classList.toggle('sel');
+  el.classList.toggle(cls, el.classList.contains('sel'));
+  // Sync head diagram if it's a site chip
+  if(el.dataset.side) syncHeadDiagram();
+}
+
+function addOtherChip(inputId, containerId, group, cls) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  const container = document.getElementById(containerId);
+  const chip = document.createElement('span');
+  chip.className = 'chip sel ' + cls;
+  chip.dataset.val = val;
+  chip.dataset.group = group;
+  chip.textContent = val;
+  chip.onclick = function() { toggleChip(this, cls); };
+  container.appendChild(chip);
+  input.value = '';
+  // 커스텀 칩 영구 저장
+  const customs = getCustom(group);
+  if (!customs.includes(val)) { customs.push(val); saveCustom(group, customs); }
+}
+
+// ── Interactive Head Diagram ──
+function getHeadSVG(prefix) {
+  // Medical diagram style - clean line art with anatomical labels
+  return `
+  <div style="display:flex;justify-content:center;gap:8px;align-items:flex-start;padding:4px 0">
+    <div style="text-align:center">
+      <svg viewBox="0 0 260 250" width="195" style="max-width:55vw">
+        <defs><radialGradient id="${prefix}skin"><stop offset="0%" stop-color="#fcebd5"/><stop offset="100%" stop-color="#f0d5b8"/></radialGradient></defs>
+        <!-- Head -->
+        <ellipse cx="130" cy="108" rx="88" ry="102" fill="url(#${prefix}skin)" stroke="#9a8070" stroke-width="1.8"/>
+        <!-- Jaw -->
+        <path d="M 52 140 Q 70 210, 130 220 Q 190 210, 208 140" fill="url(#${prefix}skin)" stroke="#9a8070" stroke-width="1.8"/>
+        <!-- Ears -->
+        <path d="M 43 100 C 32 92,28 115,34 130 C 37 138,43 134,43 126" fill="#f0d5b8" stroke="#9a8070" stroke-width="1.2"/>
+        <path d="M 217 100 C 228 92,232 115,226 130 C 223 138,217 134,217 126" fill="#f0d5b8" stroke="#9a8070" stroke-width="1.2"/>
+        <!-- Hairline -->
+        <path d="M 50 70 Q 70 20, 130 12 Q 190 20, 210 70" fill="none" stroke="#7a6050" stroke-width="1.2" stroke-dasharray="3 2"/>
+        <!-- Eyes -->
+        <path d="M 82 122 Q 97 113, 114 122 Q 97 127, 82 122 Z" fill="#fff" stroke="#6a5a50" stroke-width="1.2"/>
+        <circle cx="98" cy="121" r="5.5" fill="#2a1a0a"/><circle cx="99.5" cy="119.5" r="1.8" fill="#fff"/>
+        <path d="M 146 122 Q 163 113, 178 122 Q 163 127, 146 122 Z" fill="#fff" stroke="#6a5a50" stroke-width="1.2"/>
+        <circle cx="162" cy="121" r="5.5" fill="#2a1a0a"/><circle cx="163.5" cy="119.5" r="1.8" fill="#fff"/>
+        <!-- Eyebrows -->
+        <path d="M 78 110 Q 98 100, 116 108" fill="none" stroke="#5a4030" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M 144 108 Q 162 100, 182 110" fill="none" stroke="#5a4030" stroke-width="2.5" stroke-linecap="round"/>
+        <!-- Nose -->
+        <path d="M 130 118 C 128 135, 122 148, 120 152 Q 130 158, 140 152 C 138 148, 132 135, 130 118" fill="none" stroke="#a08a78" stroke-width="1.2"/>
+        <!-- Nostrils -->
+        <ellipse cx="124" cy="152" rx="4" ry="2.5" fill="none" stroke="#a08a78" stroke-width="1"/>
+        <ellipse cx="136" cy="152" rx="4" ry="2.5" fill="none" stroke="#a08a78" stroke-width="1"/>
+        <!-- Mouth -->
+        <path d="M 112 175 Q 122 180, 130 179 Q 138 180, 148 175" fill="none" stroke="#b08070" stroke-width="1.5" stroke-linecap="round"/>
+        <!-- Center line -->
+        <line x1="130" y1="15" x2="130" y2="195" stroke="#a08a78" stroke-width="0.4" stroke-dasharray="4 3" opacity=".35"/>
+
+        <!-- Clickable regions -->
+        <rect id="${prefix}l-temple" x="34" y="90" width="38" height="36" rx="8" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','관자놀이')"/>
+        <text x="53" y="111" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">관자</text>
+        <text x="53" y="122" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">놀이</text>
+
+        <rect id="${prefix}l-brow" x="72" y="95" width="34" height="20" rx="6" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','눈썹부위')"/>
+        <text x="89" y="109" text-anchor="middle" font-size="9" font-weight="700" fill="#3b82f6" style="pointer-events:none">눈썹</text>
+
+        <rect id="${prefix}l-forehead" x="66" y="42" width="46" height="36" rx="10" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','이마')"/>
+        <text x="89" y="65" text-anchor="middle" font-size="12" font-weight="700" fill="#3b82f6" style="pointer-events:none">이마</text>
+
+        <rect id="${prefix}r-temple" x="188" y="90" width="38" height="36" rx="8" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','관자놀이')"/>
+        <text x="207" y="111" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">관자</text>
+        <text x="207" y="122" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">놀이</text>
+
+        <rect id="${prefix}r-brow" x="154" y="95" width="34" height="20" rx="6" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','눈썹부위')"/>
+        <text x="171" y="109" text-anchor="middle" font-size="9" font-weight="700" fill="#ef4444" style="pointer-events:none">눈썹</text>
+
+        <rect id="${prefix}r-forehead" x="148" y="42" width="46" height="36" rx="10" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','이마')"/>
+        <text x="171" y="65" text-anchor="middle" font-size="12" font-weight="700" fill="#ef4444" style="pointer-events:none">이마</text>
+
+        <rect id="${prefix}c-glabella" x="106" y="100" width="48" height="22" rx="8" fill="rgba(168,85,247,.12)" stroke="#a855f7" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('both','미간')"/>
+        <text x="130" y="115" text-anchor="middle" font-size="11" font-weight="800" fill="#a855f7" style="pointer-events:none">미간</text>
+
+        <text x="53" y="243" text-anchor="middle" font-size="10" fill="#3b82f6" font-weight="700">← 왼쪽</text>
+        <text x="207" y="243" text-anchor="middle" font-size="10" fill="#ef4444" font-weight="700">오른쪽 →</text>
+      </svg>
+    </div>
+    <div style="text-align:center">
+      <svg viewBox="0 0 180 250" width="120" style="max-width:34vw">
+        <defs><radialGradient id="${prefix}skinb"><stop offset="0%" stop-color="#fcebd5"/><stop offset="100%" stop-color="#f0d5b8"/></radialGradient></defs>
+        <!-- Head back -->
+        <path d="M 90 15 C 35 15, 8 65, 8 115 C 8 155, 20 180, 42 200 L 52 215 L 58 230 L 122 230 L 128 215 L 138 200 C 160 180, 172 155, 172 115 C 172 65, 145 15, 90 15 Z" fill="url(#${prefix}skinb)" stroke="#9a8070" stroke-width="1.8"/>
+        <!-- Hair -->
+        <path d="M 90 15 C 35 15, 8 65, 12 100 Q 30 40, 90 22 Q 150 40, 168 100 C 172 65, 145 15, 90 15 Z" fill="#7a6050" opacity=".2"/>
+        <!-- Neck -->
+        <path d="M 58 218 L 55 245 L 125 245 L 122 218" fill="url(#${prefix}skinb)" stroke="#9a8070" stroke-width="1.2"/>
+        <!-- Ears -->
+        <path d="M 9 108 C 0 100,-3 118,3 132 C 6 140,10 136,10 128" fill="#f0d5b8" stroke="#9a8070" stroke-width="1"/>
+        <path d="M 171 108 C 180 100,183 118,177 132 C 174 140,170 136,170 128" fill="#f0d5b8" stroke="#9a8070" stroke-width="1"/>
+        <line x1="90" y1="22" x2="90" y2="200" stroke="#9a8070" stroke-width="0.4" stroke-dasharray="4 3" opacity=".35"/>
+
+        <rect id="${prefix}l-occipital" x="14" y="110" width="68" height="52" rx="14" fill="rgba(59,130,246,.12)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','후두부')"/>
+        <text x="48" y="141" text-anchor="middle" font-size="13" font-weight="800" fill="#3b82f6" style="pointer-events:none">후두부</text>
+
+        <rect id="${prefix}r-occipital" x="98" y="110" width="68" height="52" rx="14" fill="rgba(239,68,68,.12)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','후두부')"/>
+        <text x="132" y="141" text-anchor="middle" font-size="13" font-weight="800" fill="#ef4444" style="pointer-events:none">후두부</text>
+
+        <text x="48" y="243" text-anchor="middle" font-size="10" fill="#3b82f6" font-weight="700">← 왼</text>
+        <text x="132" y="243" text-anchor="middle" font-size="10" fill="#ef4444" font-weight="700">오 →</text>
+      </svg>
+    </div>
+  </div>`;
+}
+
+function renderHeadDiagram() {
+  const el=document.getElementById('head-diagram');
+  if(!el) return;
+  el.innerHTML=getHeadSVG('hd-');
+}
+
+const _hdMap={
+  'left-관자놀이':'hd-l-temple','left-눈썹부위':'hd-l-brow','left-이마':'hd-l-forehead','left-후두부':'hd-l-occipital',
+  'right-관자놀이':'hd-r-temple','right-눈썹부위':'hd-r-brow','right-이마':'hd-r-forehead','right-후두부':'hd-r-occipital',
+  'both-미간':'hd-c-glabella'
+};
+function getHdMap(prefix) {
+  const m={};
+  Object.entries(_hdMap).forEach(([k,v])=>{ m[k]=v.replace('hd-',prefix); });
+  return m;
+}
+
+function toggleHeadSite(side, site) {
+  if(side==='both') {
+    // 미간: 양쪽 모두 토글
+    ['left','right'].forEach(s=>{
+      const chip=document.querySelector(`#site-${s}-chips .chip[data-val="${site}"]`);
+      if(chip) { chip.click(); }
+    });
+  } else {
+    const chip=document.querySelector(`#site-${side}-chips .chip[data-val="${site}"]`);
+    if(chip) chip.click();
+  }
+  syncHeadDiagram();
+}
+
+function syncHeadDiagram() {
+  const activeL=new Set();const activeR=new Set();
+  document.querySelectorAll('#site-left-chips .chip.sel').forEach(c=>activeL.add(c.dataset.val));
+  document.querySelectorAll('#site-right-chips .chip.sel').forEach(c=>activeR.add(c.dataset.val));
+
+  Object.entries(_hdMap).forEach(([key,id])=>{
+    const el=document.getElementById(id);if(!el) return;
+    const [side,site]=key.split('-');
+    let active=false;
+    if(side==='both') active=activeL.has(site)||activeR.has(site);
+    else if(side==='left') active=activeL.has(site);
+    else active=activeR.has(site);
+
+    const color=side==='right'?'239,68,68':side==='left'?'59,130,246':'168,85,247';
+    el.setAttribute('fill',active?`rgba(${color},.5)`:`rgba(${color},.12)`);
+    el.setAttribute('stroke-width',active?'3.5':'2');
+  });
+}
+
+function addSiteChip(inputId, containerId, side) {
+  const input = document.getElementById(inputId);
+  const val = input.value.trim();
+  if (!val) return;
+  const container = document.getElementById(containerId);
+  const chip = document.createElement('span');
+  chip.className = 'chip sel sel-' + side;
+  chip.dataset.val = val;
+  chip.dataset.side = side;
+  chip.textContent = val;
+  chip.onclick = function() { toggleChip(this, 'sel-' + side); };
+  container.appendChild(chip);
+  input.value = '';
+  const customs = getCustom('site-' + side);
+  if (!customs.includes(val)) { customs.push(val); saveCustom('site-' + side, customs); }
+}
+
+// ── Form render ──
+function renderForm(entry) {
+  const now = kstNow();
+  const e = entry || {};
+  const isEdit = !!entry;
+  const nrs = e.nrs ?? 5;
+  const skipNrs = e.nrs === -1;
+
+  const siteChips = (side, items) => {
+    const customs = getCustom('site-' + side);
+    const all = [...items, ...customs];
+    return all.map(s => {
+      const sel = e.sites?.includes((side==='left'?'왼쪽':'오른쪽')+' '+s);
+      return `<span class="chip ${sel?'sel sel-'+side:''}" data-val="${esc(s)}" data-side="${side}" onclick="toggleChip(this,'sel-${side}')">${esc(s)}</span>`;
+    }).join('');
+  };
+
+  // 기본 + 커스텀(영구 저장) + 편집 시 항목 복원
+  const customSyms = getCustom('sym');
+  const extraSyms = (e.symptoms||[]).filter(s => !SYMPTOMS.includes(s) && !customSyms.includes(s));
+  const symChips = [...SYMPTOMS, ...customSyms, ...extraSyms].map(s => {
+    const sel = e.symptoms?.includes(s);
+    return `<span class="chip ${sel?'sel sel-sym':''}" data-val="${esc(s)}" data-group="sym" onclick="toggleChip(this,'sel-sym')">${esc(s)}</span>`;
+  }).join('');
+
+  const customPain = getCustom('pain');
+  const extraPain = (e.painType||[]).filter(p => !PAIN_TYPES.includes(p) && !customPain.includes(p));
+  const painTypeChips = [...PAIN_TYPES, ...customPain, ...extraPain].map(p => {
+    const sel = e.painType?.includes(p);
+    return `<span class="chip ${sel?'sel sel-pain':''}" data-val="${esc(p)}" data-group="pain" onclick="toggleChip(this,'sel-pain')">${esc(p)}</span>`;
+  }).join('');
+
+  const customMeds = getCustom('med');
+  const extraMeds = (e.meds||[]).filter(m => !MEDS.includes(m) && !customMeds.includes(m));
+  const medChips = [...MEDS, ...customMeds, ...extraMeds].map(m => {
+    const sel = e.meds?.includes(m);
+    return `<span class="chip ${sel?'sel sel-med':''}" data-val="${esc(m)}" data-group="med" onclick="toggleChip(this,'sel-med')">${esc(m)}</span>`;
+  }).join('');
+
+  const customTx = getCustom('tx');
+  const extraTx = (e.treatments||[]).filter(t => !TREATMENTS.includes(t) && !customTx.includes(t));
+  const txChips = [...TREATMENTS, ...customTx, ...extraTx].map(t => {
+    const sel = e.treatments?.includes(t);
+    return `<span class="chip ${sel?'sel sel-tx':''}" data-val="${esc(t)}" data-group="tx" onclick="toggleChip(this,'sel-tx')">${esc(t)}</span>`;
+  }).join('');
+
+  const datetime = e.datetime || '';
+  const dateVal = datetime ? datetime.split('T')[0] : now.date;
+  const timeRaw = datetime ? datetime.split('T')[1] : now.time;
+  const timeUnknown = timeRaw === '시간미상';
+  const timeVal = timeUnknown ? now.time : timeRaw;
+
+  document.getElementById('tab-form').innerHTML = `
+    ${isEdit ? `<input type="hidden" id="q-edit-id" value="${e.id}">` : ''}
+    <div class="section">
+      <div class="section-title">날짜 / 시간</div>
+      <div class="row">
+        <input type="date" class="input input-sm" id="q-date" value="${dateVal}">
+        <input type="time" class="input input-sm" id="q-time" value="${timeVal}" ${timeUnknown?'disabled':''}>
+      </div>
+      <label class="nrs-skip"><input type="checkbox" id="q-time-unknown" ${timeUnknown?'checked':''} onchange="document.getElementById('q-time').disabled=this.checked"> 시간 모름</label>
+    </div>
+
+    <div class="section">
+      <div class="section-title">통증 강도 (NRS)</div>
+      <div class="nrs-wrap">
+        <input type="range" id="q-nrs" min="0" max="10" value="${skipNrs?5:nrs}" ${skipNrs?'disabled':''} oninput="document.getElementById('q-nrs-val').textContent=this.value;document.getElementById('q-nrs-val').style.color=nrsColor(+this.value)">
+        <span class="nrs-val" id="q-nrs-val" style="color:${skipNrs?'var(--mu2)':nrsColor(skipNrs?5:nrs)}">${skipNrs?'-':nrs}</span>
+      </div>
+      <label class="nrs-skip"><input type="checkbox" id="q-skip-nrs" ${skipNrs?'checked':''} onchange="toggleNrsSkip(this.checked)"> 기록 안함</label>
+    </div>
+
+    <div class="section">
+      <div class="section-title">부위 (그림을 터치하거나 아래 칩을 선택)</div>
+      <div id="head-diagram"></div>
+      <div style="margin-top:8px">
+        <div style="font-size:.68rem;color:var(--mu);margin-bottom:4px;font-weight:600">왼쪽</div>
+        <div class="chips" id="site-left-chips">${siteChips('left', SITES.left)}</div>
+        <div class="other-row">
+          <input class="other-input" id="site-left-other" placeholder="직접 입력">
+          <button class="btn-other-add" onclick="addSiteChip('site-left-other','site-left-chips','left')">+</button>
+        </div>
+      </div>
+      <div style="margin-top:6px">
+        <div style="font-size:.68rem;color:var(--mu);margin-bottom:4px;font-weight:600">오른쪽</div>
+        <div class="chips" id="site-right-chips">${siteChips('right', SITES.right)}</div>
+        <div class="other-row">
+          <input class="other-input" id="site-right-other" placeholder="직접 입력">
+          <button class="btn-other-add" onclick="addSiteChip('site-right-other','site-right-chips','right')">+</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">통증 종류</div>
+      <div class="chips" id="pain-chips">${painTypeChips}</div>
+      <div class="other-row">
+        <input class="other-input" id="pain-other" placeholder="기타 통증">
+        <button class="btn-other-add" onclick="addOtherChip('pain-other','pain-chips','pain','sel-pain')">+</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">증상</div>
+      <div class="chips" id="sym-chips">${symChips}</div>
+      <div class="other-row">
+        <input class="other-input" id="sym-other" placeholder="기타 증상">
+        <button class="btn-other-add" onclick="addOtherChip('sym-other','sym-chips','sym','sel-sym')">+</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">약물</div>
+      <div class="chips" id="med-chips">${medChips}</div>
+      <div class="other-row">
+        <input class="other-input" id="med-other" placeholder="기타 약물">
+        <button class="btn-other-add" onclick="addOtherChip('med-other','med-chips','med','sel-med')">+</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">시술</div>
+      <div class="chips" id="tx-chips">${txChips}</div>
+      <div class="other-row">
+        <input class="other-input" id="tx-other" placeholder="직접 입력">
+        <button class="btn-other-add" onclick="addOtherChip('tx-other','tx-chips','tx','sel-tx')">+</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">메모</div>
+      <textarea class="memo" id="q-memo" rows="3" placeholder="상태, 트리거 등 자유 기록">${esc(e.memo||'')}</textarea>
+    </div>
+
+    <button class="btn-save" id="q-save-btn" onclick="this.disabled=true;this.textContent='저장 중...';saveEntry().finally(()=>{const b=document.getElementById('q-save-btn');if(b){b.disabled=false;b.textContent='💾 기록 저장';}})">${isEdit ? '✏️ 수정 완료' : '💾 기록 저장'}</button>
+    <div id="recent-quick-logs"></div>
+  `;
+  renderRecentQuickLogs();
+  renderHeadDiagram();
+  // Sync diagram with pre-selected chips (edit mode)
+  setTimeout(()=>syncHeadDiagram(),50);
+}
+
+function renderRecentQuickLogs() {
+  const container = document.getElementById('recent-quick-logs');
+  if (!container) return;
+  const logs = getQuickLogs().slice(-5).reverse();
+  if (!logs.length) { container.innerHTML = ''; return; }
+  container.innerHTML = `
+    <div style="margin-top:20px;padding-top:14px;border-top:1.5px solid var(--bd)">
+      <div style="font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mu);margin-bottom:8px">최근 기록</div>
+      ${logs.map(l => {
+        const dt = l.datetime.split('T');
+        const timeStr = dt[1] === '시간미상' ? '시간미상' : dt[1];
+        const nrsHtml = l.nrs >= 0
+          ? `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`
+          : '';
+        const badge = l.synced
+          ? '<span class="log-item-badge synced">반영됨</span>'
+          : '<span class="log-item-badge pending">미반영</span>';
+        const tags = [
+          ...(l.sites||[]).map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
+          ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
+          ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
+          ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
+        ].join('');
+        return `<div class="log-item" style="opacity:${l.synced?'.6':'1'}">
+          <div class="log-item-head">
+            <span class="log-item-date">${dt[0].slice(5)} ${timeStr}</span>
+            ${nrsHtml} ${badge}
+          </div>
+          ${tags ? `<div class="log-item-tags">${tags}</div>` : ''}
+          ${l.memo ? `<div class="log-item-memo">${esc(l.memo)}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function toggleNrsSkip(skip) {
+  const slider = document.getElementById('q-nrs');
+  const val = document.getElementById('q-nrs-val');
+  slider.disabled = skip;
+  if (skip) {
+    val.textContent = '-';
+    val.style.color = 'var(--mu2)';
+  } else {
+    val.textContent = slider.value;
+    val.style.color = nrsColor(+slider.value);
+  }
+}
+
+// ── Save ──
+async function saveEntry() {
+  const date = document.getElementById('q-date').value;
+  if (!date) { showToast('날짜를 선택하세요'); return; }
+  const timeUnknown = document.getElementById('q-time-unknown').checked;
+  const time = timeUnknown ? '시간미상' : (document.getElementById('q-time').value || '00:00');
+
+  let nrs = -1;
+  if (!document.getElementById('q-skip-nrs').checked) {
+    nrs = parseInt(document.getElementById('q-nrs').value);
+  }
+
+  const sites = [];
+  document.querySelectorAll('.chip.sel[data-side]').forEach(el =>
+    sites.push((el.dataset.side==='left'?'왼쪽':'오른쪽')+' '+el.dataset.val)
+  );
+  const painType = [];
+  document.querySelectorAll('.chip.sel[data-group="pain"]').forEach(el => painType.push(el.dataset.val));
+  const symptoms = [];
+  document.querySelectorAll('.chip.sel[data-group="sym"]').forEach(el => symptoms.push(el.dataset.val));
+  const meds = [];
+  document.querySelectorAll('.chip.sel[data-group="med"]').forEach(el => meds.push(el.dataset.val));
+  const treatments = [];
+  document.querySelectorAll('.chip.sel[data-group="tx"]').forEach(el => treatments.push(el.dataset.val));
+  const memo = document.getElementById('q-memo')?.value.trim() || '';
+
+  const editId = document.getElementById('q-edit-id')?.value;
+  const logs = getQuickLogs();
+
+  if (editId) {
+    const idx = logs.findIndex(l => String(l.id) === editId);
+    if (idx >= 0) {
+      const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, painType, symptoms, meds, treatments, memo, synced: false };
+      logs[idx] = updated;
+      saveQuickLogs(logs);
+      showToast('💾 저장 중...');
+      const ok = await cloudSave([updated]);
+      showToast(ok ? '✅ 수정 완료 + ☁️ 업로드됨' : '✅ 수정 완료 (오프라인)');
+      renderForm();
+      return;
+    }
+  }
+
+  const entry = {
+    id: Date.now(),
+    datetime: `${date}T${time}`,
+    nrs, sites, painType, symptoms, meds, treatments, memo,
+    synced: false,
+    createdAt: new Date(Date.now() + 9*3600000).toISOString()
+  };
+
+  logs.push(entry);
+  saveQuickLogs(logs);
+  showToast('💾 저장 중...');
+  const ok = await cloudSave([entry]);
+  showToast(ok ? '✅ 저장 완료 + ☁️ 붕쌤에게 전송됨' : '✅ 로컬 저장됨 (☁️ 업로드 실패)');
+  renderForm();
+}
+
+// ── List ──
+function renderList() {
+  const logs = getQuickLogs().slice().reverse();
+  if (!logs.length) {
+    document.getElementById('tab-list').innerHTML = '<div class="empty">아직 기록이 없어요.<br>두통이 생기면 ✏️ 기록 탭에서 빠르게 남겨보세요.</div>';
+    return;
+  }
+  document.getElementById('tab-list').innerHTML = logs.map(l => {
+    const dt = l.datetime.split('T');
+    const dateStr = dt[0];
+    const timeStr = dt[1] === '시간미상' ? '시간미상' : dt[1];
+    const tags = [
+      ...(l.sites||[]).map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
+      ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
+      ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
+      ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
+    ].join('');
+    const nrsHtml = l.nrs >= 0
+      ? `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`
+      : '';
+    const badge = l.synced
+      ? '<span class="log-item-badge synced">반영됨</span>'
+      : '<span class="log-item-badge pending">미반영</span>';
+    return `<div class="log-item" style="${l.synced?'opacity:.7':''}" ${l.synced?`onclick="toggleLogDetail(${l.id})"`:''}>
+      <div class="log-item-head">
+        <span class="log-item-date">${dateStr} ${timeStr}</span>
+        ${nrsHtml} ${badge}
+      </div>
+      ${tags ? `<div class="log-item-tags">${tags}</div>` : ''}
+      ${l.memo ? `<div class="log-item-memo">${esc(l.memo)}</div>` : ''}
+      ${l.synced?`<div id="log-detail-${l.id}" class="log-detail" style="display:none">
+        <div style="font-size:.72rem;color:var(--mu);border-top:1px solid var(--bd);padding-top:8px;margin-top:6px">
+          ${(l.sites||[]).length?`<div><strong>부위:</strong> ${(l.sites||[]).map(s=>esc(s)).join(', ')}</div>`:''}
+          ${(l.symptoms||[]).length?`<div><strong>증상:</strong> ${(l.symptoms||[]).map(s=>esc(s)).join(', ')}</div>`:''}
+          ${(l.meds||[]).length?`<div><strong>투약:</strong> ${(l.meds||[]).map(m=>esc(m)).join(', ')}</div>`:''}
+          ${(l.treatments||[]).length?`<div><strong>치료:</strong> ${(l.treatments||[]).map(t=>esc(t)).join(', ')}</div>`:''}
+          ${l.memo?`<div><strong>메모:</strong> ${esc(l.memo)}</div>`:''}
+          <div style="color:var(--mu2);margin-top:4px">✅ 반영 완료 · 수정 불가</div>
+        </div>
+      </div>
+      <div class="log-item-actions"><span style="font-size:.68rem;color:var(--ac);cursor:pointer">탭하여 상세 보기</span></div>`
+      :`<div class="log-item-actions">
+        <button class="btn-sm" onclick="editEntry(${l.id})">수정</button>
+        <button class="btn-sm del" onclick="deleteEntry(${l.id})">삭제</button>
+      </div>`}
+    </div>`;
+  }).join('');
+}
+
+function toggleLogDetail(id) {
+  const el = document.getElementById('log-detail-' + id);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function editEntry(id) {
+  const logs = getQuickLogs();
+  const entry = logs.find(l => l.id === id);
+  if (!entry) return;
+  switchTab('form');
+  setTimeout(() => renderForm(entry), 50);
+}
+
+async function deleteEntry(id) {
+  if (!confirm('삭제할까요?')) return;
+  const logs = getQuickLogs().filter(l => l.id !== id);
+  saveQuickLogs(logs);
+  showToast('🗑 삭제 중...');
+  // 클라우드에 전체 목록 덮어쓰기 (삭제 확실 반영)
+  await cloudSaveAll(logs);
+  showToast('🗑 삭제됨');
+  renderList();
+}
+
+// 클라우드에 전체 목록을 덮어쓰기 (삭제/수정 반영)
+async function cloudSaveAll(logs) {
+  const url = getSyncUrl();
+  if (!url) return false;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'replaceAll', entries: logs }),
+      redirect: 'follow'
+    });
+    return res.ok || res.type === 'opaqueredirect' || res.redirected;
+  } catch (e) { return false; }
+}
+
+// ── Cloud Sync ──
+const SYNC_URL_KEY = 'om_quick_sync_url';
+const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzYF46qeLJRGIQsqfXbic6ITRGKr1eA9chrVJ8Fu5_gM7TDSYUFlpaWQGmSR9RdAACjzw/exec';
+
+function getSyncUrl() { return localStorage.getItem(SYNC_URL_KEY) || DEFAULT_SYNC_URL; }
+function saveSyncUrl(url) { localStorage.setItem(SYNC_URL_KEY, url.trim()); }
+
+function toggleSettings() {
+  const panel = document.getElementById('settings-panel');
+  panel.classList.toggle('show');
+  if (panel.classList.contains('show')) {
+    document.getElementById('sync-url-input').value = getSyncUrl();
+    document.getElementById('sync-indicator').innerHTML = getSyncUrl()
+      ? '<span style="color:#2d6a4f">☁️ 동기화 활성</span>' : '<span style="color:#c03030">동기화 꺼짐</span>';
+  }
+}
+
+function setSyncStatus(msg, cls) {
+  document.getElementById('sync-status').innerHTML = msg ? `<span class="sync-status ${cls}">${msg}</span>` : '';
+}
+
+async function testSyncUrl() {
+  const url = getSyncUrl();
+  if (!url) { setSyncStatus('URL을 입력하세요', 'sync-fail'); return; }
+  setSyncStatus('연결 중...', 'sync-ing');
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.ok) setSyncStatus(`연결 성공 (${data.entries.length}건 저장됨)`, 'sync-ok');
+    else setSyncStatus('응답 오류', 'sync-fail');
+  } catch (e) { setSyncStatus('연결 실패: ' + e.message, 'sync-fail'); }
+}
+
+async function cloudSave(entries) {
+  const url = getSyncUrl();
+  if (!url || !entries.length) return false;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'save', entries }),
+      redirect: 'follow'
+    });
+    // Apps Script redirects → check final response
+    if (res.ok || res.type === 'opaqueredirect' || res.redirected) return true;
+    return false;
+  } catch (e) { return false; }
+}
+
+async function syncAllToCloud() {
+  const logs = getQuickLogs();
+  if (!logs.length) { showToast('업로드할 기록이 없습니다'); return; }
+  const url = getSyncUrl();
+  if (!url) { showToast('동기화 URL을 먼저 설정하세요'); return; }
+  setSyncStatus('업로드 중...', 'sync-ing');
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'save', entries: logs }),
+      redirect: 'follow'
+    });
+    setSyncStatus(`${logs.length}건 업로드 완료`, 'sync-ok');
+    showToast(`☁️ ${logs.length}건 업로드 완료`);
+  } catch (e) { setSyncStatus('업로드 실패', 'sync-fail'); }
+}
+
+async function fetchCloudStatus() {
+  const url = getSyncUrl();
+  if (!url) return;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.ok) return;
+    // 클라우드가 진실: 클라우드 데이터를 기반으로 로컬 갱신
+    const local = getQuickLogs();
+    const cloudEntries = data.entries || [];
+
+    // 로컬에만 있는 미전송 항목 보존
+    const cloudIds = new Set(cloudEntries.map(e => String(e.id)));
+    const localOnly = local.filter(l => !cloudIds.has(String(l.id)) && !l.synced);
+
+    // 클라우드 데이터 + 로컬 미전송 = 최종 목록
+    const merged = [...cloudEntries, ...localOnly];
+    merged.sort((a, b) => (a.datetime || '').localeCompare(b.datetime || ''));
+
+    const oldJSON = JSON.stringify(local.map(l=>l.id).sort());
+    const newJSON = JSON.stringify(merged.map(l=>l.id).sort());
+    if (oldJSON !== newJSON || local.length !== merged.length) {
+      saveQuickLogs(merged);
+      renderRecentQuickLogs();
+      updatePendingCount();
+    }
+  } catch (e) { /* 오프라인 — 로컬 캐시 사용 */ }
+}
+
+// ── Init ──
+renderForm();
+updatePendingCount();
+// 앱 시작 시 클라우드에서 전체 동기화
+fetchCloudStatus();
+// 포그라운드 복귀 시 재동기화
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) fetchCloudStatus();
+});
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

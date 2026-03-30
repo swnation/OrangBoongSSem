@@ -1,0 +1,25 @@
+{
+  "id": "orangi-quick",
+  "name": "두통 빠른 기록",
+  "short_name": "두통 기록",
+  "description": "오랑이 두통 빠른 기록 — 인증 없이 간편하게",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f0eb",
+  "theme_color": "#c96442",
+  "icons": [
+    {
+      "src": "../icons/quick-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/quick-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
