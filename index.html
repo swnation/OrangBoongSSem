@@ -910,13 +910,15 @@ async function loadDomainData(domainId) {
 async function saveMaster() {
   const ds = D();
   if (!ds.masterFileId) return;
-  ds.master.accumulated.last_updated = new Date().toISOString();
+  ds.master.accumulated.last_updated = kstNow().toISOString();
   // Also save current session in-progress (Bug fix #2)
   if (S.session && S.session.currentRound > 0 && S.session.currentRound < 4) {
     ds.master._inProgressSession = { ...S.session };
   } else {
     delete ds.master._inProgressSession;
   }
+  // #12 Version stamping for conflict detection
+  stampVersion(ds.master);
   await driveUpdate(ds.masterFileId, ds.master);
 }
 
@@ -925,10 +927,10 @@ async function manualBackup() {
   showToast('📦 백업 생성 중...');
   const ds = D(); const dc = DC();
   try {
-    const date = new Date().toISOString().split('T')[0];
+    const date = kstToday();
     const name = `${dc.logPrefix}_backup_${date}.json`;
-    await driveCreate(name, {...ds.master, backup_date:new Date().toISOString()}, ds.folderId);
-    ds.master.last_backup = new Date().toISOString();
+    await driveCreate(name, {...ds.master, backup_date:kstNow().toISOString()}, ds.folderId);
+    ds.master.last_backup = kstNow().toISOString();
     await saveMaster();
     showToast(`📦 백업 완료: ${dc.folder}/${name}`);
   } catch(e) { showToast('⚠️ 백업 실패: '+e.message, 4000); }
@@ -1578,6 +1580,7 @@ function renderHome() {
   return `
     <button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
     <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
+    ${renderDrugInteractionWarning()}
     ${renderInsightCard()}
     ${renderWeeklySummaryCard()}
     ${renderBungrukiTimeline()}
@@ -2036,6 +2039,8 @@ function renderStatsView() {
   ${topSyms.length?`<div class="card"><div class="card-title">증상 빈도 (30일)</div>${symHtml}</div>`:''}
   ${topMeds.length?`<div class="card"><div class="card-title">투약 빈도 (30일)</div>${medHtml}</div>`:''}
   ${lc.moodMode?'':renderCalendarHeatmap(logs,lc)}
+  ${renderTrendChart(logs, 90)}
+  ${renderCorrelationAnalysis(logs)}
   ${renderTreatmentTracker()}
   <div style="text-align:center;margin-top:8px"><button class="btn-export" onclick="exportPDF()">📑 PDF 리포트 생성</button></div>`;
 }
@@ -4260,7 +4265,7 @@ JSON만: {"model":{"in":X,"out":X}}`;
       const valid = Object.values(newP).every(p => p.in >= 0.01 && p.in <= 100 && p.out >= 0.01 && p.out <= 100);
       if (valid) {
         m.price_table = {...DEFAULT_PRICE_TABLE, ...newP};
-        m.price_updated = new Date().toISOString();
+        m.price_updated = kstNow().toISOString();
         await saveMaster();
       }
     }
@@ -5613,14 +5618,20 @@ function getSuggestedTemplates(question) {
   }).slice(0,3);
 }
 
+let _suggestedTemplates=[];
 function renderTemplateSuggestions(question) {
   const el=document.getElementById('tmpl-suggest-area');
   if(!el) return;
-  const suggestions=getSuggestedTemplates(question);
-  if(!suggestions.length) { el.innerHTML=''; return; }
+  _suggestedTemplates=getSuggestedTemplates(question);
+  if(!_suggestedTemplates.length) { el.innerHTML=''; return; }
   el.innerHTML=`<div class="tmpl-suggest"><span style="font-size:.68rem;color:var(--mu)">💡 관련 템플릿:</span> ${
-    suggestions.map(t=>`<span class="tmpl-chip" onclick="document.getElementById('q-input').value='${esc(t)}';if(S.session)S.session.question='${esc(t)}'" style="font-size:.68rem;cursor:pointer">${esc(t.substring(0,35))}${t.length>35?'…':''}</span>`).join('')
+    _suggestedTemplates.map((t,i)=>`<span class="tmpl-chip" onclick="applySuggestedTemplate(${i})" style="font-size:.68rem;cursor:pointer">${esc(t.substring(0,35))}${t.length>35?'…':''}</span>`).join('')
   }</div>`;
+}
+function applySuggestedTemplate(idx) {
+  const t=_suggestedTemplates[idx]; if(!t) return;
+  const input=document.getElementById('q-input'); if(input) input.value=t;
+  if(S.session) S.session.question=t;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5698,6 +5709,413 @@ function renderUploadProgress(fileName, percent) {
       </div>
       <span style="font-size:.68rem;color:var(--mu)">${percent}%</span>`;
   }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// #6 약물 상호작용 체커
+// ═══════════════════════════════════════════════════════════════
+const _DRUG_INTERACTIONS = [
+  // [약물A, 약물B, 위험도(high/moderate/low), 설명]
+  ['Aspirin','Ibuprofen','high','위장관 출혈 위험 증가, NSAID 병용 금기'],
+  ['Aspirin','Naproxen','high','위장관 출혈 위험 증가, NSAID 병용 금기'],
+  ['Aspirin','Warfarin','high','출혈 위험 대폭 증가'],
+  ['Ibuprofen','Naproxen','high','NSAID 중복, 위장관/신장 부작용 증가'],
+  ['Warfarin','Ibuprofen','high','출혈 위험 증가'],
+  ['Warfarin','Naproxen','high','출혈 위험 증가'],
+  ['Warfarin','Acetaminophen','moderate','고용량 시 INR 상승 가능'],
+  ['SSRI','Triptan','moderate','세로토닌 증후군 위험'],
+  ['Venlafaxine','Triptan','moderate','세로토닌 증후군 위험'],
+  ['Duloxetine','Triptan','moderate','세로토닌 증후군 위험'],
+  ['Fluoxetine','Tramadol','high','세로토닌 증후군 위험'],
+  ['Sertraline','Tramadol','high','세로토닌 증후군 위험'],
+  ['Methotrexate','Ibuprofen','high','메토트렉세이트 독성 증가'],
+  ['Methotrexate','Naproxen','high','메토트렉세이트 독성 증가'],
+  ['ACE inhibitor','Potassium','moderate','고칼륨혈증 위험'],
+  ['Lithium','Ibuprofen','high','리튬 독성 증가'],
+  ['Lithium','Naproxen','high','리튬 독성 증가'],
+  ['Propranolol','Rizatriptan','moderate','리자트립탄 혈중 농도 상승'],
+  ['Topiramate','Valproate','moderate','암모니아 수치 상승, 저체온'],
+  ['Valproate','Lamotrigine','moderate','라모트리진 혈중 농도 상승, 발진 위험'],
+  ['Ergotamine','Triptan','high','혈관 수축 과다, 24시간 간격 필요'],
+  ['MAO inhibitor','SSRI','high','세로토닌 증후군 위험, 병용 금기'],
+  ['MAO inhibitor','Triptan','high','세로토닌 증후군 위험'],
+  ['Carbamazepine','Oral contraceptive','moderate','피임 효과 감소'],
+  ['Pregabalin','Opioid','high','CNS 억제 과다, 호흡 억제 위험'],
+];
+
+function _normalizeDrugName(name) {
+  // Convert Korean drug name to English using _DRUG_NAMES mapping
+  const upper=(name||'').trim();
+  if(!upper) return '';
+  // Check exact match in _DRUG_NAMES
+  if(_DRUG_NAMES[upper]) return _DRUG_NAMES[upper];
+  // Check case-insensitive English
+  const lower=upper.toLowerCase();
+  for(const [ko,en] of Object.entries(_DRUG_NAMES)) {
+    if(ko.toLowerCase()===lower||en.toLowerCase()===lower) return en;
+  }
+  // Return original (capitalized) for English names
+  return upper.charAt(0).toUpperCase()+upper.slice(1).toLowerCase();
+}
+
+function checkDrugInteractions() {
+  // Collect active meds from all user domains
+  const currentUser=DC().user;
+  const activeMeds=new Set();
+  Object.entries(S.domainState).forEach(([domainId,ds])=>{
+    const dd=DOMAINS[domainId];
+    if(!dd||dd.user!==currentUser||!ds.master) return;
+    (ds.master.conditions||[]).forEach(c=>{
+      if(c.status==='active'&&c.medsList?.length) {
+        c.medsList.forEach(m=>activeMeds.add(_normalizeDrugName(m)));
+      }
+    });
+  });
+
+  const medsArr=[...activeMeds].filter(Boolean);
+  if(medsArr.length<2) return [];
+
+  const warnings=[];
+  for(const [a,b,severity,desc] of _DRUG_INTERACTIONS) {
+    const aLower=a.toLowerCase(), bLower=b.toLowerCase();
+    const hasA=medsArr.some(m=>m.toLowerCase().includes(aLower));
+    const hasB=medsArr.some(m=>m.toLowerCase().includes(bLower));
+    if(hasA&&hasB) {
+      warnings.push({drugA:a,drugB:b,severity,desc});
+    }
+  }
+  return warnings;
+}
+
+function renderDrugInteractionWarning() {
+  const warnings=checkDrugInteractions();
+  if(!warnings.length) return '';
+  const severityIcon={high:'🔴',moderate:'🟡',low:'🟢'};
+  const severityLabel={high:'위험',moderate:'주의',low:'참고'};
+  const items=warnings.map(w=>`
+    <div class="drug-interaction-warn" style="border-left:3px solid ${w.severity==='high'?'#ef4444':'#f59e0b'}">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span>${severityIcon[w.severity]||'⚠️'}</span>
+        <span style="font-weight:600;font-size:.8rem">${esc(w.drugA)} + ${esc(w.drugB)}</span>
+        <span class="badge ${w.severity==='high'?'badge-red':'badge-orange'}">${severityLabel[w.severity]}</span>
+      </div>
+      <div style="font-size:.75rem;color:var(--mu);margin-top:3px">${esc(w.desc)}</div>
+    </div>`).join('');
+
+  return `<div class="card" style="border-color:${warnings.some(w=>w.severity==='high')?'#ef4444':'#f59e0b'}">
+    <div class="card-title">⚠️ 약물 상호작용 경고 <span class="badge badge-red">${warnings.length}건</span></div>
+    ${items}
+    <div style="font-size:.65rem;color:var(--mu);margin-top:8px;padding:4px 8px;background:var(--sf2);border-radius:4px">※ 참고용입니다. 실제 투약 변경은 반드시 담당 의사와 상의하세요.</div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// #11 데이터 암호화
+// ═══════════════════════════════════════════════════════════════
+async function encryptData(data, password) {
+  const enc=new TextEncoder();
+  const keyMaterial=await crypto.subtle.importKey('raw',enc.encode(password),{name:'PBKDF2'},false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:enc.encode('orangi-health-encrypt-v9'),iterations:100000,hash:'SHA-256'},
+    keyMaterial,{name:'AES-GCM',length:256},false,['encrypt']);
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const plaintext=enc.encode(JSON.stringify(data));
+  const ciphertext=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plaintext);
+  // Pack iv + ciphertext as base64
+  const combined=new Uint8Array(iv.length+ciphertext.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(ciphertext),iv.length);
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptData(encrypted, password) {
+  const enc=new TextEncoder();
+  const keyMaterial=await crypto.subtle.importKey('raw',enc.encode(password),{name:'PBKDF2'},false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:enc.encode('orangi-health-encrypt-v9'),iterations:100000,hash:'SHA-256'},
+    keyMaterial,{name:'AES-GCM',length:256},false,['decrypt']);
+  const raw=atob(encrypted);
+  const bytes=new Uint8Array(Array.from(raw,c=>c.charCodeAt(0)));
+  const iv=bytes.slice(0,12);
+  const ciphertext=bytes.slice(12);
+  const decrypted=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ciphertext);
+  return JSON.parse(new TextDecoder().decode(decrypted));
+}
+
+function isEncryptionEnabled() {
+  return localStorage.getItem('om_encrypt_enabled')==='true';
+}
+
+function getEncryptionPassword() {
+  return S._encryptPass||null;
+}
+
+function toggleEncryption(enabled) {
+  if(enabled) {
+    const pass=prompt('데이터 암호화 비밀번호를 설정하세요 (잊으면 데이터 복구 불가):');
+    if(!pass||pass.length<4) { showToast('비밀번호는 4자 이상이어야 합니다.'); return; }
+    const confirm=prompt('비밀번호를 다시 입력하세요:');
+    if(pass!==confirm) { showToast('비밀번호가 일치하지 않습니다.'); return; }
+    S._encryptPass=pass;
+    localStorage.setItem('om_encrypt_enabled','true');
+    showToast('🔐 데이터 암호화가 활성화되었습니다');
+  } else {
+    S._encryptPass=null;
+    localStorage.removeItem('om_encrypt_enabled');
+    showToast('🔓 데이터 암호화가 비활성화되었습니다');
+  }
+}
+
+function promptEncryptionPassword() {
+  if(!isEncryptionEnabled()) return true;
+  if(S._encryptPass) return true;
+  const pass=prompt('데이터 암호화 비밀번호를 입력하세요:');
+  if(!pass) { showToast('비밀번호가 필요합니다.'); return false; }
+  S._encryptPass=pass;
+  return true;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// #12 멀티기기 충돌 해결
+// ═══════════════════════════════════════════════════════════════
+function stampVersion(master) {
+  if(!master._version) master._version=1;
+  else master._version++;
+  master._lastModified=kstNow().toISOString();
+  master._deviceId=getDeviceId();
+  return master;
+}
+
+function getDeviceId() {
+  let id=localStorage.getItem('om_device_id');
+  if(!id) { id='dev_'+Math.random().toString(36).slice(2,10); localStorage.setItem('om_device_id',id); }
+  return id;
+}
+
+function detectConflict(local, remote) {
+  if(!local?._version||!remote?._version) return false;
+  // Conflict: different devices modified the same version
+  if(local._version===remote._version&&local._deviceId!==remote._deviceId&&local._lastModified!==remote._lastModified) return true;
+  // Remote is ahead
+  if(remote._version>local._version) return 'remote_ahead';
+  return false;
+}
+
+function showConflictModal(local, remote, domainId) {
+  const localDate=local._lastModified?new Date(local._lastModified).toLocaleString('ko-KR'):'알 수 없음';
+  const remoteDate=remote._lastModified?new Date(remote._lastModified).toLocaleString('ko-KR'):'알 수 없음';
+  const localSessions=local.sessions?.length||0;
+  const remoteSessions=remote.sessions?.length||0;
+
+  const html=`<div style="padding:16px">
+    <h3 style="margin:0 0 12px;color:var(--ink)">⚠️ 데이터 충돌 감지</h3>
+    <p style="font-size:.8rem;color:var(--mu)">다른 기기에서 수정된 데이터가 감지되었습니다.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0">
+      <div style="padding:12px;border:2px solid var(--ac);border-radius:8px;background:var(--sf2)">
+        <div style="font-weight:600;font-size:.82rem;margin-bottom:6px">📱 현재 기기</div>
+        <div style="font-size:.72rem;color:var(--mu)">수정: ${localDate}</div>
+        <div style="font-size:.72rem;color:var(--mu)">버전: v${local._version||'?'}</div>
+        <div style="font-size:.72rem;color:var(--mu)">세션: ${localSessions}개</div>
+      </div>
+      <div style="padding:12px;border:2px solid #f59e0b;border-radius:8px;background:var(--sf2)">
+        <div style="font-weight:600;font-size:.82rem;margin-bottom:6px">☁️ 클라우드</div>
+        <div style="font-size:.72rem;color:var(--mu)">수정: ${remoteDate}</div>
+        <div style="font-size:.72rem;color:var(--mu)">버전: v${remote._version||'?'}</div>
+        <div style="font-size:.72rem;color:var(--mu)">세션: ${remoteSessions}개</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-save" onclick="resolveConflict('local','${esc(domainId)}')" style="flex:1">📱 현재 기기 유지</button>
+      <button class="btn-save" onclick="resolveConflict('remote','${esc(domainId)}')" style="flex:1;background:#f59e0b">☁️ 클라우드 사용</button>
+      <button class="btn-save" onclick="resolveConflict('merge','${esc(domainId)}')" style="flex:1;background:#8b5cf6">🔀 병합 시도</button>
+    </div>
+    <button class="btn-cancel" onclick="closeModal('conflict-modal')" style="width:100%;margin-top:8px">나중에 결정</button>
+  </div>`;
+
+  let modal=document.getElementById('conflict-modal');
+  if(!modal) {
+    modal=document.createElement('div');
+    modal.id='conflict-modal';
+    modal.className='modal';
+    modal.innerHTML=`<div class="modal-content" style="max-width:420px"><div id="conflict-body"></div></div>`;
+    document.body.appendChild(modal);
+  }
+  document.getElementById('conflict-body').innerHTML=html;
+  modal.style.display='flex';
+}
+
+async function resolveConflict(strategy, domainId) {
+  const ds=S.domainState[domainId];
+  if(!ds) return;
+  try {
+    if(strategy==='local') {
+      // Keep local, overwrite remote
+      stampVersion(ds.master);
+      await driveUpdate(ds.masterFileId, ds.master);
+      showToast('📱 현재 기기 데이터로 저장됨');
+    } else if(strategy==='remote') {
+      // Use remote
+      ds.master=await driveRead(ds.masterFileId);
+      cacheToLocal(domainId);
+      showToast('☁️ 클라우드 데이터로 복원됨');
+    } else if(strategy==='merge') {
+      // Simple merge: take more sessions, combine conditions
+      const remote=await driveRead(ds.masterFileId);
+      const local=ds.master;
+      // Merge sessions (union by date+question)
+      const sessionKeys=new Set((local.sessions||[]).map(s=>s.date+'|'+s.question));
+      (remote.sessions||[]).forEach(s=>{
+        const key=s.date+'|'+s.question;
+        if(!sessionKeys.has(key)) { local.sessions.push(s); sessionKeys.add(key); }
+      });
+      // Merge conditions (union by name)
+      const condNames=new Set((local.conditions||[]).map(c=>c.name));
+      (remote.conditions||[]).forEach(c=>{
+        if(!condNames.has(c.name)) { local.conditions.push(c); condNames.add(c.name); }
+      });
+      // Merge accumulated
+      ['established_consensus','unresolved_issues','discarded_hypotheses'].forEach(field=>{
+        const existing=new Set(local.accumulated?.[field]||[]);
+        (remote.accumulated?.[field]||[]).forEach(item=>{
+          if(!existing.has(item)) { local.accumulated[field].push(item); }
+        });
+      });
+      stampVersion(local);
+      await driveUpdate(ds.masterFileId, local);
+      cacheToLocal(domainId);
+      showToast('🔀 데이터 병합 완료');
+    }
+  } catch(e) { showToast('❌ 충돌 해결 실패: '+e.message); }
+
+  const modal=document.getElementById('conflict-modal');
+  if(modal) modal.style.display='none';
+  renderView(S.currentView);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// #15 통계 강화 (90일 추세 차트 + 상관분석)
+// ═══════════════════════════════════════════════════════════════
+function renderTrendChart(logs, days) {
+  const lc=DC().logConfig;
+  if(lc.moodMode) return ''; // Mood mode doesn't have NRS
+
+  const dates=[];
+  for(let i=days-1;i>=0;i--) dates.push(kstDaysAgo(i));
+
+  const byDate={};
+  logs.forEach(l=>{
+    const d=l.datetime.slice(0,10);
+    if(!byDate[d]) byDate[d]=[];
+    if(l.nrs>=0) byDate[d].push(l.nrs);
+  });
+
+  // Build SVG line chart
+  const width=600, height=120, padX=30, padY=15;
+  const plotW=width-padX*2, plotH=height-padY*2;
+  const points=[];
+  dates.forEach((d,i)=>{
+    const vals=byDate[d];
+    if(vals?.length) {
+      const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+      const x=padX+(i/(dates.length-1))*plotW;
+      const y=padY+(1-avg/10)*plotH;
+      points.push({x,y,avg,date:d});
+    }
+  });
+
+  if(points.length<2) return '';
+
+  const pathD=points.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const areaD=pathD+` L${points[points.length-1].x.toFixed(1)},${height-padY} L${points[0].x.toFixed(1)},${height-padY} Z`;
+
+  // Grid lines
+  const gridLines=[0,2,4,6,8,10].map(n=>{
+    const y=padY+(1-n/10)*plotH;
+    return `<line x1="${padX}" y1="${y}" x2="${width-padX}" y2="${y}" stroke="var(--bd)" stroke-width="0.5" stroke-dasharray="3"/>
+      <text x="${padX-4}" y="${y+3}" text-anchor="end" font-size="8" fill="var(--mu)">${n}</text>`;
+  }).join('');
+
+  // Month labels
+  const monthLabels=[];
+  let lastMonth='';
+  dates.forEach((d,i)=>{
+    const m=d.slice(5,7);
+    if(m!==lastMonth) {
+      const x=padX+(i/(dates.length-1))*plotW;
+      monthLabels.push(`<text x="${x}" y="${height-2}" font-size="8" fill="var(--mu)">${d.slice(5,10)}</text>`);
+      lastMonth=m;
+    }
+  });
+
+  const dots=points.map(p=>{
+    const color=nrsColor(p.avg);
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="${color}" stroke="var(--sf)" stroke-width="1">
+      <title>${p.date}: NRS ${p.avg.toFixed(1)}</title></circle>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="card-title">📈 NRS ${days}일 추세</div>
+    <svg viewBox="0 0 ${width} ${height}" style="width:100%;height:auto;max-height:150px">
+      ${gridLines}
+      <path d="${areaD}" fill="var(--ac)" opacity="0.08"/>
+      <path d="${pathD}" fill="none" stroke="var(--ac)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      ${dots}
+      ${monthLabels.join('')}
+    </svg>
+  </div>`;
+}
+
+function renderCorrelationAnalysis(logs) {
+  const lc=DC().logConfig;
+  if(lc.moodMode) return '';
+
+  const nrsLogs=logs.filter(l=>l.nrs>=0);
+  if(nrsLogs.length<10) return '';
+
+  // Medication-NRS correlation
+  const medStats={};
+  nrsLogs.forEach(l=>{
+    const meds=l.meds||l.medications||[];
+    if(meds.length) {
+      meds.forEach(m=>{
+        if(!medStats[m]) medStats[m]={withNrs:[],count:0};
+        medStats[m].withNrs.push(l.nrs);
+        medStats[m].count++;
+      });
+    }
+  });
+
+  const globalAvg=nrsLogs.reduce((a,l)=>a+l.nrs,0)/nrsLogs.length;
+  const correlations=Object.entries(medStats)
+    .filter(([,s])=>s.count>=3)
+    .map(([med,s])=>{
+      const avg=s.withNrs.reduce((a,b)=>a+b,0)/s.withNrs.length;
+      const diff=avg-globalAvg;
+      return {med,avg:avg.toFixed(1),count:s.count,diff:diff.toFixed(1),direction:diff<0?'lower':'higher'};
+    })
+    .sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff))
+    .slice(0,6);
+
+  if(!correlations.length) return '';
+
+  const rows=correlations.map(c=>{
+    const color=c.direction==='lower'?'#10b981':'#ef4444';
+    const icon=c.direction==='lower'?'↓':'↑';
+    const barW=Math.min(100,Math.abs(c.diff)*15);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+      <span style="font-size:.78rem;min-width:80px;text-align:right">${esc(c.med)}</span>
+      <div style="flex:1;display:flex;align-items:center;gap:4px">
+        <div style="width:${barW}%;height:6px;background:${color};border-radius:3px;opacity:.7"></div>
+        <span style="font-size:.68rem;color:${color};font-weight:600">${icon} ${c.diff}</span>
+      </div>
+      <span style="font-size:.65rem;color:var(--mu);font-family:var(--mono)">avg ${c.avg} (${c.count}회)</span>
+    </div>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="card-title">🔬 약물-NRS 상관분석 <span class="badge badge-blue">vs 전체 평균 ${globalAvg.toFixed(1)}</span></div>
+    <div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">투약 시 NRS가 전체 평균 대비 어떻게 변했는지 보여줍니다.</div>
+    ${rows}
+    <div style="font-size:.6rem;color:var(--mu);margin-top:8px">※ 상관관계는 인과관계를 의미하지 않습니다. 최소 3회 이상 투약 데이터 기준.</div>
+  </div>`;
 }
 
 if ('serviceWorker' in navigator) {
