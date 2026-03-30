@@ -2393,11 +2393,36 @@ function checkQuickLogUpdates() {
   if (count > _lastQuickLogCount && _lastQuickLogCount >= 0) {
     const newCount = count - _lastQuickLogCount;
     showToast(`📱 오랑이가 두통 ${newCount}건을 기록했습니다`, 4000);
+    // 새 기록에 대해 푸시 알림
+    const newEntries = pending.slice(-newCount);
+    newEntries.forEach(e => sendQuickLogNotification(e));
     updateQuickLogBadge();
     if (S.currentView === 'log') renderView('log');
   }
   _lastQuickLogCount = count;
   updateQuickLogBadge();
+}
+
+function sendQuickLogNotification(entry) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const nrsText = entry.nrs >= 0 ? `NRS ${entry.nrs}/10` : '기록';
+  const syms = (entry.symptoms || []).join(', ');
+  const meds = (entry.meds || []).join(', ');
+  const time = entry.datetime?.slice(11, 16) || '';
+  const lines = [nrsText];
+  if (syms) lines.push(syms);
+  if (meds) lines.push('💊 ' + meds);
+  try {
+    const n = new Notification('🤕 오랑이가 두통을 기록했어요', {
+      body: lines.join('\n') + (time ? '\n🕐 ' + time : ''),
+      icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤕</text></svg>",
+      tag: 'quicklog-' + (entry.id || Date.now()),
+      vibrate: [300, 100, 300],
+      requireInteraction: true,
+      silent: false
+    });
+    n.onclick = () => { window.focus(); switchView('log'); n.close(); };
+  } catch (e) {}
 }
 
 async function pollCloudQuickLogs() {
@@ -2415,9 +2440,13 @@ async function pollCloudQuickLogs() {
   checkQuickLogUpdates();
 }
 
-// 로컬 체크: 10초, 클라우드 체크: 30초
+// 로컬 체크: 10초, 클라우드 체크: 3분
 setInterval(checkQuickLogUpdates, 10000);
-setInterval(pollCloudQuickLogs, 30000);
+setInterval(pollCloudQuickLogs, 180000);
+// 앱이 포그라운드로 돌아올 때 즉시 체크
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) pollCloudQuickLogs();
+});
 
 function renderQuickLogBanner() {
   if (S.currentDomain !== 'orangi-migraine') return '';
