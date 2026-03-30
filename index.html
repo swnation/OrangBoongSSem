@@ -85,7 +85,8 @@
     <div style="margin-top:auto;padding:12px 16px;border-top:1px solid #1a2535;display:flex;flex-direction:column;gap:6px">
       <button class="sb-foot-btn" onclick="openKeys()">🔑 API 키 설정</button>
       <button class="sb-foot-btn" onclick="openCtx()">📋 환자 컨텍스트</button>
-      <button class="sb-foot-btn" onclick="manualBackup()">📦 지금 백업</button>
+      <button class="sb-foot-btn" onclick="manualBackup()">📦 데이터 백업</button>
+      <button class="sb-foot-btn" onclick="codeBackupToDrive()">💾 코드 백업</button>
       <button class="theme-toggle" onclick="toggleTheme()">
         <span id="theme-icon">🌙</span> <span id="theme-label">다크 모드</span>
       </button>
@@ -940,6 +941,71 @@ async function manualBackup() {
     await saveMaster();
     showToast(`📦 백업 완료: ${dc.folder}/${name}`);
   } catch(e) { showToast('⚠️ 백업 실패: '+e.message, 4000); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CODE BACKUP TO GOOGLE DRIVE
+// ═══════════════════════════════════════════════════════════════
+async function codeBackupToDrive() {
+  if (!requireLogin()) return;
+  showToast('💾 코드 백업 생성 중...');
+  try {
+    // 백업 전용 폴더
+    const folderId = await getOrCreateFolder('Orangi Code Backups');
+    const ver = APP_VERSION[0]?.v || 'unknown';
+    const date = kstToday();
+
+    // 현재 코드 파일 수집 (inline)
+    const files = {};
+    // index.html — 현재 실행 중인 전체 HTML
+    files['index.html'] = document.documentElement.outerHTML ? null : null; // placeholder
+    // style.css, quick.html 등은 fetch로 가져옴
+    const filesToFetch = ['index.html','style.css','quick.html','sw.js','manifest.json','quick-manifest.json','CLAUDE.md'];
+    for (const fname of filesToFetch) {
+      try {
+        const res = await fetch('./' + fname, {cache:'no-store'});
+        if (res.ok) files[fname] = await res.text();
+      } catch(e) {}
+    }
+
+    // 변경 로그: APP_VERSION + git 커밋 메시지 대용
+    const changelog = APP_VERSION.map(v => `${v.v} (${v.date}): ${v.note}`);
+
+    // v9.0 세션 맥락 기록
+    const context = [
+      '부위 구조: 미간(내측눈썹)·이마(외측이마)·눈썹부위(눈썹뼈)·관자놀이·후두부',
+      'nrs 규칙: nrs>=0 유효, nrs===-1 미기록, nrs>0 사용 금지',
+      'esc() 규칙: onclick에 사용자 텍스트 직접삽입 금지 → 전역변수 참조',
+      '날짜 규칙: kstToday()/kstNow() 사용, new Date().toISOString() 금지',
+      '알림: 카톡 불가 → PWA Notification API + 3분 폴링',
+      'quick.html: 오랑이 전용 두통 입력, 클라우드(Apps Script) 주 저장소',
+      'API 키: localStorage 전용, Drive 동기화 안 함',
+      '백업: 최근 5개 버전 유지, 코드+맥락 함께 Drive 저장',
+    ];
+
+    const backup = {
+      version: ver,
+      date: date,
+      createdAt: kstNow().toISOString(),
+      changelog: changelog,
+      context: context,
+      files: files,
+    };
+
+    const fileName = `orangi_code_${ver}_${date}.json`;
+
+    // 같은 이름 파일 있으면 덮어쓰기
+    const existing = await driveSearch(fileName, folderId);
+    if (existing.length > 0) {
+      await driveUpdate(existing[0].id, backup);
+    } else {
+      await driveCreate(fileName, backup, folderId);
+    }
+
+    showToast(`💾 코드 백업 완료: ${fileName}`, 4000);
+  } catch(e) {
+    showToast('⚠️ 코드 백업 실패: ' + e.message, 4000);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
