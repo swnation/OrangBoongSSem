@@ -690,10 +690,10 @@ function renderList() {
       </div>
       ${tags ? `<div class="log-item-tags">${tags}</div>` : ''}
       ${l.memo ? `<div class="log-item-memo">${esc(l.memo)}</div>` : ''}
-      <div class="log-item-actions">
+      ${l.synced?`<div class="log-item-actions"><span style="font-size:.68rem;color:var(--mu)">✅ 반영 완료 (수정 불가)</span></div>`:`<div class="log-item-actions">
         <button class="btn-sm" onclick="editEntry(${l.id})">수정</button>
         <button class="btn-sm del" onclick="deleteEntry(${l.id})">삭제</button>
-      </div>
+      </div>`}
     </div>`;
   }).join('');
 }
@@ -706,11 +706,20 @@ function editEntry(id) {
   setTimeout(() => renderForm(entry), 50);
 }
 
+function getDeletedIds() {
+  try { return JSON.parse(localStorage.getItem('om_quick_deleted') || '[]'); } catch(e) { return []; }
+}
+function addDeletedId(id) {
+  const ids = getDeletedIds();
+  if (!ids.includes(String(id))) { ids.push(String(id)); localStorage.setItem('om_quick_deleted', JSON.stringify(ids)); }
+}
+
 async function deleteEntry(id) {
   if (!confirm('삭제할까요?')) return;
   const logs = getQuickLogs().filter(l => l.id !== id);
   saveQuickLogs(logs);
-  // 클라우드에서도 삭제
+  addDeletedId(id);
+  // 클라우드에서도 삭제 시도
   try {
     const url = getSyncUrl();
     if (url) {
@@ -806,7 +815,9 @@ async function fetchCloudStatus() {
     let changed = false;
 
     // 클라우드에서 synced 상태 업데이트 + 새 항목 가져오기
+    const deletedIds = new Set(getDeletedIds());
     data.entries.forEach(ce => {
+      if (deletedIds.has(String(ce.id))) return; // 로컬에서 삭제한 항목은 무시
       const localEntry = local.find(l => String(l.id) === String(ce.id));
       if (localEntry) {
         if (ce.synced && !localEntry.synced) { localEntry.synced = true; changed = true; }
