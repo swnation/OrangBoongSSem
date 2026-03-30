@@ -882,6 +882,7 @@ async function loadDomainData(domainId) {
     }
     checkPriceUpdate();
     migrateConditions();
+    autoCodeBackup();
     ensureLogLoaded().then(()=>{migrateSiteNames();checkDailyReminder();checkWeeklyInsight();}).catch(()=>{});
     // 빠른 기록 체크 (클라우드 우선, 로컬 폴백)
     pollCloudQuickLogs().then(()=>{
@@ -1006,6 +1007,18 @@ async function codeBackupToDrive() {
   } catch(e) {
     showToast('⚠️ 코드 백업 실패: ' + e.message, 4000);
   }
+}
+
+// 버전 업 시 자동 코드 백업
+async function autoCodeBackup() {
+  const ver = APP_VERSION[0]?.v;
+  if (!ver) return;
+  const lastBackupVer = localStorage.getItem('om_last_code_backup');
+  if (lastBackupVer === ver) return; // 이미 이 버전 백업함
+  try {
+    await codeBackupToDrive();
+    localStorage.setItem('om_last_code_backup', ver);
+  } catch(e) {}
 }
 
 // ═══════════════════════════════════════════════════════════════
