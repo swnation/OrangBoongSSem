@@ -252,6 +252,8 @@ function switchTab(tab) {
 function toggleChip(el, cls) {
   el.classList.toggle('sel');
   el.classList.toggle(cls, el.classList.contains('sel'));
+  // Sync head diagram if it's a site chip
+  if(el.dataset.side) syncHeadDiagram();
 }
 
 function addOtherChip(inputId, containerId, group, cls) {
@@ -270,6 +272,123 @@ function addOtherChip(inputId, containerId, group, cls) {
   // 커스텀 칩 영구 저장
   const customs = getCustom(group);
   if (!customs.includes(val)) { customs.push(val); saveCustom(group, customs); }
+}
+
+// ── Interactive Head Diagram ──
+function renderHeadDiagram() {
+  const el=document.getElementById('head-diagram');
+  if(!el) return;
+  // SVG front face view with labeled clickable regions
+  // Regions: 미간(glabella), 이마(forehead), 눈썹부위(supraorbital), 관자놀이(temple), 후두부(occipital)
+  el.innerHTML=`
+  <div style="display:flex;justify-content:center;gap:4px;align-items:flex-start">
+    <div style="text-align:center">
+      <div style="font-size:.6rem;color:var(--mu);margin-bottom:2px">정면</div>
+      <svg viewBox="0 0 200 220" width="160" style="max-width:45vw">
+        <!-- Head outline -->
+        <ellipse cx="100" cy="100" rx="75" ry="90" fill="var(--sf2)" stroke="var(--bd2)" stroke-width="2"/>
+        <!-- Hair line -->
+        <path d="M 35 75 Q 50 30 100 20 Q 150 30 165 75" fill="none" stroke="var(--bd2)" stroke-width="1.5" stroke-dasharray="4"/>
+        <!-- Eyes -->
+        <ellipse cx="72" cy="110" rx="14" ry="8" fill="none" stroke="var(--bd2)" stroke-width="1.5"/>
+        <ellipse cx="128" cy="110" rx="14" ry="8" fill="none" stroke="var(--bd2)" stroke-width="1.5"/>
+        <!-- Nose -->
+        <path d="M 100 100 L 96 128 Q 100 132 104 128 Z" fill="none" stroke="var(--bd2)" stroke-width="1.2"/>
+        <!-- Eyebrows -->
+        <path d="M 54 98 Q 72 90 90 96" fill="none" stroke="var(--bd2)" stroke-width="1.5"/>
+        <path d="M 110 96 Q 128 90 146 98" fill="none" stroke="var(--bd2)" stroke-width="1.5"/>
+
+        <!-- Clickable regions - LEFT side -->
+        <circle id="hd-l-temple" cx="38" cy="95" r="14" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="1.5" style="cursor:pointer" onclick="toggleHeadSite('left','관자놀이')"/>
+        <text x="38" y="99" text-anchor="middle" font-size="7" fill="var(--mu)" style="pointer-events:none">관자놀이</text>
+
+        <circle id="hd-l-brow" cx="62" cy="88" r="11" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="1.5" style="cursor:pointer" onclick="toggleHeadSite('left','눈썹부위')"/>
+        <text x="62" y="91" text-anchor="middle" font-size="6" fill="var(--mu)" style="pointer-events:none">눈썹</text>
+
+        <circle id="hd-l-forehead" cx="72" cy="65" r="14" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="1.5" style="cursor:pointer" onclick="toggleHeadSite('left','이마')"/>
+        <text x="72" y="69" text-anchor="middle" font-size="7" fill="var(--mu)" style="pointer-events:none">이마</text>
+
+        <!-- Clickable regions - RIGHT side -->
+        <circle id="hd-r-temple" cx="162" cy="95" r="14" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="1.5" style="cursor:pointer" onclick="toggleHeadSite('right','관자놀이')"/>
+        <text x="162" y="99" text-anchor="middle" font-size="7" fill="var(--mu)" style="pointer-events:none">관자놀이</text>
+
+        <circle id="hd-r-brow" cx="138" cy="88" r="11" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="1.5" style="cursor:pointer" onclick="toggleHeadSite('right','눈썹부위')"/>
+        <text x="138" y="91" text-anchor="middle" font-size="6" fill="var(--mu)" style="pointer-events:none">눈썹</text>
+
+        <circle id="hd-r-forehead" cx="128" cy="65" r="14" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="1.5" style="cursor:pointer" onclick="toggleHeadSite('right','이마')"/>
+        <text x="128" y="69" text-anchor="middle" font-size="7" fill="var(--mu)" style="pointer-events:none">이마</text>
+
+        <!-- CENTER - 미간 -->
+        <circle id="hd-c-glabella" cx="100" cy="96" r="10" fill="rgba(168,85,247,.15)" stroke="#a855f7" stroke-width="1.5" style="cursor:pointer" onclick="toggleHeadSite('both','미간')"/>
+        <text x="100" y="99" text-anchor="middle" font-size="7" fill="var(--mu)" style="pointer-events:none">미간</text>
+
+        <!-- Labels -->
+        <text x="38" y="210" text-anchor="middle" font-size="7" fill="#3b82f6" font-weight="600">← 왼쪽</text>
+        <text x="162" y="210" text-anchor="middle" font-size="7" fill="#ef4444" font-weight="600">오른쪽 →</text>
+      </svg>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:.6rem;color:var(--mu);margin-bottom:2px">뒷면</div>
+      <svg viewBox="0 0 140 220" width="100" style="max-width:30vw">
+        <!-- Head back outline -->
+        <ellipse cx="70" cy="100" rx="55" ry="70" fill="var(--sf2)" stroke="var(--bd2)" stroke-width="2"/>
+        <!-- Neck -->
+        <rect x="50" y="160" width="40" height="30" rx="5" fill="var(--sf2)" stroke="var(--bd2)" stroke-width="1.5"/>
+        <!-- Hair texture -->
+        <path d="M 20 80 Q 40 25 70 18 Q 100 25 120 80" fill="none" stroke="var(--bd2)" stroke-width="1.5"/>
+
+        <!-- Occipital - LEFT -->
+        <circle id="hd-l-occipital" cx="45" cy="120" r="16" fill="rgba(59,130,246,.15)" stroke="#3b82f6" stroke-width="1.5" style="cursor:pointer" onclick="toggleHeadSite('left','후두부')"/>
+        <text x="45" y="124" text-anchor="middle" font-size="7" fill="var(--mu)" style="pointer-events:none">후두부</text>
+
+        <!-- Occipital - RIGHT -->
+        <circle id="hd-r-occipital" cx="95" cy="120" r="16" fill="rgba(239,68,68,.15)" stroke="#ef4444" stroke-width="1.5" style="cursor:pointer" onclick="toggleHeadSite('right','후두부')"/>
+        <text x="95" y="124" text-anchor="middle" font-size="7" fill="var(--mu)" style="pointer-events:none">후두부</text>
+
+        <text x="45" y="200" text-anchor="middle" font-size="7" fill="#3b82f6" font-weight="600">← 왼</text>
+        <text x="95" y="200" text-anchor="middle" font-size="7" fill="#ef4444" font-weight="600">오 →</text>
+      </svg>
+    </div>
+  </div>`;
+}
+
+const _hdMap={
+  'left-관자놀이':'hd-l-temple','left-눈썹부위':'hd-l-brow','left-이마':'hd-l-forehead','left-후두부':'hd-l-occipital',
+  'right-관자놀이':'hd-r-temple','right-눈썹부위':'hd-r-brow','right-이마':'hd-r-forehead','right-후두부':'hd-r-occipital',
+  'both-미간':'hd-c-glabella'
+};
+
+function toggleHeadSite(side, site) {
+  if(side==='both') {
+    // 미간: 양쪽 모두 토글
+    ['left','right'].forEach(s=>{
+      const chip=document.querySelector(`#site-${s}-chips .chip[data-val="${site}"]`);
+      if(chip) { chip.click(); }
+    });
+  } else {
+    const chip=document.querySelector(`#site-${side}-chips .chip[data-val="${site}"]`);
+    if(chip) chip.click();
+  }
+  syncHeadDiagram();
+}
+
+function syncHeadDiagram() {
+  const activeL=new Set();const activeR=new Set();
+  document.querySelectorAll('#site-left-chips .chip.sel').forEach(c=>activeL.add(c.dataset.val));
+  document.querySelectorAll('#site-right-chips .chip.sel').forEach(c=>activeR.add(c.dataset.val));
+
+  Object.entries(_hdMap).forEach(([key,id])=>{
+    const el=document.getElementById(id);if(!el) return;
+    const [side,site]=key.split('-');
+    let active=false;
+    if(side==='both') active=activeL.has(site)||activeR.has(site);
+    else if(side==='left') active=activeL.has(site);
+    else active=activeR.has(site);
+
+    const color=side==='right'?'239,68,68':side==='left'?'59,130,246':'168,85,247';
+    el.setAttribute('fill',active?`rgba(${color},.5)`:`rgba(${color},.15)`);
+    el.setAttribute('stroke-width',active?'3':'1.5');
+  });
 }
 
 function addSiteChip(inputId, containerId, side) {
@@ -355,19 +474,23 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
-      <div class="section-title">부위 — 왼쪽</div>
-      <div class="chips" id="site-left-chips">${siteChips('left', SITES.left)}</div>
-      <div class="other-row">
-        <input class="other-input" id="site-left-other" placeholder="직접 입력">
-        <button class="btn-other-add" onclick="addSiteChip('site-left-other','site-left-chips','left')">+</button>
+      <div class="section-title">부위 (그림을 터치하거나 아래 칩을 선택)</div>
+      <div id="head-diagram"></div>
+      <div style="margin-top:8px">
+        <div style="font-size:.68rem;color:var(--mu);margin-bottom:4px;font-weight:600">왼쪽</div>
+        <div class="chips" id="site-left-chips">${siteChips('left', SITES.left)}</div>
+        <div class="other-row">
+          <input class="other-input" id="site-left-other" placeholder="직접 입력">
+          <button class="btn-other-add" onclick="addSiteChip('site-left-other','site-left-chips','left')">+</button>
+        </div>
       </div>
-    </div>
-    <div class="section">
-      <div class="section-title">부위 — 오른쪽</div>
-      <div class="chips" id="site-right-chips">${siteChips('right', SITES.right)}</div>
-      <div class="other-row">
-        <input class="other-input" id="site-right-other" placeholder="직접 입력">
-        <button class="btn-other-add" onclick="addSiteChip('site-right-other','site-right-chips','right')">+</button>
+      <div style="margin-top:6px">
+        <div style="font-size:.68rem;color:var(--mu);margin-bottom:4px;font-weight:600">오른쪽</div>
+        <div class="chips" id="site-right-chips">${siteChips('right', SITES.right)}</div>
+        <div class="other-row">
+          <input class="other-input" id="site-right-other" placeholder="직접 입력">
+          <button class="btn-other-add" onclick="addSiteChip('site-right-other','site-right-chips','right')">+</button>
+        </div>
       </div>
     </div>
 
@@ -407,6 +530,9 @@ function renderForm(entry) {
     <div id="recent-quick-logs"></div>
   `;
   renderRecentQuickLogs();
+  renderHeadDiagram();
+  // Sync diagram with pre-selected chips (edit mode)
+  setTimeout(()=>syncHeadDiagram(),50);
 }
 
 function renderRecentQuickLogs() {
