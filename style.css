@@ -21,7 +21,7 @@ html,body{height:100%;overflow:hidden}
 body{font-family:var(--font);background:var(--bg);color:var(--ink);display:flex;font-size:14px;transition:background .3s,color .3s}
 
 /* SIDEBAR */
-aside{width:236px;min-width:236px;background:var(--sb);display:flex;flex-direction:column;height:100vh;overflow-y:auto;transition:transform .3s;z-index:100}
+aside{width:236px;min-width:236px;background:var(--sb);display:flex;flex-direction:column;height:100vh;overflow-y:auto;transition:transform .3s;z-index:200}
 .logo{padding:18px 18px 14px;border-bottom:1px solid #1e2a3a}
 .logo-title{font-family:var(--serif);color:#fff;font-size:1.05rem;line-height:1.35}
 .logo-sub{font-size:.67rem;color:#3d5068;margin-top:3px;font-family:var(--mono);letter-spacing:.06em}
