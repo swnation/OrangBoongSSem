@@ -87,6 +87,7 @@
       <button class="sb-foot-btn" onclick="openCtx()">📋 환자 컨텍스트</button>
       <button class="sb-foot-btn" onclick="manualBackup()">📦 데이터 백업</button>
       <button class="sb-foot-btn" onclick="codeBackupToDrive()">💾 코드 백업</button>
+      <button class="sb-foot-btn" id="notif-toggle-btn" onclick="toggleNotifications()">🔔 알림 설정</button>
       <button class="theme-toggle" onclick="toggleTheme()">
         <span id="theme-icon">🌙</span> <span id="theme-label">다크 모드</span>
       </button>
@@ -1792,7 +1793,7 @@ function renderSession() {
     <div class="q-bar">
       <div class="q-label" style="color:var(--domain-color)">● ${mode==='debate'?'쟁점':mode==='quick'?'빠른 질문':'오늘의 질문'}</div>
       ${tmplHtml}
-      <textarea id="q-input" rows="2" placeholder="${mode==='debate'?'쟁점을 입력하세요 (예: Venlafaxine 중단 유지해도 되는가?)':mode==='quick'?'질문을 입력하세요...':'질문을 입력하세요...'}"
+      <textarea id="q-input" rows="4" placeholder="${mode==='debate'?'쟁점을 입력하세요 (예: Venlafaxine 중단 유지해도 되는가?)':mode==='quick'?'질문을 입력하세요...':'질문을 입력하세요...'}"
         ${curRound>=4?'readonly style="color:var(--mu)"':''}
         oninput="if(S.session){S.session.question=this.value;S._dirty=true;}updateModeSuggestion(this.value)">${esc(sess.question||'')}</textarea>
       <div id="tmpl-suggest-area"></div>
@@ -5912,19 +5913,43 @@ function renderUploadProgress(fileName, percent) {
 // PWA 푸시 알림 (기록 저장 시)
 // ═══════════════════════════════════════════════════════════════
 function requestNotificationPermission() {
-  if(!('Notification' in window)) return;
-  if(Notification.permission==='default') {
-    Notification.requestPermission().then(p=>{
-      if(p==='granted') showToast('🔔 알림이 활성화되었습니다');
-    });
+  if(!('Notification' in window)) { showToast('이 브라우저는 알림을 지원하지 않습니다'); return; }
+  if(Notification.permission==='granted') { updateNotifButton(); return; }
+  if(Notification.permission==='denied') { showToast('⚠️ 알림이 차단되었습니다. 브라우저 설정에서 허용해주세요.'); updateNotifButton(); return; }
+  Notification.requestPermission().then(p=>{
+    if(p==='granted') {
+      showToast('🔔 알림이 활성화되었습니다!');
+      // 테스트 알림
+      try { new Notification('🔔 알림 테스트', {body:'오랑이 두통 기록 알림이 활성화되었습니다.', tag:'test'}); } catch(e){}
+    } else if(p==='denied') {
+      showToast('❌ 알림이 차단되었습니다. 브라우저 주소창 왼쪽 자물쇠에서 허용해주세요.');
+    }
+    updateNotifButton();
+  });
+}
+
+function toggleNotifications() {
+  if(!('Notification' in window)) { showToast('이 브라우저는 알림을 지원하지 않습니다'); return; }
+  const perm = Notification.permission;
+  if(perm==='granted') {
+    showToast('✅ 알림이 이미 활성화되어 있습니다. 오랑이가 기록하면 알림이 옵니다.');
+  } else if(perm==='denied') {
+    showToast('⚠️ 알림이 차단됨 — 주소창 왼쪽 🔒 → 알림 → 허용으로 변경해주세요', 5000);
+  } else {
+    requestNotificationPermission();
   }
 }
 
-// 사용자 인터랙션 시 알림 권한 요청 (모바일은 인터랙션 필요)
-document.addEventListener('click',function _reqNotif(){
-  requestNotificationPermission();
-  document.removeEventListener('click',_reqNotif);
-},{once:true});
+function updateNotifButton() {
+  const btn=document.getElementById('notif-toggle-btn');
+  if(!btn) return;
+  if(!('Notification' in window)) { btn.textContent='🔕 알림 미지원'; return; }
+  const perm=Notification.permission;
+  if(perm==='granted') btn.textContent='🔔 알림 켜짐';
+  else if(perm==='denied') btn.textContent='🔕 알림 차단됨';
+  else btn.textContent='🔔 알림 설정';
+}
+setTimeout(updateNotifButton, 1000);
 
 function sendLogNotification(entry) {
   if(!('Notification' in window)||Notification.permission!=='granted') return;
