@@ -5779,6 +5779,59 @@ function generateWeeklySummary() {
   return { period:`${weekAgo} ~ ${today}`, logCount:weekLogs.length, sessionCount:weekSessions.length, avgNrs, dates, byDate, topMeds };
 }
 
+function _renderWeeklyNrsChart(logs, dates) {
+  if(!logs.length) return '';
+  var w=320, h=80, padL=24, padR=8, padT=12, padB=16;
+  var plotW=w-padL-padR, plotH=h-padT-padB;
+  // X: time index, Y: NRS 0-10
+  var grid='';
+  for(var n=0;n<=10;n+=5){
+    var y=padT+(1-n/10)*plotH;
+    grid+='<line x1="'+padL+'" y1="'+y+'" x2="'+(w-padR)+'" y2="'+y+'" stroke="var(--bd)" stroke-width="0.5"/>';
+    grid+='<text x="'+(padL-3)+'" y="'+(y+3)+'" text-anchor="end" font-size="7" fill="var(--mu)">'+n+'</text>';
+  }
+  // Date separators
+  var dateSet=[...new Set(logs.map(function(l){return l.date;}))].sort();
+  var dayLabels='';
+  dateSet.forEach(function(d,i){
+    var firstIdx=logs.findIndex(function(l){return l.date===d;});
+    var x=padL+(firstIdx/(logs.length-1||1))*plotW;
+    if(i>0) dayLabels+='<line x1="'+x+'" y1="'+padT+'" x2="'+x+'" y2="'+(h-padB)+'" stroke="var(--bd)" stroke-width="0.5" stroke-dasharray="2"/>';
+    dayLabels+='<text x="'+x+'" y="'+(h-2)+'" font-size="7" fill="var(--mu)">'+d.slice(5)+'</text>';
+  });
+  // Points and line
+  var pts=logs.map(function(l,i){
+    var x=padL+(i/(logs.length-1||1))*plotW;
+    var y=padT+(1-l.nrs/10)*plotH;
+    return {x:x,y:y,nrs:l.nrs,time:l.time,meds:l.meds,tx:l.treatments};
+  });
+  var pathD=pts.map(function(p,i){return (i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1);}).join(' ');
+  var areaD=pathD+' L'+pts[pts.length-1].x.toFixed(1)+','+(h-padB)+' L'+pts[0].x.toFixed(1)+','+(h-padB)+' Z';
+  var dots=pts.map(function(p){
+    var c=p.nrs>=7?'#ef4444':p.nrs>=4?'#f59e0b':'#10b981';
+    var hasTx=p.tx&&p.tx.length&&p.tx.some(function(t){return t.toLowerCase().includes('block');});
+    var r=hasTx?4:2.5;
+    var stroke=hasTx?'stroke="#1e40af" stroke-width="2"':'stroke="var(--sf)" stroke-width="1"';
+    return '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+r+'" fill="'+c+'" '+stroke+'>'
+      +'<title>'+p.time+' NRS '+p.nrs+(p.meds.length?' | '+p.meds.join(', '):'')+(p.tx&&p.tx.length?' | '+p.tx.join(', '):'')+'</title></circle>';
+  }).join('');
+  // Med/tx markers
+  var markers=pts.map(function(p){
+    var items=[];
+    if(p.meds&&p.meds.length) items.push('💊');
+    if(p.tx&&p.tx.length&&p.tx.some(function(t){return t.toLowerCase().includes('block');})) items.push('💉');
+    if(!items.length) return '';
+    return '<text x="'+p.x.toFixed(1)+'" y="'+(p.y-6)+'" text-anchor="middle" font-size="7">'+items.join('')+'</text>';
+  }).join('');
+
+  return '<div style="margin:8px 0"><svg viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;max-height:100px">'
+    +grid+dayLabels
+    +'<path d="'+areaD+'" fill="var(--ac)" opacity="0.06"/>'
+    +'<path d="'+pathD+'" fill="none" stroke="var(--ac)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'
+    +dots+markers
+    +'</svg></div>';
+}
+
 function _renderNrsCell(avg,color,barW) {
   if(avg===null) return '<div style="font-size:.7rem;color:var(--mu)">-</div>';
   const v=typeof avg==='number'?avg.toFixed(1):avg;
@@ -5793,56 +5846,66 @@ function renderWeeklySummaryCard() {
 
   const dayNames=['일','월','화','수','목','금','토'];
 
+  // NRS 타임라인 SVG (시간대별 점)
+  const allLogs=[];
+  summary.dates.forEach(d=>{
+    const dd=summary.byDate[d];
+    dd.logs.forEach(l=>{ if(l.nrs>=0) allLogs.push({date:d,time:l.datetime?.slice(11,16)||'00:00',nrs:l.nrs,meds:l.meds||[],treatments:l.treatments||[]}); });
+  });
+  allLogs.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  const svgChart=_renderWeeklyNrsChart(allLogs,summary.dates);
+
+  // 일별 상세 (시간대별 펼침)
   const daysHtml=summary.dates.map(d=>{
     const dd=summary.byDate[d];
     if(!dd.logs.length) return '';
     const dayOfWeek=dayNames[new Date(d+'T12:00').getDay()];
     const dateLabel=d.slice(5)+' ('+dayOfWeek+')';
-    const avgNrs=dd.nrs.length?(dd.nrs.reduce((a,b)=>a+b,0)/dd.nrs.length):null;
-    const maxNrs=dd.nrs.length?Math.max(...dd.nrs):null;
-    const nrsColor=avgNrs===null?'var(--mu)':avgNrs>=7?'#ef4444':avgNrs>=4?'#f59e0b':'#10b981';
-    const nrsBarW=avgNrs!==null?Math.max(8,avgNrs*10):0;
-
     const isBlock=t=>t.toLowerCase().includes('block');
-    const medsHtml=dd.meds.map(m=>`<span style="font-size:.65rem;padding:1px 6px;border-radius:3px;background:#fef3c7;color:#92400e">${esc(m)}</span>`).join(' ');
-    const txHtml=dd.treatments.map(t=>{
-      if(isBlock(t)) return `<span style="font-size:.65rem;padding:2px 8px;border-radius:4px;background:#dbeafe;color:#1e40af;font-weight:700;border:1.5px solid #93c5fd">💉 ${esc(t)}</span>`;
-      return `<span style="font-size:.65rem;padding:1px 6px;border-radius:3px;background:#d1fae5;color:#065f46">${esc(t)}</span>`;
-    }).join(' ');
-    const painHtml=dd.painType.length?`<span style="font-size:.62rem;color:#ec4899">${dd.painType.map(p=>esc(p)).join(' · ')}</span>`:'';
 
-    return `<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);align-items:flex-start">
-      <div style="min-width:52px;text-align:right">
-        <div style="font-size:.72rem;font-weight:600;font-family:var(--mono);color:var(--ink)">${dateLabel}</div>
-        <div style="font-size:.6rem;color:var(--mu)">${dd.logs.length}건</div>
-      </div>
-      <div style="min-width:40px;text-align:center">${_renderNrsCell(avgNrs,nrsColor,nrsBarW)}</div>
-      <div style="flex:1;display:flex;flex-wrap:wrap;gap:3px;align-items:center">
-        ${painHtml}
-        ${medsHtml}
-        ${txHtml}
-        ${!dd.meds.length&&!dd.treatments.length?`<span style="font-size:.62rem;color:var(--mu2)">투약/처치 없음</span>`:''}
-      </div>
-    </div>`;
+    const logsHtml=dd.logs.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||'')).map(l=>{
+      const time=l.datetime?.slice(11,16)||'';
+      const nrs=l.nrs>=0?l.nrs:null;
+      const nc=nrs===null?'var(--mu)':nrs>=7?'#ef4444':nrs>=4?'#f59e0b':'#10b981';
+      const barW=nrs!==null?Math.max(5,nrs*10):0;
+      const meds=(l.meds||[]).map(m=>'<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:#fef3c7;color:#92400e">'+esc(m)+'</span>').join(' ');
+      const tx=(l.treatments||[]).map(t=>{
+        if(isBlock(t)) return '<span style="font-size:.6rem;padding:1px 6px;border-radius:4px;background:#dbeafe;color:#1e40af;font-weight:700;border:1.5px solid #93c5fd">💉 '+esc(t)+'</span>';
+        return '<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:#d1fae5;color:#065f46">'+esc(t)+'</span>';
+      }).join(' ');
+      const pain=(l.painType||[]).length?'<span style="font-size:.58rem;color:#ec4899">'+(l.painType||[]).map(p=>esc(p)).join('·')+'</span>':'';
+      const sites=(l.sites||[]).length?'<span style="font-size:.58rem;color:var(--mu)">'+(l.sites||[]).map(s=>esc(s)).join(', ')+'</span>':'';
+
+      return '<div style="display:flex;gap:6px;padding:2px 0;align-items:center">'
+        +'<span style="font-size:.65rem;font-family:var(--mono);color:var(--mu);min-width:32px">'+esc(time)+'</span>'
+        +(nrs!==null?'<span style="font-size:.75rem;font-weight:700;color:'+nc+';min-width:22px;text-align:center">'+nrs+'</span>'
+          +'<div style="width:50px;height:3px;background:var(--bd);border-radius:2px;overflow:hidden"><div style="width:'+barW+'%;height:100%;background:'+nc+'"></div></div>'
+          :'<span style="font-size:.65rem;color:var(--mu);min-width:22px;text-align:center">-</span><div style="width:50px"></div>')
+        +'<div style="flex:1;display:flex;flex-wrap:wrap;gap:2px;align-items:center">'+pain+sites+meds+tx+'</div>'
+        +'</div>';
+    }).join('');
+
+    return '<div style="padding:6px 0;border-bottom:1.5px solid var(--bd)">'
+      +'<div style="font-size:.72rem;font-weight:700;color:var(--ink);margin-bottom:3px">'+esc(dateLabel)
+      +'<span style="font-size:.6rem;font-weight:400;color:var(--mu);margin-left:6px">'+dd.logs.length+'건</span></div>'
+      +logsHtml+'</div>';
   }).join('');
 
-  const medsTotal=summary.topMeds.map(([name,count])=>`<span style="font-size:.7rem;background:var(--sf2);padding:2px 8px;border-radius:4px">${esc(name)} ×${count}</span>`).join(' ');
+  const medsTotal=summary.topMeds.map(function(e){return '<span style="font-size:.7rem;background:var(--sf2);padding:2px 8px;border-radius:4px">'+esc(e[0])+' ×'+e[1]+'</span>';}).join(' ');
 
-  return `<div class="weekly-summary-card">
-    <div class="card-title">📊 주간 요약 <span class="badge badge-blue">${summary.period}</span></div>
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0">
-      <div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--ac)">${summary.logCount}</div><div style="font-size:.65rem;color:var(--mu)">기록</div></div>
-      <div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--r3)">${summary.sessionCount}</div><div style="font-size:.65rem;color:var(--mu)">세션</div></div>
-      ${summary.avgNrs!==null?`<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:${summary.avgNrs>=7?'#ef4444':summary.avgNrs>=4?'#f59e0b':'#10b981'}">${summary.avgNrs}</div><div style="font-size:.65rem;color:var(--mu)">평균 NRS</div></div>`:''}
-    </div>
-    <div style="margin-top:8px;font-size:.68rem;display:flex;gap:8px;align-items:center;color:var(--mu);border-bottom:1px solid var(--bd);padding-bottom:4px">
-      <span style="min-width:52px;text-align:right;font-weight:600">날짜</span>
-      <span style="min-width:40px;text-align:center;font-weight:600">NRS</span>
-      <span style="font-weight:600">약물 / 시술 / 처치</span>
-    </div>
-    ${daysHtml}
-    ${medsTotal?`<div style="margin-top:8px"><span style="font-size:.68rem;color:var(--mu)">주간 합계:</span> ${medsTotal}</div>`:''}
-  </div>`;
+  const avgColor=summary.avgNrs===null?'var(--mu)':summary.avgNrs>=7?'#ef4444':summary.avgNrs>=4?'#f59e0b':'#10b981';
+
+  return '<div class="weekly-summary-card">'
+    +'<div class="card-title">📊 주간 요약 <span class="badge badge-blue">'+summary.period+'</span></div>'
+    +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0">'
+    +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--ac)">'+summary.logCount+'</div><div style="font-size:.65rem;color:var(--mu)">기록</div></div>'
+    +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--r3)">'+summary.sessionCount+'</div><div style="font-size:.65rem;color:var(--mu)">세션</div></div>'
+    +(summary.avgNrs!==null?'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:'+avgColor+'">'+summary.avgNrs+'</div><div style="font-size:.65rem;color:var(--mu)">평균 NRS</div></div>':'')
+    +'</div>'
+    +svgChart
+    +daysHtml
+    +(medsTotal?'<div style="margin-top:8px"><span style="font-size:.68rem;color:var(--mu)">주간 합계:</span> '+medsTotal+'</div>':'')
+    +'</div>';
 }
 
 // ═══════════════════════════════════════════════════════════════
