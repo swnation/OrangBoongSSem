@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<script src="https://accounts.google.com/gsi/client" async></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 </head>
@@ -705,18 +705,28 @@ async function ensureValidToken() {
   });
 }
 
-(function checkGSI(attempts) {
+function checkGSI(attempts) {
   if(!attempts) attempts=0;
   if (window.google?.accounts?.oauth2) {
     const el = document.getElementById('gsi-status');
     if (el) { el.textContent = '✓ 준비됨 — 위 버튼을 눌러 로그인하세요'; el.style.color = '#2d6a4f'; }
+  } else if(attempts<20) {
+    setTimeout(()=>checkGSI(attempts+1), 500);
+  } else if(attempts===20) {
+    // 동적 재로드 시도
+    const s=document.createElement('script');
+    s.src='https://accounts.google.com/gsi/client';
+    s.onload=()=>setTimeout(()=>checkGSI(21),500);
+    s.onerror=()=>checkGSI(30);
+    document.head.appendChild(s);
   } else if(attempts<30) {
     setTimeout(()=>checkGSI(attempts+1), 500);
   } else {
     const el = document.getElementById('gsi-status');
-    if (el) { el.innerHTML = '⚠️ Google 인증 로드 실패 — <a href="javascript:location.reload()" style="color:var(--ac)">새로고침</a>'; el.style.color = '#c03030'; }
+    if (el) { el.innerHTML = '⚠️ Google 인증 로드 실패 — <a href="javascript:location.reload()" style="color:var(--ac)">새로고침</a> 또는 <a href="javascript:void(0)" onclick="checkGSI(0)" style="color:var(--ac)">재시도</a>'; el.style.color = '#c03030'; }
   }
-})();
+}
+checkGSI(0);
 
 function handleToken(resp) {
   if (resp.error) {
@@ -2442,11 +2452,12 @@ async function markSyncedOnCloud(ids) {
 
 function mergeQuickLogs(local, cloud) {
   if (!cloud) return local;
+  const deletedIds = new Set(JSON.parse(localStorage.getItem('om_quick_deleted')||'[]'));
   const merged = [...local];
   cloud.forEach(ce => {
+    if (deletedIds.has(String(ce.id))) return; // 삭제된 항목 무시
     const idx = merged.findIndex(l => String(l.id) === String(ce.id));
     if (idx >= 0) {
-      // 클라우드가 더 최신이면 업데이트
       if (ce.synced && !merged[idx].synced) merged[idx].synced = true;
     } else {
       merged.push(ce);
@@ -2730,6 +2741,8 @@ async function discardQuickLog(id) {
   if (!confirm('이 빠른 기록을 삭제할까요?')) return;
   const logs = getQuickLogs().filter(l => l.id !== id);
   saveQuickLogs(logs);
+  // 삭제 ID 기록 (클라우드 복원 방지)
+  try { const d=JSON.parse(localStorage.getItem('om_quick_deleted')||'[]'); if(!d.includes(String(id))){d.push(String(id));localStorage.setItem('om_quick_deleted',JSON.stringify(d));} } catch(e){}
   // 클라우드에서도 삭제
   try {
     const url = getQuickSyncUrl();
