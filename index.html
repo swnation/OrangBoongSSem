@@ -4968,7 +4968,7 @@ function exportPDF() {
     html+=`<h2>등록 질환</h2><table><tr><th>질환</th><th>상태</th><th>투약</th></tr>`;
     conditions.forEach(c=>{
       const statusL={active:'치료 중',remission:'관해',resolved:'완치','self-stopped':'자의 중단'};
-      html+=`<tr><td>${c.name}</td><td>${statusL[c.status]||c.status}</td><td>${c.medsList?.join(', ')||c.medications||'-'}</td></tr>`;
+      html+=`<tr><td>${esc(c.name)}</td><td>${statusL[c.status]||c.status}</td><td>${(c.medsList||[]).map(m=>esc(m)).join(', ')||c.medications||'-'}</td></tr>`;
     });
     html+=`</table>`;
   }
@@ -4982,7 +4982,7 @@ function exportPDF() {
     last30.forEach(l=>{
       html+=`<tr><td>${l.datetime.slice(0,10)}</td><td>${l.datetime.slice(11,16)}</td>`;
       html+=lc.moodMode?`<td>${l.mood||'-'}</td>`:`<td>${l.nrs>=0?l.nrs:'-'}</td>`;
-      html+=`<td>${(l.symptoms||[]).join(', ')||'-'}</td><td>${(l.meds||[]).join(', ')||'-'}</td><td>${l.memo||'-'}</td></tr>`;
+      html+=`<td>${(l.symptoms||[]).map(s=>esc(s)).join(', ')||'-'}</td><td>${(l.meds||[]).map(m=>esc(m)).join(', ')||'-'}</td><td>${esc(l.memo||'-')}</td></tr>`;
     });
     html+=`</table>`;
   }
@@ -6405,7 +6405,7 @@ function exportMonthlyPDF() {
     const statusL={active:'치료 중',remission:'관해',resolved:'완치','self-stopped':'자의 중단'};
     html+=`<div class="section"><h2>등록 질환</h2><table><tr><th>질환명</th><th>상태</th><th>현재 투약</th></tr>`;
     conditions.filter(c=>c.status==='active'||c.status==='remission').forEach(c=>{
-      html+=`<tr><td>${c.name}</td><td>${statusL[c.status]||c.status}</td><td>${c.medsList?.join(', ')||'-'}</td></tr>`;
+      html+=`<tr><td>${esc(c.name)}</td><td>${statusL[c.status]||c.status}</td><td>${(c.medsList||[]).map(m=>esc(m)).join(', ')||'-'}</td></tr>`;
     });
     html+=`</table></div>`;
   }
@@ -6415,8 +6415,8 @@ function exportMonthlyPDF() {
     html+=`<div class="section"><h2>주요 증상 및 투약 빈도</h2><table><tr><th>증상</th><th>횟수</th><th>투약</th><th>횟수</th></tr>`;
     const maxRows=Math.max(topSyms.length,topMeds.length);
     for(let i=0;i<maxRows;i++){
-      html+=`<tr><td>${topSyms[i]?topSyms[i][0]:''}</td><td>${topSyms[i]?topSyms[i][1]:''}</td>
-        <td>${topMeds[i]?topMeds[i][0]:''}</td><td>${topMeds[i]?topMeds[i][1]:''}</td></tr>`;
+      html+=`<tr><td>${topSyms[i]?esc(topSyms[i][0]):''}</td><td>${topSyms[i]?topSyms[i][1]:''}</td>
+        <td>${topMeds[i]?esc(topMeds[i][0]):''}</td><td>${topMeds[i]?topMeds[i][1]:''}</td></tr>`;
     }
     html+=`</table></div>`;
   }
@@ -6447,8 +6447,8 @@ function exportMonthlyPDF() {
       const nrsCls=l.nrs>=7?'nrs-high':l.nrs>=4?'nrs-med':'nrs-low';
       html+=`<tr><td>${l.datetime.slice(0,10)}</td><td>${l.datetime.slice(11,16)}</td>
         <td class="${l.nrs>=0?nrsCls:''}">${l.nrs>=0?l.nrs:'-'}</td>
-        <td>${(l.symptoms||[]).join(', ')||'-'}</td><td>${(l.meds||[]).join(', ')||'-'}</td>
-        <td>${l.memo||'-'}</td></tr>`;
+        <td>${(l.symptoms||[]).map(s=>esc(s)).join(', ')||'-'}</td><td>${(l.meds||[]).map(m=>esc(m)).join(', ')||'-'}</td>
+        <td>${esc(l.memo||'-')}</td></tr>`;
     });
     html+=`</table></div>`;
   }
@@ -6542,12 +6542,11 @@ function generateAIQuestionSuggestions() {
 }
 
 function renderAIQuestionSuggestions() {
-  const suggestions=generateAIQuestionSuggestions();
-  if(!suggestions.length) return '';
+  if(!_aiSuggestions.length) return '';
   return `<div class="card" style="border-color:var(--ac)">
     <div class="card-title">🤖 AI 질문 추천 <span class="badge badge-blue">패턴 기반</span></div>
     <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">최근 기록 패턴을 분석하여 세션에서 다룰 질문을 추천합니다.</div>
-    ${suggestions.map((s,i)=>`
+    ${_aiSuggestions.map((s,i)=>`
       <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin-bottom:6px;background:var(--sf2);border-radius:8px;cursor:pointer"
         onclick="startNewSession(_aiSuggestions[${i}])">
         <span style="font-size:.8rem">💬</span>
