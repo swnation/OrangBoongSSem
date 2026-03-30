@@ -1580,6 +1580,7 @@ function renderHome() {
   return `
     <button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
     <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
+    ${renderPatternWarnings()}
     ${renderDrugInteractionWarning()}
     ${renderInsightCard()}
     ${renderWeeklySummaryCard()}
@@ -2041,6 +2042,7 @@ function renderStatsView() {
   ${lc.moodMode?'':renderCalendarHeatmap(logs,lc)}
   ${renderTrendChart(logs, 90)}
   ${renderCorrelationAnalysis(logs)}
+  ${renderMedEffectAnalysis(logs)}
   ${renderTreatmentTracker()}
   <div style="text-align:center;margin-top:8px"><button class="btn-export" onclick="exportPDF()">📑 PDF 리포트 생성</button></div>`;
 }
@@ -6153,6 +6155,173 @@ function renderCorrelationAnalysis(logs) {
     <div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">투약 시 NRS가 전체 평균 대비 어떻게 변했는지 보여줍니다.</div>
     ${rows}
     <div style="font-size:.6rem;color:var(--mu);margin-top:8px">※ 상관관계는 인과관계를 의미하지 않습니다. 최소 3회 이상 투약 데이터 기준.</div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 약물 효과 추적 — 복용 후 NRS 변화 분석
+// ═══════════════════════════════════════════════════════════════
+function renderMedEffectAnalysis(logs) {
+  const lc=DC().logConfig;
+  if(lc.moodMode||lc.customFields) return '';
+
+  // Group logs by date with time info
+  const nrsLogs=logs.filter(l=>l.nrs>=0).sort((a,b)=>a.datetime.localeCompare(b.datetime));
+  if(nrsLogs.length<5) return '';
+
+  // For each medication, find "before" and "after" NRS patterns
+  const medEffects={};
+  const byDate={};
+  nrsLogs.forEach(l=>{
+    const d=l.datetime.slice(0,10);
+    if(!byDate[d]) byDate[d]=[];
+    byDate[d].push(l);
+  });
+
+  const dates=Object.keys(byDate).sort();
+  dates.forEach((d,di)=>{
+    const dayLogs=byDate[d];
+    const dayMeds=new Set(dayLogs.flatMap(l=>l.meds||[]));
+    if(!dayMeds.size) return;
+
+    // Get NRS for this day and next day
+    const todayNrs=dayLogs.filter(l=>l.nrs>=0).map(l=>l.nrs);
+    const nextDate=dates[di+1];
+    const nextNrs=nextDate?byDate[nextDate].filter(l=>l.nrs>=0).map(l=>l.nrs):[];
+
+    const todayAvg=todayNrs.length?todayNrs.reduce((a,b)=>a+b,0)/todayNrs.length:null;
+    const nextAvg=nextNrs.length?nextNrs.reduce((a,b)=>a+b,0)/nextNrs.length:null;
+
+    dayMeds.forEach(med=>{
+      if(!medEffects[med]) medEffects[med]={dayOfNrs:[],nextDayNrs:[],count:0};
+      if(todayAvg!==null) medEffects[med].dayOfNrs.push(todayAvg);
+      if(nextAvg!==null) medEffects[med].nextDayNrs.push(nextAvg);
+      medEffects[med].count++;
+    });
+  });
+
+  const results=Object.entries(medEffects)
+    .filter(([,e])=>e.count>=3&&e.dayOfNrs.length>=3&&e.nextDayNrs.length>=2)
+    .map(([med,e])=>{
+      const dayAvg=e.dayOfNrs.reduce((a,b)=>a+b,0)/e.dayOfNrs.length;
+      const nextAvg=e.nextDayNrs.reduce((a,b)=>a+b,0)/e.nextDayNrs.length;
+      const change=nextAvg-dayAvg;
+      return {med,dayAvg:dayAvg.toFixed(1),nextAvg:nextAvg.toFixed(1),change:change.toFixed(1),count:e.count,improved:change<0};
+    })
+    .sort((a,b)=>parseFloat(a.change)-parseFloat(b.change))
+    .slice(0,6);
+
+  if(!results.length) return '';
+
+  const rows=results.map(r=>{
+    const arrow=r.improved?'↓':'↑';
+    const color=r.improved?'#10b981':'#ef4444';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bd)">
+      <span style="font-size:.78rem;min-width:80px;font-weight:500">${esc(r.med)}</span>
+      <div style="flex:1;display:flex;align-items:center;gap:6px">
+        <span style="font-size:.72rem;color:var(--mu)">복용일 ${r.dayAvg}</span>
+        <span style="color:${color};font-weight:700;font-size:.8rem">${arrow}</span>
+        <span style="font-size:.72rem;color:${color};font-weight:600">다음날 ${r.nextAvg}</span>
+      </div>
+      <span style="font-size:.62rem;color:var(--mu);font-family:var(--mono)">${r.count}회</span>
+    </div>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="card-title">💊 약물 효과 추적 <span class="badge badge-green">복용→다음날 NRS 변화</span></div>
+    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">약물 복용일과 다음날의 평균 NRS 변화를 비교합니다.</div>
+    ${rows}
+    <div style="font-size:.6rem;color:var(--mu);margin-top:8px">※ 최소 3회 이상 복용 데이터 기준. 다른 요인이 영향을 줄 수 있습니다.</div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 패턴 감지 경고 — 위험 패턴 자동 감지
+// ═══════════════════════════════════════════════════════════════
+function detectDangerousPatterns() {
+  const ds=D(); const lc=DC().logConfig;
+  if(lc.moodMode||lc.customFields) return [];
+  const logs=ds.logData||[];
+  if(!logs.length) return [];
+
+  const warnings=[];
+  const today=kstToday();
+  const recentLogs=logs.filter(l=>{
+    const d=l.datetime.slice(0,10);
+    const diff=Math.round((new Date(today+'T00:00:00')-new Date(d+'T00:00:00'))/86400000);
+    return diff>=0&&diff<=14;
+  }).sort((a,b)=>a.datetime.localeCompare(b.datetime));
+
+  if(!recentLogs.length) return [];
+
+  // 1. 연속 고통 감지: 3일 연속 NRS 7+
+  const byDate={};
+  recentLogs.forEach(l=>{
+    const d=l.datetime.slice(0,10);
+    if(!byDate[d]) byDate[d]=[];
+    if(l.nrs>=0) byDate[d].push(l.nrs);
+  });
+  const dates=Object.keys(byDate).sort();
+  let consecHigh=0; let maxConsec=0;
+  dates.forEach(d=>{
+    const avg=byDate[d].reduce((a,b)=>a+b,0)/byDate[d].length;
+    if(avg>=7) { consecHigh++; maxConsec=Math.max(maxConsec,consecHigh); }
+    else { consecHigh=0; }
+  });
+  if(maxConsec>=3) {
+    warnings.push({level:'high',icon:'🔴',text:`${maxConsec}일 연속 NRS 7 이상 — 전문의 상담을 권장합니다`});
+  }
+
+  // 2. 투약 빈도 과다: 7일 중 5일 이상 진통제 사용
+  const last7=recentLogs.filter(l=>{
+    const diff=Math.round((new Date(today+'T00:00:00')-new Date(l.datetime.slice(0,10)+'T00:00:00'))/86400000);
+    return diff>=0&&diff<=7;
+  });
+  const medDays=new Set(last7.filter(l=>(l.meds||[]).length>0).map(l=>l.datetime.slice(0,10)));
+  if(medDays.size>=5) {
+    warnings.push({level:'moderate',icon:'🟡',text:`최근 7일 중 ${medDays.size}일 투약 — 약물 과용 두통(MOH) 주의`});
+  }
+
+  // 3. NRS 악화 추세: 최근 7일 평균 > 이전 7일 평균
+  const prev7=logs.filter(l=>{
+    const diff=Math.round((new Date(today+'T00:00:00')-new Date(l.datetime.slice(0,10)+'T00:00:00'))/86400000);
+    return diff>7&&diff<=14;
+  });
+  const cur7Nrs=last7.filter(l=>l.nrs>=0).map(l=>l.nrs);
+  const prev7Nrs=prev7.filter(l=>l.nrs>=0).map(l=>l.nrs);
+  if(cur7Nrs.length>=3&&prev7Nrs.length>=3) {
+    const curAvg=cur7Nrs.reduce((a,b)=>a+b,0)/cur7Nrs.length;
+    const prevAvg=prev7Nrs.reduce((a,b)=>a+b,0)/prev7Nrs.length;
+    if(curAvg-prevAvg>=2) {
+      warnings.push({level:'moderate',icon:'📈',text:`NRS 악화 추세: 이전 주 평균 ${prevAvg.toFixed(1)} → 이번 주 ${curAvg.toFixed(1)} (+${(curAvg-prevAvg).toFixed(1)})`});
+    }
+  }
+
+  // 4. 기록 공백: 3일 이상 기록 없음
+  if(recentLogs.length) {
+    const lastLog=recentLogs[recentLogs.length-1];
+    const lastDate=lastLog.datetime.slice(0,10);
+    const gap=Math.round((new Date(today+'T00:00:00')-new Date(lastDate+'T00:00:00'))/86400000);
+    if(gap>=3) {
+      warnings.push({level:'low',icon:'📝',text:`${gap}일 동안 기록 없음 — 꾸준한 기록이 패턴 분석에 도움됩니다`});
+    }
+  }
+
+  return warnings;
+}
+
+function renderPatternWarnings() {
+  const warnings=detectDangerousPatterns();
+  if(!warnings.length) return '';
+  const levelBorder={high:'#ef4444',moderate:'#f59e0b',low:'var(--ac)'};
+  const items=warnings.map(w=>`
+    <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-left:3px solid ${levelBorder[w.level]};margin-bottom:6px;background:var(--sf2);border-radius:0 6px 6px 0">
+      <span style="font-size:1rem">${w.icon}</span>
+      <span style="font-size:.78rem;color:var(--ink)">${esc(w.text)}</span>
+    </div>`).join('');
+  return `<div class="card" style="border-color:${warnings[0].level==='high'?'#ef4444':'#f59e0b'}">
+    <div class="card-title">⚠️ 패턴 감지 경고 <span class="badge badge-orange">${warnings.length}건</span></div>
+    ${items}
   </div>`;
 }
 
