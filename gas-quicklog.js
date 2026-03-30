@@ -28,6 +28,18 @@ function doPost(e) {
         const entry = logs.find(function(l) { return l.id === id; });
         if (entry) entry.synced = true;
       });
+    } else if (data.action === 'replaceAll') {
+      // 전체 목록 덮어쓰기 (삭제/수정 반영)
+      var replaced = (data.entries || []).slice(-200);
+      props.setProperty('quickLogs', JSON.stringify(replaced));
+      return ContentService.createTextOutput(JSON.stringify({ ok: true, count: replaced.length }))
+        .setMimeType(ContentService.MimeType.JSON);
+    } else if (data.action === 'delete') {
+      var deleteIds = (data.ids || []).map(function(id) { return String(id); });
+      var filtered = logs.filter(function(l) { return deleteIds.indexOf(String(l.id)) === -1; });
+      props.setProperty('quickLogs', JSON.stringify(filtered));
+      return ContentService.createTextOutput(JSON.stringify({ ok: true, count: filtered.length }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     // 최근 200건만 유지
