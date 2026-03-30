@@ -6156,17 +6156,13 @@ function renderCorrelationAnalysis(logs) {
   </div>`;
 }
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
-}
-
 // Load aiEnabled from localStorage on startup
 try { const ae=localStorage.getItem('aiEnabled'); if(ae) S.aiEnabled=JSON.parse(ae); } catch(e){}
 
-// #18 Check for shared session on load
-window.addEventListener('load',()=>{ loadSharedSession(); });
+window.addEventListener('load', () => {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  loadSharedSession();
+});
 
 </script>
 </body>
