@@ -458,7 +458,9 @@ function renderForm(entry) {
     return `<span class="chip ${sel?'sel sel-sym':''}" data-val="${esc(s)}" data-group="sym" onclick="toggleChip(this,'sel-sym')">${esc(s)}</span>`;
   }).join('');
 
-  const painTypeChips = PAIN_TYPES.map(p => {
+  const customPain = getCustom('pain');
+  const extraPain = (e.painType||[]).filter(p => !PAIN_TYPES.includes(p) && !customPain.includes(p));
+  const painTypeChips = [...PAIN_TYPES, ...customPain, ...extraPain].map(p => {
     const sel = e.painType?.includes(p);
     return `<span class="chip ${sel?'sel sel-pain':''}" data-val="${esc(p)}" data-group="pain" onclick="toggleChip(this,'sel-pain')">${esc(p)}</span>`;
   }).join('');
@@ -527,6 +529,10 @@ function renderForm(entry) {
     <div class="section">
       <div class="section-title">통증 종류</div>
       <div class="chips" id="pain-chips">${painTypeChips}</div>
+      <div class="other-row">
+        <input class="other-input" id="pain-other" placeholder="기타 통증">
+        <button class="btn-other-add" onclick="addOtherChip('pain-other','pain-chips','pain','sel-pain')">+</button>
+      </div>
     </div>
 
     <div class="section">
