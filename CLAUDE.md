@@ -117,3 +117,4 @@ backup/v8.1  ← UX 개선/직접입력/자동완성/컨텍스트통합
 9. API 키는 localStorage에만 저장 (Drive 동기화 안 함)
 10. 버전 업 시 `APP_VERSION` 배열에 새 항목 추가 필수
 11. 버전 업 시 `backup/vX.X` 브랜치 생성 필수, **최근 5개만 유지** (가장 오래된 것 삭제)
+12. 버전 업 시 `codeBackupToDrive()` 실행하여 Google Drive에 코드+맥락 백업 필수 (사용자가 로그인 상태일 때 자동 호출)
