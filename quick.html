@@ -706,33 +706,30 @@ function editEntry(id) {
   setTimeout(() => renderForm(entry), 50);
 }
 
-function getDeletedIds() {
-  try { return JSON.parse(localStorage.getItem('om_quick_deleted') || '[]'); } catch(e) { return []; }
-}
-function addDeletedId(id) {
-  const ids = getDeletedIds();
-  if (!ids.includes(String(id))) { ids.push(String(id)); localStorage.setItem('om_quick_deleted', JSON.stringify(ids)); }
-}
-
 async function deleteEntry(id) {
   if (!confirm('삭제할까요?')) return;
   const logs = getQuickLogs().filter(l => l.id !== id);
   saveQuickLogs(logs);
-  addDeletedId(id);
-  // 클라우드에서도 삭제 시도
-  try {
-    const url = getSyncUrl();
-    if (url) {
-      await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'delete', ids: [id] }),
-        redirect: 'follow'
-      });
-    }
-  } catch (e) {}
+  showToast('🗑 삭제 중...');
+  // 클라우드에 전체 목록 덮어쓰기 (삭제 확실 반영)
+  await cloudSaveAll(logs);
   showToast('🗑 삭제됨');
   renderList();
+}
+
+// 클라우드에 전체 목록을 덮어쓰기 (삭제/수정 반영)
+async function cloudSaveAll(logs) {
+  const url = getSyncUrl();
+  if (!url) return false;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'replaceAll', entries: logs }),
+      redirect: 'follow'
+    });
+    return res.ok || res.type === 'opaqueredirect' || res.redirected;
+  } catch (e) { return false; }
 }
 
 // ── Cloud Sync ──
@@ -809,39 +806,26 @@ async function fetchCloudStatus() {
     const res = await fetch(url);
     const data = await res.json();
     if (!data.ok) return;
-    // 클라우드를 주 저장소로: 클라우드 데이터로 로컬 병합
+    // 클라우드가 진실: 클라우드 데이터를 기반으로 로컬 갱신
     const local = getQuickLogs();
-    const localIds = new Set(local.map(l => String(l.id)));
-    let changed = false;
+    const cloudEntries = data.entries || [];
 
-    // 클라우드에서 synced 상태 업데이트 + 새 항목 가져오기
-    const deletedIds = new Set(getDeletedIds());
-    data.entries.forEach(ce => {
-      if (deletedIds.has(String(ce.id))) return; // 로컬에서 삭제한 항목은 무시
-      const localEntry = local.find(l => String(l.id) === String(ce.id));
-      if (localEntry) {
-        if (ce.synced && !localEntry.synced) { localEntry.synced = true; changed = true; }
-      } else {
-        // 클라우드에만 있는 기록 → 로컬에 추가
-        local.push(ce);
-        changed = true;
-      }
-    });
+    // 로컬에만 있는 미전송 항목 보존
+    const cloudIds = new Set(cloudEntries.map(e => String(e.id)));
+    const localOnly = local.filter(l => !cloudIds.has(String(l.id)) && !l.synced);
 
-    // 클라우드에서 삭제된 항목 → 로컬에서도 제거
-    const cloudIds = new Set(data.entries.map(e => String(e.id)));
-    const beforeLen = local.length;
-    const filtered = local.filter(l => cloudIds.has(String(l.id)) || !l.synced);
-    if (filtered.length !== beforeLen) changed = true;
+    // 클라우드 데이터 + 로컬 미전송 = 최종 목록
+    const merged = [...cloudEntries, ...localOnly];
+    merged.sort((a, b) => (a.datetime || '').localeCompare(b.datetime || ''));
 
-    if (changed) {
-      filtered.sort((a, b) => (a.datetime || '').localeCompare(b.datetime || ''));
-      saveQuickLogs(filtered);
+    const oldJSON = JSON.stringify(local.map(l=>l.id).sort());
+    const newJSON = JSON.stringify(merged.map(l=>l.id).sort());
+    if (oldJSON !== newJSON || local.length !== merged.length) {
+      saveQuickLogs(merged);
       renderRecentQuickLogs();
       updatePendingCount();
-      if (filtered.length !== beforeLen) showToast('☁️ 클라우드 동기화 완료');
     }
-  } catch (e) { /* 오프라인 — 로컬만 사용 */ }
+  } catch (e) { /* 오프라인 — 로컬 캐시 사용 */ }
 }
 
 // ── Init ──
