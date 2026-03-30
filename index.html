@@ -5889,6 +5889,8 @@ document.addEventListener('click',function _reqNotif(){
   requestNotificationPermission();
   document.removeEventListener('click',_reqNotif);
 },{once:true});
+
+function sendLogNotification(entry) {
   if(!('Notification' in window)||Notification.permission!=='granted') return;
   const lc=DC().logConfig;
   const dc=DC();
