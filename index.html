@@ -1582,6 +1582,7 @@ function renderHome() {
     <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
     ${renderPatternWarnings()}
     ${renderDrugInteractionWarning()}
+    ${(()=>{_aiSuggestions=generateAIQuestionSuggestions();return renderAIQuestionSuggestions();})()}
     ${renderInsightCard()}
     ${renderWeeklySummaryCard()}
     ${renderBungrukiTimeline()}
@@ -2044,7 +2045,10 @@ function renderStatsView() {
   ${renderCorrelationAnalysis(logs)}
   ${renderMedEffectAnalysis(logs)}
   ${renderTreatmentTracker()}
-  <div style="text-align:center;margin-top:8px"><button class="btn-export" onclick="exportPDF()">📑 PDF 리포트 생성</button></div>`;
+  <div style="text-align:center;margin-top:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+    <button class="btn-export" onclick="exportPDF()">📑 기본 리포트</button>
+    <button class="btn-export" onclick="exportMonthlyPDF()" style="background:#2c5f8a">📋 월간 리포트 (병원용)</button>
+  </div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -6324,6 +6328,234 @@ function renderPatternWarnings() {
     ${items}
   </div>`;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 월간 PDF 리포트 — 병원 방문용
+// ═══════════════════════════════════════════════════════════════
+function exportMonthlyPDF() {
+  const dc=DC(); const ds=D(); const m=DM();
+  if(!m){showToast('데이터 없음');return;}
+  const logs=ds.logData||[];
+  const sessions=m.sessions||[];
+  const conditions=m.conditions||[];
+  const lc=dc.logConfig;
+  const today=kstToday();
+  const monthAgo=kstDaysAgo(30);
+
+  const last30=logs.filter(l=>l.datetime?.slice(0,10)>=monthAgo&&l.datetime?.slice(0,10)<=today).sort((a,b)=>a.datetime.localeCompare(b.datetime));
+  const nrsVals=last30.filter(l=>l.nrs>=0).map(l=>l.nrs);
+  const avgNrs=nrsVals.length?(nrsVals.reduce((a,b)=>a+b,0)/nrsVals.length).toFixed(1):'-';
+  const maxNrs=nrsVals.length?Math.max(...nrsVals):'-';
+  const minNrs=nrsVals.length?Math.min(...nrsVals):'-';
+  const attackDays=new Set(last30.filter(l=>l.nrs>=4).map(l=>l.datetime.slice(0,10))).size;
+  const medDays=new Set(last30.filter(l=>(l.meds||[]).length).map(l=>l.datetime.slice(0,10))).size;
+
+  // Symptom frequency
+  const symFreq={};
+  last30.forEach(l=>(l.symptoms||[]).forEach(s=>{symFreq[s]=(symFreq[s]||0)+1;}));
+  const topSyms=Object.entries(symFreq).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  // Med frequency
+  const medFreq={};
+  last30.forEach(l=>(l.meds||[]).forEach(m2=>{medFreq[m2]=(medFreq[m2]||0)+1;}));
+  const topMeds=Object.entries(medFreq).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  // Weekly breakdown
+  const weeks=[[],[],[],[],[]];
+  last30.forEach(l=>{
+    const diff=Math.round((new Date(today+'T00:00:00')-new Date(l.datetime.slice(0,10)+'T00:00:00'))/86400000);
+    const wi=Math.min(4,Math.floor(diff/7));
+    weeks[wi].push(l);
+  });
+
+  let html=`<html><head><meta charset="utf-8"><title>${dc.user} ${dc.label} 월간 리포트</title>
+  <style>
+    body{font-family:'맑은 고딕','Apple SD Gothic Neo',sans-serif;font-size:11px;padding:24px;color:#333;max-width:800px;margin:0 auto}
+    h1{font-size:20px;border-bottom:3px solid #2c5f8a;padding-bottom:8px;color:#2c5f8a;margin-bottom:4px}
+    .subtitle{font-size:11px;color:#777;margin-bottom:16px}
+    h2{font-size:14px;color:#2c5f8a;margin-top:20px;border-left:4px solid #2c5f8a;padding-left:8px}
+    .stat-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:12px 0}
+    .stat-box{background:#f8f9fa;border:1px solid #ddd;border-radius:6px;padding:10px;text-align:center}
+    .stat-val{font-size:18px;font-weight:700;color:#2c5f8a}.stat-label{font-size:9px;color:#777;margin-top:2px}
+    table{width:100%;border-collapse:collapse;margin:8px 0;font-size:10px}
+    th{background:#e8f0fe;padding:5px 8px;text-align:left;font-weight:600;border:1px solid #ddd}
+    td{border:1px solid #ddd;padding:4px 8px}
+    .nrs-high{background:#fee2e2;color:#991b1b}.nrs-med{background:#fef3c7;color:#92400e}.nrs-low{background:#d1fae5;color:#065f46}
+    .freq-bar{display:inline-block;height:8px;border-radius:4px;margin-right:6px;vertical-align:middle}
+    .section{margin-bottom:16px;page-break-inside:avoid}
+    .footer{margin-top:24px;padding-top:12px;border-top:1px solid #ddd;font-size:9px;color:#999;text-align:center}
+    .week-row{display:flex;gap:12px;margin:6px 0;padding:6px 10px;background:#f8f9fa;border-radius:4px;font-size:10px}
+    @media print{body{padding:12px}h1{font-size:16px}.stat-grid{grid-template-columns:repeat(5,1fr)}}
+  </style></head><body>`;
+
+  html+=`<h1>${dc.icon} ${dc.label} — 월간 의료 리포트</h1>`;
+  html+=`<div class="subtitle">환자: ${dc.user} | 기간: ${monthAgo} ~ ${today} | 생성일: ${today}</div>`;
+
+  // Summary stats
+  html+=`<div class="stat-grid">
+    <div class="stat-box"><div class="stat-val">${last30.length}</div><div class="stat-label">총 기록 수</div></div>
+    <div class="stat-box"><div class="stat-val">${avgNrs}</div><div class="stat-label">평균 NRS</div></div>
+    <div class="stat-box"><div class="stat-val">${maxNrs}</div><div class="stat-label">최대 NRS</div></div>
+    <div class="stat-box"><div class="stat-val">${attackDays}일</div><div class="stat-label">발작일(NRS4+)</div></div>
+    <div class="stat-box"><div class="stat-val">${medDays}일</div><div class="stat-label">투약일</div></div>
+  </div>`;
+
+  // Conditions
+  if(conditions.length) {
+    const statusL={active:'치료 중',remission:'관해',resolved:'완치','self-stopped':'자의 중단'};
+    html+=`<div class="section"><h2>등록 질환</h2><table><tr><th>질환명</th><th>상태</th><th>현재 투약</th></tr>`;
+    conditions.filter(c=>c.status==='active'||c.status==='remission').forEach(c=>{
+      html+=`<tr><td>${c.name}</td><td>${statusL[c.status]||c.status}</td><td>${c.medsList?.join(', ')||'-'}</td></tr>`;
+    });
+    html+=`</table></div>`;
+  }
+
+  // Top symptoms & meds
+  if(topSyms.length||topMeds.length) {
+    html+=`<div class="section"><h2>주요 증상 및 투약 빈도</h2><table><tr><th>증상</th><th>횟수</th><th>투약</th><th>횟수</th></tr>`;
+    const maxRows=Math.max(topSyms.length,topMeds.length);
+    for(let i=0;i<maxRows;i++){
+      html+=`<tr><td>${topSyms[i]?topSyms[i][0]:''}</td><td>${topSyms[i]?topSyms[i][1]:''}</td>
+        <td>${topMeds[i]?topMeds[i][0]:''}</td><td>${topMeds[i]?topMeds[i][1]:''}</td></tr>`;
+    }
+    html+=`</table></div>`;
+  }
+
+  // Weekly breakdown
+  html+=`<div class="section"><h2>주간 추이</h2>`;
+  const weekLabels=['이번 주','1주 전','2주 전','3주 전','4주 전'];
+  weeks.forEach((w,wi)=>{
+    if(!w.length) return;
+    const wNrs=w.filter(l=>l.nrs>=0).map(l=>l.nrs);
+    const wAvg=wNrs.length?(wNrs.reduce((a,b)=>a+b,0)/wNrs.length).toFixed(1):'-';
+    const wMax=wNrs.length?Math.max(...wNrs):'-';
+    const wMeds=new Set(w.filter(l=>(l.meds||[]).length).map(l=>l.datetime.slice(0,10))).size;
+    html+=`<div class="week-row">
+      <strong style="min-width:50px">${weekLabels[wi]}</strong>
+      <span>기록 ${w.length}건</span>
+      <span>평균 NRS: ${wAvg}</span>
+      <span>최대: ${wMax}</span>
+      <span>투약: ${wMeds}일</span>
+    </div>`;
+  });
+  html+=`</div>`;
+
+  // Detailed log table
+  if(last30.length) {
+    html+=`<div class="section"><h2>상세 기록</h2><table><tr><th>날짜</th><th>시간</th><th>NRS</th><th>증상</th><th>투약</th><th>메모</th></tr>`;
+    last30.forEach(l=>{
+      const nrsCls=l.nrs>=7?'nrs-high':l.nrs>=4?'nrs-med':'nrs-low';
+      html+=`<tr><td>${l.datetime.slice(0,10)}</td><td>${l.datetime.slice(11,16)}</td>
+        <td class="${l.nrs>=0?nrsCls:''}">${l.nrs>=0?l.nrs:'-'}</td>
+        <td>${(l.symptoms||[]).join(', ')||'-'}</td><td>${(l.meds||[]).join(', ')||'-'}</td>
+        <td>${l.memo||'-'}</td></tr>`;
+    });
+    html+=`</table></div>`;
+  }
+
+  // Drug interaction warnings
+  const interactions=checkDrugInteractions();
+  if(interactions.length) {
+    html+=`<div class="section"><h2>⚠️ 약물 상호작용 경고</h2><table><tr><th>약물 조합</th><th>위험도</th><th>설명</th></tr>`;
+    interactions.forEach(w=>{
+      html+=`<tr><td>${w.drugA} + ${w.drugB}</td><td>${w.severity==='high'?'위험':'주의'}</td><td>${w.desc}</td></tr>`;
+    });
+    html+=`</table></div>`;
+  }
+
+  html+=`<div class="footer">이 리포트는 Orangi Health AI 협진 시스템에서 자동 생성되었습니다.<br>의료적 결정은 반드시 담당 전문의와 상담 후 진행하세요.<br>생성: ${today} | Orangi Health v9.0</div>`;
+  html+=`</body></html>`;
+
+  const w=window.open('','_blank');
+  if(!w){showToast('⚠️ 팝업이 차단되었습니다. 팝업을 허용해 주세요.',4000);return;}
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>{w.print();},500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AI 질문 자동 추천 — 최근 패턴 기반
+// ═══════════════════════════════════════════════════════════════
+function generateAIQuestionSuggestions() {
+  const ds=D(); const lc=DC().logConfig; const dc=DC();
+  if(lc.customFields) return [];
+  const logs=ds.logData||[];
+  const suggestions=[];
+  const today=kstToday();
+
+  const recent=logs.filter(l=>{
+    const diff=Math.round((new Date(today+'T00:00:00')-new Date(l.datetime.slice(0,10)+'T00:00:00'))/86400000);
+    return diff>=0&&diff<=14;
+  });
+
+  if(recent.length<3) return [];
+
+  // Pattern 1: High NRS frequency
+  const highNrs=recent.filter(l=>l.nrs>=7);
+  if(highNrs.length>=3) {
+    suggestions.push(`최근 2주간 NRS 7 이상이 ${highNrs.length}회 발생했습니다. 예방약 조정이 필요한지 검토해 주세요.`);
+  }
+
+  // Pattern 2: Same symptom recurring
+  const symFreq={};
+  recent.forEach(l=>(l.symptoms||[]).forEach(s=>{symFreq[s]=(symFreq[s]||0)+1;}));
+  const topSym=Object.entries(symFreq).sort((a,b)=>b[1]-a[1])[0];
+  if(topSym&&topSym[1]>=4) {
+    suggestions.push(`"${topSym[0]}" 증상이 ${topSym[1]}회 반복됩니다. 이 증상의 원인과 대처법을 분석해 주세요.`);
+  }
+
+  // Pattern 3: Medication overuse
+  const medDays=new Set(recent.filter(l=>(l.meds||[]).length).map(l=>l.datetime.slice(0,10))).size;
+  if(medDays>=8) {
+    suggestions.push(`14일 중 ${medDays}일 약물 복용 — 약물 과용 두통(MOH) 가능성을 평가하고 대안을 제시해 주세요.`);
+  }
+
+  // Pattern 4: NRS worsening trend
+  const first7=recent.filter(l=>{
+    const diff=Math.round((new Date(today+'T00:00:00')-new Date(l.datetime.slice(0,10)+'T00:00:00'))/86400000);
+    return diff>7;
+  }).filter(l=>l.nrs>=0);
+  const last7=recent.filter(l=>{
+    const diff=Math.round((new Date(today+'T00:00:00')-new Date(l.datetime.slice(0,10)+'T00:00:00'))/86400000);
+    return diff<=7;
+  }).filter(l=>l.nrs>=0);
+  if(first7.length>=2&&last7.length>=2) {
+    const prev=first7.reduce((a,l)=>a+l.nrs,0)/first7.length;
+    const cur=last7.reduce((a,l)=>a+l.nrs,0)/last7.length;
+    if(cur-prev>=1.5) {
+      suggestions.push(`NRS가 악화 추세입니다 (${prev.toFixed(1)}→${cur.toFixed(1)}). 악화 원인과 치료 전략 변경을 논의해 주세요.`);
+    }
+  }
+
+  // Pattern 5: New symptom appeared
+  const older=logs.filter(l=>{
+    const diff=Math.round((new Date(today+'T00:00:00')-new Date(l.datetime.slice(0,10)+'T00:00:00'))/86400000);
+    return diff>14&&diff<=60;
+  });
+  const olderSyms=new Set(older.flatMap(l=>l.symptoms||[]));
+  const newSyms=[...new Set(recent.flatMap(l=>l.symptoms||[]))].filter(s=>!olderSyms.has(s));
+  if(newSyms.length) {
+    suggestions.push(`새로 나타난 증상: ${newSyms.join(', ')} — 이 증상의 의미와 추가 검사 필요 여부를 평가해 주세요.`);
+  }
+
+  return suggestions.slice(0,3);
+}
+
+function renderAIQuestionSuggestions() {
+  const suggestions=generateAIQuestionSuggestions();
+  if(!suggestions.length) return '';
+  return `<div class="card" style="border-color:var(--ac)">
+    <div class="card-title">🤖 AI 질문 추천 <span class="badge badge-blue">패턴 기반</span></div>
+    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">최근 기록 패턴을 분석하여 세션에서 다룰 질문을 추천합니다.</div>
+    ${suggestions.map((s,i)=>`
+      <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;margin-bottom:6px;background:var(--sf2);border-radius:8px;cursor:pointer"
+        onclick="startNewSession(_aiSuggestions[${i}])">
+        <span style="font-size:.8rem">💬</span>
+        <span style="font-size:.78rem;color:var(--ink);line-height:1.5">${esc(s)}</span>
+      </div>`).join('')}
+  </div>`;
+}
+let _aiSuggestions=[];
 
 // Load aiEnabled from localStorage on startup
 try { const ae=localStorage.getItem('aiEnabled'); if(ae) S.aiEnabled=JSON.parse(ae); } catch(e){}
