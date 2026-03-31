@@ -102,13 +102,20 @@ saveMaster = async function() { await _origSaveMasterFn(); cacheToLocal(...); };
 ## 백업 브랜치
 **규칙: 최근 5개 버전은 항상 백업 브랜치를 유지한다. 새 버전 백업 시 가장 오래된 것을 삭제.**
 ```
+backup/v9.1  ← Gemini 리뷰 반영 · 누적지식 점수 · 디베이트 비용최적화
 backup/v9.0  ← 20개 신기능 · 약물상호작용 · 푸시알림 · 인터랙티브 머리그림
 backup/v8.4  ← 디베이트/빠른질문/인사이트/세션이어하기
 backup/v8.3  ← KST/한영매핑/PDF/캘린더/시술추적
 backup/v8.2  ← 질환 관리 통합/ICD-10/질환별 투약
-backup/v8.1  ← UX 개선/직접입력/자동완성/컨텍스트통합
 ```
-> ※ backup/v8.0, backup/v7.6은 5개 초과로 삭제 대상 (GitHub에서 수동 삭제)
+
+### 버전업 시 백업 자동화 절차 (필수)
+**Claude는 버전업 커밋을 main에 머지할 때 아래 절차를 반드시 자동 수행한다:**
+1. `mcp__github__list_branches`로 현재 `backup/v*` 브랜치 목록 조회
+2. `mcp__github__create_branch`로 `backup/v{새버전}` 생성 (from: main)
+3. 백업 브랜치가 5개 초과 시, 가장 오래된 것부터 삭제 요청 (삭제 도구 없으면 사용자에게 알림)
+4. 이 CLAUDE.md의 백업 브랜치 목록을 업데이트하여 커밋
+5. HANDOFF.md에도 반영
 
 ## 작업 시 주의사항
 1. `esc()` 함수는 `'`(단일 인용부호)도 이스케이프함 (`&#39;`)
@@ -121,5 +128,5 @@ backup/v8.1  ← UX 개선/직접입력/자동완성/컨텍스트통합
 8. 자동완성 리스너 중복 방지: `input._acSetup` 플래그 확인
 9. API 키는 AES-GCM 암호화 후 localStorage 저장 (`om_keys_enc`). 평문 저장 금지
 10. 버전 업 시 `APP_VERSION` 배열에 새 항목 추가 필수
-11. 버전 업 시 `backup/vX.X` 브랜치 생성 필수, **최근 5개만 유지** (가장 오래된 것 삭제)
+11. 버전 업 시 **백업 자동화 절차** (위 "버전업 시 백업 자동화 절차" 섹션) 반드시 수행
 12. 버전 업 시 `codeBackupToDrive()` 실행하여 Google Drive에 코드+맥락 백업 필수 (사용자가 로그인 상태일 때 자동 호출)
