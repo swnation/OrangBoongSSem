@@ -1100,7 +1100,7 @@ function getRoleSystem(aiId) {
 
   const role = dc.aiRoles[aiId] || 'AI 분석';
   return `${dc.user} ${dc.label} 협진 AI — ${AI_DEFS[aiId].name} 역할: ${role}.
-규칙: ① 팩트/해석/전략 분리 ② 확정/추정/가설 구분 ③ 금지표현 사용 금지 ④ 불필요한 수식어 없이 내용만 ⑤ 항목당 1-2문장 압축`;
+규칙: ① 팩트/해석/전략 분리 ② 확정/추정/가설 구분 ③ 금지표현 사용 금지 ④ 불필요한 수식어·인사·서론 없이 핵심만 ⑤ 항목당 1문장 압축 ⑥ 최종 요약은 별도 단계에서 하므로 여기선 분석 데이터만 제공`;
 }
 
 // Non-streaming fallback (used by summary, price update, etc.)
@@ -1251,7 +1251,7 @@ function buildUserPrompt(aiId, roundNum) {
   const question = sess.question || '(질문 미입력)';
 
   if (roundNum === 1) {
-    return `${contextFull}\n\n[오늘 세션 질문]\n${question}\n\n위 정보를 바탕으로 분석해 주세요. 팩트/해석/전략 분리, 확정/추정/가설 구분.`;
+    return `${contextFull}\n\n[오늘 세션 질문]\n${question}\n\n분석해 주세요. 서론/인사 없이 바로 핵심. 항목당 1문장. 최종 정리는 별도 요약 단계에서 하므로 여기선 분석 데이터만.`;
   }
   const prevRound = sess.rounds[roundNum-2];
   const myPrev = prevRound?.answers?.[aiId] || '';
@@ -1259,7 +1259,7 @@ function buildUserPrompt(aiId, roundNum) {
     .filter(([id])=>id!==aiId && prevRound?.answers?.[id])
     .map(([id,def])=>`▶ [${def.name}]\n${prevRound.answers[id]}`).join('\n\n---\n\n');
 
-  return `${contextFull}\n\n[질문]\n${question}\n\n[내 R${roundNum-1} 답변]\n${myPrev}\n\n[다른 AI R${roundNum-1}]\n${others}\n\n검토 후 답변:\n1. [흡수할 장점]\n2. [보완·반박]\n3. [발전된 분석]\n4. [인사이트 한줄]`;
+  return `${contextFull}\n\n[질문]\n${question}\n\n[내 R${roundNum-1} 답변]\n${myPrev}\n\n[다른 AI R${roundNum-1}]\n${others}\n\n서론 없이 바로 답변:\n1. [흡수] 타 AI의 맞는 점 한줄\n2. [반박] 틀린 점·보완 한줄씩\n3. [수정 분석] 핵심만\n4. [인사이트 한줄]`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1346,7 +1346,7 @@ async function runQuickQuestion(aiId) {
   showToast('✅ 빠른 질문 완료 & 저장됨');
 }
 
-async function runRound(roundNum) {
+async function runRound(roundNum, errorsOnly) {
   if(S.generating) return;
   const q = document.getElementById('q-input')?.value?.trim();
   if(!q) { showToast('❌ 질문을 입력해 주세요.'); return; }
@@ -1355,7 +1355,13 @@ async function runRound(roundNum) {
   if(roundNum===1 && _sessionFiles.length) {
     S.session._attachments = _sessionFiles.map(f=>({name:f.name,type:f.type,size:f.size,driveId:f.driveId,webLink:f.webLink}));
   }
-  const enabledAIs = getEnabledAIs();
+  let enabledAIs = getEnabledAIs();
+  // errorsOnly: only re-run AIs that had errors in this round
+  if(errorsOnly && S.session.rounds[roundNum-1]) {
+    const rd = S.session.rounds[roundNum-1];
+    enabledAIs = enabledAIs.filter(id=>(rd.answers?.[id]||'').startsWith('⚠️'));
+    if(!enabledAIs.length) { showToast('재실행할 오류 AI가 없습니다.'); return; }
+  }
   const missingKeys = enabledAIs.filter(id=>!S.keys[id]);
   if(missingKeys.length) { showToast('❌ API 키 없음: '+missingKeys.map(id=>AI_DEFS[id].name).join(', ')); return; }
   if(!enabledAIs.length) { showToast('❌ 최소 1개 AI를 선택해주세요.'); return; }
@@ -1368,11 +1374,13 @@ async function runRound(roundNum) {
   document.getElementById('session-round-badge').textContent = `R${roundNum}`;
   if(!S.session.rounds[roundNum-1]) S.session.rounds[roundNum-1]={round:roundNum,answers:{}};
   enabledAIs.forEach(id=>setCardStatus(id,'loading'));
-  // Hide disabled AI cards
-  Object.keys(AI_DEFS).forEach(id=>{
-    const card=document.querySelector(`[data-ai="${id}"]`);
-    if(card) card.style.display=enabledAIs.includes(id)?'':'none';
-  });
+  // Hide disabled AI cards (only when running full round, not error-only retry)
+  if(!errorsOnly) {
+    Object.keys(AI_DEFS).forEach(id=>{
+      const card=document.querySelector(`[data-ai="${id}"]`);
+      if(card) card.style.display=getEnabledAIs().includes(id)?'':'none';
+    });
+  }
   const runBtn=document.getElementById('run-btn'); if(runBtn) runBtn.disabled=true;
 
   await Promise.all(enabledAIs.map(async aiId=>{
@@ -1848,7 +1856,7 @@ function renderActionBar(curRound) {
     const hasErr=Object.keys(AI_DEFS).some(id=>(S.session.rounds[2]?.answers?.[id]||'').startsWith('⚠️'));
     return `<div class="round-action-bar">
       <button class="btn-run-round green" id="final-btn" onclick="runFinalSummary()"><div class="spin" id="final-sp"></div>✅ 세션 종료 & 저장</button>
-      ${hasErr?`<button class="btn-run-round" onclick="runRound(3)" style="background:#5a5a7a">🔁 R3 오류 재실행</button>`:''}
+      ${hasErr?`<button class="btn-run-round" onclick="runRound(3,true)" style="background:#5a5a7a">🔁 R3 오류만 재실행</button>`:''}
       <span class="run-note">각 AI 카드에서 개별 재생성도 가능합니다</span>
     </div>`;
   }
@@ -1862,7 +1870,7 @@ function renderActionBar(curRound) {
     return `<div class="round-action-bar" style="flex-wrap:wrap">
       <button class="btn-run-round" id="run-btn" onclick="runRound(${next})">${nextLabel}</button>
       <button class="btn-run-round green" onclick="runFinalSummary()" style="font-size:.78rem;padding:8px 14px">✅ 여기서 요약 & 종료</button>
-      ${hasErr?`<button class="btn-run-round" onclick="runRound(${curRound})" style="background:#5a5a7a">🔁 R${curRound} 오류 재실행</button>`:''}
+      ${hasErr?`<button class="btn-run-round" onclick="runRound(${curRound},true)" style="background:#5a5a7a">🔁 R${curRound} 오류만 재실행</button>`:''}
       <button class="btn-undo" onclick="undoSession()" ${_sessionHistory.length?'':'disabled'} title="이전 라운드로 되돌리기">↩ Undo</button>
       <span class="run-note">${mode==='debate'?'또는 심판 판정으로 종료':'AI들이 서로의 답변을 분석합니다'}</span>
     </div>`;
