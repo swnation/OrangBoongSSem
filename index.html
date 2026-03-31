@@ -487,11 +487,12 @@ const AI_DEFS = {
   gpt:    {name:'GPT',        color:'#10a37f'},
   claude: {name:'Claude',     color:'#c96442'},
   gemini: {name:'Gemini',     color:'#4285f4'},
+  grok:   {name:'Grok',       color:'#1DA1F2'},
   perp:   {name:'Perplexity', color:'#20808d'},
 };
 
 const DEFAULT_MODELS = {
-  gpt:'gpt-5.4', claude:'claude-sonnet-4-6', gemini:'gemini-2.5-pro', perp:'sonar',
+  gpt:'gpt-5.4', claude:'claude-sonnet-4-6', gemini:'gemini-2.5-pro', grok:'grok-3', perp:'sonar',
 };
 
 const MODEL_OPTIONS = {
@@ -517,6 +518,11 @@ const MODEL_OPTIONS = {
     {value:'gemini-2.5-flash',label:'Gemini 2.5 Flash (무료)'},
     {value:'gemini-2.5-flash-lite',label:'Gemini 2.5 Flash-Lite (최저비용)'},
   ],
+  grok: [
+    {value:'grok-3',label:'Grok 3 (추천)'},
+    {value:'grok-3-mini',label:'Grok 3 Mini (빠름)'},
+    {value:'grok-4.20-multi-agent-0309',label:'Grok 4.20 Multi-Agent'},
+  ],
   perp: [
     {value:'sonar',label:'Sonar (추천)'},
     {value:'sonar-pro',label:'Sonar Pro (고성능)'},
@@ -529,6 +535,7 @@ const KEY_INFO = {
   gpt:    {label:'OpenAI (GPT)',      link:'https://platform.openai.com/api-keys',   note:'platform.openai.com → API Keys'},
   claude: {label:'Anthropic (Claude)',link:'https://console.anthropic.com/',          note:'console.anthropic.com → API Keys'},
   gemini: {label:'Google (Gemini)',   link:'https://aistudio.google.com/app/apikey', note:'aistudio.google.com → Get API Key'},
+  grok:   {label:'xAI (Grok)',       link:'https://console.x.ai/',                  note:'console.x.ai → API Keys'},
   perp:   {label:'Perplexity',       link:'https://www.perplexity.ai/settings/api', note:'perplexity.ai → Settings → API'},
 };
 
@@ -536,6 +543,7 @@ const DEFAULT_PRICE_TABLE = {
   'gpt-5.4':{in:2.50,out:15.00},'gpt-5.3-chat-latest':{in:2.50,out:10.00},'gpt-4o':{in:2.50,out:10.00},
   'claude-sonnet-4-6':{in:3.00,out:15.00},'claude-opus-4-6':{in:5.00,out:25.00},'claude-haiku-4-5-20251001':{in:1.00,out:5.00},
   'gemini-2.5-pro':{in:1.25,out:10.00},'gemini-2.5-flash':{in:0.15,out:0.60},
+  'grok-3':{in:3.00,out:15.00},'grok-3-mini':{in:0.30,out:0.50},'grok-4.20-multi-agent-0309':{in:5.00,out:25.00},
   'sonar':{in:1.00,out:1.00},'sonar-pro':{in:3.00,out:15.00},
 };
 
@@ -1118,25 +1126,29 @@ function updateSidebarCost() {
 // ═══════════════════════════════════════════════════════════════
 // AI API CALLS
 // ═══════════════════════════════════════════════════════════════
+// ── 간결 출력 공통 규칙 (토큰 절약 최우선) ──
+const _CONCISE='서론·인사·결론·수식어 금지. 항목당 1문장. 총 4~6문장 이내. 이전 AI는 [흡수][반박][보완]만. 분석 데이터만 출력.';
+
 function getRoleSystem(aiId) {
   const dc = DC();
   const mode=S.session?.mode||'normal';
 
   if(mode==='debate') {
-    const reversed=S.session?.debateReversed;
+    const rev=S.session?.debateReversed;
     const debateRoles={
-      gpt: reversed?'반대 측 — 쟁점에 대해 "아니다" 근거를 최대한 수집·반박':'찬성 측 — 쟁점에 대해 "맞다" 근거를 최대한 수집·주장',
-      gemini: reversed?'찬성 측 — 쟁점에 대해 "맞다" 근거를 최대한 수집·주장':'반대 측 — 쟁점에 대해 "아니다" 근거를 최대한 수집·반박',
-      claude: '심판 — 양측 논거 강도 평가, 과단정 체크, 잠정 결론 도출, SSOT 원칙 위반 여부 체크',
-      perp: '팩트체크 — 양측이 인용한 수치/문헌/가이드라인 검증, 출처 명시',
+      gpt: rev?'반대 측 — "아니다" 근거 수집·반박':'찬성 측 — "맞다" 근거 수집·주장',
+      gemini: rev?'찬성 측 — "맞다" 근거 수집·주장':'반대 측 — "아니다" 근거 수집·반박',
+      grok: '중도 측 — 양측 장단점 균형 평가, 제3의 시각·조건부 합의점 도출',
+      claude: '심판 — 논거 강도 평가, 과단정 체크, 잠정 결론, SSOT 위반 여부',
+      perp: '팩트체크 — 인용 수치/문헌/가이드라인 검증, 출처 명시',
     };
     return `${dc.user} ${dc.label} 디베이트 — ${AI_DEFS[aiId].name} 역할: ${debateRoles[aiId]||'분석'}.
-규칙: ① 자신의 역할에 충실 ② 근거 기반 논증 ③ 감정적 주장 금지 ④ 출처 명시 ⑤ 불확실한 부분 명시`;
+${_CONCISE} 자신의 역할에 충실. 근거 기반. 감정적 주장 금지.`;
   }
 
   const role = dc.aiRoles[aiId] || 'AI 분석';
   return `${dc.user} ${dc.label} 협진 AI — ${AI_DEFS[aiId].name} 역할: ${role}.
-규칙: ① 팩트/해석/전략 분리 ② 확정/추정/가설 구분 ③ 금지표현 사용 금지 ④ 불필요한 수식어·인사·서론 없이 핵심만 ⑤ 항목당 1문장 압축 ⑥ 최종 요약은 별도 단계에서 하므로 여기선 분석 데이터만 제공`;
+${_CONCISE}`;
 }
 
 // Non-streaming fallback (used by summary, price update, etc.)
@@ -1245,6 +1257,31 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
     recordUsage(aiId,model,inT,outT);
     return text;
   }
+  // Grok (xAI — OpenAI 호환)
+  if(aiId==='grok') {
+    const r=await fetchWithRetry('https://api.x.ai/v1/chat/completions',{method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
+      body:JSON.stringify({model,max_tokens:4000,stream:true,
+        messages:[{role:'system',content:system},{role:'user',content:user}]}),signal});
+    if(!r.ok){const d=await r.json();throw new Error('Grok: '+(d.error?.message||r.status));}
+    let text='',inT=0,outT=0;
+    const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
+    while(true){
+      const{done,value}=await reader.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');buf=lines.pop()||'';
+      for(const line of lines){
+        if(!line.startsWith('data: ')||line==='data: [DONE]')continue;
+        try{const ev=JSON.parse(line.slice(6));
+          if(ev.choices?.[0]?.delta?.content){text+=ev.choices[0].delta.content;onChunk(text);}
+          if(ev.usage){inT=ev.usage.prompt_tokens||0;outT=ev.usage.completion_tokens||0;}
+        }catch(e){}
+      }
+    }
+    recordUsage(aiId,model,inT,outT);
+    return text;
+  }
+
   throw new Error('알 수 없는 AI: '+aiId);
 }
 
@@ -1307,8 +1344,9 @@ function startNewSession(prefillQuestion, mode) {
     id:Date.now(), date:kstToday(),
     question:prefillQuestion||'', rounds:[], currentRound:0, summary:null,
     new_consensus:[], new_discarded:[], updated_issues:[],
-    mode: mode||'normal', // 'normal','debate','quick'
+    mode: mode||'normal', // 'normal','debate','quick','multi-grok'
     debateReversed: false,
+    grokAgentLevel: 4,
   };
   S._dirty = false;
   switchView('session');
@@ -1606,6 +1644,79 @@ function setCardStatus(aiId,status) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// GROK MULTI-AGENT MODE
+// ═══════════════════════════════════════════════════════════════
+async function runGrokMultiAgent() {
+  if(S.generating) return;
+  const q=document.getElementById('q-input')?.value?.trim();
+  if(!q){showToast('❌ 질문을 입력해 주세요.');return;}
+  if(!S.keys.grok){showToast('❌ Grok API 키가 없습니다. 🔑 설정에서 입력하세요.');return;}
+  S.session.question=q;
+  const agentLevel=S.session.grokAgentLevel||4;
+  S.generating=true; S._dirty=true;
+  const btn=document.getElementById('run-btn');if(btn)btn.disabled=true;
+
+  // Grok 카드 표시
+  const area=document.getElementById('content');
+  const summArea=document.getElementById('summary-area')||document.createElement('div');
+  summArea.id='summary-area';
+  summArea.innerHTML=`<div class="card" style="text-align:center;padding:24px"><div class="spin" style="display:block;margin:0 auto"></div><p style="margin-top:12px;font-size:.85rem;color:var(--mu)">🤖 Grok ${agentLevel} 에이전트 내부 토론 중...</p><span id="grok-timer" style="font-size:.75rem;color:var(--mu)">0s</span></div>`;
+  if(!summArea.parentNode) area.appendChild(summArea);
+
+  // 타이머
+  const timerStart=Date.now();
+  const timerInterval=setInterval(()=>{
+    const el=document.getElementById('grok-timer');
+    if(el) el.textContent=Math.round((Date.now()-timerStart)/1000)+'s';
+  },1000);
+
+  const dc=DC();
+  const contextSection=buildContextSection();
+  const logSummary=buildLogSummary();
+  const contextFull=contextSection+(logSummary?'\n\n'+logSummary:'');
+
+  const system=`Grok ${agentLevel} Multi-Agent 모드. 내부에서 Captain, Researcher, Logician, Contrarian 등 ${agentLevel}명이 토론.
+의학 SSOT 원칙 준수. 토론 과정은 간결히.
+**최종 출력은 반드시 아래 JSON만 출력. 다른 텍스트 금지.**
+{"session_summary":"3문장 이내","new_consensus":["합의1"],"new_discarded":["폐기 가설"],"updated_issues":["미해결"],"final_recommendation":"구체적 권고","next_steps":["행동1"],"debate_key_points":"주요 충돌과 합의 (간단히)"}`;
+
+  const userPrompt=`${contextFull}\n\n[질문]\n${q}`;
+
+  try {
+    // Multi-Agent 모델 사용
+    const savedModel=S.models.grok;
+    S.models.grok='grok-4.20-multi-agent-0309';
+    const raw=await callAIStream('grok',system,userPrompt,(chunk)=>{
+      const el=document.getElementById('grok-timer');
+      if(el) el.textContent=Math.round((Date.now()-timerStart)/1000)+'s (스트리밍...)';
+    });
+    S.models.grok=savedModel;
+
+    // JSON 추출
+    let parsed;
+    try {
+      const jsonStr=raw.match(/\{[\s\S]*\}/)[0];
+      parsed=JSON.parse(jsonStr);
+    } catch(e) {
+      parsed={session_summary:'JSON 파싱 실패 — 원문 참조',final_recommendation:raw.substring(0,500),new_consensus:[],new_discarded:[],updated_issues:[],next_steps:[],debate_key_points:''};
+    }
+
+    S.session.summary=parsed;
+    S.session.currentRound=4;
+    S.session.rounds=[{round:1,answers:{grok:raw},errors:{}}];
+    await saveMaster();
+
+    summArea.innerHTML=renderSummaryResult(parsed);
+    showToast(`✅ Grok ${agentLevel} 에이전트 협업 완료`);
+  } catch(e) {
+    summArea.innerHTML=`<div class="card" style="padding:16px;color:#ef4444">⚠️ Grok Multi-Agent 오류: ${esc(e.message)}</div>`;
+  }
+  clearInterval(timerInterval);
+  S.generating=false;if(btn)btn.disabled=false;
+  updateSidebarCost();
+}
+
 // FINAL SUMMARY
 // ═══════════════════════════════════════════════════════════════
 async function runFinalSummary() {
@@ -1832,12 +1943,12 @@ function renderHome() {
 // SESSION VIEW
 function getDebateRole(aiId,reversed) {
   const roles=reversed
-    ?{gpt:'반대 측',gemini:'찬성 측',claude:'심판',perp:'팩트체크'}
-    :{gpt:'찬성 측',gemini:'반대 측',claude:'심판',perp:'팩트체크'};
+    ?{gpt:'반대 측',gemini:'찬성 측',grok:'중도',claude:'심판',perp:'팩트체크'}
+    :{gpt:'찬성 측',gemini:'반대 측',grok:'중도',claude:'심판',perp:'팩트체크'};
   return roles[aiId]||'';
 }
 function getDebateRoleColor(aiId) {
-  const colors={gpt:'#10a37f',gemini:'#4285f4',claude:'#c96442',perp:'#20808d'};
+  const colors={gpt:'#10a37f',gemini:'#4285f4',grok:'#1DA1F2',claude:'#c96442',perp:'#20808d'};
   return colors[aiId]||'var(--mu)';
 }
 
@@ -1848,18 +1959,26 @@ function renderSession() {
   const mode=sess.mode||'normal';
 
   // Mode selector (only at R0)
-  const modeSelector = curRound===0 ? `<div style="display:flex;gap:6px;margin-bottom:12px">
-    ${[['normal','⚡ 일반 협진'],['debate','⚔️ 디베이트'],['quick','💬 빠른 질문']].map(([m,label])=>
+  const modeSelector = curRound===0 ? `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+    ${[['normal','⚡ 일반 협진'],['debate','⚔️ 디베이트'],['multi-grok','🤖 Grok Multi-Agent'],['quick','💬 빠른 질문']].map(([m,label])=>
       `<button class="log-vtab ${mode===m?'active':''}" onclick="S.session.mode='${m}';renderView('session')">${label}</button>`).join('')}
   </div>` : '';
 
+  // Grok Multi-Agent 에이전트 수 선택
+  const grokAgentSelector = mode==='multi-grok'&&curRound===0 ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+    <span style="font-size:.72rem;color:var(--mu)">에이전트 수:</span>
+    ${[4,8,16].map(n=>`<button class="log-vtab ${(sess.grokAgentLevel||4)===n?'active':''}" onclick="S.session.grokAgentLevel=${n};renderView('session')" style="font-size:.72rem;padding:4px 12px">${n}${n===4?' (빠름)':n===8?' (균형)':' (심층)'}</button>`).join('')}
+  </div>` : '';
+
   // Debate reverse toggle
-  const debateToggle = mode==='debate'&&curRound===0 ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
-    <span style="font-size:.72rem;color:var(--mu)">역할 배치:</span>
-    <span style="font-size:.75rem;font-weight:600;color:#10a37f">GPT=${sess.debateReversed?'반대':'찬성'}</span>
-    <span style="font-size:.75rem;color:var(--mu)">vs</span>
-    <span style="font-size:.75rem;font-weight:600;color:#4285f4">Gemini=${sess.debateReversed?'찬성':'반대'}</span>
-    <button class="btn-cancel" onclick="S.session.debateReversed=!S.session.debateReversed;renderView('session')" style="font-size:.68rem;padding:3px 10px;margin-left:auto">↔ 반전</button>
+  const debateToggle = mode==='debate'&&curRound===0 ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px;padding:8px 12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+    <span style="font-size:.68rem;color:var(--mu)">5역할:</span>
+    <span style="font-size:.7rem;font-weight:600;color:#10a37f">GPT=${sess.debateReversed?'반대':'찬성'}</span>
+    <span style="font-size:.7rem;font-weight:600;color:#4285f4">Gemini=${sess.debateReversed?'찬성':'반대'}</span>
+    <span style="font-size:.7rem;font-weight:600;color:#1DA1F2">Grok=중도</span>
+    <span style="font-size:.7rem;font-weight:600;color:#c96442">Claude=심판</span>
+    <span style="font-size:.7rem;font-weight:600;color:#20808d">Perp=팩트</span>
+    <button class="btn-cancel" onclick="S.session.debateReversed=!S.session.debateReversed;renderView('session')" style="font-size:.65rem;padding:3px 8px;margin-left:auto">↔ 찬반전환</button>
   </div>` : '';
 
   const aiCards=Object.entries(AI_DEFS).map(([id,def])=>{
@@ -1933,6 +2052,7 @@ function renderSession() {
       `:curRound<4&&sess._attachments?.length?`<div style="margin-top:6px;font-size:.72rem;color:var(--mu)">📎 첨부 ${sess._attachments.length}건</div>`:''}
     </div>
     ${debateToggle}
+    ${grokAgentSelector||''}
     ${mode!=='quick'?`<div class="round-bar">
       <span style="font-size:.72rem;color:#5a7a95;font-family:var(--mono)">${mode==='debate'?'⚔️ 디베이트':'진행'}:</span>
       ${roundDots}
@@ -1991,7 +2111,10 @@ function renderActionBar(curRound) {
   }
 
   // R0 start
-  const startLabel=mode==='debate'?'⚔️ R1 시작 — 찬성/반대/팩트체크':'⚡ R1 시작 — 4개 AI 동시 답변';
+  if(mode==='multi-grok') {
+    return `<div class="round-action-bar"><button class="btn-run-round" id="run-btn" onclick="runGrokMultiAgent()" style="background:#1DA1F2">🤖 Grok Multi-Agent 시작 (${S.session?.grokAgentLevel||4} 에이전트)</button><span class="run-note">Grok 내부 토론 → Claude 형식 요약</span></div>`;
+  }
+  const startLabel=mode==='debate'?'⚔️ R1 시작 — 5역할 디베이트':'⚡ R1 시작 — 5개 AI 동시 답변';
   return `<div class="round-action-bar"><button class="btn-run-round" id="run-btn" onclick="runRound(1)">${startLabel}</button><span class="run-note">${mode==='debate'?'디베이트 시작':'독립 분석 시작'}</span></div>`;
 }
 
@@ -3858,7 +3981,7 @@ function exportLogCSV() {
 function renderSidebarAIs() {
   const list=document.getElementById('sb-ai-list');if(!list)return;
   const dc=DC();
-  if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,perp:true};
+  if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,grok:true,perp:true};
   list.innerHTML=Object.entries(AI_DEFS).map(([id,def])=>{
     const hasKey=!!S.keys[id];
     const enabled=S.aiEnabled[id]!==false;
@@ -5816,14 +5939,14 @@ function getRating(aiId) {
 // #9 AI 선택 토글
 // ═══════════════════════════════════════════════════════════════
 function toggleAIEnabled(aiId, checked) {
-  if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,perp:true};
+  if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,grok:true,perp:true};
   S.aiEnabled[aiId]=checked;
   try { localStorage.setItem('aiEnabled',JSON.stringify(S.aiEnabled)); } catch(e){}
   renderSidebarAIs();
 }
 
 function getEnabledAIs() {
-  if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,perp:true};
+  if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,grok:true,perp:true};
   return Object.keys(AI_DEFS).filter(id=>S.aiEnabled[id]!==false);
 }
 
