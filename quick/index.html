@@ -171,9 +171,27 @@ const TREATMENTS = ['GON block','LON block','SPG block'];
 
 const LS_KEY = 'om_quick_logs';
 
-// ── 커스텀 칩 영구 저장 ──
-function getCustom(key) { try { return JSON.parse(localStorage.getItem('om_qc_'+key) || '[]'); } catch { return []; } }
-function saveCustom(key, arr) { localStorage.setItem('om_qc_'+key, JSON.stringify(arr)); }
+// ── 커스텀 칩 영구 저장 (메인 앱과 키 공유 → Drive 동기화) ──
+const _QC_KEY_MAP={
+  'med':'om_custom_meds_orangi-migraine','sym':'om_custom_syms_orangi-migraine',
+  'tx':'om_custom_tx_orangi-migraine','pain':'om_custom_pain_orangi-migraine',
+  'site-left':'om_custom_sites_left_orangi-migraine','site-right':'om_custom_sites_right_orangi-migraine'
+};
+function getCustom(key) {
+  const mk=_QC_KEY_MAP[key];
+  // 메인 앱 키에서 먼저 읽고, 없으면 구 키(om_qc_)도 병합
+  try {
+    const main=mk?JSON.parse(localStorage.getItem(mk)||'[]'):[];
+    const old=JSON.parse(localStorage.getItem('om_qc_'+key)||'[]');
+    if(old.length&&mk) { const merged=[...new Set([...main,...old])]; localStorage.setItem(mk,JSON.stringify(merged)); localStorage.removeItem('om_qc_'+key); return merged; }
+    return main.length?main:old;
+  } catch { return []; }
+}
+function saveCustom(key, arr) {
+  const mk=_QC_KEY_MAP[key];
+  if(mk) localStorage.setItem(mk, JSON.stringify(arr));
+  else localStorage.setItem('om_qc_'+key, JSON.stringify(arr));
+}
 
 // ── Helpers ──
 function kstNow() {
