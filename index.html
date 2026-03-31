@@ -942,15 +942,41 @@ async function saveMaster() {
   const ds = D();
   if (!ds.masterFileId) return;
   ds.master.accumulated.last_updated = kstNow().toISOString();
-  // Also save current session in-progress (Bug fix #2)
   if (S.session && S.session.currentRound > 0 && S.session.currentRound < 4) {
     ds.master._inProgressSession = { ...S.session };
   } else {
     delete ds.master._inProgressSession;
   }
-  // #12 Version stamping for conflict detection
+  // 커스텀 항목 Drive 동기화
+  _syncCustomItemsToMaster();
   stampVersion(ds.master);
   await driveUpdate(ds.masterFileId, ds.master);
+}
+
+// ── 커스텀 항목 클라우드 영구 저장 ──
+const _CUSTOM_KEYS=['meds','syms','tx','sites_left','sites_right','pain'];
+
+function _syncCustomItemsToMaster() {
+  const ds=D(); const dom=S.currentDomain;
+  const customs={};
+  _CUSTOM_KEYS.forEach(k=>{
+    const val=JSON.parse(localStorage.getItem(`om_custom_${k}_${dom}`)||'[]');
+    if(val.length) customs[k]=val;
+  });
+  if(Object.keys(customs).length) ds.master._customItems=customs;
+  else delete ds.master._customItems;
+}
+
+function _restoreCustomItemsFromMaster(ds, domainId) {
+  const customs=ds.master?._customItems;
+  if(!customs) return;
+  _CUSTOM_KEYS.forEach(k=>{
+    if(!customs[k]?.length) return;
+    const lsKey=`om_custom_${k}_${domainId}`;
+    const existing=JSON.parse(localStorage.getItem(lsKey)||'[]');
+    const merged=[...new Set([...existing,...customs[k]])];
+    localStorage.setItem(lsKey,JSON.stringify(merged));
+  });
 }
 
 async function manualBackup() {
@@ -4265,6 +4291,7 @@ async function loadAllUserDomains() {
         ds.master=await driveRead(ds.masterFileId);
         const def=getDefaultMaster();
         for(const k of Object.keys(def)){if(!(k in ds.master))ds.master[k]=def[k];}
+        _restoreCustomItemsFromMaster(ds, domainId);
       } else {
         ds.master=getDefaultMaster();
         ds.masterFileId=await driveCreate(dc.masterFile,ds.master,folderId);
@@ -6608,6 +6635,7 @@ async function resolveConflict(strategy, domainId) {
     } else if(strategy==='remote') {
       // Use remote
       ds.master=await driveRead(ds.masterFileId);
+      _restoreCustomItemsFromMaster(ds, domainId);
       cacheToLocal(domainId);
       showToast('☁️ 클라우드 데이터로 복원됨');
     } else if(strategy==='merge') {
