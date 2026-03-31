@@ -127,7 +127,11 @@ main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 .round-pill{font-size:.72rem;font-weight:700;padding:5px 14px;border-radius:20px;border:1.5px solid;font-family:var(--mono);cursor:default}
 .round-pill.done{opacity:.5}.round-pill.active{color:#fff}.round-pill.waiting{background:transparent}
 .ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
-.ai-card{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;overflow:hidden;transition:border-color .3s}
+.ai-card{background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;overflow:hidden;transition:border-color .3s, opacity .2s}
+/* Quick question card states */
+.ai-card.quick-idle{opacity:.6}
+.ai-card.quick-selected{opacity:1}
+.ai-card.quick-dimmed{opacity:.3}
 .ai-card.generating{border-color:#3b82f640;animation:pb 1.5s infinite}
 @keyframes pb{0%,100%{border-color:#3b82f640}50%{border-color:#3b82f6bb}}
 .ai-card.done{border-color:#10b98155}
@@ -141,6 +145,11 @@ main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 .ai-body textarea{width:100%;border:none;outline:none;padding:11px 13px;font-family:var(--font);font-size:.84rem;line-height:1.65;resize:vertical;min-height:150px;background:transparent;color:var(--ink)}
 .ai-body textarea.gen{background:#f0f7ff;color:var(--mu)}
 [data-theme="dark"] .ai-body textarea.gen{background:#1a2030;color:#5a6a7a}
+/* Quick question AI selector buttons */
+.quick-ai-btn{background:transparent;border:2px solid var(--ai-color);color:var(--ai-color);padding:8px 16px;font-size:.8rem;font-weight:500;transition:all .2s}
+.quick-ai-btn.selected{background:var(--ai-color);color:#fff;font-weight:700}
+.selection-active .quick-ai-btn:not(.selected){opacity:.4}
+.quick-start-btn{background:var(--ac);padding:10px 24px;font-size:.85rem;font-weight:700;margin-left:auto}
 /* Quick question / Multi-grok: single card full width, larger answer */
 .ai-grid.single-card{grid-template-columns:1fr}
 .ai-grid.single-card .ai-body textarea{min-height:350px;font-size:.92rem;font-weight:500;line-height:1.75;color:var(--ink)}
