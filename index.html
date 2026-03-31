@@ -497,21 +497,29 @@ const DEFAULT_MODELS = {
 const MODEL_OPTIONS = {
   gpt: [
     {value:'gpt-5.4',label:'GPT-5.4 (최신·추천)'},
+    {value:'gpt-5.4-mini',label:'GPT-5.4 Mini (저비용)'},
     {value:'gpt-5.3-chat-latest',label:'GPT-5.3'},
-    {value:'gpt-4o',label:'GPT-4o (안정)'},
+    {value:'gpt-4.1',label:'GPT-4.1 (안정)'},
+    {value:'gpt-4.1-mini',label:'GPT-4.1 Mini'},
+    {value:'o3',label:'o3 (추론)'},
+    {value:'o4-mini',label:'o4-mini (빠른 추론)'},
   ],
   claude: [
-    {value:'claude-sonnet-4-6',label:'Claude Sonnet 4.6 (추천)'},
-    {value:'claude-opus-4-6',label:'Claude Opus 4.6 (고성능)'},
-    {value:'claude-haiku-4-5-20251001',label:'Claude Haiku 4.5 (빠름)'},
+    {value:'claude-sonnet-4-6',label:'Sonnet 4.6 (추천)'},
+    {value:'claude-opus-4-6',label:'Opus 4.6 (고성능)'},
+    {value:'claude-haiku-4-5-20251001',label:'Haiku 4.5 (빠름)'},
   ],
   gemini: [
-    {value:'gemini-2.5-pro',label:'Gemini 2.5 Pro (추천·무료)'},
-    {value:'gemini-2.5-flash',label:'Gemini 2.5 Flash (빠름·무료)'},
+    {value:'gemini-3.1-pro-preview',label:'Gemini 3.1 Pro (최신)'},
+    {value:'gemini-3-flash-preview',label:'Gemini 3 Flash (빠름)'},
+    {value:'gemini-2.5-pro',label:'Gemini 2.5 Pro (안정·무료)'},
+    {value:'gemini-2.5-flash',label:'Gemini 2.5 Flash (무료)'},
   ],
   perp: [
     {value:'sonar',label:'Sonar (추천)'},
     {value:'sonar-pro',label:'Sonar Pro (고성능)'},
+    {value:'sonar-reasoning-pro',label:'Sonar Reasoning Pro (추론)'},
+    {value:'sonar-reasoning',label:'Sonar Reasoning (추론·저비용)'},
   ],
 };
 
@@ -1768,10 +1776,10 @@ function renderSession() {
         <button class="ai-regen" id="regen-${id}" onclick="regenOne('${id}')"
           ${isError?'style="border-color:#ef4444;color:#ef4444;font-weight:600"':''}>↺ ${isError?'재시도':'재생성'}</button>`:''}
       </div>
-      ${curRound>0?`<div style="padding:4px 13px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--bd);background:var(--sf2)">
-        <span style="font-size:.62rem;color:var(--mu);white-space:nowrap">모델:</span>
+      <div style="padding:4px 13px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--bd);background:var(--sf2)">
         <select onchange="changeAIModel('${id}',this.value)" style="flex:1;border:1px solid var(--bd);border-radius:4px;padding:2px 5px;font-size:.68rem;background:var(--sf);color:var(--ink);cursor:pointer">${modelOpts}</select>
-      </div>`:''}
+        ${curRound>0&&isError?`<button onclick="regenOne('${id}')" style="font-size:.65rem;padding:2px 8px;border:1.5px solid #ef4444;border-radius:4px;background:none;color:#ef4444;cursor:pointer;font-weight:600;white-space:nowrap">▶ 재실행</button>`:''}
+      </div>
       <div class="ai-body">
         <textarea id="ans-${id}" class="${ans?(isError?'gen':''):'gen'}"
           placeholder="${curRound===0?'라운드 시작 시 자동 생성...':'생성 중...'}">${esc(ans)}</textarea>
