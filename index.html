@@ -501,6 +501,7 @@ const MODEL_OPTIONS = {
     {value:'gpt-5.3-chat-latest',label:'GPT-5.3'},
     {value:'gpt-4.1',label:'GPT-4.1 (안정)'},
     {value:'gpt-4.1-mini',label:'GPT-4.1 Mini'},
+    {value:'gpt-4o',label:'GPT-4o (안정)'},
     {value:'o3',label:'o3 (추론)'},
     {value:'o4-mini',label:'o4-mini (빠른 추론)'},
   ],
@@ -1367,7 +1368,7 @@ async function runRound(roundNum, errorsOnly) {
   // errorsOnly: only re-run AIs that had errors in this round
   if(errorsOnly && S.session.rounds[roundNum-1]) {
     const rd = S.session.rounds[roundNum-1];
-    enabledAIs = enabledAIs.filter(id=>(rd.answers?.[id]||'').startsWith('⚠️'));
+    enabledAIs = enabledAIs.filter(id=>rd.errors?.[id]);
     if(!enabledAIs.length) { showToast('재실행할 오류 AI가 없습니다.'); return; }
   }
   const missingKeys = enabledAIs.filter(id=>!S.keys[id]);
@@ -1380,13 +1381,13 @@ async function runRound(roundNum, errorsOnly) {
   S.generating = true; S._dirty = true;
   S.session.currentRound = roundNum;
   document.getElementById('session-round-badge').textContent = `R${roundNum}`;
-  if(!S.session.rounds[roundNum-1]) S.session.rounds[roundNum-1]={round:roundNum,answers:{}};
+  if(!S.session.rounds[roundNum-1]) S.session.rounds[roundNum-1]={round:roundNum,answers:{},errors:{}};
   enabledAIs.forEach(id=>setCardStatus(id,'loading'));
   // Hide disabled AI cards (only when running full round, not error-only retry)
   if(!errorsOnly) {
     Object.keys(AI_DEFS).forEach(id=>{
       const card=document.querySelector(`[data-ai="${id}"]`);
-      if(card) card.style.display=getEnabledAIs().includes(id)?'':'none';
+      if(card) card.style.display=enabledAIs.includes(id)?'':'none';
     });
   }
   const runBtn=document.getElementById('run-btn'); if(runBtn) runBtn.disabled=true;
@@ -1399,6 +1400,7 @@ async function runRound(roundNum, errorsOnly) {
         if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
       });
       S.session.rounds[roundNum-1].answers[aiId]=answer;
+      delete S.session.rounds[roundNum-1].errors[aiId];
       const ta=document.getElementById('ans-'+aiId);
       if(ta){ta.value=answer;ta.classList.remove('gen');}
       // Show markdown render after completion
@@ -1407,6 +1409,7 @@ async function runRound(roundNum, errorsOnly) {
     } catch(e) {
       const msg='⚠️ 오류: '+e.message;
       S.session.rounds[roundNum-1].answers[aiId]=msg;
+      S.session.rounds[roundNum-1].errors[aiId]=true;
       const ta=document.getElementById('ans-'+aiId);
       if(ta){ta.value=msg;ta.classList.remove('gen');}
       setCardStatus(aiId,'error');
@@ -1432,13 +1435,15 @@ async function regenOne(aiId) {
   const btn=document.getElementById('regen-'+aiId);
   if(btn){btn.disabled=true;btn.textContent='생성중...';}
   setCardStatus(aiId,'loading');
-  if(!S.session.rounds[curRound-1]) S.session.rounds[curRound-1]={round:curRound,answers:{}};
+  if(!S.session.rounds[curRound-1]) S.session.rounds[curRound-1]={round:curRound,answers:{},errors:{}};
+  if(!S.session.rounds[curRound-1].errors) S.session.rounds[curRound-1].errors={};
   try {
     const answer=await callAIStream(aiId,getRoleSystem(aiId),buildUserPrompt(aiId,curRound),(chunk)=>{
       const ta=document.getElementById('ans-'+aiId);
       if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
     });
     S.session.rounds[curRound-1].answers[aiId]=answer;
+    delete S.session.rounds[curRound-1].errors[aiId];
     const ta=document.getElementById('ans-'+aiId);
     if(ta){ta.value=answer;ta.classList.remove('gen');}
     updateAICardMD(aiId, answer);
@@ -1447,6 +1452,7 @@ async function regenOne(aiId) {
   } catch(e) {
     const msg='⚠️ 오류: '+e.message;
     S.session.rounds[curRound-1].answers[aiId]=msg;
+    S.session.rounds[curRound-1].errors[aiId]=true;
     const ta=document.getElementById('ans-'+aiId);
     if(ta){ta.value=msg;ta.classList.remove('gen');}
     setCardStatus(aiId,'error');
@@ -1760,7 +1766,7 @@ function renderSession() {
 
   const aiCards=Object.entries(AI_DEFS).map(([id,def])=>{
     const ans=curRound>0?(sess.rounds[curRound-1]?.answers?.[id]||''):'';
-    const isError=ans.startsWith('⚠️ 오류');
+    const isError=!!(sess.rounds[curRound-1]?.errors?.[id]);
     const curModel=S.models[id]||DEFAULT_MODELS[id];
     const modelOpts=(MODEL_OPTIONS[id]||[]).map(m=>
       `<option value="${m.value}" ${curModel===m.value?'selected':''}>${m.label}</option>`).join('');
@@ -1773,12 +1779,11 @@ function renderSession() {
         <span class="ai-role">${mode==='debate'?'':dc.aiRoles[id]||''}</span>${debateLabel}
         <span id="chip-${id}" class="ai-chip"></span>
         ${curRound>0?`<button class="btn-copy" onclick="copyAIResponse('${id}')" style="margin-left:auto">📋</button>
-        <button class="ai-regen" id="regen-${id}" onclick="regenOne('${id}')"
-          ${isError?'style="border-color:#ef4444;color:#ef4444;font-weight:600"':''}>↺ ${isError?'재시도':'재생성'}</button>`:''}
+        <button class="ai-regen" id="regen-${id}" onclick="regenOne('${id}')">↺ 재생성</button>`:''}
       </div>
       <div style="padding:4px 13px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--bd);background:var(--sf2)">
         <select onchange="changeAIModel('${id}',this.value)" style="flex:1;border:1px solid var(--bd);border-radius:4px;padding:2px 5px;font-size:.68rem;background:var(--sf);color:var(--ink);cursor:pointer">${modelOpts}</select>
-        ${curRound>0&&isError?`<button onclick="regenOne('${id}')" style="font-size:.65rem;padding:2px 8px;border:1.5px solid #ef4444;border-radius:4px;background:none;color:#ef4444;cursor:pointer;font-weight:600;white-space:nowrap">▶ 재실행</button>`:''}
+        ${isError?`<button onclick="regenOne('${id}')" style="font-size:.65rem;padding:2px 8px;border:1.5px solid #ef4444;border-radius:4px;background:none;color:#ef4444;cursor:pointer;font-weight:600;white-space:nowrap">▶ 재실행</button>`:''}
       </div>
       <div class="ai-body">
         <textarea id="ans-${id}" class="${ans?(isError?'gen':''):'gen'}"
@@ -1861,7 +1866,7 @@ function renderActionBar(curRound) {
 
   // R3 done (first time, not after continueSession)
   if(curRound===3 && !S.session._continued) {
-    const hasErr=Object.keys(AI_DEFS).some(id=>(S.session.rounds[2]?.answers?.[id]||'').startsWith('⚠️'));
+    const hasErr=Object.keys(AI_DEFS).some(id=>S.session.rounds[2]?.errors?.[id]);
     return `<div class="round-action-bar">
       <button class="btn-run-round green" id="final-btn" onclick="runFinalSummary()"><div class="spin" id="final-sp"></div>✅ 세션 종료 & 저장</button>
       ${hasErr?`<button class="btn-run-round" onclick="runRound(3,true)" style="background:#5a5a7a">🔁 R3 오류만 재실행</button>`:''}
@@ -1874,7 +1879,7 @@ function renderActionBar(curRound) {
     const next=curRound+1;
     const labels={2:'🔄 R2 크로스체크',3:'🔄 R3 최종 수렴'};
     const nextLabel=labels[next]||`🔄 R${next} 추가 분석`;
-    const hasErr=Object.keys(AI_DEFS).some(id=>(S.session.rounds[curRound-1]?.answers?.[id]||'').startsWith('⚠️'));
+    const hasErr=Object.keys(AI_DEFS).some(id=>S.session.rounds[curRound-1]?.errors?.[id]);
     return `<div class="round-action-bar" style="flex-wrap:wrap">
       <button class="btn-run-round" id="run-btn" onclick="runRound(${next})">${nextLabel}</button>
       <button class="btn-run-round green" onclick="runFinalSummary()" style="font-size:.78rem;padding:8px 14px">✅ 여기서 요약 & 종료</button>
