@@ -2508,6 +2508,28 @@ function toggleChip(el,cls){el.classList.toggle('sel');el.classList.toggle(cls,e
 
 async function setLogView(v){S.logView=v;await ensureLogLoaded();renderView('log');}
 
+async function loadLogMonth(ym) {
+  const ds=D();
+  ds.logMonth=ym;
+  try {
+    const files=await driveSearch(logFileName(ym),ds.folderId);
+    if(files.length>0){ds.logFileId=files[0].id;const d=await driveRead(ds.logFileId);ds.logData=Array.isArray(d)?d:[];}
+    else{ds.logData=[];ds.logFileId=null;}
+  } catch(e){ds.logData=[];ds.logFileId=null;}
+  renderView('log');
+}
+
+async function changeLogMonth(delta) {
+  const ds=D();
+  const cur=ds.logMonth||kstMonth();
+  const [y,m]=cur.split('-').map(Number);
+  const d=new Date(y, m-1+delta, 1);
+  const ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  // 미래 달은 로드하지 않음
+  if(ym>kstMonth()) return;
+  await loadLogMonth(ym);
+}
+
 // ── 빠른 기록 (quick.html) 연동 ──
 let _quickLogCache = null; // 클라우드+로컬 병합 캐시
 
@@ -3188,7 +3210,14 @@ function renderLogList() {
     </div>`;
   }).join('');
 
-  return renderLogFilter(ds.logData)+`<div class="card"><div class="card-title" style="display:flex;align-items:center;gap:8px">📋 ${ds.logMonth} ${hasFilter?`필터 결과 (${filtered.length}/${ds.logData.length}건)`:`전체 (${ds.logData.length}건)`}
+  const isCurrentMonth=ds.logMonth===kstMonth();
+  const monthNav=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    <button onclick="changeLogMonth(-1)" style="font-size:.8rem;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf2);color:var(--ink);cursor:pointer">◀ 이전 달</button>
+    <span style="flex:1;text-align:center;font-size:.85rem;font-weight:700;color:var(--ink)">${ds.logMonth}</span>
+    <button onclick="changeLogMonth(1)" ${isCurrentMonth?'disabled style="font-size:.8rem;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf2);color:var(--mu);cursor:not-allowed;opacity:.4"':'style="font-size:.8rem;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf2);color:var(--ink);cursor:pointer"'}>다음 달 ▶</button>
+  </div>`;
+
+  return renderLogFilter(ds.logData)+monthNav+`<div class="card"><div class="card-title" style="display:flex;align-items:center;gap:8px">📋 ${ds.logMonth} ${hasFilter?`필터 결과 (${filtered.length}/${ds.logData.length}건)`:`전체 (${ds.logData.length}건)`}
     <button onclick="toggleAllLogDates()" style="margin-left:auto;font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf2);color:var(--mu);cursor:pointer">전체 접기/펼치기</button>
   </div><div data-log-list>${groupsHtml}</div></div>`;
 }
