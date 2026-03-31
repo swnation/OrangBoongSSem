@@ -1401,10 +1401,19 @@ function continueFromHistory(idx) {
 function buildUserPrompt(aiId, roundNum) {
   const m = DM(); const sess = S.session;
   const accum = m.accumulated;
+  // 토큰 절약: 누적 지식은 최근 10개씩만 + 질문 관련도 선별
+  const q=(sess.question||'').toLowerCase();
+  const _selectRelevant=(arr,max=10)=>{
+    if(arr.length<=max) return arr;
+    // 질문 키워드와 매칭되는 항목 우선
+    const scored=arr.map((x,i)=>({x,score:(q&&x.toLowerCase().split(/\s+/).some(w=>w.length>1&&q.includes(w))?100:0)+(arr.length-i)}));
+    scored.sort((a,b)=>b.score-a.score);
+    return scored.slice(0,max).map(s=>s.x);
+  };
   const accumText = [
-    accum.established_consensus.length ? '■ 확립된 합의\n'+accum.established_consensus.map(x=>'- '+x).join('\n') : '',
-    accum.discarded_hypotheses.length ? '■ 폐기된 가설\n'+accum.discarded_hypotheses.map(x=>'- '+x).join('\n') : '',
-    accum.unresolved_issues.length ? '■ 미해결 쟁점\n'+accum.unresolved_issues.map(x=>'- '+x).join('\n') : '',
+    accum.established_consensus.length ? '■ 확립된 합의 ('+accum.established_consensus.length+'건 중 최근/관련)\n'+_selectRelevant(accum.established_consensus).map(x=>'- '+x).join('\n') : '',
+    accum.discarded_hypotheses.length ? '■ 폐기된 가설\n'+_selectRelevant(accum.discarded_hypotheses,5).map(x=>'- '+x).join('\n') : '',
+    accum.unresolved_issues.length ? '■ 미해결 쟁점\n'+_selectRelevant(accum.unresolved_issues).map(x=>'- '+x).join('\n') : '',
   ].filter(Boolean).join('\n\n');
 
   const condContext = getConditionsContext();
@@ -1522,6 +1531,17 @@ async function runRound(roundNum, errorsOnly) {
     S.session._attachments = _sessionFiles.map(f=>({name:f.name,type:f.type,size:f.size,driveId:f.driveId,webLink:f.webLink}));
   }
   let enabledAIs = getEnabledAIs();
+  // 비용 최적화: 라운드별 AI 자동 선택 (일반/디베이트 모드)
+  const mode=S.session?.mode||'normal';
+  if(!errorsOnly && mode!=='multi-grok') {
+    if(roundNum===1) {
+      // R1: Perp(팩트수집) + GPT/Claude/Gemini. Grok은 R2부터
+      enabledAIs=enabledAIs.filter(id=>id!=='grok');
+    } else if(roundNum>=2) {
+      // R2+: Grok 포함, Perp는 제외 (팩트는 R1에서 충분)
+      enabledAIs=enabledAIs.filter(id=>id!=='perp');
+    }
+  }
   // errorsOnly: only re-run AIs that had errors in this round
   if(errorsOnly && S.session.rounds[roundNum-1]) {
     const rd = S.session.rounds[roundNum-1];
@@ -2169,6 +2189,19 @@ function renderSession() {
     <div id="summary-area">${sess.summary?renderSummaryResult(sess.summary):''}</div>`;
 }
 
+// R1 의견 충돌 감지: AI 답변에서 반대/불일치 키워드 탐색
+function _detectConflict() {
+  const rd=S.session?.rounds?.[0];
+  if(!rd?.answers) return '';
+  const answers=Object.values(rd.answers).filter(a=>a&&!a.startsWith('⚠️'));
+  if(answers.length<2) return '';
+  const conflictWords=['반박','불일치','동의하지','반대','다르게','오류','재고','의문'];
+  let conflicts=0;
+  answers.forEach(a=>{ if(conflictWords.some(w=>a.includes(w))) conflicts++; });
+  if(conflicts>=2) return '⚡ AI 의견 충돌 감지 — R2 크로스체크 권장';
+  return '';
+}
+
 function renderActionBar(curRound) {
   const mode=S.session?.mode||'normal';
 
@@ -2206,12 +2239,14 @@ function renderActionBar(curRound) {
     const labels={2:'🔄 R2 크로스체크',3:'🔄 R3 최종 수렴'};
     const nextLabel=labels[next]||`🔄 R${next} 추가 분석`;
     const hasErr=Object.keys(AI_DEFS).some(id=>S.session.rounds[curRound-1]?.errors?.[id]);
+    // R1 후 의견 충돌 감지
+    const conflictHint=curRound===1?_detectConflict():'';
     return `<div class="round-action-bar" style="flex-wrap:wrap">
       <button class="btn-run-round" id="run-btn" onclick="runRound(${next})">${nextLabel}</button>
       <button class="btn-run-round green" onclick="runFinalSummary()" style="font-size:.78rem;padding:8px 14px">✅ 여기서 요약 & 종료</button>
       ${hasErr?`<button class="btn-run-round" onclick="runRound(${curRound},true)" style="background:#5a5a7a">🔁 R${curRound} 오류만 재실행</button>`:''}
       <button class="btn-undo" onclick="undoSession()" ${_sessionHistory.length?'':'disabled'} title="이전 라운드로 되돌리기">↩ Undo</button>
-      <span class="run-note">${mode==='debate'?'또는 심판 판정으로 종료':'AI들이 서로의 답변을 분석합니다'}</span>
+      <span class="run-note">${conflictHint||( mode==='debate'?'또는 심판 판정으로 종료':'AI들이 서로의 답변을 분석합니다')}</span>
     </div>`;
   }
 
