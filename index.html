@@ -3132,16 +3132,35 @@ function filterLogs(logs) {
   });
 }
 
+const _logCollapsed={};
+
 function renderLogList() {
   const ds=D(); if(!ds.logData?.length) return '<div class="hint">이번 달 기록 없음</div>';
   const filtered=filterLogs(ds.logData);
   const hasFilter=_logFilter.med||_logFilter.sym||_logFilter.cat;
-  return renderLogFilter(ds.logData)+`<div class="card"><div class="card-title">📋 ${ds.logMonth} ${hasFilter?`필터 결과 (${filtered.length}/${ds.logData.length}건)`:`전체 (${ds.logData.length}건)`}</div>`+
-    [...filtered].reverse().map((l,ri)=>{
+
+  // 날짜별 그룹핑
+  const byDate={};
+  [...filtered].reverse().forEach(l=>{
+    const date=l.datetime?.slice(0,10)||'unknown';
+    if(!byDate[date]) byDate[date]=[];
+    byDate[date].push(l);
+  });
+
+  const dayNames=['일','월','화','수','목','금','토'];
+  const groupsHtml=Object.entries(byDate).map(([date,logs])=>{
+    const dayOfWeek=dayNames[new Date(date+'T12:00').getDay()];
+    const dateLabel=date.slice(5)+' ('+dayOfWeek+')';
+    const collapsed=!!_logCollapsed[date];
+    const nrsVals=logs.filter(l=>l.nrs>=0).map(l=>l.nrs);
+    const avgNrs=nrsVals.length?(nrsVals.reduce((a,b)=>a+b,0)/nrsVals.length).toFixed(1):null;
+    const nc=avgNrs===null?'var(--mu)':avgNrs>=7?'#ef4444':avgNrs>=4?'#f59e0b':'#10b981';
+
+    const logsHtml=logs.map(l=>{
       const realIdx=ds.logData.indexOf(l);
       const timeStr=l.datetime.slice(11,16);
       return `<div class="log-item">
-        <div class="log-item-time">${l.datetime.slice(5,10)}${timeStr!=='00:00'?'<br>'+timeStr:''}</div>
+        <div class="log-item-time">${timeStr!=='00:00'?timeStr:''}</div>
         <div class="log-item-body">
           ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
             (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`:'')}
@@ -3156,7 +3175,80 @@ function renderLogList() {
         <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
         <button class="log-del" onclick="deleteLogEntry(${realIdx})">✕</button>
       </div>`;
-    }).join('')+'</div>';
+    }).join('');
+
+    return `<div style="margin-bottom:2px">
+      <div onclick="_logCollapsed['${date}']=!_logCollapsed['${date}'];document.getElementById('content').querySelector('[data-log-list]').innerHTML=renderLogListInner()" style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;user-select:none;background:var(--sf2);border-radius:6px;border:1px solid var(--bd)">
+        <span style="font-size:.7rem;color:var(--mu)">${collapsed?'▸':'▾'}</span>
+        <span style="font-size:.78rem;font-weight:700;color:var(--ink)">${esc(dateLabel)}</span>
+        <span style="font-size:.65rem;color:var(--mu)">${logs.length}건</span>
+        ${avgNrs!==null?`<span style="font-size:.65rem;font-weight:600;color:${nc}">평균 ${avgNrs}</span>`:''}
+      </div>
+      ${collapsed?'':`<div style="padding:0 4px">${logsHtml}</div>`}
+    </div>`;
+  }).join('');
+
+  return renderLogFilter(ds.logData)+`<div class="card"><div class="card-title" style="display:flex;align-items:center;gap:8px">📋 ${ds.logMonth} ${hasFilter?`필터 결과 (${filtered.length}/${ds.logData.length}건)`:`전체 (${ds.logData.length}건)`}
+    <button onclick="toggleAllLogDates()" style="margin-left:auto;font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf2);color:var(--mu);cursor:pointer">전체 접기/펼치기</button>
+  </div><div data-log-list>${groupsHtml}</div></div>`;
+}
+
+function renderLogListInner() {
+  const ds=D(); if(!ds.logData?.length) return '';
+  const filtered=filterLogs(ds.logData);
+  const byDate={};
+  [...filtered].reverse().forEach(l=>{
+    const date=l.datetime?.slice(0,10)||'unknown';
+    if(!byDate[date]) byDate[date]=[];
+    byDate[date].push(l);
+  });
+  const dayNames=['일','월','화','수','목','금','토'];
+  return Object.entries(byDate).map(([date,logs])=>{
+    const dayOfWeek=dayNames[new Date(date+'T12:00').getDay()];
+    const dateLabel=date.slice(5)+' ('+dayOfWeek+')';
+    const collapsed=!!_logCollapsed[date];
+    const nrsVals=logs.filter(l=>l.nrs>=0).map(l=>l.nrs);
+    const avgNrs=nrsVals.length?(nrsVals.reduce((a,b)=>a+b,0)/nrsVals.length).toFixed(1):null;
+    const nc=avgNrs===null?'var(--mu)':avgNrs>=7?'#ef4444':avgNrs>=4?'#f59e0b':'#10b981';
+    const logsHtml=logs.map(l=>{
+      const realIdx=ds.logData.indexOf(l);
+      const timeStr=l.datetime.slice(11,16);
+      return `<div class="log-item">
+        <div class="log-item-time">${timeStr!=='00:00'?timeStr:''}</div>
+        <div class="log-item-body">
+          ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
+            (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`:'')}
+          ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
+          <div class="log-item-tags">
+            ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
+            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
+            ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
+          </div>
+          ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
+        </div>
+        <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
+        <button class="log-del" onclick="deleteLogEntry(${realIdx})">✕</button>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:2px">
+      <div onclick="_logCollapsed['${date}']=!_logCollapsed['${date}'];document.getElementById('content').querySelector('[data-log-list]').innerHTML=renderLogListInner()" style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;user-select:none;background:var(--sf2);border-radius:6px;border:1px solid var(--bd)">
+        <span style="font-size:.7rem;color:var(--mu)">${collapsed?'▸':'▾'}</span>
+        <span style="font-size:.78rem;font-weight:700;color:var(--ink)">${esc(dateLabel)}</span>
+        <span style="font-size:.65rem;color:var(--mu)">${logs.length}건</span>
+        ${avgNrs!==null?`<span style="font-size:.65rem;font-weight:600;color:${nc}">평균 ${avgNrs}</span>`:''}
+      </div>
+      ${collapsed?'':`<div style="padding:0 4px">${logsHtml}</div>`}
+    </div>`;
+  }).join('');
+}
+
+function toggleAllLogDates() {
+  const ds=D(); if(!ds.logData?.length) return;
+  const dates=[...new Set(ds.logData.map(l=>l.datetime?.slice(0,10)))];
+  const allCollapsed=dates.every(d=>_logCollapsed[d]);
+  dates.forEach(d=>{ _logCollapsed[d]=!allCollapsed; });
+  const el=document.getElementById('content').querySelector('[data-log-list]');
+  if(el) el.innerHTML=renderLogListInner();
 }
 
 async function saveLogEntry() {
@@ -5992,14 +6084,25 @@ function renderWeeklySummaryCard() {
   allLogs.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
   const svgChart=_renderWeeklyNrsChart(allLogs,summary.dates);
 
-  // 일별 상세 (시간대별 펼침)
+  // 일별 상세 (탭하면 펼치기)
   const daysHtml=summary.dates.map(d=>{
     const dd=summary.byDate[d];
     if(!dd.logs.length) return '';
     const dayOfWeek=dayNames[new Date(d+'T12:00').getDay()];
     const dateLabel=d.slice(5)+' ('+dayOfWeek+')';
     const isBlock=t=>t.toLowerCase().includes('block');
+    const dayId='wk-'+d.replace(/-/g,'');
 
+    // 요약 한줄 (접힌 상태)
+    const firstLog=dd.logs.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''))[0];
+    const nrsVals=dd.logs.filter(l=>l.nrs>=0).map(l=>l.nrs);
+    const nrsRange=nrsVals.length?'NRS '+(nrsVals.length>1?Math.min(...nrsVals)+'~'+Math.max(...nrsVals):nrsVals[0]):'';
+    const allMeds=[...new Set(dd.logs.flatMap(l=>l.meds||[]))];
+    const previewMeds=allMeds.slice(0,2).map(m=>'<span style="font-size:.58rem;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#92400e">'+esc(m)+'</span>').join(' ');
+    const allSites=[...new Set(dd.logs.flatMap(l=>l.sites||[]))];
+    const previewSites=allSites.length?'<span style="font-size:.58rem;color:var(--mu)">'+allSites.slice(0,3).map(s=>esc(s)).join(', ')+'</span>':'';
+
+    // 상세 (펼친 상태)
     const logsHtml=dd.logs.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||'')).map(l=>{
       const time=l.datetime?.slice(11,16)||'';
       const nrs=l.nrs>=0?l.nrs:null;
@@ -6012,20 +6115,29 @@ function renderWeeklySummaryCard() {
       }).join(' ');
       const pain=(l.painType||[]).length?'<span style="font-size:.58rem;color:#ec4899">'+(l.painType||[]).map(p=>esc(p)).join('·')+'</span>':'';
       const sites=(l.sites||[]).length?'<span style="font-size:.58rem;color:var(--mu)">'+(l.sites||[]).map(s=>esc(s)).join(', ')+'</span>':'';
+      const symptoms=(l.symptoms||[]).length?'<span style="font-size:.58rem;color:#8b5cf6">'+(l.symptoms||[]).map(s=>esc(s)).join(', ')+'</span>':'';
+      const memo=l.memo?'<div style="font-size:.6rem;color:var(--mu);margin-top:2px;padding-left:38px">📝 '+esc(l.memo)+'</div>':'';
 
-      return '<div style="display:flex;gap:6px;padding:2px 0;align-items:center">'
+      return '<div style="padding:3px 0;border-bottom:1px solid var(--bd)">'
+        +'<div style="display:flex;gap:6px;align-items:center">'
         +'<span style="font-size:.65rem;font-family:var(--mono);color:var(--mu);min-width:32px">'+esc(time)+'</span>'
         +(nrs!==null?'<span style="font-size:.75rem;font-weight:700;color:'+nc+';min-width:22px;text-align:center">'+nrs+'</span>'
           +'<div style="width:50px;height:3px;background:var(--bd);border-radius:2px;overflow:hidden"><div style="width:'+barW+'%;height:100%;background:'+nc+'"></div></div>'
           :'<span style="font-size:.65rem;color:var(--mu);min-width:22px;text-align:center">-</span><div style="width:50px"></div>')
-        +'<div style="flex:1;display:flex;flex-wrap:wrap;gap:2px;align-items:center">'+pain+sites+meds+tx+'</div>'
-        +'</div>';
+        +'<div style="flex:1;display:flex;flex-wrap:wrap;gap:2px;align-items:center">'+pain+sites+symptoms+meds+tx+'</div>'
+        +'</div>'+memo+'</div>';
     }).join('');
 
     return '<div style="padding:6px 0;border-bottom:1.5px solid var(--bd)">'
-      +'<div style="font-size:.72rem;font-weight:700;color:var(--ink);margin-bottom:3px">'+esc(dateLabel)
-      +'<span style="font-size:.6rem;font-weight:400;color:var(--mu);margin-left:6px">'+dd.logs.length+'건</span></div>'
-      +logsHtml+'</div>';
+      +'<div onclick="document.getElementById(\''+dayId+'\').style.display=document.getElementById(\''+dayId+'\').style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.wk-arrow\').textContent=document.getElementById(\''+dayId+'\').style.display===\'none\'?\'▸\':\'▾\'" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">'
+      +'<span class="wk-arrow" style="font-size:.7rem;color:var(--mu);min-width:10px">▸</span>'
+      +'<span style="font-size:.72rem;font-weight:700;color:var(--ink)">'+esc(dateLabel)+'</span>'
+      +'<span style="font-size:.6rem;font-weight:400;color:var(--mu)">'+dd.logs.length+'건</span>'
+      +(nrsRange?'<span style="font-size:.6rem;font-weight:600;color:'+(nrsVals[0]>=7?'#ef4444':nrsVals[0]>=4?'#f59e0b':'#10b981')+'">'+nrsRange+'</span>':'')
+      +previewSites+previewMeds
+      +'</div>'
+      +'<div id="'+dayId+'" style="display:none;margin-top:4px;padding-left:16px">'+logsHtml+'</div>'
+      +'</div>';
   }).join('');
 
   const medsTotal=summary.topMeds.map(function(e){return '<span style="font-size:.7rem;background:var(--sf2);padding:2px 8px;border-radius:4px">'+esc(e[0])+' ×'+e[1]+'</span>';}).join(' ');
