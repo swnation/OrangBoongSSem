@@ -1,0 +1,55 @@
+name: Cleanup old backup branches
+
+on:
+  create:
+    branches:
+      - 'backup/v*'
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete old backup branches (keep latest 5)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // backup/v* 브랜치만 조회
+            const { data: refs } = await github.rest.git.listMatchingRefs({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'heads/backup/v'
+            });
+
+            const backups = refs
+              .map(r => r.ref.replace('refs/heads/', ''))
+              .filter(name => /^backup\/v\d+\.\d+$/.test(name));
+
+            // 버전 번호 순 정렬 (높은 순)
+            backups.sort((a, b) => {
+              const va = a.match(/(\d+)\.(\d+)/).slice(1).map(Number);
+              const vb = b.match(/(\d+)\.(\d+)/).slice(1).map(Number);
+              return vb[0] - va[0] || vb[1] - va[1];
+            });
+
+            console.log(`Found ${backups.length} backup branches: ${backups.join(', ')}`);
+
+            if (backups.length <= 5) {
+              console.log('5개 이하 → 삭제 불필요');
+              return;
+            }
+
+            // 6번째부터 삭제
+            const toDelete = backups.slice(5);
+            for (const branch of toDelete) {
+              console.log(`Deleting: ${branch}`);
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${branch}`
+              });
+              console.log(`Deleted: ${branch}`);
+            }
+
+            console.log(`완료: ${toDelete.length}개 삭제, ${Math.min(backups.length, 5)}개 유지`);
