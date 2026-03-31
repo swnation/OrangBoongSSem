@@ -1406,7 +1406,7 @@ function buildUserPrompt(aiId, roundNum) {
   const _selectRelevant=(arr,max=10)=>{
     if(arr.length<=max) return arr;
     // 질문 키워드와 매칭되는 항목 우선
-    const scored=arr.map((x,i)=>({x,score:(q&&x.toLowerCase().split(/\s+/).some(w=>w.length>1&&q.includes(w))?100:0)+i}));
+    const scored=arr.map((x,i)=>({x,score:(q&&x.toLowerCase().split(/\s+/).some(w=>w.length>1&&q.includes(w))?10000:0)+i}));
     scored.sort((a,b)=>b.score-a.score);
     return scored.slice(0,max).map(s=>s.x);
   };
