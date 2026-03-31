@@ -1452,7 +1452,7 @@ async function regenOne(aiId) {
   const ac=new AbortController();
   if(!S._abortControllers) S._abortControllers={};
   S._abortControllers[aiId]=ac;
-  updateStopBtn(aiId,true);
+  updateStopBtn(aiId,true); startAITimer(aiId);
   try {
     const answer=await callAIStream(aiId,getRoleSystem(aiId),buildUserPrompt(aiId,curRound),(chunk)=>{
       const ta=document.getElementById('ans-'+aiId);
@@ -1482,7 +1482,7 @@ async function regenOne(aiId) {
     }
   }
   delete S._abortControllers?.[aiId];
-  updateStopBtn(aiId,false);
+  updateStopBtn(aiId,false); stopAITimer(aiId);
   if(btn){btn.disabled=false;btn.textContent='↺ 재생성';}
   try { await saveMaster(); updateSidebarCost(); } catch(e) {}
 }
@@ -1732,6 +1732,8 @@ function switchView(view, btn) {
   closeSidebar();
 }
 function renderView(view) {
+  // 세션 뷰를 벗어날 때 타이머 정리
+  if(view!=='session') { Object.keys(_aiTimers).forEach(id=>stopAITimer(id)); }
   const area=document.getElementById('content');
   if(view==='home') area.innerHTML=renderHome();
   else if(view==='session') area.innerHTML=renderSession();
