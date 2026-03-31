@@ -1119,14 +1119,14 @@ async function callAI(aiId, system, user) {
 }
 
 // Streaming AI call — onChunk(accumulatedText) called on each chunk
-async function callAIStream(aiId, system, user, onChunk) {
+async function callAIStream(aiId, system, user, onChunk, signal) {
   const key=S.keys[aiId]; const model=S.models[aiId]||DEFAULT_MODELS[aiId];
   if(!key) throw new Error(`${AI_DEFS[aiId]?.name} API 키 미설정. 🔑 설정에서 입력하세요.`);
 
   if(aiId==='claude') {
     const r=await fetchWithRetry('https://api.anthropic.com/v1/messages',{method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model,max_tokens:6000,stream:true,system,messages:[{role:'user',content:user}]})});
+      body:JSON.stringify({model,max_tokens:6000,stream:true,system,messages:[{role:'user',content:user}]}),signal});
     if(!r.ok){const d=await r.json();throw new Error('Claude: '+(d.error?.message||r.status));}
     let text='',inT=0,outT=0;
     const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
@@ -1151,7 +1151,7 @@ async function callAIStream(aiId, system, user, onChunk) {
     const r=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{method:'POST',
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
       body:JSON.stringify({model,max_completion_tokens:4000,stream:true,stream_options:{include_usage:true},
-        messages:[{role:'system',content:system},{role:'user',content:user}]})});
+        messages:[{role:'system',content:system},{role:'user',content:user}]}),signal});
     if(!r.ok){const d=await r.json();throw new Error('GPT: '+(d.error?.message||r.status));}
     let text='',inT=0,outT=0;
     const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
@@ -1174,7 +1174,7 @@ async function callAIStream(aiId, system, user, onChunk) {
   if(aiId==='gemini') {
     const r=await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`,
       {method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({system_instruction:{parts:[{text:system}]},contents:[{parts:[{text:user}]}],generationConfig:{maxOutputTokens:8192}})});
+      body:JSON.stringify({system_instruction:{parts:[{text:system}]},contents:[{parts:[{text:user}]}],generationConfig:{maxOutputTokens:8192}}),signal});
     if(!r.ok){const d=await r.json();throw new Error('Gemini: '+(d.error?.message||r.status));}
     let text='',inT=0,outT=0;
     const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
@@ -1200,7 +1200,7 @@ async function callAIStream(aiId, system, user, onChunk) {
     const r=await fetchWithRetry('https://api.perplexity.ai/chat/completions',{method:'POST',
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
       body:JSON.stringify({model,max_tokens:4000,stream:true,stream_options:{include_usage:true},
-        messages:[{role:'system',content:system},{role:'user',content:user}]})});
+        messages:[{role:'system',content:system},{role:'user',content:user}]}),signal});
     if(!r.ok){const d=await r.json();throw new Error('Perplexity: '+(d.error?.message||r.status));}
     let text='',inT=0,outT=0;
     const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
@@ -1394,27 +1394,38 @@ async function runRound(roundNum, errorsOnly) {
   const runBtn=document.getElementById('run-btn'); if(runBtn) runBtn.disabled=true;
 
   await Promise.all(enabledAIs.map(async aiId=>{
+    const ac=new AbortController();
+    if(!S._abortControllers) S._abortControllers={};
+    S._abortControllers[aiId]=ac;
+    updateStopBtn(aiId,true);
     try {
       const answer = await callAIStream(aiId, getRoleSystem(aiId), buildUserPrompt(aiId,roundNum), (chunk)=>{
-        // Real-time partial update (#9)
         const ta=document.getElementById('ans-'+aiId);
         if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
-      });
+      }, ac.signal);
       S.session.rounds[roundNum-1].answers[aiId]=answer;
       delete S.session.rounds[roundNum-1].errors[aiId];
       const ta=document.getElementById('ans-'+aiId);
       if(ta){ta.value=answer;ta.classList.remove('gen');}
-      // Show markdown render after completion
       updateAICardMD(aiId, answer);
       setCardStatus(aiId,'done');
     } catch(e) {
-      const msg='⚠️ 오류: '+e.message;
-      S.session.rounds[roundNum-1].answers[aiId]=msg;
-      S.session.rounds[roundNum-1].errors[aiId]=true;
-      const ta=document.getElementById('ans-'+aiId);
-      if(ta){ta.value=msg;ta.classList.remove('gen');}
-      setCardStatus(aiId,'error');
+      if(e.name==='AbortError') {
+        const ta=document.getElementById('ans-'+aiId);
+        const partial=ta?.value||'';
+        if(partial) { S.session.rounds[roundNum-1].answers[aiId]=partial; delete S.session.rounds[roundNum-1].errors[aiId]; setCardStatus(aiId,'done'); showToast(`⏹ ${AI_DEFS[aiId].name} 중단됨`); }
+        else { S.session.rounds[roundNum-1].errors[aiId]=true; setCardStatus(aiId,'error'); }
+      } else {
+        const msg='⚠️ 오류: '+e.message;
+        S.session.rounds[roundNum-1].answers[aiId]=msg;
+        S.session.rounds[roundNum-1].errors[aiId]=true;
+        const ta=document.getElementById('ans-'+aiId);
+        if(ta){ta.value=msg;ta.classList.remove('gen');}
+        setCardStatus(aiId,'error');
+      }
     }
+    delete S._abortControllers?.[aiId];
+    updateStopBtn(aiId,false);
   }));
 
   S.generating=false; if(runBtn) runBtn.disabled=false;
@@ -1438,11 +1449,15 @@ async function regenOne(aiId) {
   setCardStatus(aiId,'loading');
   if(!S.session.rounds[curRound-1]) S.session.rounds[curRound-1]={round:curRound,answers:{},errors:{}};
   if(!S.session.rounds[curRound-1].errors) S.session.rounds[curRound-1].errors={};
+  const ac=new AbortController();
+  if(!S._abortControllers) S._abortControllers={};
+  S._abortControllers[aiId]=ac;
+  updateStopBtn(aiId,true);
   try {
     const answer=await callAIStream(aiId,getRoleSystem(aiId),buildUserPrompt(aiId,curRound),(chunk)=>{
       const ta=document.getElementById('ans-'+aiId);
       if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
-    });
+    }, ac.signal);
     S.session.rounds[curRound-1].answers[aiId]=answer;
     delete S.session.rounds[curRound-1].errors[aiId];
     const ta=document.getElementById('ans-'+aiId);
@@ -1451,15 +1466,37 @@ async function regenOne(aiId) {
     setCardStatus(aiId,'done');
     showToast(`✅ ${AI_DEFS[aiId].name} 재생성 완료`);
   } catch(e) {
-    const msg='⚠️ 오류: '+e.message;
-    S.session.rounds[curRound-1].answers[aiId]=msg;
-    S.session.rounds[curRound-1].errors[aiId]=true;
-    const ta=document.getElementById('ans-'+aiId);
-    if(ta){ta.value=msg;ta.classList.remove('gen');}
-    setCardStatus(aiId,'error');
+    if(e.name==='AbortError') {
+      const ta=document.getElementById('ans-'+aiId);
+      const partial=ta?.value||'';
+      if(partial) { S.session.rounds[curRound-1].answers[aiId]=partial; delete S.session.rounds[curRound-1].errors[aiId]; setCardStatus(aiId,'done'); }
+      else { S.session.rounds[curRound-1].errors[aiId]=true; setCardStatus(aiId,'error'); }
+      showToast(`⏹ ${AI_DEFS[aiId].name} 중단됨`);
+    } else {
+      const msg='⚠️ 오류: '+e.message;
+      S.session.rounds[curRound-1].answers[aiId]=msg;
+      S.session.rounds[curRound-1].errors[aiId]=true;
+      const ta=document.getElementById('ans-'+aiId);
+      if(ta){ta.value=msg;ta.classList.remove('gen');}
+      setCardStatus(aiId,'error');
+    }
   }
+  delete S._abortControllers?.[aiId];
+  updateStopBtn(aiId,false);
   if(btn){btn.disabled=false;btn.textContent='↺ 재생성';}
   try { await saveMaster(); updateSidebarCost(); } catch(e) {}
+}
+
+function stopAI(aiId) {
+  const ac=S._abortControllers?.[aiId];
+  if(ac) ac.abort();
+}
+
+function updateStopBtn(aiId, running) {
+  const el=document.getElementById('stop-'+aiId);
+  if(!el) return;
+  if(running) { el.style.display='inline-block'; }
+  else { el.style.display='none'; }
 }
 
 // Partial DOM update: show markdown view after streaming (#9)
@@ -1779,7 +1816,8 @@ function renderSession() {
         <span class="ai-name" style="color:${def.color}">${def.name}</span>
         <span class="ai-role">${mode==='debate'?'':dc.aiRoles[id]||''}</span>${debateLabel}
         <span id="chip-${id}" class="ai-chip"></span>
-        ${curRound>0?`<button class="btn-copy" onclick="copyAIResponse('${id}')" style="margin-left:auto">📋</button>
+        <button id="stop-${id}" onclick="stopAI('${id}')" style="display:none;margin-left:auto;font-size:.65rem;padding:2px 8px;border:1.5px solid #f59e0b;border-radius:4px;background:none;color:#f59e0b;cursor:pointer;font-weight:600;white-space:nowrap">⏹ 중단</button>
+        ${curRound>0?`<button class="btn-copy" onclick="copyAIResponse('${id}')" style="${S._abortControllers?.[id]?'':'margin-left:auto'}">📋</button>
         <button class="ai-regen" id="regen-${id}" onclick="regenOne('${id}')">↺ 재생성</button>`:''}
       </div>
       <div style="padding:4px 13px;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--bd);background:var(--sf2)">
