@@ -1676,15 +1676,14 @@ async function runGrokMultiAgent() {
   const logSummary=buildLogSummary();
   const contextFull=contextSection+(logSummary?'\n\n'+logSummary:'');
 
-  const system=`Grok ${agentLevel} Multi-Agent 모드. 내부에서 Captain, Researcher, Logician, Contrarian 등 ${agentLevel}명이 토론.
-의학 SSOT 원칙 준수. 토론 과정은 간결히.
-**최종 출력은 반드시 아래 JSON만 출력. 다른 텍스트 금지.**
-{"session_summary":"3문장 이내","new_consensus":["합의1"],"new_discarded":["폐기 가설"],"updated_issues":["미해결"],"final_recommendation":"구체적 권고","next_steps":["행동1"],"debate_key_points":"주요 충돌과 합의 (간단히)"}`;
+  const system=`Grok ${agentLevel} Multi-Agent 모드. 내부 ${agentLevel}명(Captain, Researcher, Logician, Contrarian 등) 토론 후 요약.
+SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요.
+**최종 출력은 반드시 아래 JSON만 출력. 다른 텍스트 절대 금지. 각 문자열 100자 이내.**
+{"session_summary":"3문장요약","new_consensus":["합의"],"new_discarded":["폐기"],"updated_issues":["쟁점"],"new_protocols":[],"round_evolution":"에이전트 토론 발전과정","final_recommendation":"최종권고","next_steps":["행동1","행동2"]}`;
 
   const userPrompt=`${contextFull}\n\n[질문]\n${q}`;
 
   try {
-    // Multi-Agent 모델 사용
     const savedModel=S.models.grok;
     S.models.grok='grok-4.20-multi-agent-0309';
     const raw=await callAIStream('grok',system,userPrompt,(chunk)=>{
@@ -1693,22 +1692,36 @@ async function runGrokMultiAgent() {
     });
     S.models.grok=savedModel;
 
-    // JSON 추출
+    // JSON 추출 (기존 Claude runFinalSummary와 동일한 파싱)
     let parsed;
-    try {
-      const jsonStr=raw.match(/\{[\s\S]*\}/)[0];
-      parsed=JSON.parse(jsonStr);
-    } catch(e) {
-      parsed={session_summary:'JSON 파싱 실패 — 원문 참조',final_recommendation:raw.substring(0,500),new_consensus:[],new_discarded:[],updated_issues:[],next_steps:[],debate_key_points:''};
+    let clean=raw.replace(/```json|```/g,'').trim();
+    const jsonMatch=clean.match(/\{[\s\S]*\}/);
+    if(jsonMatch) clean=jsonMatch[0];
+    try { parsed=JSON.parse(clean); }
+    catch(e) {
+      parsed={session_summary:'JSON 파싱 실패',new_consensus:[],new_discarded:[],updated_issues:[],
+        new_protocols:[],round_evolution:'',final_recommendation:raw.substring(0,500),next_steps:['원문 참조']};
+      showToast('⚠️ 요약 파싱 실패 — 세션은 저장됩니다.',4000);
     }
 
+    // 누적 저장 (기존 runFinalSummary와 동일)
     S.session.summary=parsed;
     S.session.currentRound=4;
     S.session.rounds=[{round:1,answers:{grok:raw},errors:{}}];
+    const m=DM(); const accum=m.accumulated;
+    if(parsed.new_consensus?.length) accum.established_consensus.push(...parsed.new_consensus);
+    if(parsed.new_discarded?.length) accum.discarded_hypotheses.push(...parsed.new_discarded);
+    if(parsed.updated_issues?.length) accum.unresolved_issues.push(...parsed.updated_issues.filter(x=>!accum.unresolved_issues.includes(x)));
+    S.session.new_consensus=parsed.new_consensus||[];
+    S.session.new_discarded=parsed.new_discarded||[];
+    S.session.updated_issues=parsed.updated_issues||[];
+    m.sessions.unshift({...S.session});
+    if(!m.session_timeline) m.session_timeline=[];
+    m.session_timeline.unshift({date:S.session.date,question:S.session.question,summary:parsed.session_summary,mode:'multi-grok',agentLevel});
     await saveMaster();
 
     summArea.innerHTML=renderSummaryResult(parsed);
-    showToast(`✅ Grok ${agentLevel} 에이전트 협업 완료`);
+    showToast(`✅ Grok ${agentLevel} 에이전트 요약 완료`);
   } catch(e) {
     summArea.innerHTML=`<div class="card" style="padding:16px;color:#ef4444">⚠️ Grok Multi-Agent 오류: ${esc(e.message)}</div>`;
   }
