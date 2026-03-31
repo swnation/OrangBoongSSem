@@ -141,6 +141,10 @@ main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden}
 .ai-body textarea{width:100%;border:none;outline:none;padding:11px 13px;font-family:var(--font);font-size:.84rem;line-height:1.65;resize:vertical;min-height:150px;background:transparent;color:var(--ink)}
 .ai-body textarea.gen{background:#f0f7ff;color:var(--mu)}
 [data-theme="dark"] .ai-body textarea.gen{background:#1a2030;color:#5a6a7a}
+/* Quick question / Multi-grok: single card full width, larger answer */
+.ai-grid.single-card{grid-template-columns:1fr}
+.ai-grid.single-card .ai-body textarea{min-height:350px;font-size:.92rem;font-weight:500;line-height:1.75;color:var(--ink)}
+.ai-grid.single-card .ai-md{font-size:.92rem;font-weight:500;line-height:1.75;max-height:none}
 /* Markdown rendered output */
 .ai-md{padding:11px 13px;font-size:.84rem;line-height:1.65;color:var(--ink);overflow-y:auto;max-height:400px}
 .ai-md h1,.ai-md h2,.ai-md h3{font-family:var(--serif);margin:10px 0 6px;font-weight:400}
