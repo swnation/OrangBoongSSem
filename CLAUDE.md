@@ -1,14 +1,16 @@
-# CLAUDE.md — Orangi Health AI 협진 시스템 v8.3
+# CLAUDE.md — Orangi Health AI 협진 시스템 v9.1
 
 ## 프로젝트 개요
-멀티 도메인 AI 협진 의료 기록 시스템. 4개 AI(GPT/Claude/Gemini/Perplexity)를 동시 호출하여 환자 데이터를 분석하는 단일 페이지 웹앱.
+멀티 도메인 AI 협진 의료 기록 시스템. 5개 AI(GPT/Claude/Gemini/Grok/Perplexity)를 동시 호출하여 환자 데이터를 분석하는 단일 페이지 웹앱.
 
 ## 파일 구조
 ```
-index.html      — HTML + JS 메인 앱 (~4260줄)
+index.html      — HTML + JS 메인 앱 (~7500줄)
 style.css       — CSS (325줄)
 manifest.json   — PWA 매니페스트
 sw.js           — Service Worker (network-first HTML, cache-first 정적자산)
+quick/          — 두통 빠른 기록 별도 앱
+icons/          — PWA 아이콘 (icon-512/192, quick-512/192)
 VERSION.md      — 버전 정보 + 백업 브랜치 목록
 CLAUDE.md       — 이 파일
 ```
@@ -17,10 +19,11 @@ CLAUDE.md       — 이 파일
 - **프론트엔드**: Vanilla JS (프레임워크 없음), 단일 `<script>` 태그
 - **스타일**: 외부 CSS (`style.css`) + CSS 변수 (다크모드 지원)
 - **저장**: Google Drive API (OAuth2) + localStorage 오프라인 캐시
-- **AI API**: 4개 프로바이더 SSE 스트리밍 (Claude/GPT/Gemini/Perplexity)
+- **AI API**: 5개 프로바이더 SSE 스트리밍 (Claude/GPT/Gemini/Grok/Perplexity)
 - **외부 라이브러리**: marked.js (마크다운), DOMPurify (XSS 방어)
 - **PWA**: Service Worker + manifest.json
 - **의약품 검색**: 식약처 공공데이터 API (`DrugPrdtPrmsnInfoService07`)
+- **API 키 보안**: AES-256-GCM 암호화 (PIN 기반 PBKDF2)
 
 ## 핵심 아키텍처
 
@@ -60,8 +63,10 @@ UTC+9 오프셋을 수동 적용하는 방식.
 
 ### API 호출
 - `fetchWithRetry(url, opts, maxRetries=2)`: 429/5xx 시 지수 백오프 재시도
-- `callAIStream(aiId, system, user, onChunk)`: SSE 스트리밍 + 실시간 UI 업데이트
+- `callAIStream(aiId, system, user, onChunk, signal)`: SSE 스트리밍 + AbortController 지원
 - `callAI(aiId, system, user)`: 비스트리밍 래퍼 (요약 등에 사용)
+- AI 5개: gpt(OpenAI), claude(Anthropic), gemini(Google), grok(xAI), perp(Perplexity)
+- 비용 최적화: R1에서 Grok 제외, R2+에서 Perplexity 제외
 - OAuth 토큰 자동 갱신 (`scheduleTokenRefresh`, `ensureValidToken`)
 
 ### 자동완성 시스템
@@ -114,7 +119,7 @@ backup/v8.1  ← UX 개선/직접입력/자동완성/컨텍스트통합
 6. `+고정` 버튼 등 폼 리렌더 시 `_saveLogFormState()` / `_restoreLogFormState()` 사용
 7. onclick에 사용자/AI 텍스트 직접 삽입 금지 → 전역 변수 참조 방식 사용
 8. 자동완성 리스너 중복 방지: `input._acSetup` 플래그 확인
-9. API 키는 localStorage에만 저장 (Drive 동기화 안 함)
+9. API 키는 AES-GCM 암호화 후 localStorage 저장 (`om_keys_enc`). 평문 저장 금지
 10. 버전 업 시 `APP_VERSION` 배열에 새 항목 추가 필수
 11. 버전 업 시 `backup/vX.X` 브랜치 생성 필수, **최근 5개만 유지** (가장 오래된 것 삭제)
 12. 버전 업 시 `codeBackupToDrive()` 실행하여 Google Drive에 코드+맥락 백업 필수 (사용자가 로그인 상태일 때 자동 호출)
