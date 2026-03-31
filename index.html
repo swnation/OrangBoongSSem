@@ -1397,7 +1397,7 @@ async function runRound(roundNum, errorsOnly) {
     const ac=new AbortController();
     if(!S._abortControllers) S._abortControllers={};
     S._abortControllers[aiId]=ac;
-    updateStopBtn(aiId,true);
+    updateStopBtn(aiId,true); startAITimer(aiId);
     try {
       const answer = await callAIStream(aiId, getRoleSystem(aiId), buildUserPrompt(aiId,roundNum), (chunk)=>{
         const ta=document.getElementById('ans-'+aiId);
@@ -1425,7 +1425,7 @@ async function runRound(roundNum, errorsOnly) {
       }
     }
     delete S._abortControllers?.[aiId];
-    updateStopBtn(aiId,false);
+    updateStopBtn(aiId,false); stopAITimer(aiId);
   }));
 
   S.generating=false; if(runBtn) runBtn.disabled=false;
@@ -1497,6 +1497,38 @@ function updateStopBtn(aiId, running) {
   if(!el) return;
   if(running) { el.style.display='inline-block'; }
   else { el.style.display='none'; }
+}
+
+// ── AI 생성 타이머 ──
+const _aiTimers={};
+const AI_SLOW_THRESHOLD=45; // 초 — 이 시간 지나면 재시도 권장
+
+function startAITimer(aiId) {
+  stopAITimer(aiId);
+  const el=document.getElementById('timer-'+aiId);
+  if(!el) return;
+  const start=Date.now();
+  el.textContent='0s';
+  el.style.display='inline';
+  el.style.color='var(--mu)';
+  const warn=document.getElementById('slow-'+aiId);
+  if(warn) warn.style.display='none';
+  _aiTimers[aiId]=setInterval(()=>{
+    const sec=Math.round((Date.now()-start)/1000);
+    el.textContent=sec+'s';
+    if(sec>=AI_SLOW_THRESHOLD) {
+      el.style.color='#f59e0b';
+      if(warn) { warn.style.display='inline'; warn.title=`${sec}초 경과 — 중단 후 재시도를 권장합니다`; }
+    }
+  },1000);
+}
+
+function stopAITimer(aiId) {
+  if(_aiTimers[aiId]) { clearInterval(_aiTimers[aiId]); delete _aiTimers[aiId]; }
+  const el=document.getElementById('timer-'+aiId);
+  if(el) el.style.display='none';
+  const warn=document.getElementById('slow-'+aiId);
+  if(warn) warn.style.display='none';
 }
 
 // Partial DOM update: show markdown view after streaming (#9)
@@ -1816,6 +1848,8 @@ function renderSession() {
         <span class="ai-name" style="color:${def.color}">${def.name}</span>
         <span class="ai-role">${mode==='debate'?'':dc.aiRoles[id]||''}</span>${debateLabel}
         <span id="chip-${id}" class="ai-chip"></span>
+        <span id="timer-${id}" style="display:none;font-size:.62rem;font-weight:600;font-variant-numeric:tabular-nums;color:var(--mu)"></span>
+        <span id="slow-${id}" style="display:none;cursor:help;font-size:.8rem" title="응답이 느립니다 — 중단 후 재시도 권장">⚠️</span>
         <button id="stop-${id}" onclick="stopAI('${id}')" style="display:none;margin-left:auto;font-size:.65rem;padding:2px 8px;border:1.5px solid #f59e0b;border-radius:4px;background:none;color:#f59e0b;cursor:pointer;font-weight:600;white-space:nowrap">⏹ 중단</button>
         ${curRound>0?`<button class="btn-copy" onclick="copyAIResponse('${id}')" style="${S._abortControllers?.[id]?'':'margin-left:auto'}">📋</button>
         <button class="ai-regen" id="regen-${id}" onclick="regenOne('${id}')">↺ 재생성</button>`:''}
