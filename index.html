@@ -2833,6 +2833,13 @@ async function changeLogMonth(delta) {
   const ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
   // 미래 달은 로드하지 않음
   if(ym>kstMonth()) return;
+  // 이전 달 이동 시 기록 존재 여부 확인
+  if(delta<0 && ds.folderId) {
+    try {
+      const files=await driveSearch(logFileName(ym),ds.folderId);
+      if(!files.length) { showToast('📭 '+ym+' 기록 없음'); return; }
+    } catch(e) {}
+  }
   await loadLogMonth(ym);
 }
 
