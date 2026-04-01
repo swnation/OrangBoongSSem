@@ -4506,10 +4506,9 @@ async function reorganizeCtx() {
 
     const user=domainIds.map(id=>`=== [${ctxMap[id].label}] (${id}) ===\n${ctxMap[id].text}`).join('\n\n');
     const raw=await callAIStream(aiId,system,user,()=>{},ac.signal);
-    let clean=raw.replace(/```json|```/g,'').trim();
-    const jsonMatch=clean.match(/\{[\s\S]*\}/);
-    if(jsonMatch) clean=jsonMatch[0];
-    const parsed=JSON.parse(clean);
+    const jsonMatch=raw.match(/\{[\s\S]*\}/);
+    if(!jsonMatch) throw new Error('AI 응답에서 유효한 JSON을 찾을 수 없습니다.');
+    const parsed=JSON.parse(jsonMatch[0]);
 
     // 결과 미리보기 — 각 도메인 글자수 비교
     const preview=domainIds.map(id=>{
@@ -4524,7 +4523,7 @@ async function reorganizeCtx() {
     // textarea에 결과 적용 (아직 Drive 저장 안 함)
     domainIds.forEach(id=>{
       const ta=document.getElementById('ctx-ta-'+id);
-      if(ta&&parsed[id]) ta.value=parsed[id];
+      if(ta&&parsed[id]!==undefined) ta.value=parsed[id];
     });
     showToast('✅ 통합 정리 완료 — "전체 저장"을 눌러 Drive에 반영하세요');
   } catch(e){
