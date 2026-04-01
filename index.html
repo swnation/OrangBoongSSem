@@ -145,7 +145,10 @@
     <div class="modal-body" id="ctx-body" style="padding:12px 16px"></div>
     <div class="modal-foot" style="flex-wrap:wrap;gap:4px">
       <div style="display:flex;gap:4px;width:100%;margin-bottom:4px">
+        <button class="btn-cancel" onclick="upgradeCtxFromRecent()" style="font-size:.68rem;flex:1;border-color:#10b981;color:#10b981">📊 최근 기록 반영</button>
         <button class="btn-cancel" onclick="reorganizeCtx()" style="font-size:.68rem;flex:1;border-color:var(--ac);color:var(--ac)">🤖 AI 통합 정리</button>
+      </div>
+      <div style="display:flex;gap:4px;width:100%;margin-bottom:4px">
         <button class="btn-cancel" onclick="restoreCtxBackup()" style="font-size:.68rem;flex:1" id="ctx-restore-btn" disabled>↩ 되돌리기</button>
         <button class="btn-cancel" onclick="listCtxBackups()" style="font-size:.68rem;flex:1">☁️ 백업 목록</button>
       </div>
@@ -4620,6 +4623,107 @@ async function reorganizeCtx() {
   } catch(e){
     if(e.name==='AbortError') showToast('⏹ 정리 중단됨');
     else showToast('❌ 통합 정리 실패: '+e.message,4000);
+  } finally {
+    delete S._abortControllers?.[aiId];
+    S.generating=false;
+    if(progress) progress.style.display='none';
+  }
+}
+
+async function upgradeCtxFromRecent() {
+  const currentUser=DC().user;
+  const domainIds=Object.keys(DOMAINS).filter(id=>DOMAINS[id].user===currentUser);
+  const aiId=['claude','gpt','gemini','grok','perp'].find(id=>S.keys[id]);
+  if(!aiId){showToast('❌ API 키가 없습니다.');return;}
+  if(S.generating){showToast('다른 AI 작업이 진행 중입니다.');return;}
+
+  // 각 도메인의 최근 세션 + 누적 지식 + 로그 수집
+  const domainData={};
+  for(const id of domainIds) {
+    const ds=S.domainState[id];
+    if(!ds?.master) continue;
+    const dd=DOMAINS[id];
+    const ta=document.getElementById('ctx-ta-'+id);
+    const currentCtx=ta?ta.value:(ds.master.patient_context||dd.defaultContext);
+    const sessions=(ds.master.sessions||[]).slice(0,5);
+    const accum=ds.master.accumulated||{};
+    const sessionSummaries=sessions.map(s=>`[${s.date}] ${s.question||''} → ${s.summary?.session_summary||''} / 권고: ${s.summary?.final_recommendation||''}`).join('\n');
+    const accumSummary=[
+      accum.established_consensus?.length?'합의: '+accum.established_consensus.slice(-5).join('; '):'',
+      accum.unresolved_issues?.length?'쟁점: '+accum.unresolved_issues.slice(-5).join('; '):'',
+    ].filter(Boolean).join('\n');
+    domainData[id]={label:`${dd.user} · ${dd.label}`,currentCtx,sessionSummaries,accumSummary};
+  }
+
+  const hasData=Object.values(domainData).some(d=>d.sessionSummaries||d.accumSummary);
+  if(!hasData){showToast('반영할 최근 기록이 없습니다.');return;}
+  if(!confirm(`${AI_DEFS[aiId].name}로 최근 세션·누적 지식을 분석하여 SSOT를 업그레이드합니다.\n\n- 새로 확인된 사실 반영\n- 치료 반응 업데이트\n- 오래된 정보 최신화\n- 날짜 기준 갱신`)) return;
+
+  // 백업
+  _ctxBackup={timestamp:kstNow().toISOString(),data:{}};
+  domainIds.forEach(id=>{
+    const ta=document.getElementById('ctx-ta-'+id);
+    const ds=S.domainState[id];
+    _ctxBackup.data[id]=ta?ta.value:(ds?.master?.patient_context||DOMAINS[id].defaultContext);
+  });
+
+  S.generating=true;
+  const progress=document.getElementById('ctx-progress');
+  const progressText=document.getElementById('ctx-progress-text');
+  if(progress) progress.style.display='';
+  if(progressText) progressText.textContent=`${AI_DEFS[aiId].name} 분석 중...`;
+
+  const ac=new AbortController();if(!S._abortControllers)S._abortControllers={};S._abortControllers[aiId]=ac;
+  try {
+    const system=`당신은 의료 SSOT 업데이트 전문가입니다. 각 도메인의 현재 컨텍스트와 최근 세션/누적 지식을 비교하여 컨텍스트를 업그레이드합니다.
+
+규칙:
+1. 새로 확인된 사실(치료 반응, 진단 변화, 약물 변경 등)을 반영
+2. 기존 정보와 모순되는 내용은 최신 정보로 갱신
+3. 날짜 기준을 오늘(${kstToday()})로 업데이트
+4. 기존 구조(■ 섹션)와 SSOT 원칙/금지 표현은 반드시 유지
+5. 추가된 내용에는 [${kstToday()} 반영] 태그 표시
+6. 원본 핵심 정보는 절대 삭제하지 말 것 — 추가/수정만
+
+반드시 아래 JSON만 출력. 다른 텍스트 금지.
+{${domainIds.map(id=>`"${id}":"업그레이드된 컨텍스트"`).join(',')}}`;
+
+    const userParts=domainIds.map(id=>{
+      const d=domainData[id];
+      return `=== [${d.label}] (${id}) ===\n[현재 SSOT]\n${d.currentCtx}\n\n[최근 세션 요약]\n${d.sessionSummaries||'(없음)'}\n\n[누적 지식]\n${d.accumSummary||'(없음)'}`;
+    }).join('\n\n');
+
+    let chunkLen=0;
+    const raw=await callAIStream(aiId,system,userParts,(chunk)=>{
+      chunkLen=chunk.length;
+      if(progressText) progressText.textContent=`${AI_DEFS[aiId].name} 생성 중... ${chunkLen}자`;
+    },ac.signal);
+
+    if(progressText) progressText.textContent='결과 파싱 중...';
+    const jsonMatch=raw.match(/\{[\s\S]*\}/);
+    if(!jsonMatch) throw new Error('AI 응답에서 유효한 JSON을 찾을 수 없습니다.');
+    const parsed=JSON.parse(jsonMatch[0]);
+
+    const preview=domainIds.map(id=>{
+      const dd=DOMAINS[id];
+      const oldLen=domainData[id].currentCtx.length;
+      const newLen=(parsed[id]||'').length;
+      const diff=newLen-oldLen;
+      return `${dd.icon} ${dd.label}: ${oldLen}자 → ${newLen}자 (${diff>=0?'+':''}${diff})`;
+    }).join('\n');
+
+    if(!confirm(`업그레이드 결과:\n\n${preview}\n\n적용 후 "전체 저장"으로 Drive에 반영하세요.\n"↩ 되돌리기"로 원래 내용 복원 가능`)) return;
+
+    domainIds.forEach(id=>{
+      const ta=document.getElementById('ctx-ta-'+id);
+      if(ta&&typeof parsed[id]==='string') ta.value=parsed[id];
+    });
+    const restoreBtn=document.getElementById('ctx-restore-btn');
+    if(restoreBtn) restoreBtn.disabled=false;
+    showToast('✅ SSOT 업그레이드 완료 — "전체 저장"을 눌러 반영하세요');
+  } catch(e){
+    if(e.name==='AbortError') showToast('⏹ 업그레이드 중단됨');
+    else showToast('❌ 업그레이드 실패: '+e.message,4000);
   } finally {
     delete S._abortControllers?.[aiId];
     S.generating=false;
