@@ -143,8 +143,8 @@
   <div class="modal" style="width:780px;max-height:90vh">
     <div class="modal-head"><h3>📋 통합 환자 컨텍스트 / SSOT</h3><button class="modal-close" onclick="closeModal('ctx-modal')">✕</button></div>
     <div class="modal-body" id="ctx-body" style="padding:12px 16px"></div>
-    <div class="modal-foot">
-      <span style="font-size:.68rem;color:var(--mu);margin-right:auto">각 도메인 컨텍스트를 펼쳐서 편집하세요</span>
+    <div class="modal-foot" style="flex-wrap:wrap;gap:4px">
+      <button class="btn-cancel" onclick="reorganizeCtx()" style="font-size:.68rem;margin-right:auto;border-color:var(--ac);color:var(--ac)">🤖 AI 통합 정리</button>
       <button class="btn-cancel" onclick="closeModal('ctx-modal')">취소</button>
       <button class="btn-save" onclick="saveAllCtx()">전체 저장 (Drive 동기화)</button>
     </div>
@@ -4466,6 +4466,74 @@ async function saveAllCtx() {
   }
   closeModal('ctx-modal');
   showToast(`✅ ${saved||'모든'} 컨텍스트 저장 & Drive 동기화`);
+}
+
+async function reorganizeCtx() {
+  const currentUser=DC().user;
+  const domainIds=Object.keys(DOMAINS).filter(id=>DOMAINS[id].user===currentUser);
+  if(domainIds.length<2){showToast('도메인이 2개 이상이어야 통합 정리가 가능합니다.');return;}
+  const aiId=['claude','gpt','gemini','grok','perp'].find(id=>S.keys[id]);
+  if(!aiId){showToast('❌ API 키가 없습니다.');return;}
+
+  // 현재 textarea 값 수집 (편집 중인 내용 반영)
+  const ctxMap={};
+  domainIds.forEach(id=>{
+    const ta=document.getElementById('ctx-ta-'+id);
+    const dd=DOMAINS[id];
+    ctxMap[id]={label:`${dd.user} · ${dd.label}`,text:ta?ta.value:(S.domainState[id]?.master?.patient_context||dd.defaultContext)};
+  });
+
+  if(!confirm(`${AI_DEFS[aiId].name}로 ${domainIds.length}개 도메인 컨텍스트를 통합 정리합니다.\n\n- 도메인 간 중복 정보 제거\n- 공통 사항은 각 도메인에 간결하게 유지\n- 도메인별 전문 정보만 남기기\n- 오래된/불필요한 내용 정리`)) return;
+
+  if(S.generating){showToast('다른 AI 작업이 진행 중입니다.');return;}
+  S.generating=true;
+  showToast('🤖 컨텍스트 통합 정리 중...',8000);
+
+  const ac=new AbortController();if(!S._abortControllers)S._abortControllers={};S._abortControllers[aiId]=ac;
+  try {
+    const system=`당신은 의료 SSOT 데이터 정리 전문가입니다. 여러 도메인의 환자 컨텍스트를 받아 효율적으로 정리합니다.
+
+규칙:
+1. 모든 도메인에 반복되는 공통 정보(환자 기본, 기저질환 등)는 각 도메인에 간결하게 유지하되 표현을 통일
+2. 각 도메인 전문 영역의 정보만 해당 도메인에 남기기 (편두통 도메인에 정신건강 상세 불필요)
+3. 오래된 날짜 참조는 최신화, 불필요한 중복 삭제
+4. SSOT 원칙, 금지 표현 등 중요 규칙은 반드시 유지
+5. 각 도메인의 기존 구조(■ 섹션)를 유지하되 간결하게
+6. 원본의 의미와 핵심 정보를 절대 삭제하지 말 것
+
+반드시 아래 JSON만 출력. 다른 텍스트 금지.
+{${domainIds.map(id=>`"${id}":"정리된 컨텍스트 텍스트"`).join(',')}}`;
+
+    const user=domainIds.map(id=>`=== [${ctxMap[id].label}] (${id}) ===\n${ctxMap[id].text}`).join('\n\n');
+    const raw=await callAIStream(aiId,system,user,()=>{},ac.signal);
+    let clean=raw.replace(/```json|```/g,'').trim();
+    const jsonMatch=clean.match(/\{[\s\S]*\}/);
+    if(jsonMatch) clean=jsonMatch[0];
+    const parsed=JSON.parse(clean);
+
+    // 결과 미리보기 — 각 도메인 글자수 비교
+    const preview=domainIds.map(id=>{
+      const dd=DOMAINS[id];
+      const oldLen=ctxMap[id].text.length;
+      const newLen=(parsed[id]||'').length;
+      return `${dd.icon} ${dd.label}: ${oldLen}자 → ${newLen}자`;
+    }).join('\n');
+
+    if(!confirm(`통합 정리 결과:\n\n${preview}\n\n각 도메인 텍스트 영역에 적용합니다.\n(저장은 "전체 저장" 버튼을 눌러야 반영됩니다)`)) return;
+
+    // textarea에 결과 적용 (아직 Drive 저장 안 함)
+    domainIds.forEach(id=>{
+      const ta=document.getElementById('ctx-ta-'+id);
+      if(ta&&parsed[id]) ta.value=parsed[id];
+    });
+    showToast('✅ 통합 정리 완료 — "전체 저장"을 눌러 Drive에 반영하세요');
+  } catch(e){
+    if(e.name==='AbortError') showToast('⏹ 정리 중단됨');
+    else showToast('❌ 통합 정리 실패: '+e.message,4000);
+  } finally {
+    delete S._abortControllers?.[aiId];
+    S.generating=false;
+  }
 }
 
 function changeAIModel(aiId,newModel) {
