@@ -2436,7 +2436,10 @@ async function cleanupAccumulated() {
   const aiId=['claude','gpt','gemini','grok','perp'].find(id=>S.keys[id]);
   if(!aiId){showToast('❌ API 키가 없습니다.');return;}
   if(!confirm(`누적 지식 ${total}건을 ${AI_DEFS[aiId].name}로 정리합니다.\n중복 제거, 병합, 해결된 쟁점 이동 등을 수행합니다.`)) return;
+  if(S.generating){showToast('다른 AI 작업이 진행 중입니다.');return;}
+  S.generating=true;
   showToast('🤖 누적 지식 정리 중...',5000);
+  const ac=new AbortController();if(!S._abortControllers)S._abortControllers={};S._abortControllers[aiId]=ac;
   try {
     const system=`당신은 의료 데이터 정리 전문가입니다. 아래 누적 지식을 정리해주세요:
 1. 중복/유사 항목 병합 (의미가 같으면 하나로)
@@ -2446,9 +2449,7 @@ async function cleanupAccumulated() {
 반드시 아래 JSON만 출력:
 {"established_consensus":["항목"],"discarded_hypotheses":["항목"],"unresolved_issues":["항목"]}`;
     const user=`[확립된 합의]\n${(accum.established_consensus||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[폐기된 가설]\n${(accum.discarded_hypotheses||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[미해결 쟁점]\n${(accum.unresolved_issues||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}`;
-    const ac=new AbortController();if(!S._abortControllers)S._abortControllers={};S._abortControllers[aiId]=ac;
     const raw=await callAIStream(aiId,system,user,()=>{},ac.signal);
-    delete S._abortControllers[aiId];
     let clean=raw.replace(/```json|```/g,'').trim();
     const jsonMatch=clean.match(/\{[\s\S]*\}/);
     if(jsonMatch) clean=jsonMatch[0];
@@ -2460,7 +2461,13 @@ async function cleanupAccumulated() {
     accum.unresolved_issues=parsed.unresolved_issues||[];
     await saveMaster(); renderView('home');
     showToast(`✅ 누적 지식 정리 완료: ${total}건 → ${newTotal}건`);
-  } catch(e){showToast('❌ 정리 실패: '+e.message,4000);}
+  } catch(e){
+    if(e.name==='AbortError') showToast('⏹ 정리 중단됨');
+    else showToast('❌ 정리 실패: '+e.message,4000);
+  } finally {
+    delete S._abortControllers?.[aiId];
+    S.generating=false;
+  }
 }
 
 // TEMPLATES
