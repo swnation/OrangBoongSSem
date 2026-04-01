@@ -250,6 +250,7 @@ const DOMAINS = {
     logConfig: {
       sites: {left:['미간','이마','눈썹부위','관자놀이','후두부'], right:['미간','이마','눈썹부위','관자놀이','후두부']},
       painTypes: ['욱신거림','쥐어짜는','찌르는','묵직한','쑤시는','타는 듯한','전기 오는 듯한'],
+      triggers: ['수면부족','과수면','수면분절','공복','불규칙식사','카페인','알코올','스트레스','피로','강한빛','소음','냄새','운동후','긴장/자세'],
       symptoms: ['구역','어지러움','손발저림','빛과민','소리과민','식은땀','심계항진','실신전조'],
       meds: ['AAP 500mg','Loxoprofen','타 NSAID','Metoclopramide'],
       treatments: ['GON block','LON block','SPG block'],
@@ -3439,9 +3440,21 @@ function renderLog() {
        </div>
        </div>` : '');
 
+  // 트리거 칩 (triggers가 있는 도메인만)
+  const customTriggers=JSON.parse(localStorage.getItem('om_custom_triggers_'+S.currentDomain)||'[]');
+  const triggersHtml=lc.triggers?`
+    <div class="log-section-title">추정 트리거 <button onclick="openChipManager('triggers')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
+    <div class="log-chips">${[...lc.triggers,...customTriggers].map(t=>`<div class="log-chip" data-group="trigger" data-val="${t}" onclick="toggleChip(this,'sel-trigger')">${t}</div>`).join('')}
+      <div style="display:flex;gap:4px;align-items:center">
+        <input class="log-other-input" id="trigger-other" placeholder="직접 입력" style="width:80px">
+        <button onclick="addCustomTrigger()" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
+      </div>
+    </div>`:'';
+
   return `<div class="log-view-tabs">${viewTabs}</div>
   ${renderQuickLogBanner()}
   <div class="log-form">
+    ${renderOutcomeCards()}
     <div style="display:flex;gap:12px;margin-bottom:2px">
       <div style="flex:1"><div class="log-section-title" style="margin-top:0">날짜</div>
         <input type="date" id="log-date" value="${dateStr}" class="dx-form-input"></div>
@@ -3454,6 +3467,7 @@ function renderLog() {
     ${moodHtml}
     ${sitesHtml}
     ${painTypesHtml}
+    ${triggersHtml}
     ${lc.symptoms?.length||customSyms.length?`<div class="log-section-title">증상 <button onclick="openChipManager('syms')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div><div class="log-chips">${allSyms.map(s=>`<div class="log-chip" data-group="sym" data-val="${s}" onclick="toggleChip(this,'sel-sym')">${s}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="sym-other" placeholder="직접 입력" style="width:100px">
@@ -3574,9 +3588,11 @@ function renderLogList() {
             (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`:'')}
           ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
           <div class="log-item-tags">
+            ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`).join('')}
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
+            ${l.outcome?`<span class="log-tag" style="background:${l.outcome.rating==='good'?'#f0fdf4':l.outcome.rating==='partial'?'#fffbeb':'#fef2f2'};color:${l.outcome.rating==='good'?'#15803d':l.outcome.rating==='partial'?'#92400e':'#dc2626'}">${l.outcome.rating==='good'?'✅좋음':l.outcome.rating==='partial'?'🔸나아짐':'❌안들음'}</span>`:''}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
         </div>
@@ -3635,9 +3651,11 @@ function renderLogListInner() {
             (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`:'')}
           ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
           <div class="log-item-tags">
+            ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`).join('')}
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
+            ${l.outcome?`<span class="log-tag" style="background:${l.outcome.rating==='good'?'#f0fdf4':l.outcome.rating==='partial'?'#fffbeb':'#fef2f2'};color:${l.outcome.rating==='good'?'#15803d':l.outcome.rating==='partial'?'#92400e':'#dc2626'}">${l.outcome.rating==='good'?'✅좋음':l.outcome.rating==='partial'?'🔸나아짐':'❌안들음'}</span>`:''}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
         </div>
@@ -3666,6 +3684,64 @@ function toggleAllLogDates() {
   if(el) el.innerHTML=renderLogListInner();
 }
 
+// ── 처치 효과 미평가 기록 찾기 ──
+function getUnratedLogs() {
+  if(S.currentDomain!=='orangi-migraine') return [];
+  const ds=D();if(!ds.logData?.length) return [];
+  const now=kstNow();
+  return ds.logData.filter(l=>{
+    const hasTreatment=(l.meds?.length>0)||(l.treatments?.length>0);
+    const noOutcome=!l.outcome||!l.outcome.rating;
+    const withinDays=(now-new Date(l.datetime))<=3*86400000;
+    return hasTreatment&&noOutcome&&withinDays;
+  });
+}
+
+function renderOutcomeCards() {
+  const unrated=getUnratedLogs();
+  if(!unrated.length) return '';
+  return unrated.map(l=>{
+    const date=l.datetime.slice(5,10);
+    const time=l.datetime.slice(11,16);
+    const nrs=l.nrs>=0?`NRS ${l.nrs}`:'';
+    const tx=[...(l.meds||[]),...(l.treatments||[])].join(', ');
+    const idx=D().logData.indexOf(l);
+    return `<div class="outcome-card" id="outcome-card-${idx}" style="padding:10px 14px;margin-bottom:8px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:10px;border-left:3px solid var(--ac)">
+      <div style="font-size:.75rem;color:var(--mu);margin-bottom:6px">📋 ${date} ${time} ${nrs} — <strong>${esc(tx)}</strong> 효과는?</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="rateOutcome(${idx},'good')" style="flex:1;padding:6px;border:1.5px solid #10b981;border-radius:8px;background:#f0fdf4;color:#10b981;font-size:.78rem;font-weight:600;cursor:pointer">✅ 효과 좋음</button>
+        <button onclick="rateOutcome(${idx},'partial')" style="flex:1;padding:6px;border:1.5px solid #f59e0b;border-radius:8px;background:#fffbeb;color:#f59e0b;font-size:.78rem;font-weight:600;cursor:pointer">🔸 좀 나아짐</button>
+        <button onclick="rateOutcome(${idx},'none')" style="flex:1;padding:6px;border:1.5px solid #ef4444;border-radius:8px;background:#fef2f2;color:#ef4444;font-size:.78rem;font-weight:600;cursor:pointer">❌ 안 들었음</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function rateOutcome(logIdx,rating) {
+  const ds=D();const entry=ds.logData[logIdx];if(!entry) return;
+  entry.outcome={rating,ratedAt:kstNow().toISOString()};
+  const card=document.getElementById('outcome-card-'+logIdx);
+  if(card){
+    const labels={good:'✅ 효과 좋음',partial:'🔸 좀 나아짐',none:'❌ 안 들었음'};
+    card.innerHTML=`<div style="font-size:.75rem;color:var(--mu);text-align:center;padding:4px">${labels[rating]} 기록됨</div>`;
+    setTimeout(()=>{card.style.display='none';},1500);
+  }
+  try{await saveLogData();showToast('📝 처치 효과 기록됨');}
+  catch(e){showToast('⚠️ 저장 실패: '+e.message);}
+}
+
+// ── 커스텀 트리거 추가 ──
+function addCustomTrigger() {
+  const el=document.getElementById('trigger-other');
+  const val=(el?.value||'').trim();if(!val) return;
+  const key='om_custom_triggers_'+S.currentDomain;
+  const list=JSON.parse(localStorage.getItem(key)||'[]');
+  if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
+  el.value='';
+  const saved=_saveLogFormState();renderView('log');_restoreLogFormState(saved);
+  showToast(`✅ "${val}" 고정됨`);
+}
+
 async function saveLogEntry() {
   const btn=document.getElementById('log-save-btn');const sp=document.getElementById('log-sp');
   if(btn)btn.disabled=true;if(sp)sp.style.display='block';
@@ -3691,6 +3767,8 @@ async function saveLogEntry() {
   const siteLeftOther=document.getElementById('site-left-other')?.value.trim();if(siteLeftOther)sites.push('왼쪽 '+siteLeftOther);
   const siteRightOther=document.getElementById('site-right-other')?.value.trim();if(siteRightOther)sites.push('오른쪽 '+siteRightOther);
   const painType=[];document.querySelectorAll('.log-chip.sel[data-group="pain"]').forEach(el=>painType.push(el.dataset.val));
+  const triggers=[];document.querySelectorAll('.log-chip.sel[data-group="trigger"]').forEach(el=>triggers.push(el.dataset.val));
+  const triggerOther=document.getElementById('trigger-other')?.value.trim();if(triggerOther)triggers.push(triggerOther);
   const symptoms=[];document.querySelectorAll('.log-chip.sel[data-group="sym"]').forEach(el=>symptoms.push(el.dataset.val));
   const symOther=document.getElementById('sym-other')?.value.trim();if(symOther)symptoms.push(symOther);
   const meds=[];document.querySelectorAll('.log-chip.sel[data-group="med"]').forEach(el=>meds.push(el.dataset.val));
@@ -3702,7 +3780,7 @@ async function saveLogEntry() {
   const txOther=document.getElementById('tx-other')?.value.trim();if(txOther)treatments.push(txOther);
   const memo=document.getElementById('log-memo')?.value.trim();
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
-  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,symptoms,meds,treatments,memo};
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo};
   await ensureLogLoaded();
   const ds=D();
   // 빠른 기록 연동: 저장 성공 시 synced 마킹
@@ -3773,6 +3851,12 @@ function editLogEntry(idx) {
       const val=s.replace(/^(왼쪽|오른쪽)\s*/,'');
       document.querySelectorAll(`.log-chip[data-side="${side}"]`).forEach(c=>{
         if(c.dataset.val===val) c.classList.add('sel','sel-'+side);
+      });
+    });
+    // Triggers
+    (entry.triggers||[]).forEach(s=>{
+      document.querySelectorAll('.log-chip[data-group="trigger"]').forEach(c=>{
+        if(c.dataset.val===s) c.classList.add('sel','sel-trigger');
       });
     });
     // Symptoms
@@ -4151,7 +4235,7 @@ function getRecentLogSummary() {
   }
 
   // Standard mode (편두통)
-  const lines=week.map(l=>`${l.datetime.slice(5,16)} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' NRS'+l.nrs:''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')).join('\n');
+  const lines=week.map(l=>`${l.datetime.slice(5,16)} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' NRS'+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')).join('\n');
   const nrsVals=week.map(l=>l.nrs).filter(n=>n>=0);
   const avg=nrsVals.length?(nrsVals.reduce((a,b)=>a+b,0)/nrsVals.length).toFixed(1):'-';
   return `[최근 7일 기록]\n${lines}\n평균NRS: ${avg}`;
@@ -4203,9 +4287,9 @@ function exportLogCSV() {
       csv+=`${l.datetime.slice(0,10)},${l.datetime.slice(11,16)},"${l.mood||''}","${(l.symptoms||[]).join(';')}","${(l.meds||[]).join(';')}","${(l.treatments||[]).join(';')}","${(l.memo||'').replace(/"/g,'""')}"\n`;
     });
   } else {
-    csv='날짜,시간,NRS,부위,증상,투약,치료,메모\n';
+    csv='날짜,시간,NRS,부위,트리거,증상,투약,치료,효과,메모\n';
     ds.logData.forEach(l=>{
-      csv+=`${l.datetime.slice(0,10)},${l.datetime.slice(11,16)},${l.nrs>=0?l.nrs:''},"${(l.sites||[]).join(';')}","${(l.symptoms||[]).join(';')}","${(l.meds||[]).join(';')}","${(l.treatments||[]).join(';')}","${(l.memo||'').replace(/"/g,'""')}"\n`;
+      csv+=`${l.datetime.slice(0,10)},${l.datetime.slice(11,16)},${l.nrs>=0?l.nrs:''},"${(l.sites||[]).join(';')}","${(l.triggers||[]).join(';')}","${(l.symptoms||[]).join(';')}","${(l.meds||[]).join(';')}","${(l.treatments||[]).join(';')}","${l.outcome?.rating||''}","${(l.memo||'').replace(/"/g,'""')}"\n`;
     });
   }
   downloadFile(`${DC().logPrefix}_${ds.logMonth}.csv`,'\uFEFF'+csv,'text/csv;charset=utf-8');
