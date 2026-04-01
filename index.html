@@ -2547,22 +2547,51 @@ function useTemplateInSession(idx) {
 function renderOutcomeStats(logs) {
   const rated=logs.filter(l=>l.outcome?.rating);
   if(rated.length<3) return '';
+  // 약물별 경과 통계
   const medStats={};
-  rated.forEach(l=>{(l.meds||[]).forEach(med=>{
-    if(!medStats[med]) medStats[med]={good:0,partial:0,none:0,total:0};
-    medStats[med][l.outcome.rating]++;medStats[med].total++;
-  });});
-  const results=Object.entries(medStats).filter(([,s])=>s.total>=3).sort((a,b)=>b[1].total-a[1].total);
-  if(!results.length) return '';
-  const rows=results.map(([med,s])=>{
-    const gPct=Math.round(s.good/s.total*100);const pPct=Math.round(s.partial/s.total*100);const nPct=100-gPct-pPct;
-    return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px"><span>${esc(med)}</span><span style="color:var(--mu)">${s.total}회 (좋음 ${gPct}%)</span></div>
-      <div style="display:flex;height:16px;border-radius:4px;overflow:hidden;background:var(--bd)">
-        ${gPct?`<div style="width:${gPct}%;background:#10b981"></div>`:''}${pPct?`<div style="width:${pPct}%;background:#f59e0b"></div>`:''}${nPct?`<div style="width:${nPct}%;background:#ef4444"></div>`:''}
+  rated.forEach(l=>{
+    const r=l.outcome.rating;
+    const norm=r==='good'?'better':r==='partial'?'same':r==='none'?'worse':r;
+    (l.meds||[]).forEach(med=>{
+      if(!medStats[med]) medStats[med]={better:0,same:0,worse:0,total:0};
+      medStats[med][norm]++;medStats[med].total++;
+    });
+  });
+  // 시술별 경과 통계
+  rated.forEach(l=>{
+    const r=l.outcome.rating;
+    const norm=r==='good'?'better':r==='partial'?'same':r==='none'?'worse':r;
+    (l.treatments||[]).forEach(tx=>{
+      if(!medStats[tx]) medStats[tx]={better:0,same:0,worse:0,total:0};
+      medStats[tx][norm]++;medStats[tx].total++;
+    });
+  });
+  // 약/시술 없이 자연회복
+  const noMed=rated.filter(l=>!(l.meds?.length)&&!(l.treatments?.length));
+  const naturalStats=noMed.length>=2?{better:0,same:0,worse:0,total:noMed.length}:null;
+  if(naturalStats) noMed.forEach(l=>{
+    const r=l.outcome.rating;
+    const norm=r==='good'?'better':r==='partial'?'same':r==='none'?'worse':r;
+    naturalStats[norm]++;
+  });
+  const results=Object.entries(medStats).filter(([,s])=>s.total>=2).sort((a,b)=>b[1].total-a[1].total);
+  if(!results.length&&!naturalStats) return '';
+  const renderBar=([label,s])=>{
+    const bPct=Math.round(s.better/s.total*100);const sPct=Math.round(s.same/s.total*100);const wPct=100-bPct-sPct;
+    return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px"><span>${esc(label)}</span><span style="color:var(--mu)">${s.total}회 (호전 ${bPct}%)</span></div>
+      <div style="display:flex;height:18px;border-radius:4px;overflow:hidden;background:var(--bd)">
+        ${bPct?`<div style="width:${bPct}%;background:#10b981"></div>`:''}${sPct?`<div style="width:${sPct}%;background:#f59e0b"></div>`:''}${wPct?`<div style="width:${wPct}%;background:#ef4444"></div>`:''}
       </div></div>`;
-  }).join('');
-  return `<div class="card"><div class="card-title">💊 약물 효과 평가 (직접 평가 기반)</div>
-    <div style="display:flex;gap:12px;justify-content:center;margin-bottom:10px;flex-wrap:wrap"><span style="font-size:.65rem;color:var(--mu)">🟩 효과 좋음</span><span style="font-size:.65rem;color:var(--mu)">🟨 좀 나아짐</span><span style="font-size:.65rem;color:var(--mu)">🟥 안 들었음</span></div>${rows}</div>`;
+  };
+  const rows=results.map(renderBar).join('');
+  const naturalRow=naturalStats?renderBar(['💤 약/시술 없이 자연경과',naturalStats]):'';
+  // 전체 요약
+  const allBetter=rated.filter(l=>{const r=l.outcome.rating;return r==='better'||r==='good';}).length;
+  const summaryPct=Math.round(allBetter/rated.length*100);
+  return `<div class="card"><div class="card-title">📊 경과 통계 (직접 평가 ${rated.length}건)</div>
+    <div style="text-align:center;margin-bottom:10px"><span style="font-size:1.2rem;font-weight:700;color:#10b981">${summaryPct}%</span><span style="font-size:.75rem;color:var(--mu)"> 호전율 (전체)</span></div>
+    <div style="display:flex;gap:12px;justify-content:center;margin-bottom:10px;flex-wrap:wrap"><span style="font-size:.65rem;color:var(--mu)">🟢 호전</span><span style="font-size:.65rem;color:var(--mu)">🟡 비슷</span><span style="font-size:.65rem;color:var(--mu)">🔴 악화</span></div>
+    ${rows}${naturalRow}</div>`;
 }
 
 // ── 통계 차트: 트리거별 평균 NRS ──
@@ -3686,7 +3715,7 @@ function renderLogList() {
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-            ${l.outcome?`<span class="log-tag" style="background:${l.outcome.rating==='good'?'#f0fdf4':l.outcome.rating==='partial'?'#fffbeb':'#fef2f2'};color:${l.outcome.rating==='good'?'#15803d':l.outcome.rating==='partial'?'#92400e':'#dc2626'}">${l.outcome.rating==='good'?'✅좋음':l.outcome.rating==='partial'?'🔸나아짐':'❌안들음'}</span>`:''}
+            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`:''}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
@@ -3750,7 +3779,7 @@ function renderLogListInner() {
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-            ${l.outcome?`<span class="log-tag" style="background:${l.outcome.rating==='good'?'#f0fdf4':l.outcome.rating==='partial'?'#fffbeb':'#fef2f2'};color:${l.outcome.rating==='good'?'#15803d':l.outcome.rating==='partial'?'#92400e':'#dc2626'}">${l.outcome.rating==='good'?'✅좋음':l.outcome.rating==='partial'?'🔸나아짐':'❌안들음'}</span>`:''}
+            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`:''}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
@@ -3778,6 +3807,30 @@ function toggleAllLogDates() {
   dates.forEach(d=>{ _logCollapsed[d]=!allCollapsed; });
   const el=document.getElementById('content').querySelector('[data-log-list]');
   if(el) el.innerHTML=renderLogListInner();
+}
+
+// ── ntfy 푸시 알림 ──
+async function sendNtfyBung(entry) {
+  const topic=localStorage.getItem('om_ntfy_bung');
+  if(!topic||S.currentDomain!=='orangi-migraine') return;
+  const nrs=entry.nrs>=0?`NRS ${entry.nrs}`:'';
+  const sites=(entry.sites||[]).join(', ');
+  const meds=(entry.meds||[]).join(', ');
+  const tx=(entry.treatments||[]).join(', ');
+  const body=`${entry.datetime.slice(11,16)} ${nrs} ${sites}\n${meds?'💊 '+meds:''}${tx?' 🩺 '+tx:''}`.trim();
+  try{await fetch('https://ntfy.sh/'+topic,{method:'POST',headers:{Title:'🤕 오랑이 두통 기록',Priority:'4',Tags:'headache'},body});}catch(e){}
+}
+
+async function sendNtfyFollowup(entry) {
+  const topic=localStorage.getItem('om_ntfy_orangi');
+  if(!topic||S.currentDomain!=='orangi-migraine') return;
+  const nrs=entry.nrs>=0?`NRS ${entry.nrs}`:'';
+  const tx=[...(entry.meds||[]),...(entry.treatments||[])].join(', ');
+  const body=`${entry.datetime.slice(11,16)} ${nrs} ${tx} → 지금 어때요?`;
+  // 2시간 후 알림 (setTimeout — 앱이 켜져 있을 때만)
+  setTimeout(async()=>{
+    try{await fetch('https://ntfy.sh/'+topic,{method:'POST',headers:{Title:'🤕 두통 경과 확인',Priority:'4',Tags:'headache,followup'},body});}catch(e){}
+  },2*60*60*1000);
 }
 
 // ── 날씨 자동 수집 (OpenWeatherMap) ──
@@ -3817,11 +3870,11 @@ function renderOutcomeCards() {
     const tx=[...(l.meds||[]),...(l.treatments||[])].join(', ');
     const idx=D().logData.indexOf(l);
     return `<div class="outcome-card" id="outcome-card-${idx}" style="padding:10px 14px;margin-bottom:8px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:10px;border-left:3px solid var(--ac)">
-      <div style="font-size:.75rem;color:var(--mu);margin-bottom:6px">📋 ${date} ${time} ${nrs} — <strong>${esc(tx)}</strong> 효과는?</div>
+      <div style="font-size:.75rem;color:var(--mu);margin-bottom:6px">📋 ${date} ${time} ${nrs} — <strong>${esc(tx)}</strong> 경과는?</div>
       <div style="display:flex;gap:8px">
-        <button onclick="rateOutcome(${idx},'good')" style="flex:1;padding:6px;border:1.5px solid #10b981;border-radius:8px;background:#f0fdf4;color:#10b981;font-size:.78rem;font-weight:600;cursor:pointer">✅ 효과 좋음</button>
-        <button onclick="rateOutcome(${idx},'partial')" style="flex:1;padding:6px;border:1.5px solid #f59e0b;border-radius:8px;background:#fffbeb;color:#f59e0b;font-size:.78rem;font-weight:600;cursor:pointer">🔸 좀 나아짐</button>
-        <button onclick="rateOutcome(${idx},'none')" style="flex:1;padding:6px;border:1.5px solid #ef4444;border-radius:8px;background:#fef2f2;color:#ef4444;font-size:.78rem;font-weight:600;cursor:pointer">❌ 안 들었음</button>
+        <button onclick="rateOutcome(${idx},'better')" style="flex:1;padding:8px;border:2px solid #10b981;border-radius:8px;background:#10b98120;color:#10b981;font-size:.82rem;font-weight:700;cursor:pointer">🟢 호전</button>
+        <button onclick="rateOutcome(${idx},'same')" style="flex:1;padding:8px;border:2px solid #f59e0b;border-radius:8px;background:#f59e0b20;color:#b45309;font-size:.82rem;font-weight:700;cursor:pointer">🟡 비슷</button>
+        <button onclick="rateOutcome(${idx},'worse')" style="flex:1;padding:8px;border:2px solid #ef4444;border-radius:8px;background:#ef444420;color:#ef4444;font-size:.82rem;font-weight:700;cursor:pointer">🔴 악화</button>
       </div>
     </div>`;
   }).join('');
@@ -3832,11 +3885,35 @@ async function rateOutcome(logIdx,rating) {
   entry.outcome={rating,ratedAt:kstNow().toISOString()};
   const card=document.getElementById('outcome-card-'+logIdx);
   if(card){
-    const labels={good:'✅ 효과 좋음',partial:'🔸 좀 나아짐',none:'❌ 안 들었음'};
-    card.innerHTML=`<div style="font-size:.75rem;color:var(--mu);text-align:center;padding:4px">${labels[rating]} 기록됨</div>`;
+    const labels={better:'🟢 호전',same:'🟡 비슷',worse:'🔴 악화'};
+    card.innerHTML=`<div style="font-size:.78rem;color:var(--mu);text-align:center;padding:4px;font-weight:600">${labels[rating]} 기록됨</div>`;
     setTimeout(()=>{card.style.display='none';},1500);
   }
-  try{await saveLogData();showToast('📝 처치 효과 기록됨');}
+  try{await saveLogData();showToast('📝 경과 기록됨');}
+  catch(e){showToast('⚠️ 저장 실패: '+e.message);}
+}
+
+function editOutcome(logIdx) {
+  const ds=D();const entry=ds.logData[logIdx];if(!entry) return;
+  const date=entry.datetime.slice(5,10);const time=entry.datetime.slice(11,16);
+  const nrs=entry.nrs>=0?`NRS ${entry.nrs}`:'';
+  const tx=[...(entry.meds||[]),...(entry.treatments||[])].join(', ');
+  showConfirmModal('📋 경과 수정',
+    `<div style="text-align:center;margin-bottom:12px"><div style="font-size:.8rem;color:var(--mu)">${date} ${time} ${nrs} — ${esc(tx)}</div></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="updateOutcome(${logIdx},'better');closeConfirmModal()" style="flex:1;padding:10px;border:2px solid #10b981;border-radius:8px;background:#10b98120;color:#10b981;font-size:.85rem;font-weight:700;cursor:pointer">🟢 호전</button>
+      <button onclick="updateOutcome(${logIdx},'same');closeConfirmModal()" style="flex:1;padding:10px;border:2px solid #f59e0b;border-radius:8px;background:#f59e0b20;color:#b45309;font-size:.85rem;font-weight:700;cursor:pointer">🟡 비슷</button>
+      <button onclick="updateOutcome(${logIdx},'worse');closeConfirmModal()" style="flex:1;padding:10px;border:2px solid #ef4444;border-radius:8px;background:#ef444420;color:#ef4444;font-size:.85rem;font-weight:700;cursor:pointer">🔴 악화</button>
+    </div>
+    <div style="text-align:center;margin-top:8px"><button onclick="updateOutcome(${logIdx},null);closeConfirmModal()" style="font-size:.7rem;color:var(--mu);background:none;border:none;cursor:pointer;text-decoration:underline">경과 삭제</button></div>`,
+    []);
+}
+
+async function updateOutcome(logIdx,rating) {
+  const ds=D();const entry=ds.logData[logIdx];if(!entry) return;
+  if(rating) entry.outcome={rating,ratedAt:kstNow().toISOString()};
+  else delete entry.outcome;
+  try{await saveLogData();renderView('log');showToast(rating?'📝 경과 수정됨':'🗑 경과 삭제됨');}
   catch(e){showToast('⚠️ 저장 실패: '+e.message);}
 }
 
@@ -3911,7 +3988,7 @@ async function saveLogEntry() {
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   } else {
     ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-    try{await saveLogData();_markQuickSynced();sendLogNotification(entry);showToast('✅ 기록 저장됨');renderView('log');}
+    try{await saveLogData();_markQuickSynced();sendLogNotification(entry);sendNtfyBung(entry);sendNtfyFollowup(entry);showToast('✅ 기록 저장됨');renderView('log');}
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   }
   if(btn)btn.disabled=false;if(sp)sp.style.display='none';
@@ -4349,10 +4426,20 @@ function getRecentLogSummary() {
   }
 
   // Standard mode (편두통)
-  const lines=week.map(l=>`${l.datetime.slice(5,16)} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' NRS'+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')).join('\n');
+  const outcomeLabel={better:'→호전',same:'→비슷',worse:'→악화',good:'→호전',partial:'→비슷',none:'→악화'};
+  const lines=week.map(l=>`${l.datetime.slice(5,16)} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' NRS'+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')+(l.outcome?.rating?' '+outcomeLabel[l.outcome.rating]:'')).join('\n');
   const nrsVals=week.map(l=>l.nrs).filter(n=>n>=0);
   const avg=nrsVals.length?(nrsVals.reduce((a,b)=>a+b,0)/nrsVals.length).toFixed(1):'-';
-  return `[최근 7일 기록]\n${lines}\n평균NRS: ${avg}`;
+  // 경과 요약
+  const rated=week.filter(l=>l.outcome?.rating);
+  let outcomeSummary='';
+  if(rated.length) {
+    const better=rated.filter(l=>l.outcome.rating==='better'||l.outcome.rating==='good').length;
+    const same=rated.filter(l=>l.outcome.rating==='same'||l.outcome.rating==='partial').length;
+    const worse=rated.filter(l=>l.outcome.rating==='worse'||l.outcome.rating==='none').length;
+    outcomeSummary=`\n경과평가: ${rated.length}건 중 호전${better} 비슷${same} 악화${worse}`;
+  }
+  return `[최근 7일 기록]\n${lines}\n평균NRS: ${avg}${outcomeSummary}`;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4475,6 +4562,28 @@ function openKeys() {
       <button class="btn-vis" onclick="toggleVis('key-weather',this)">표시</button>
     </div>
     <div class="key-note">💡 무료 (1000회/일). 기록 시 날씨가 자동 첨부됩니다 (서울 강동구).</div>
+  </div><hr style="border:none;border-top:1px solid var(--bd);margin:4px 0">
+  <div class="key-group">
+    <div class="key-row">
+      <div class="key-label">🔔 ntfy 토픽 — 오랑이 경과 알림
+        ${localStorage.getItem('om_ntfy_orangi')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
+      </div>
+    </div>
+    <div class="key-input-row">
+      <input class="key-input ${localStorage.getItem('om_ntfy_orangi')?'set':''}" type="text" id="key-ntfy-orangi" value="${localStorage.getItem('om_ntfy_orangi')||''}" placeholder="예: orangi-ha-7x9k2m">
+    </div>
+    <div class="key-note">💡 두통 기록 2시간 후 경과 확인 알림 (호전/비슷/악화). 오랑이 폰 ntfy 앱에서 같은 토픽 구독 필요.</div>
+  </div><hr style="border:none;border-top:1px solid var(--bd);margin:4px 0">
+  <div class="key-group">
+    <div class="key-row">
+      <div class="key-label">🔔 ntfy 토픽 — 붕쌤 즉시 알림
+        ${localStorage.getItem('om_ntfy_bung')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
+      </div>
+    </div>
+    <div class="key-input-row">
+      <input class="key-input ${localStorage.getItem('om_ntfy_bung')?'set':''}" type="text" id="key-ntfy-bung" value="${localStorage.getItem('om_ntfy_bung')||''}" placeholder="예: bung-notify-3k8m">
+    </div>
+    <div class="key-note">💡 오랑이 두통 기록 시 붕쌤에게 즉시 알림. 붕쌤 폰 ntfy 앱에서 같은 토픽 구독 필요.</div>
   </div>`;
   openModal('keys-modal');
   // #19 키 갱신 알림
@@ -4507,6 +4616,12 @@ async function saveKeys() {
   const weatherKey=(document.getElementById('key-weather')?.value||'').trim();
   if(weatherKey) localStorage.setItem('om_weather_key',weatherKey);
   else localStorage.removeItem('om_weather_key');
+  const ntfyOrangi=(document.getElementById('key-ntfy-orangi')?.value||'').trim();
+  if(ntfyOrangi) localStorage.setItem('om_ntfy_orangi',ntfyOrangi);
+  else localStorage.removeItem('om_ntfy_orangi');
+  const ntfyBung=(document.getElementById('key-ntfy-bung')?.value||'').trim();
+  if(ntfyBung) localStorage.setItem('om_ntfy_bung',ntfyBung);
+  else localStorage.removeItem('om_ntfy_bung');
   // 키 암호화 저장
   if(S._keyPin) {
     await saveKeysEncrypted();
