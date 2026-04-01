@@ -1488,7 +1488,6 @@ function startLightMode() {
   const preferred=['claude','gpt','gemini','grok','perp'];
   const aiId=preferred.find(id=>S.keys[id]);
   if(!aiId){showToast('❌ API 키가 없습니다.');return;}
-  const dc=DC();const m=DM();
   const recentSummary=getRecentLogSummary();
   const crossCtx=getCrossDomainContext();
   const autoQuestion=`최근 기록 기반 빠른 상태 체크를 해주세요.\n${recentSummary||'(최근 기록 없음)'}${crossCtx}\n\n다음을 간결하게 (5문장 이내) 답해주세요:\n1. 현재 상태 요약 (추세)\n2. 주의할 점\n3. 다음 조치 권장사항`;
@@ -3549,7 +3548,7 @@ function renderLog() {
        </div>` : '');
 
   // 트리거 칩 (triggers가 있는 도메인만)
-  const customTriggers=JSON.parse(localStorage.getItem('om_custom_triggers_'+S.currentDomain)||'[]');
+  let customTriggers=[];try{customTriggers=JSON.parse(localStorage.getItem('om_custom_triggers_'+S.currentDomain)||'[]');}catch(e){}
   const triggersHtml=lc.triggers?`
     <div class="log-section-title">추정 트리거 <button onclick="openChipManager('triggers')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
     <div class="log-chips">${[...lc.triggers,...customTriggers].map(t=>`<div class="log-chip" data-group="trigger" data-val="${t}" onclick="toggleChip(this,'sel-trigger')">${t}</div>`).join('')}
@@ -3907,7 +3906,7 @@ function addCustomTrigger() {
   const el=document.getElementById('trigger-other');
   const val=(el?.value||'').trim();if(!val) return;
   const key='om_custom_triggers_'+S.currentDomain;
-  const list=JSON.parse(localStorage.getItem(key)||'[]');
+  let list=[];try{list=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
   if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
   el.value='';
   const saved=_saveLogFormState();renderView('log');_restoreLogFormState(saved);
@@ -3955,7 +3954,7 @@ async function saveLogEntry() {
   const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo};
   // 날씨 자동 첨부 (편두통 도메인, 2초 타임아웃)
   if(S.currentDomain==='orangi-migraine'&&editIdx<0){
-    try{const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),2000))]);if(w)entry.weather=w;}catch(e){}
+    try{const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),2000))]);if(w)entry.weather=w;}catch(e){console.warn('Weather attachment failed:',e);}
   }
   await ensureLogLoaded();
   const ds=D();
