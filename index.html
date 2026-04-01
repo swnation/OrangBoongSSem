@@ -8206,8 +8206,10 @@ function getMainHeadSVG() {
           <radialGradient id="${p}shadow" cx="50%" cy="38%" r="55%"><stop offset="0%" stop-color="rgba(0,0,0,0)"/><stop offset="70%" stop-color="rgba(40,25,15,.12)"/><stop offset="100%" stop-color="rgba(40,25,15,.25)"/></radialGradient>
           <linearGradient id="${p}hair" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3c2a22"/><stop offset="100%" stop-color="#2a1e18"/></linearGradient>
         </defs>
-        <g><path d="M140 18 Q85 35,65 95 Q60 145,78 195 Q95 235,115 250 Q140 260,165 250 Q195 235,212 195 Q230 145,225 95 Q205 35,140 18 Z" fill="url(#${p}skin)" stroke="#d9b8a8" stroke-width="1.5">
-          <animateTransform attributeName="transform" type="scale" values="1;1.008;1" dur="4s" repeatCount="indefinite" additive="sum"/></path></g>
+        <!-- 전체 얼굴 그룹: breathing 애니메이션 -->
+        <g style="transform-origin:140px 145px">
+          <animateTransform attributeName="transform" type="scale" values="1;1.006;1" dur="4s" repeatCount="indefinite"/>
+        <path d="M140 18 Q85 35,65 95 Q60 145,78 195 Q95 235,115 250 Q140 260,165 250 Q195 235,212 195 Q230 145,225 95 Q205 35,140 18 Z" fill="url(#${p}skin)" stroke="#d9b8a8" stroke-width="1.5"/>
         <path d="M140 18 Q85 35,65 95 Q60 145,78 195 Q95 235,115 250 Q140 260,165 250 Q195 235,212 195 Q230 145,225 95 Q205 35,140 18 Z" fill="url(#${p}shadow)" opacity="0.5"/>
         <ellipse cx="98" cy="118" rx="13" ry="8" fill="#fff" stroke="#3c2a22" stroke-width="2.2"/>
         <circle cx="98" cy="118" r="6.5" fill="#2c1f18"/><circle cx="101" cy="115" r="2.2" fill="#fff" opacity="0.85"/>
@@ -8220,6 +8222,7 @@ function getMainHeadSVG() {
         <path d="M115 190 Q130 197,155 190" fill="none" stroke="#c88a7a" stroke-width="3" stroke-linecap="round"/>
         <path d="M118 193 Q130 199,152 193" fill="none" stroke="#c88a7a" stroke-width="1.5" opacity="0.6"/>
         <path d="M65 55 Q48 80,55 115 Q70 45,140 28 Q210 45,225 115 Q232 80,215 55" fill="url(#${p}hair)" opacity="0.9"/>
+        </g>
 
         <ellipse id="${p}c-glabella" cx="140" cy="112" rx="19" ry="11" fill="rgba(168,85,247,0.12)" stroke="#a855f7" stroke-width="2" style="cursor:pointer" onclick="toggleMainSite('both','미간')"/>
         <text x="140" y="116" text-anchor="middle" font-size="10" font-weight="800" fill="#a855f7" style="pointer-events:none" opacity=".9">미간</text>
