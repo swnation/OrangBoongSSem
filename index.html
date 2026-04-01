@@ -4523,7 +4523,7 @@ async function reorganizeCtx() {
     // textarea에 결과 적용 (아직 Drive 저장 안 함)
     domainIds.forEach(id=>{
       const ta=document.getElementById('ctx-ta-'+id);
-      if(ta&&parsed[id]!==undefined) ta.value=parsed[id];
+      if(ta&&typeof parsed[id]==='string') ta.value=parsed[id];
     });
     showToast('✅ 통합 정리 완료 — "전체 저장"을 눌러 Drive에 반영하세요');
   } catch(e){
