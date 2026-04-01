@@ -144,8 +144,17 @@
     <div class="modal-head"><h3>📋 통합 환자 컨텍스트 / SSOT</h3><button class="modal-close" onclick="closeModal('ctx-modal')">✕</button></div>
     <div class="modal-body" id="ctx-body" style="padding:12px 16px"></div>
     <div class="modal-foot" style="flex-wrap:wrap;gap:4px">
-      <button class="btn-cancel" onclick="reorganizeCtx()" style="font-size:.68rem;margin-right:auto;border-color:var(--ac);color:var(--ac)">🤖 AI 통합 정리</button>
-      <button class="btn-cancel" onclick="closeModal('ctx-modal')">취소</button>
+      <div style="display:flex;gap:4px;width:100%;margin-bottom:4px">
+        <button class="btn-cancel" onclick="reorganizeCtx()" style="font-size:.68rem;flex:1;border-color:var(--ac);color:var(--ac)">🤖 AI 통합 정리</button>
+        <button class="btn-cancel" onclick="restoreCtxBackup()" style="font-size:.68rem;flex:1" id="ctx-restore-btn" disabled>↩ 되돌리기</button>
+      </div>
+      <div id="ctx-progress" style="display:none;width:100%;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--sf2);border-radius:6px;border:1px solid var(--bd)">
+          <div class="spin" style="width:16px;height:16px;border-width:2px"></div>
+          <span id="ctx-progress-text" style="font-size:.72rem;color:var(--mu)">AI 통합 정리 중...</span>
+        </div>
+      </div>
+      <button class="btn-cancel" onclick="closeModal('ctx-modal')" style="margin-left:auto">취소</button>
       <button class="btn-save" onclick="saveAllCtx()">전체 저장 (Drive 동기화)</button>
     </div>
   </div>
@@ -4486,8 +4495,16 @@ async function reorganizeCtx() {
   if(!confirm(`${AI_DEFS[aiId].name}로 ${domainIds.length}개 도메인 컨텍스트를 통합 정리합니다.\n\n- 도메인 간 중복 정보 제거\n- 공통 사항은 각 도메인에 간결하게 유지\n- 도메인별 전문 정보만 남기기\n- 오래된/불필요한 내용 정리`)) return;
 
   if(S.generating){showToast('다른 AI 작업이 진행 중입니다.');return;}
+
+  // 백업 저장 (되돌리기용)
+  _ctxBackup={timestamp:kstNow().toISOString(),data:{}};
+  domainIds.forEach(id=>{ _ctxBackup.data[id]=ctxMap[id].text; });
+
   S.generating=true;
-  showToast('🤖 컨텍스트 통합 정리 중...',8000);
+  const progress=document.getElementById('ctx-progress');
+  const progressText=document.getElementById('ctx-progress-text');
+  if(progress) progress.style.display='';
+  if(progressText) progressText.textContent=`${AI_DEFS[aiId].name} 분석 중...`;
 
   const ac=new AbortController();if(!S._abortControllers)S._abortControllers={};S._abortControllers[aiId]=ac;
   try {
@@ -4505,7 +4522,13 @@ async function reorganizeCtx() {
 {${domainIds.map(id=>`"${id}":"정리된 컨텍스트 텍스트"`).join(',')}}`;
 
     const user=domainIds.map(id=>`=== [${ctxMap[id].label}] (${id}) ===\n${ctxMap[id].text}`).join('\n\n');
-    const raw=await callAIStream(aiId,system,user,()=>{},ac.signal);
+    let chunkLen=0;
+    const raw=await callAIStream(aiId,system,user,(chunk)=>{
+      chunkLen=chunk.length;
+      if(progressText) progressText.textContent=`${AI_DEFS[aiId].name} 생성 중... ${chunkLen}자`;
+    },ac.signal);
+
+    if(progressText) progressText.textContent='결과 파싱 중...';
     const jsonMatch=raw.match(/\{[\s\S]*\}/);
     if(!jsonMatch) throw new Error('AI 응답에서 유효한 JSON을 찾을 수 없습니다.');
     const parsed=JSON.parse(jsonMatch[0]);
@@ -4518,13 +4541,16 @@ async function reorganizeCtx() {
       return `${dd.icon} ${dd.label}: ${oldLen}자 → ${newLen}자`;
     }).join('\n');
 
-    if(!confirm(`통합 정리 결과:\n\n${preview}\n\n각 도메인 텍스트 영역에 적용합니다.\n(저장은 "전체 저장" 버튼을 눌러야 반영됩니다)`)) return;
+    if(!confirm(`통합 정리 결과:\n\n${preview}\n\n각 도메인 텍스트 영역에 적용합니다.\n(저장은 "전체 저장" 버튼을 눌러야 반영됩니다)\n\n※ "↩ 되돌리기" 버튼으로 원래 내용 복원 가능`)) return;
 
     // textarea에 결과 적용 (아직 Drive 저장 안 함)
     domainIds.forEach(id=>{
       const ta=document.getElementById('ctx-ta-'+id);
       if(ta&&typeof parsed[id]==='string') ta.value=parsed[id];
     });
+    // 되돌리기 버튼 활성화
+    const restoreBtn=document.getElementById('ctx-restore-btn');
+    if(restoreBtn) restoreBtn.disabled=false;
     showToast('✅ 통합 정리 완료 — "전체 저장"을 눌러 Drive에 반영하세요');
   } catch(e){
     if(e.name==='AbortError') showToast('⏹ 정리 중단됨');
@@ -4532,7 +4558,21 @@ async function reorganizeCtx() {
   } finally {
     delete S._abortControllers?.[aiId];
     S.generating=false;
+    if(progress) progress.style.display='none';
   }
+}
+
+let _ctxBackup=null;
+function restoreCtxBackup() {
+  if(!_ctxBackup){showToast('복원할 백업이 없습니다.');return;}
+  if(!confirm(`${_ctxBackup.timestamp} 시점으로 되돌립니다.\n\n현재 편집 내용이 덮어씌워집니다.`)) return;
+  Object.entries(_ctxBackup.data).forEach(([id,text])=>{
+    const ta=document.getElementById('ctx-ta-'+id);
+    if(ta) ta.value=text;
+  });
+  const restoreBtn=document.getElementById('ctx-restore-btn');
+  if(restoreBtn) restoreBtn.disabled=true;
+  showToast('↩ 컨텍스트 복원됨 — "전체 저장"을 눌러 Drive에 반영하세요');
 }
 
 function changeAIModel(aiId,newModel) {
