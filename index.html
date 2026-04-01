@@ -2547,33 +2547,19 @@ function useTemplateInSession(idx) {
 function renderOutcomeStats(logs) {
   const rated=logs.filter(l=>l.outcome?.rating);
   if(rated.length<3) return '';
-  // 약물별 경과 통계
+  const rMap={good:'better',partial:'same',none:'worse'};
+  const normR=r=>rMap[r]||r;
   const medStats={};
   rated.forEach(l=>{
-    const r=l.outcome.rating;
-    const norm=r==='good'?'better':r==='partial'?'same':r==='none'?'worse':r;
-    (l.meds||[]).forEach(med=>{
-      if(!medStats[med]) medStats[med]={better:0,same:0,worse:0,total:0};
-      medStats[med][norm]++;medStats[med].total++;
+    const norm=normR(l.outcome.rating);
+    [...(l.meds||[]),...(l.treatments||[])].forEach(item=>{
+      if(!medStats[item]) medStats[item]={better:0,same:0,worse:0,total:0};
+      medStats[item][norm]++;medStats[item].total++;
     });
   });
-  // 시술별 경과 통계
-  rated.forEach(l=>{
-    const r=l.outcome.rating;
-    const norm=r==='good'?'better':r==='partial'?'same':r==='none'?'worse':r;
-    (l.treatments||[]).forEach(tx=>{
-      if(!medStats[tx]) medStats[tx]={better:0,same:0,worse:0,total:0};
-      medStats[tx][norm]++;medStats[tx].total++;
-    });
-  });
-  // 약/시술 없이 자연회복
   const noMed=rated.filter(l=>!(l.meds?.length)&&!(l.treatments?.length));
   const naturalStats=noMed.length>=2?{better:0,same:0,worse:0,total:noMed.length}:null;
-  if(naturalStats) noMed.forEach(l=>{
-    const r=l.outcome.rating;
-    const norm=r==='good'?'better':r==='partial'?'same':r==='none'?'worse':r;
-    naturalStats[norm]++;
-  });
+  if(naturalStats) noMed.forEach(l=>naturalStats[normR(l.outcome.rating)]++);
   const results=Object.entries(medStats).filter(([,s])=>s.total>=2).sort((a,b)=>b[1].total-a[1].total);
   if(!results.length&&!naturalStats) return '';
   const renderBar=([label,s])=>{
@@ -2585,8 +2571,7 @@ function renderOutcomeStats(logs) {
   };
   const rows=results.map(renderBar).join('');
   const naturalRow=naturalStats?renderBar(['💤 약/시술 없이 자연경과',naturalStats]):'';
-  // 전체 요약
-  const allBetter=rated.filter(l=>{const r=l.outcome.rating;return r==='better'||r==='good';}).length;
+  const allBetter=rated.filter(l=>normR(l.outcome.rating)==='better').length;
   const summaryPct=Math.round(allBetter/rated.length*100);
   return `<div class="card"><div class="card-title">📊 경과 통계 (직접 평가 ${rated.length}건)</div>
     <div style="text-align:center;margin-bottom:10px"><span style="font-size:1.2rem;font-weight:700;color:#10b981">${summaryPct}%</span><span style="font-size:.75rem;color:var(--mu)"> 호전율 (전체)</span></div>
