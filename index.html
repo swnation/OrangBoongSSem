@@ -4655,7 +4655,8 @@ async function upgradeCtxFromRecent() {
     domainData[id]={label:`${dd.user} · ${dd.label}`,currentCtx,sessionSummaries,accumSummary};
   }
 
-  const hasData=Object.values(domainData).some(d=>d.sessionSummaries||d.accumSummary);
+  const processedIds=Object.keys(domainData);
+  const hasData=processedIds.some(d=>domainData[d].sessionSummaries||domainData[d].accumSummary);
   if(!hasData){showToast('반영할 최근 기록이 없습니다.');return;}
   if(!confirm(`${AI_DEFS[aiId].name}로 최근 세션·누적 지식을 분석하여 SSOT를 업그레이드합니다.\n\n- 새로 확인된 사실 반영\n- 치료 반응 업데이트\n- 오래된 정보 최신화\n- 날짜 기준 갱신`)) return;
 
@@ -4686,9 +4687,9 @@ async function upgradeCtxFromRecent() {
 6. 원본 핵심 정보는 절대 삭제하지 말 것 — 추가/수정만
 
 반드시 아래 JSON만 출력. 다른 텍스트 금지.
-{${domainIds.map(id=>`"${id}":"업그레이드된 컨텍스트"`).join(',')}}`;
+{${processedIds.map(id=>`"${id}":"업그레이드된 컨텍스트"`).join(',')}}`;
 
-    const userParts=domainIds.map(id=>{
+    const userParts=processedIds.map(id=>{
       const d=domainData[id];
       return `=== [${d.label}] (${id}) ===\n[현재 SSOT]\n${d.currentCtx}\n\n[최근 세션 요약]\n${d.sessionSummaries||'(없음)'}\n\n[누적 지식]\n${d.accumSummary||'(없음)'}`;
     }).join('\n\n');
@@ -4704,7 +4705,7 @@ async function upgradeCtxFromRecent() {
     if(!jsonMatch) throw new Error('AI 응답에서 유효한 JSON을 찾을 수 없습니다.');
     const parsed=JSON.parse(jsonMatch[0]);
 
-    const preview=domainIds.map(id=>{
+    const preview=processedIds.map(id=>{
       const dd=DOMAINS[id];
       const oldLen=domainData[id].currentCtx.length;
       const newLen=(parsed[id]||'').length;
@@ -4714,7 +4715,7 @@ async function upgradeCtxFromRecent() {
 
     if(!confirm(`업그레이드 결과:\n\n${preview}\n\n적용 후 "전체 저장"으로 Drive에 반영하세요.\n"↩ 되돌리기"로 원래 내용 복원 가능`)) return;
 
-    domainIds.forEach(id=>{
+    processedIds.forEach(id=>{
       const ta=document.getElementById('ctx-ta-'+id);
       if(ta&&typeof parsed[id]==='string') ta.value=parsed[id];
     });
