@@ -3715,7 +3715,7 @@ function renderLogList() {
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}">${l.outcome.rating==='better'?'🟢호전':l.outcome.rating==='same'?'🟡비슷':l.outcome.rating==='worse'?'🔴악화':l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`:''}
+            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`:''}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
@@ -3779,7 +3779,7 @@ function renderLogListInner() {
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}">${l.outcome.rating==='better'?'🟢호전':l.outcome.rating==='same'?'🟡비슷':l.outcome.rating==='worse'?'🔴악화':l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`:''}
+            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`:''}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
@@ -3890,6 +3890,30 @@ async function rateOutcome(logIdx,rating) {
     setTimeout(()=>{card.style.display='none';},1500);
   }
   try{await saveLogData();showToast('📝 경과 기록됨');}
+  catch(e){showToast('⚠️ 저장 실패: '+e.message);}
+}
+
+function editOutcome(logIdx) {
+  const ds=D();const entry=ds.logData[logIdx];if(!entry) return;
+  const date=entry.datetime.slice(5,10);const time=entry.datetime.slice(11,16);
+  const nrs=entry.nrs>=0?`NRS ${entry.nrs}`:'';
+  const tx=[...(entry.meds||[]),...(entry.treatments||[])].join(', ');
+  showConfirmModal('📋 경과 수정',
+    `<div style="text-align:center;margin-bottom:12px"><div style="font-size:.8rem;color:var(--mu)">${date} ${time} ${nrs} — ${esc(tx)}</div></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="updateOutcome(${logIdx},'better');closeConfirmModal()" style="flex:1;padding:10px;border:2px solid #10b981;border-radius:8px;background:#10b98120;color:#10b981;font-size:.85rem;font-weight:700;cursor:pointer">🟢 호전</button>
+      <button onclick="updateOutcome(${logIdx},'same');closeConfirmModal()" style="flex:1;padding:10px;border:2px solid #f59e0b;border-radius:8px;background:#f59e0b20;color:#b45309;font-size:.85rem;font-weight:700;cursor:pointer">🟡 비슷</button>
+      <button onclick="updateOutcome(${logIdx},'worse');closeConfirmModal()" style="flex:1;padding:10px;border:2px solid #ef4444;border-radius:8px;background:#ef444420;color:#ef4444;font-size:.85rem;font-weight:700;cursor:pointer">🔴 악화</button>
+    </div>
+    <div style="text-align:center;margin-top:8px"><button onclick="updateOutcome(${logIdx},null);closeConfirmModal()" style="font-size:.7rem;color:var(--mu);background:none;border:none;cursor:pointer;text-decoration:underline">경과 삭제</button></div>`,
+    []);
+}
+
+async function updateOutcome(logIdx,rating) {
+  const ds=D();const entry=ds.logData[logIdx];if(!entry) return;
+  if(rating) entry.outcome={rating,ratedAt:kstNow().toISOString()};
+  else delete entry.outcome;
+  try{await saveLogData();renderView('log');showToast(rating?'📝 경과 수정됨':'🗑 경과 삭제됨');}
   catch(e){showToast('⚠️ 저장 실패: '+e.message);}
 }
 
