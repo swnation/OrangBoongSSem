@@ -181,6 +181,7 @@
 // VERSION — 새 버전 추가 시 여기 맨 위에 한 줄 추가, 6번째부터는 자동 제거
 // ═══════════════════════════════════════════════════════════════
 const APP_VERSION = [
+  {v:'v9.2', date:'2026-04-01', note:'처치효과회고 · 트리거칩 · 날씨자동수집 · 통계차트강화 · 경량모드'},
   {v:'v9.0', date:'2026-03-29', note:'20개 신기능 · 약물상호작용 · Undo/Redo · AI평가 · AI선택 · 타임라인 · 암호화 · 충돌해결 · PWA설치 · 오프라인편집 · 통계강화 · 주간요약 · 템플릿추천 · 세션공유 · 키갱신알림 · 첨부UX · 버그수정'},
   {v:'v8.5', date:'2026-03-29', note:'두통 빠른 기록 (quick.html) · 인증 없는 독립 기록 · 메인 앱 연동/검토/반영'},
   {v:'v8.4', date:'2026-03-29', note:'디베이트 · 빠른질문 · 조기요약 · 기록필터 · 인사이트 · 붕룩이타임라인'},
@@ -1482,6 +1483,24 @@ function startSessionFromLogs() {
   startNewSession(question);
 }
 
+// ── 경량 모드 (빠른 체크) ──
+function startLightMode() {
+  const preferred=['claude','gpt','gemini','grok','perp'];
+  const aiId=preferred.find(id=>S.keys[id]);
+  if(!aiId){showToast('❌ API 키가 없습니다.');return;}
+  const dc=DC();const m=DM();
+  const recentSummary=getRecentLogSummary();
+  const crossCtx=getCrossDomainContext();
+  const autoQuestion=`최근 기록 기반 빠른 상태 체크를 해주세요.\n${recentSummary||'(최근 기록 없음)'}${crossCtx}\n\n다음을 간결하게 (5문장 이내) 답해주세요:\n1. 현재 상태 요약 (추세)\n2. 주의할 점\n3. 다음 조치 권장사항`;
+  _sessionFiles=[];
+  S.session={id:Date.now(),date:kstToday(),question:autoQuestion,rounds:[],currentRound:0,summary:null,new_consensus:[],new_discarded:[],updated_issues:[],mode:'light',lightAI:aiId,debateReversed:false,grokAgentLevel:4};
+  S._dirty=true;
+  switchView('session');
+  document.getElementById('session-round-badge').style.display='inline';
+  document.getElementById('session-round-badge').textContent='⚡';
+  setTimeout(()=>runQuickQuestion(aiId),100);
+}
+
 // Session mode suggestion (keyword-based, no AI)
 function suggestSessionMode(question) {
   if(!question||question.length<5) return null;
@@ -2071,6 +2090,10 @@ function renderHome() {
   return `
     <button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
     <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
+    <button onclick="startLightMode()" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,#f0fdf4,#eff6ff);border:1.5px solid var(--bd);border-radius:12px;cursor:pointer;font-size:.88rem;width:100%;margin-bottom:12px;margin-top:-8px">
+      <span style="font-size:1.2rem">⚡</span>
+      <div style="text-align:left"><div style="font-weight:600;color:var(--ink)">빠른 체크</div><div style="font-size:.68rem;color:var(--mu)">AI 1개 · 최근 기록 기반 빠른 요약</div></div>
+    </button>
     ${renderPatternWarnings()}
     ${renderDrugInteractionWarning()}
     ${(()=>{_aiSuggestions=generateAIQuestionSuggestions();return renderAIQuestionSuggestions();})()}
@@ -2124,7 +2147,7 @@ function renderSession() {
 
   // Mode selector (only at R0)
   const modeSelector = curRound===0 ? `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-    ${[['normal','⚡ 일반 협진'],['debate','⚔️ 디베이트'],['multi-grok','🤖 Grok Multi-Agent'],['quick','💬 빠른 질문']].map(([m,label])=>
+    ${[['normal','⚡ 일반 협진'],['debate','⚔️ 디베이트'],['multi-grok','🤖 Grok Multi-Agent'],['quick','💬 빠른 질문'],['light','⚡ 빠른 체크']].map(([m,label])=>
       `<button class="log-vtab ${mode===m?'active':''}" onclick="S.session.mode='${m}';renderView('session')">${label}</button>`).join('')}
   </div>` : '';
 
@@ -2231,7 +2254,7 @@ function renderSession() {
     <div id="stop-all-bar" style="display:none;text-align:center;margin-bottom:8px">
       <button onclick="stopAllAI()" style="padding:8px 28px;font-size:.82rem;font-weight:700;border:2px solid #ef4444;border-radius:8px;background:#ef444415;color:#ef4444;cursor:pointer">⏹ 전체 중단</button>
     </div>
-    <div class="ai-grid${mode==='quick'||mode==='multi-grok'?' single-card':''}">${aiCards}</div>
+    <div class="ai-grid${mode==='quick'||mode==='multi-grok'||mode==='light'?' single-card':''}">${aiCards}</div>
     <div id="summary-area">${sess.summary?renderSummaryResult(sess.summary):''}</div>`;
 }
 
@@ -2251,8 +2274,8 @@ function _detectConflict() {
 function renderActionBar(curRound) {
   const mode=S.session?.mode||'normal';
 
-  // Quick question mode
-  if(mode==='quick') {
+  // Quick question / light mode
+  if(mode==='quick'||mode==='light') {
     if(curRound>=4) return `<div class="round-action-bar" style="border-color:#10b98155;background:#f0fdf4"><span style="color:var(--gr);font-size:.85rem;font-weight:600">✅ 빠른 질문 완료</span><button class="btn-run-round green" onclick="startNewSession()" style="margin-left:auto">새 세션</button></div>`;
     const selAI=S.session._quickSelectedAI||'';
     return `<div class="round-action-bar ${selAI?'selection-active':''}" style="flex-wrap:wrap;gap:6px;align-items:center">
@@ -2520,6 +2543,74 @@ function useTemplateInSession(idx) {
 
 // ═══════════════════════════════════════════════════════════════
 // STATS DASHBOARD (#3)
+// ── 통계 차트: 약물 효과율 (직접 평가 기반) ──
+function renderOutcomeStats(logs) {
+  const rated=logs.filter(l=>l.outcome?.rating);
+  if(rated.length<3) return '';
+  const medStats={};
+  rated.forEach(l=>{(l.meds||[]).forEach(med=>{
+    if(!medStats[med]) medStats[med]={good:0,partial:0,none:0,total:0};
+    medStats[med][l.outcome.rating]++;medStats[med].total++;
+  });});
+  const results=Object.entries(medStats).filter(([,s])=>s.total>=3).sort((a,b)=>b[1].total-a[1].total);
+  if(!results.length) return '';
+  const rows=results.map(([med,s])=>{
+    const gPct=Math.round(s.good/s.total*100);const pPct=Math.round(s.partial/s.total*100);const nPct=100-gPct-pPct;
+    return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px"><span>${esc(med)}</span><span style="color:var(--mu)">${s.total}회 (좋음 ${gPct}%)</span></div>
+      <div style="display:flex;height:16px;border-radius:4px;overflow:hidden;background:var(--bd)">
+        ${gPct?`<div style="width:${gPct}%;background:#10b981"></div>`:''}${pPct?`<div style="width:${pPct}%;background:#f59e0b"></div>`:''}${nPct?`<div style="width:${nPct}%;background:#ef4444"></div>`:''}
+      </div></div>`;
+  }).join('');
+  return `<div class="card"><div class="card-title">💊 약물 효과 평가 (직접 평가 기반)</div>
+    <div style="display:flex;gap:12px;justify-content:center;margin-bottom:10px;flex-wrap:wrap"><span style="font-size:.65rem;color:var(--mu)">🟩 효과 좋음</span><span style="font-size:.65rem;color:var(--mu)">🟨 좀 나아짐</span><span style="font-size:.65rem;color:var(--mu)">🟥 안 들었음</span></div>${rows}</div>`;
+}
+
+// ── 통계 차트: 트리거별 평균 NRS ──
+function renderTriggerNrsChart(logs) {
+  const triggerLogs=logs.filter(l=>l.triggers?.length&&l.nrs>=0);
+  if(triggerLogs.length<5) return '';
+  const stats={};
+  triggerLogs.forEach(l=>{(l.triggers||[]).forEach(t=>{
+    if(!stats[t]) stats[t]={sum:0,count:0};stats[t].sum+=l.nrs;stats[t].count++;
+  });});
+  const results=Object.entries(stats).filter(([,s])=>s.count>=2).map(([t,s])=>({trigger:t,avg:s.sum/s.count,count:s.count})).sort((a,b)=>b.avg-a.avg).slice(0,8);
+  if(!results.length) return '';
+  const maxAvg=Math.max(...results.map(r=>r.avg),10);
+  const bars=results.map(r=>{
+    const pct=Math.round(r.avg/maxAvg*100);const color=r.avg>=7?'#ef4444':r.avg>=4?'#f59e0b':'#10b981';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="min-width:80px;font-size:.72rem;text-align:right;color:var(--ink)">${esc(r.trigger)}</span>
+      <div style="flex:1;height:18px;background:var(--bd);border-radius:4px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${color};border-radius:4px"></div></div>
+      <span style="min-width:50px;font-size:.68rem;color:var(--mu)">${r.avg.toFixed(1)} (${r.count}회)</span></div>`;
+  }).join('');
+  return `<div class="card"><div class="card-title">⚡ 트리거별 평균 NRS</div>${bars}<div style="font-size:.62rem;color:var(--mu2);text-align:center;margin-top:6px">최소 2회 이상 기록된 트리거만 표시.</div></div>`;
+}
+
+// ── 통계 차트: 기압-NRS 산점도 ──
+function renderPressureChart(logs) {
+  const wLogs=logs.filter(l=>l.weather?.pressure&&l.nrs>=0);
+  if(wLogs.length<5) return '';
+  const W=320,H=180,pad=40;
+  const pressures=wLogs.map(l=>l.weather.pressure);
+  const pMin=Math.min(...pressures)-5,pMax=Math.max(...pressures)+5;
+  const dots=wLogs.map(l=>{
+    const x=pad+(l.weather.pressure-pMin)/(pMax-pMin)*(W-pad*2);
+    const y=H-pad-(l.nrs/10)*(H-pad*2);
+    const color=l.nrs>=7?'#ef4444':l.nrs>=4?'#f59e0b':'#10b981';
+    return `<circle cx="${x}" cy="${y}" r="4" fill="${color}" opacity=".7"/>`;
+  }).join('');
+  return `<div class="card"><div class="card-title">🌡️ 기압 vs NRS 상관</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:400px;display:block;margin:0 auto">
+      <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="var(--bd)" stroke-width="1"/>
+      <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}" stroke="var(--bd)" stroke-width="1"/>
+      <text x="${W/2}" y="${H-5}" text-anchor="middle" font-size="10" fill="var(--mu)">기압 (hPa)</text>
+      <text x="12" y="${H/2}" text-anchor="middle" font-size="10" fill="var(--mu)" transform="rotate(-90,12,${H/2})">NRS</text>
+      <text x="${pad}" y="${H-pad+14}" text-anchor="middle" font-size="9" fill="var(--mu2)">${pMin}</text>
+      <text x="${W-pad}" y="${H-pad+14}" text-anchor="middle" font-size="9" fill="var(--mu2)">${pMax}</text>
+      ${dots}
+    </svg>
+    <div style="font-size:.62rem;color:var(--mu2);text-align:center;margin-top:6px">${wLogs.length}건 데이터. 날씨 기록이 쌓일수록 정확해집니다.</div></div>`;
+}
+
 // ═══════════════════════════════════════════════════════════════
 function renderStatsView() {
   const ds=D(); const lc=DC().logConfig; const dc=DC();
@@ -2618,6 +2709,9 @@ function renderStatsView() {
   ${renderTrendChart(logs, 90)}
   ${renderCorrelationAnalysis(logs)}
   ${renderMedEffectAnalysis(logs)}
+  ${renderOutcomeStats(last30)}
+  ${renderTriggerNrsChart(last30)}
+  ${renderPressureChart(last30)}
   ${renderTreatmentTracker()}
   <div style="text-align:center;margin-top:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
     <button class="btn-export" onclick="exportPDF()">📑 기본 리포트</button>
@@ -3595,6 +3689,7 @@ function renderLogList() {
             ${l.outcome?`<span class="log-tag" style="background:${l.outcome.rating==='good'?'#f0fdf4':l.outcome.rating==='partial'?'#fffbeb':'#fef2f2'};color:${l.outcome.rating==='good'?'#15803d':l.outcome.rating==='partial'?'#92400e':'#dc2626'}">${l.outcome.rating==='good'?'✅좋음':l.outcome.rating==='partial'?'🔸나아짐':'❌안들음'}</span>`:''}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
+          ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
         <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
         <button class="log-del" onclick="deleteLogEntry(${realIdx})">✕</button>
@@ -3658,6 +3753,7 @@ function renderLogListInner() {
             ${l.outcome?`<span class="log-tag" style="background:${l.outcome.rating==='good'?'#f0fdf4':l.outcome.rating==='partial'?'#fffbeb':'#fef2f2'};color:${l.outcome.rating==='good'?'#15803d':l.outcome.rating==='partial'?'#92400e':'#dc2626'}">${l.outcome.rating==='good'?'✅좋음':l.outcome.rating==='partial'?'🔸나아짐':'❌안들음'}</span>`:''}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
+          ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
         <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
         <button class="log-del" onclick="deleteLogEntry(${realIdx})">✕</button>
@@ -3682,6 +3778,20 @@ function toggleAllLogDates() {
   dates.forEach(d=>{ _logCollapsed[d]=!allCollapsed; });
   const el=document.getElementById('content').querySelector('[data-log-list]');
   if(el) el.innerHTML=renderLogListInner();
+}
+
+// ── 날씨 자동 수집 (OpenWeatherMap) ──
+const _WEATHER_LAT=37.5326;const _WEATHER_LON=127.1378;
+async function fetchWeather() {
+  const key=localStorage.getItem('om_weather_key')||'';
+  if(!key) return null;
+  try {
+    const url=`https://api.openweathermap.org/data/2.5/weather?lat=${_WEATHER_LAT}&lon=${_WEATHER_LON}&appid=${key}&units=metric&lang=kr`;
+    const res=await fetchWithRetry(url,{},1);
+    if(!res.ok) return null;
+    const d=await res.json();
+    return {temp:Math.round(d.main.temp*10)/10,humidity:d.main.humidity,pressure:d.main.pressure,condition:d.weather?.[0]?.description||'',windSpeed:d.wind?.speed||0,fetchedAt:kstNow().toISOString()};
+  } catch(e){console.warn('Weather fetch failed:',e);return null;}
 }
 
 // ── 처치 효과 미평가 기록 찾기 ──
@@ -3781,6 +3891,10 @@ async function saveLogEntry() {
   const memo=document.getElementById('log-memo')?.value.trim();
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
   const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo};
+  // 날씨 자동 첨부 (편두통 도메인, 2초 타임아웃)
+  if(S.currentDomain==='orangi-migraine'&&editIdx<0){
+    try{const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),2000))]);if(w)entry.weather=w;}catch(e){}
+  }
   await ensureLogLoaded();
   const ds=D();
   // 빠른 기록 연동: 저장 성공 시 synced 마킹
@@ -4349,6 +4463,18 @@ function openKeys() {
       <input class="key-input ${localStorage.getItem('om_quick_sync_url')?'set':''}" type="url" id="key-sync-url" value="${localStorage.getItem('om_quick_sync_url')||''}" placeholder="Google Apps Script 배포 URL">
     </div>
     <div class="key-note">💡 오랑이 빠른 기록(quick.html)을 다른 기기에서도 받아볼 수 있습니다. gas-quicklog.js를 Apps Script에 배포 후 URL을 입력하세요.</div>
+  </div><hr style="border:none;border-top:1px solid var(--bd);margin:4px 0">
+  <div class="key-group">
+    <div class="key-row">
+      <div class="key-label">🌤️ 날씨 API 키 (OpenWeatherMap)
+        ${localStorage.getItem('om_weather_key')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
+      </div><a class="key-link" href="https://openweathermap.org/api" target="_blank">발급 →</a>
+    </div>
+    <div class="key-input-row">
+      <input class="key-input ${localStorage.getItem('om_weather_key')?'set':''}" type="password" id="key-weather" value="${localStorage.getItem('om_weather_key')||''}" placeholder="OpenWeatherMap API 키">
+      <button class="btn-vis" onclick="toggleVis('key-weather',this)">표시</button>
+    </div>
+    <div class="key-note">💡 무료 (1000회/일). 기록 시 날씨가 자동 첨부됩니다 (서울 강동구).</div>
   </div>`;
   openModal('keys-modal');
   // #19 키 갱신 알림
@@ -4378,6 +4504,9 @@ async function saveKeys() {
   const syncUrl=(document.getElementById('key-sync-url')?.value||'').trim();
   if(syncUrl) localStorage.setItem('om_quick_sync_url',syncUrl);
   else localStorage.removeItem('om_quick_sync_url');
+  const weatherKey=(document.getElementById('key-weather')?.value||'').trim();
+  if(weatherKey) localStorage.setItem('om_weather_key',weatherKey);
+  else localStorage.removeItem('om_weather_key');
   // 키 암호화 저장
   if(S._keyPin) {
     await saveKeysEncrypted();
