@@ -1488,7 +1488,6 @@ function startLightMode() {
   const preferred=['claude','gpt','gemini','grok','perp'];
   const aiId=preferred.find(id=>S.keys[id]);
   if(!aiId){showToast('❌ API 키가 없습니다.');return;}
-  const dc=DC();const m=DM();
   const recentSummary=getRecentLogSummary();
   const crossCtx=getCrossDomainContext();
   const autoQuestion=`최근 기록 기반 빠른 상태 체크를 해주세요.\n${recentSummary||'(최근 기록 없음)'}${crossCtx}\n\n다음을 간결하게 (5문장 이내) 답해주세요:\n1. 현재 상태 요약 (추세)\n2. 주의할 점\n3. 다음 조치 권장사항`;
@@ -2547,33 +2546,19 @@ function useTemplateInSession(idx) {
 function renderOutcomeStats(logs) {
   const rated=logs.filter(l=>l.outcome?.rating);
   if(rated.length<3) return '';
-  // 약물별 경과 통계
+  const rMap={good:'better',partial:'same',none:'worse'};
+  const normR=r=>rMap[r]||r;
   const medStats={};
   rated.forEach(l=>{
-    const r=l.outcome.rating;
-    const norm=r==='good'?'better':r==='partial'?'same':r==='none'?'worse':r;
-    (l.meds||[]).forEach(med=>{
-      if(!medStats[med]) medStats[med]={better:0,same:0,worse:0,total:0};
-      medStats[med][norm]++;medStats[med].total++;
+    const norm=normR(l.outcome.rating);
+    [...(l.meds||[]),...(l.treatments||[])].forEach(item=>{
+      if(!medStats[item]) medStats[item]={better:0,same:0,worse:0,total:0};
+      medStats[item][norm]++;medStats[item].total++;
     });
   });
-  // 시술별 경과 통계
-  rated.forEach(l=>{
-    const r=l.outcome.rating;
-    const norm=r==='good'?'better':r==='partial'?'same':r==='none'?'worse':r;
-    (l.treatments||[]).forEach(tx=>{
-      if(!medStats[tx]) medStats[tx]={better:0,same:0,worse:0,total:0};
-      medStats[tx][norm]++;medStats[tx].total++;
-    });
-  });
-  // 약/시술 없이 자연회복
   const noMed=rated.filter(l=>!(l.meds?.length)&&!(l.treatments?.length));
   const naturalStats=noMed.length>=2?{better:0,same:0,worse:0,total:noMed.length}:null;
-  if(naturalStats) noMed.forEach(l=>{
-    const r=l.outcome.rating;
-    const norm=r==='good'?'better':r==='partial'?'same':r==='none'?'worse':r;
-    naturalStats[norm]++;
-  });
+  if(naturalStats) noMed.forEach(l=>naturalStats[normR(l.outcome.rating)]++);
   const results=Object.entries(medStats).filter(([,s])=>s.total>=2).sort((a,b)=>b[1].total-a[1].total);
   if(!results.length&&!naturalStats) return '';
   const renderBar=([label,s])=>{
@@ -2585,8 +2570,7 @@ function renderOutcomeStats(logs) {
   };
   const rows=results.map(renderBar).join('');
   const naturalRow=naturalStats?renderBar(['💤 약/시술 없이 자연경과',naturalStats]):'';
-  // 전체 요약
-  const allBetter=rated.filter(l=>{const r=l.outcome.rating;return r==='better'||r==='good';}).length;
+  const allBetter=rated.filter(l=>normR(l.outcome.rating)==='better').length;
   const summaryPct=Math.round(allBetter/rated.length*100);
   return `<div class="card"><div class="card-title">📊 경과 통계 (직접 평가 ${rated.length}건)</div>
     <div style="text-align:center;margin-bottom:10px"><span style="font-size:1.2rem;font-weight:700;color:#10b981">${summaryPct}%</span><span style="font-size:.75rem;color:var(--mu)"> 호전율 (전체)</span></div>
@@ -3564,7 +3548,7 @@ function renderLog() {
        </div>` : '');
 
   // 트리거 칩 (triggers가 있는 도메인만)
-  const customTriggers=JSON.parse(localStorage.getItem('om_custom_triggers_'+S.currentDomain)||'[]');
+  let customTriggers=[];try{customTriggers=JSON.parse(localStorage.getItem('om_custom_triggers_'+S.currentDomain)||'[]');}catch(e){}
   const triggersHtml=lc.triggers?`
     <div class="log-section-title">추정 트리거 <button onclick="openChipManager('triggers')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
     <div class="log-chips">${[...lc.triggers,...customTriggers].map(t=>`<div class="log-chip" data-group="trigger" data-val="${t}" onclick="toggleChip(this,'sel-trigger')">${t}</div>`).join('')}
@@ -3922,7 +3906,7 @@ function addCustomTrigger() {
   const el=document.getElementById('trigger-other');
   const val=(el?.value||'').trim();if(!val) return;
   const key='om_custom_triggers_'+S.currentDomain;
-  const list=JSON.parse(localStorage.getItem(key)||'[]');
+  let list=[];try{list=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
   if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
   el.value='';
   const saved=_saveLogFormState();renderView('log');_restoreLogFormState(saved);
@@ -3970,7 +3954,7 @@ async function saveLogEntry() {
   const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo};
   // 날씨 자동 첨부 (편두통 도메인, 2초 타임아웃)
   if(S.currentDomain==='orangi-migraine'&&editIdx<0){
-    try{const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),2000))]);if(w)entry.weather=w;}catch(e){}
+    try{const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),2000))]);if(w)entry.weather=w;}catch(e){console.warn('Weather attachment failed:',e);}
   }
   await ensureLogLoaded();
   const ds=D();

@@ -27,7 +27,7 @@
 
 ### 주요 아키텍처
 - **AI 5개**: GPT, Claude, Gemini, Grok(xAI), Perplexity
-- **세션 모드 6가지**: 일반 협진 / 디베이트 / Grok Multi-Agent / 빠른 질문 / 빠른 체크(light) / 경량
+- **세션 모드 5가지**: 일반 협진 / 디베이트 / Grok Multi-Agent / 빠른 질문 / 경량 모드(빠른 체크)
 - **비용 최적화**: R1=GPT+Claude+Gemini+Perp, R2+=GPT+Claude+Gemini+Grok (debate 예외)
 - **컨텍스트**: `getFullContext(question)` 공통 헬퍼 (buildUserPrompt + runGrokMultiAgent 공유)
 - **SSOT 백업**: Drive "Orangi SSOT Backups" 폴더, 최근 5개 유지
