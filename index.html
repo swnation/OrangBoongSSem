@@ -1402,30 +1402,31 @@ function continueFromHistory(idx) {
   startNewSession(`${prevCtx}\n\n[후속 질문]\n`);
 }
 
-function buildUserPrompt(aiId, roundNum) {
-  const m = DM(); const sess = S.session;
-  const accum = m.accumulated;
-  // 토큰 절약: 누적 지식은 최근 10개씩만 + 질문 관련도 선별
-  const q=(sess.question||'').toLowerCase();
+function getFullContext(question) {
+  const m=DM(); const accum=m.accumulated;
+  const q=(question||'').toLowerCase();
   const _selectRelevant=(arr,max=10)=>{
     if(arr.length<=max) return arr;
-    // 질문 키워드와 매칭되는 항목 우선
     const scored=arr.map((x,i)=>({x,score:(q&&x.toLowerCase().split(/\s+/).some(w=>w.length>1&&q.includes(w))?1000000:0)+i}));
     scored.sort((a,b)=>b.score-a.score);
     return scored.slice(0,max).map(s=>s.x);
   };
-  const accumText = [
-    accum.established_consensus.length ? '■ 확립된 합의 ('+accum.established_consensus.length+'건 중 최근/관련)\n'+_selectRelevant(accum.established_consensus).map(x=>'- '+x).join('\n') : '',
-    accum.discarded_hypotheses.length ? '■ 폐기된 가설\n'+_selectRelevant(accum.discarded_hypotheses,5).map(x=>'- '+x).join('\n') : '',
-    accum.unresolved_issues.length ? '■ 미해결 쟁점\n'+_selectRelevant(accum.unresolved_issues).map(x=>'- '+x).join('\n') : '',
+  const accumText=[
+    accum.established_consensus.length?'■ 확립된 합의 ('+accum.established_consensus.length+'건 중 최근/관련)\n'+_selectRelevant(accum.established_consensus).map(x=>'- '+x).join('\n'):'',
+    accum.discarded_hypotheses.length?'■ 폐기된 가설\n'+_selectRelevant(accum.discarded_hypotheses,5).map(x=>'- '+x).join('\n'):'',
+    accum.unresolved_issues.length?'■ 미해결 쟁점\n'+_selectRelevant(accum.unresolved_issues).map(x=>'- '+x).join('\n'):'',
   ].filter(Boolean).join('\n\n');
+  const condContext=getConditionsContext();
+  const crossCtx=getCrossDomainContext();
+  const fileCtx=getFileContext();
+  const contextSection=`[컨텍스트 / SSOT]\n${m.patient_context}${condContext}${crossCtx}${fileCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`;
+  const logSummary=getRecentLogSummary();
+  return contextSection+(logSummary?'\n\n'+logSummary:'');
+}
 
-  const condContext = getConditionsContext();
-  const crossCtx = getCrossDomainContext();
-  const fileCtx = getFileContext();
-  const contextSection = `[컨텍스트 / SSOT]\n${m.patient_context}${condContext}${crossCtx}${fileCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`;
-  const logSummary = getRecentLogSummary();
-  const contextFull = contextSection + (logSummary ? '\n\n'+logSummary : '');
+function buildUserPrompt(aiId, roundNum) {
+  const sess = S.session;
+  const contextFull = getFullContext(sess.question);
   const question = sess.question || '(질문 미입력)';
 
   if (roundNum === 1) {
@@ -1806,25 +1807,7 @@ async function runGrokMultiAgent() {
     if(el) el.textContent=Math.round((Date.now()-timerStart)/1000)+'s';
   },1000);
 
-  // buildUserPrompt와 동일한 컨텍스트 구성
-  const m=DM(); const accum=m.accumulated;
-  const qq=(q||'').toLowerCase();
-  const _sel=(arr,max=10)=>{
-    if(arr.length<=max) return arr;
-    const scored=arr.map((x,i)=>({x,score:(qq&&x.toLowerCase().split(/\s+/).some(w=>w.length>1&&qq.includes(w))?1000000:0)+i}));
-    scored.sort((a,b)=>b.score-a.score);
-    return scored.slice(0,max).map(s=>s.x);
-  };
-  const accumText=[
-    accum.established_consensus.length?'■ 확립된 합의\n'+_sel(accum.established_consensus).map(x=>'- '+x).join('\n'):'',
-    accum.discarded_hypotheses.length?'■ 폐기된 가설\n'+_sel(accum.discarded_hypotheses,5).map(x=>'- '+x).join('\n'):'',
-    accum.unresolved_issues.length?'■ 미해결 쟁점\n'+_sel(accum.unresolved_issues).map(x=>'- '+x).join('\n'):'',
-  ].filter(Boolean).join('\n\n');
-  const condContext=getConditionsContext();
-  const crossCtx=getCrossDomainContext();
-  const fileCtx=getFileContext();
-  const logSummary=getRecentLogSummary();
-  const contextFull=`[컨텍스트 / SSOT]\n${m.patient_context}${condContext}${crossCtx}${fileCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`+(logSummary?'\n\n'+logSummary:'');
+  const contextFull=getFullContext(q);
 
   const system=`Grok ${agentLevel} Multi-Agent 모드. 내부 ${agentLevel}명(Captain, Researcher, Logician, Contrarian 등) 토론 후 요약.
 SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요.
@@ -2463,7 +2446,9 @@ async function cleanupAccumulated() {
 반드시 아래 JSON만 출력:
 {"established_consensus":["항목"],"discarded_hypotheses":["항목"],"unresolved_issues":["항목"]}`;
     const user=`[확립된 합의]\n${(accum.established_consensus||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[폐기된 가설]\n${(accum.discarded_hypotheses||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[미해결 쟁점]\n${(accum.unresolved_issues||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}`;
-    const raw=await callAI(aiId,system,user);
+    const ac=new AbortController();if(!S._abortControllers)S._abortControllers={};S._abortControllers[aiId]=ac;
+    const raw=await callAIStream(aiId,system,user,()=>{},ac.signal);
+    delete S._abortControllers[aiId];
     let clean=raw.replace(/```json|```/g,'').trim();
     const jsonMatch=clean.match(/\{[\s\S]*\}/);
     if(jsonMatch) clean=jsonMatch[0];
@@ -4317,8 +4302,8 @@ async function _deriveKey(passphrase) {
 
 async function exportKeysEncrypted() {
   if(!Object.keys(S.keys).length){showToast('내보낼 키가 없습니다.');return;}
-  const pass=prompt('암호를 설정하세요 (키 복원 시 필요):');
-  if(!pass||pass.length<4){showToast('암호는 4자 이상이어야 합니다.');return;}
+  const pass=prompt('암호를 설정하세요 (키 복원 시 필요, 8자 이상):');
+  if(!pass||pass.length<8){showToast('보안을 위해 암호는 8자 이상이어야 합니다.');return;}
   try {
     const key=await _deriveKey(pass);
     const iv=crypto.getRandomValues(new Uint8Array(12));
@@ -4338,8 +4323,8 @@ const _KEYS_DRIVE_NAME='orangi_keys_backup.enc';
 async function exportKeysToDrive() {
   if(!requireLogin())return;
   if(!Object.keys(S.keys).length){showToast('내보낼 키가 없습니다.');return;}
-  const pass=prompt('Drive 백업용 암호를 설정하세요 (복원 시 필요):');
-  if(!pass||pass.length<4){showToast('암호는 4자 이상이어야 합니다.');return;}
+  const pass=prompt('Drive 백업용 암호를 설정하세요 (복원 시 필요, 8자 이상):');
+  if(!pass||pass.length<8){showToast('보안을 위해 암호는 8자 이상이어야 합니다.');return;}
   try {
     const key=await _deriveKey(pass);
     const iv=crypto.getRandomValues(new Uint8Array(12));
