@@ -2,6 +2,8 @@ const CACHE_NAME = 'orangi-health-v9e';
 const PRECACHE = [
   './index.html',
   './style.css',
+  './icons/head-front.png',
+  './icons/head-back.png',
   'https://cdn.jsdelivr.net/npm/marked@15/marked.min.js',
   'https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js',
 ];
