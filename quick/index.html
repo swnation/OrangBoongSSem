@@ -297,93 +297,46 @@ function addOtherChip(inputId, containerId, group, cls) {
 // ── Interactive Head Diagram ──
 function getHeadSVG(prefix) {
   return `
-  <div style="display:flex;justify-content:center;gap:6px;align-items:flex-start;padding:6px 0">
+  <div style="display:flex;justify-content:center;gap:8px;align-items:flex-start;padding:6px 0">
     <div style="text-align:center">
       <div style="font-size:.6rem;color:#999;font-weight:600;letter-spacing:.08em;margin-bottom:2px">정면</div>
-      <svg viewBox="0 0 260 270" width="190" style="max-width:52vw">
-        <defs>
-          <radialGradient id="${prefix}sk" cx="50%" cy="38%" r="55%"><stop offset="0%" stop-color="#fde8d0"/><stop offset="55%" stop-color="#f5d5b8"/><stop offset="100%" stop-color="#e8c0a0"/></radialGradient>
-          <radialGradient id="${prefix}sh" cx="50%" cy="35%" r="52%"><stop offset="0%" stop-color="rgba(0,0,0,0)"/><stop offset="80%" stop-color="rgba(0,0,0,0)"/><stop offset="100%" stop-color="rgba(0,0,0,.07)"/></radialGradient>
-          <linearGradient id="${prefix}hair" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5a4535"/><stop offset="100%" stop-color="#3a2a1f"/></linearGradient>
-        </defs>
-        <path d="M 130 12 C 75 12,40 52,40 102 C 40 138,44 162,58 186 Q 72 210,95 225 Q 112 235,130 237 Q 148 235,165 225 Q 188 210,202 186 C 216 162,220 138,220 102 C 220 52,185 12,130 12 Z" fill="url(#${prefix}sk)" stroke="#b09880" stroke-width="1.4"/>
-        <path d="M 130 12 C 75 12,40 52,40 102 C 40 138,44 162,58 186 Q 72 210,95 225 Q 112 235,130 237 Q 148 235,165 225 Q 188 210,202 186 C 216 162,220 138,220 102 C 220 52,185 12,130 12 Z" fill="url(#${prefix}sh)"/>
-        <path d="M 41 96 C 30 90,24 102,25 116 C 26 130,31 140,37 141 C 40 136,41 126,41 112 Z" fill="#f0d0b0" stroke="#b09880" stroke-width="1"/>
-        <path d="M 32 108 C 30 114,31 125,34 130" fill="none" stroke="#c8a890" stroke-width=".7"/>
-        <path d="M 219 96 C 230 90,236 102,235 116 C 234 130,229 140,223 141 C 220 136,219 126,219 112 Z" fill="#f0d0b0" stroke="#b09880" stroke-width="1"/>
-        <path d="M 228 108 C 230 114,229 125,226 130" fill="none" stroke="#c8a890" stroke-width=".7"/>
-        <path d="M 130 12 C 75 12,40 52,44 82 Q 58 28,130 18 Q 202 28,216 82 C 220 52,185 12,130 12 Z" fill="url(#${prefix}hair)" opacity=".18"/>
-        <path d="M 48 76 Q 68 20,130 12 Q 192 20,212 76" fill="none" stroke="#5a4535" stroke-width="1.2" opacity=".35"/>
-        <ellipse cx="78" cy="148" rx="18" ry="10" fill="rgba(220,160,140,.12)"/>
-        <ellipse cx="182" cy="148" rx="18" ry="10" fill="rgba(220,160,140,.12)"/>
-        <path d="M 80 120 Q 89 111,98 111 Q 107 111,116 120 Q 107 127,98 127 Q 89 127,80 120 Z" fill="#fff" stroke="#7a6a58" stroke-width="1.1"/>
-        <circle cx="98" cy="119.5" r="6.5" fill="#4a3520"/><circle cx="98" cy="119.5" r="4" fill="#1a0a00"/>
-        <circle cx="100" cy="117.5" r="1.8" fill="#fff" opacity=".85"/><circle cx="96" cy="121" r=".9" fill="#fff" opacity=".4"/>
-        <path d="M 80 120 Q 89 114,98 113 Q 107 114,116 120" fill="none" stroke="#6a5a48" stroke-width="1.4"/>
-        <path d="M 144 120 Q 153 111,162 111 Q 171 111,180 120 Q 171 127,162 127 Q 153 127,144 120 Z" fill="#fff" stroke="#7a6a58" stroke-width="1.1"/>
-        <circle cx="162" cy="119.5" r="6.5" fill="#4a3520"/><circle cx="162" cy="119.5" r="4" fill="#1a0a00"/>
-        <circle cx="164" cy="117.5" r="1.8" fill="#fff" opacity=".85"/><circle cx="160" cy="121" r=".9" fill="#fff" opacity=".4"/>
-        <path d="M 144 120 Q 153 114,162 113 Q 171 114,180 120" fill="none" stroke="#6a5a48" stroke-width="1.4"/>
-        <path d="M 76 108 Q 87 98,98 100 Q 109 101,118 107" fill="none" stroke="#4a3525" stroke-width="2.8" stroke-linecap="round"/>
-        <path d="M 142 107 Q 151 101,162 100 Q 173 98,184 108" fill="none" stroke="#4a3525" stroke-width="2.8" stroke-linecap="round"/>
-        <path d="M 130 113 C 129 126,126 140,123 150" fill="none" stroke="#b09888" stroke-width="1.1"/>
-        <path d="M 130 113 C 131 126,134 140,137 150" fill="none" stroke="#b09888" stroke-width=".6" opacity=".4"/>
-        <path d="M 121 152 Q 125 157,130 158 Q 135 157,139 152" fill="none" stroke="#b09888" stroke-width="1"/>
-        <ellipse cx="124" cy="153" rx="3.5" ry="2.2" fill="none" stroke="#b09888" stroke-width=".8"/>
-        <ellipse cx="136" cy="153" rx="3.5" ry="2.2" fill="none" stroke="#b09888" stroke-width=".8"/>
-        <path d="M 114 178 Q 122 173,130 172 Q 138 173,146 178" fill="none" stroke="#c09080" stroke-width="1.5" stroke-linecap="round"/>
-        <path d="M 116 179 Q 123 183,130 184 Q 137 183,144 179" fill="none" stroke="#c09080" stroke-width=".8" opacity=".45"/>
-        <line x1="130" y1="16" x2="130" y2="195" stroke="#b09880" stroke-width=".3" stroke-dasharray="5 4" opacity=".25"/>
-
-        <ellipse id="${prefix}l-temple" cx="48" cy="108" rx="17" ry="22" fill="rgba(59,130,246,.10)" stroke="#3b82f6" stroke-width="1.8" style="cursor:pointer" onclick="toggleHeadSite('left','관자놀이')"/>
-        <text x="48" y="106" text-anchor="middle" font-size="8" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">관자</text>
-        <text x="48" y="116" text-anchor="middle" font-size="8" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">놀이</text>
-        <ellipse id="${prefix}l-brow" cx="92" cy="103" rx="17" ry="8" fill="rgba(59,130,246,.10)" stroke="#3b82f6" stroke-width="1.8" style="cursor:pointer" onclick="toggleHeadSite('left','눈썹부위')"/>
-        <text x="92" y="107" text-anchor="middle" font-size="8" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">눈썹</text>
-        <ellipse id="${prefix}l-forehead" cx="90" cy="56" rx="28" ry="20" fill="rgba(59,130,246,.10)" stroke="#3b82f6" stroke-width="1.8" style="cursor:pointer" onclick="toggleHeadSite('left','이마')"/>
-        <text x="90" y="60" text-anchor="middle" font-size="11" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">이마</text>
-
-        <ellipse id="${prefix}r-temple" cx="212" cy="108" rx="17" ry="22" fill="rgba(239,68,68,.10)" stroke="#ef4444" stroke-width="1.8" style="cursor:pointer" onclick="toggleHeadSite('right','관자놀이')"/>
-        <text x="212" y="106" text-anchor="middle" font-size="8" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">관자</text>
-        <text x="212" y="116" text-anchor="middle" font-size="8" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">놀이</text>
-        <ellipse id="${prefix}r-brow" cx="168" cy="103" rx="17" ry="8" fill="rgba(239,68,68,.10)" stroke="#ef4444" stroke-width="1.8" style="cursor:pointer" onclick="toggleHeadSite('right','눈썹부위')"/>
-        <text x="168" y="107" text-anchor="middle" font-size="8" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">눈썹</text>
-        <ellipse id="${prefix}r-forehead" cx="170" cy="56" rx="28" ry="20" fill="rgba(239,68,68,.10)" stroke="#ef4444" stroke-width="1.8" style="cursor:pointer" onclick="toggleHeadSite('right','이마')"/>
-        <text x="170" y="60" text-anchor="middle" font-size="11" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">이마</text>
-
-        <ellipse id="${prefix}c-glabella" cx="130" cy="106" rx="18" ry="9" fill="rgba(168,85,247,.10)" stroke="#a855f7" stroke-width="1.8" style="cursor:pointer" onclick="toggleHeadSite('both','미간')"/>
-        <text x="130" y="110" text-anchor="middle" font-size="10" font-weight="800" fill="#a855f7" style="pointer-events:none" opacity=".9">미간</text>
-
-        <text x="48" y="262" text-anchor="middle" font-size="9.5" fill="#3b82f6" font-weight="600" opacity=".8">← 왼쪽</text>
-        <text x="212" y="262" text-anchor="middle" font-size="9.5" fill="#ef4444" font-weight="600" opacity=".8">오른쪽 →</text>
-      </svg>
+      <div style="position:relative;display:inline-block;width:170px;max-width:44vw">
+        <img src="../icons/head-front.png" alt="정면" style="width:100%;border-radius:10px;pointer-events:none">
+        <svg viewBox="0 0 378 347" style="position:absolute;top:0;left:0;width:100%;height:100%">
+          <ellipse id="${prefix}l-forehead" cx="120" cy="95" rx="52" ry="32" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','이마')"/>
+          <text x="120" y="100" text-anchor="middle" font-size="16" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">이마</text>
+          <ellipse id="${prefix}r-forehead" cx="258" cy="95" rx="52" ry="32" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','이마')"/>
+          <text x="258" y="100" text-anchor="middle" font-size="16" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">이마</text>
+          <ellipse id="${prefix}c-glabella" cx="189" cy="185" rx="28" ry="16" fill="rgba(168,85,247,0.10)" stroke="#a855f7" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('both','미간')"/>
+          <text x="189" y="190" text-anchor="middle" font-size="14" font-weight="800" fill="#a855f7" style="pointer-events:none" opacity=".9">미간</text>
+          <ellipse id="${prefix}l-brow" cx="138" cy="168" rx="32" ry="14" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','눈썹부위')"/>
+          <text x="138" y="173" text-anchor="middle" font-size="13" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">눈썹</text>
+          <ellipse id="${prefix}r-brow" cx="240" cy="168" rx="32" ry="14" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','눈썹부위')"/>
+          <text x="240" y="173" text-anchor="middle" font-size="13" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">눈썹</text>
+          <ellipse id="${prefix}l-temple" cx="52" cy="195" rx="28" ry="42" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','관자놀이')"/>
+          <text x="52" y="190" text-anchor="middle" font-size="11" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">관자</text>
+          <text x="52" y="204" text-anchor="middle" font-size="11" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">놀이</text>
+          <ellipse id="${prefix}r-temple" cx="326" cy="195" rx="28" ry="42" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','관자놀이')"/>
+          <text x="326" y="190" text-anchor="middle" font-size="11" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">관자</text>
+          <text x="326" y="204" text-anchor="middle" font-size="11" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">놀이</text>
+          <text x="90" y="338" text-anchor="middle" font-size="13" fill="#3b82f6" font-weight="600" opacity=".8">← 왼쪽</text>
+          <text x="288" y="338" text-anchor="middle" font-size="13" fill="#ef4444" font-weight="600" opacity=".8">오른쪽 →</text>
+        </svg>
+      </div>
     </div>
     <div style="text-align:center">
       <div style="font-size:.6rem;color:#999;font-weight:600;letter-spacing:.08em;margin-bottom:2px">후면</div>
-      <svg viewBox="0 0 180 270" width="115" style="max-width:32vw">
-        <defs>
-          <radialGradient id="${prefix}skb" cx="50%" cy="40%" r="55%"><stop offset="0%" stop-color="#f5dcc5"/><stop offset="100%" stop-color="#e0c0a0"/></radialGradient>
-          <linearGradient id="${prefix}hrb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5a4535"/><stop offset="100%" stop-color="#3a2a1f"/></linearGradient>
-        </defs>
-        <path d="M 90 14 C 38 14,10 60,10 112 C 10 152,22 178,42 198 L 52 212 Q 56 222,60 230 L 120 230 Q 124 222,128 212 L 138 198 C 158 178,170 152,170 112 C 170 60,142 14,90 14 Z" fill="url(#${prefix}skb)" stroke="#b09880" stroke-width="1.4"/>
-        <path d="M 90 14 C 38 14,10 60,14 95 Q 30 32,90 20 Q 150 32,166 95 C 170 60,142 14,90 14 Z" fill="url(#${prefix}hrb)" opacity=".22"/>
-        <path d="M 20 88 Q 35 25,90 14 Q 145 25,160 88" fill="none" stroke="#5a4535" stroke-width="1" opacity=".3"/>
-        <path d="M 50 30 Q 70 22,90 20 Q 110 22,130 30" fill="none" stroke="#5a4535" stroke-width=".5" opacity=".2"/>
-        <path d="M 35 50 Q 60 30,90 24 Q 120 30,145 50" fill="none" stroke="#5a4535" stroke-width=".5" opacity=".15"/>
-        <path d="M 60 226 L 56 252 Q 72 260,90 262 Q 108 260,124 252 L 120 226" fill="url(#${prefix}skb)" stroke="#b09880" stroke-width="1"/>
-        <path d="M 90 230 L 90 258" fill="none" stroke="#c0a890" stroke-width=".6" opacity=".3"/>
-        <path d="M 11 96 C 2 90,-1 104,1 116 C 3 128,8 136,13 137 C 14 132,12 122,11 110 Z" fill="#f0d0b0" stroke="#b09880" stroke-width=".9"/>
-        <path d="M 169 96 C 178 90,181 104,179 116 C 177 128,172 136,167 137 C 166 132,168 122,169 110 Z" fill="#f0d0b0" stroke="#b09880" stroke-width=".9"/>
-        <line x1="90" y1="22" x2="90" y2="220" stroke="#b09880" stroke-width=".3" stroke-dasharray="5 4" opacity=".25"/>
-
-        <ellipse id="${prefix}l-occipital" cx="48" cy="136" rx="32" ry="26" fill="rgba(59,130,246,.10)" stroke="#3b82f6" stroke-width="1.8" style="cursor:pointer" onclick="toggleHeadSite('left','후두부')"/>
-        <text x="48" y="140" text-anchor="middle" font-size="12" font-weight="800" fill="#3b82f6" style="pointer-events:none" opacity=".9">후두부</text>
-        <ellipse id="${prefix}r-occipital" cx="132" cy="136" rx="32" ry="26" fill="rgba(239,68,68,.10)" stroke="#ef4444" stroke-width="1.8" style="cursor:pointer" onclick="toggleHeadSite('right','후두부')"/>
-        <text x="132" y="140" text-anchor="middle" font-size="12" font-weight="800" fill="#ef4444" style="pointer-events:none" opacity=".9">후두부</text>
-
-        <text x="48" y="262" text-anchor="middle" font-size="9" fill="#3b82f6" font-weight="600" opacity=".8">← 왼</text>
-        <text x="132" y="262" text-anchor="middle" font-size="9" fill="#ef4444" font-weight="600" opacity=".8">오 →</text>
-      </svg>
+      <div style="position:relative;display:inline-block;width:170px;max-width:44vw">
+        <img src="../icons/head-back.png" alt="후면" style="width:100%;border-radius:10px;pointer-events:none">
+        <svg viewBox="0 0 379 347" style="position:absolute;top:0;left:0;width:100%;height:100%">
+          <ellipse id="${prefix}l-occipital" cx="125" cy="195" rx="62" ry="65" fill="rgba(59,130,246,0.15)" stroke="#3b82f6" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('left','후두부')"/>
+          <text x="125" y="200" text-anchor="middle" font-size="16" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">후두부</text>
+          <ellipse id="${prefix}r-occipital" cx="254" cy="195" rx="62" ry="65" fill="rgba(239,68,68,0.15)" stroke="#ef4444" stroke-width="2" style="cursor:pointer" onclick="toggleHeadSite('right','후두부')"/>
+          <text x="254" y="200" text-anchor="middle" font-size="16" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">후두부</text>
+          <text x="125" y="338" text-anchor="middle" font-size="13" fill="#3b82f6" font-weight="600" opacity=".8">← 왼쪽</text>
+          <text x="254" y="338" text-anchor="middle" font-size="13" fill="#ef4444" font-weight="600" opacity=".8">오른쪽 →</text>
+        </svg>
+      </div>
     </div>
   </div>`;
 }
@@ -434,7 +387,7 @@ function syncHeadDiagram() {
 
     const color=side==='right'?'239,68,68':side==='left'?'59,130,246':'168,85,247';
     el.setAttribute('fill',active?`rgba(${color},.45)`:`rgba(${color},.10)`);
-    el.setAttribute('stroke-width',active?'3':'1.8');
+    el.setAttribute('stroke-width',active?'3.5':'2');
   });
 }
 
