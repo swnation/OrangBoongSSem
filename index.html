@@ -4014,7 +4014,7 @@ async function saveLogEntry() {
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   } else {
     ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-    try{await saveLogData();_markQuickSynced();sendLogNotification(entry);sendNtfyBung(entry);sendNtfyFollowup(entry);showToast('✅ 기록 저장됨');renderView('log');}
+    try{await saveLogData();_markQuickSynced();sendLogNotification(entry);showToast('✅ 기록 저장됨');renderView('log');}
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   }
   if(btn)btn.disabled=false;if(sp)sp.style.display='none';

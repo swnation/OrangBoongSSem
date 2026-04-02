@@ -654,8 +654,29 @@ async function saveEntry() {
   saveQuickLogs(logs);
   showToast('💾 저장 중...');
   const ok = await cloudSave([entry]);
+  await sendQuickNtfy(entry);
   showToast(ok ? '✅ 저장 완료 + ☁️ 붕쌤에게 전송됨' : '✅ 로컬 저장됨 (☁️ 업로드 실패)');
   renderForm();
+}
+
+// ── ntfy 알림 (빠른 기록 → 붕쌤 즉시 알림) ──
+async function sendQuickNtfy(entry) {
+  const topic=localStorage.getItem('om_ntfy_bung');
+  if(!topic) return;
+  const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
+  const sites=(entry.sites||[]).join(', ');
+  const meds=(entry.meds||[]).join(', ');
+  const tx=(entry.treatments||[]).join(', ');
+  const body='🤕 오랑이 두통 기록 (빠른기록)\n'+((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim()+'\n'+(meds?'💊 '+meds:'')+(tx?' 🩺 '+tx:'');
+  try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
+  // 2시간 후 경과 확인 (오랑이 토픽)
+  const orangiTopic=localStorage.getItem('om_ntfy_orangi');
+  if(orangiTopic){
+    setTimeout(async()=>{
+      const fBody='🤕 두통 경과 확인\n'+((entry.datetime||'').slice(11,16)+' '+nrs+' '+(meds||'')+' → 지금 어때요?');
+      try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',body:fBody.trim()});}catch(e){}
+    },2*60*60*1000);
+  }
 }
 
 // ── List ──
