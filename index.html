@@ -1073,7 +1073,7 @@ async function saveMaster() {
 }
 
 // ── 커스텀 항목 클라우드 영구 저장 ──
-const _CUSTOM_KEYS=['meds','syms','tx','sites_left','sites_right','pain'];
+const _CUSTOM_KEYS=['meds','syms','tx','sites_left','sites_right','pain','triggers'];
 
 function _syncCustomItemsToMaster() {
   const ds=D(); const dom=S.currentDomain;
@@ -3909,6 +3909,7 @@ function addCustomTrigger() {
   let list=[];try{list=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
   if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
   el.value='';
+  _syncCustomItemsToMaster();saveMaster();
   const saved=_saveLogFormState();renderView('log');_restoreLogFormState(saved);
   showToast(`✅ "${val}" 고정됨`);
 }
@@ -4181,6 +4182,7 @@ function addCustomChip(type) {
   const list=JSON.parse(localStorage.getItem(key)||'[]');
   if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
   el.value='';
+  _syncCustomItemsToMaster();saveMaster();
   const saved=_saveLogFormState();
   renderView('log');
   _restoreLogFormState(saved);
@@ -4195,6 +4197,7 @@ function addCustomSite(side) {
   const list=JSON.parse(localStorage.getItem(key)||'[]');
   if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
   el.value='';
+  _syncCustomItemsToMaster();saveMaster();
   const saved=_saveLogFormState();
   renderView('log');
   _restoreLogFormState(saved);
@@ -4209,6 +4212,7 @@ function addCustomPainType() {
   const list=JSON.parse(localStorage.getItem(key)||'[]');
   if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
   el.value='';
+  _syncCustomItemsToMaster();saveMaster();
   const saved=_saveLogFormState();
   renderView('log');
   _restoreLogFormState(saved);
@@ -9001,25 +9005,25 @@ function getMainHeadSVG() {
       <div style="font-size:.68rem;color:var(--mu);font-weight:600;letter-spacing:.08em;margin-bottom:4px">정면</div>
       <div style="position:relative;display:inline-block;width:180px;max-width:44vw">
         <img src="icons/head-front.png" alt="정면" style="width:100%;border-radius:10px;pointer-events:none">
-        <svg viewBox="0 0 674 556" style="position:absolute;top:0;left:0;width:100%;height:100%">
-          <ellipse id="${p}l-forehead" cx="210" cy="130" rx="90" ry="55" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('left','이마')"/>
-          <text x="210" y="136" text-anchor="middle" font-size="24" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">이마</text>
-          <ellipse id="${p}r-forehead" cx="464" cy="130" rx="90" ry="55" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('right','이마')"/>
-          <text x="464" y="136" text-anchor="middle" font-size="24" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">이마</text>
-          <ellipse id="${p}l-brow" cx="240" cy="262" rx="52" ry="22" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('left','눈썹부위')"/>
-          <text x="240" y="268" text-anchor="middle" font-size="18" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">눈썹</text>
-          <ellipse id="${p}r-brow" cx="434" cy="262" rx="52" ry="22" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('right','눈썹부위')"/>
-          <text x="434" y="268" text-anchor="middle" font-size="18" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">눈썹</text>
-          <ellipse id="${p}c-glabella" cx="337" cy="290" rx="42" ry="24" fill="rgba(168,85,247,0.10)" stroke="#a855f7" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('both','미간')"/>
-          <text x="337" y="296" text-anchor="middle" font-size="20" font-weight="800" fill="#a855f7" style="pointer-events:none" opacity=".9">미간</text>
-          <ellipse id="${p}l-temple" cx="62" cy="310" rx="50" ry="70" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('left','관자놀이')"/>
-          <text x="62" y="305" text-anchor="middle" font-size="17" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">관자</text>
-          <text x="62" y="324" text-anchor="middle" font-size="17" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">놀이</text>
-          <ellipse id="${p}r-temple" cx="612" cy="310" rx="50" ry="70" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('right','관자놀이')"/>
-          <text x="612" y="305" text-anchor="middle" font-size="17" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">관자</text>
-          <text x="612" y="324" text-anchor="middle" font-size="17" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">놀이</text>
-          <text x="170" y="545" text-anchor="middle" font-size="18" fill="#3b82f6" font-weight="600" opacity=".8">← 왼쪽</text>
-          <text x="504" y="545" text-anchor="middle" font-size="18" fill="#ef4444" font-weight="600" opacity=".8">오른쪽 →</text>
+        <svg viewBox="0 0 600 500" style="position:absolute;top:0;left:0;width:100%;height:100%">
+          <ellipse id="${p}l-forehead" cx="185" cy="115" rx="80" ry="50" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('left','이마')"/>
+          <text x="185" y="121" text-anchor="middle" font-size="22" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">이마</text>
+          <ellipse id="${p}r-forehead" cx="415" cy="115" rx="80" ry="50" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('right','이마')"/>
+          <text x="415" y="121" text-anchor="middle" font-size="22" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">이마</text>
+          <ellipse id="${p}l-brow" cx="215" cy="240" rx="48" ry="20" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('left','눈썹부위')"/>
+          <text x="215" y="246" text-anchor="middle" font-size="17" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">눈썹</text>
+          <ellipse id="${p}r-brow" cx="385" cy="240" rx="48" ry="20" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('right','눈썹부위')"/>
+          <text x="385" y="246" text-anchor="middle" font-size="17" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">눈썹</text>
+          <ellipse id="${p}c-glabella" cx="300" cy="265" rx="38" ry="22" fill="rgba(168,85,247,0.10)" stroke="#a855f7" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('both','미간')"/>
+          <text x="300" y="271" text-anchor="middle" font-size="19" font-weight="800" fill="#a855f7" style="pointer-events:none" opacity=".9">미간</text>
+          <ellipse id="${p}l-temple" cx="55" cy="285" rx="42" ry="62" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('left','관자놀이')"/>
+          <text x="55" y="280" text-anchor="middle" font-size="15" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">관자</text>
+          <text x="55" y="297" text-anchor="middle" font-size="15" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">놀이</text>
+          <ellipse id="${p}r-temple" cx="545" cy="285" rx="42" ry="62" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('right','관자놀이')"/>
+          <text x="545" y="280" text-anchor="middle" font-size="15" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">관자</text>
+          <text x="545" y="297" text-anchor="middle" font-size="15" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">놀이</text>
+          <text x="150" y="490" text-anchor="middle" font-size="16" fill="#3b82f6" font-weight="600" opacity=".8">← 왼쪽</text>
+          <text x="450" y="490" text-anchor="middle" font-size="16" fill="#ef4444" font-weight="600" opacity=".8">오른쪽 →</text>
         </svg>
       </div>
     </div>
@@ -9027,13 +9031,13 @@ function getMainHeadSVG() {
       <div style="font-size:.68rem;color:var(--mu);font-weight:600;letter-spacing:.08em;margin-bottom:4px">후면</div>
       <div style="position:relative;display:inline-block;width:180px;max-width:44vw">
         <img src="icons/head-back.png" alt="후면" style="width:100%;border-radius:10px;pointer-events:none">
-        <svg viewBox="0 0 585 556" style="position:absolute;top:0;left:0;width:100%;height:100%">
-          <ellipse id="${p}l-occipital" cx="190" cy="370" rx="105" ry="100" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('left','후두부')"/>
-          <text x="190" y="376" text-anchor="middle" font-size="22" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">후두부</text>
-          <ellipse id="${p}r-occipital" cx="395" cy="370" rx="105" ry="100" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('right','후두부')"/>
-          <text x="395" y="376" text-anchor="middle" font-size="22" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">후두부</text>
-          <text x="190" y="545" text-anchor="middle" font-size="18" fill="#3b82f6" font-weight="600" opacity=".8">← 왼쪽</text>
-          <text x="395" y="545" text-anchor="middle" font-size="18" fill="#ef4444" font-weight="600" opacity=".8">오른쪽 →</text>
+        <svg viewBox="0 0 600 500" style="position:absolute;top:0;left:0;width:100%;height:100%">
+          <ellipse id="${p}l-occipital" cx="195" cy="330" rx="100" ry="95" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('left','후두부')"/>
+          <text x="195" y="336" text-anchor="middle" font-size="22" font-weight="700" fill="#3b82f6" style="pointer-events:none" opacity=".9">후두부</text>
+          <ellipse id="${p}r-occipital" cx="405" cy="330" rx="100" ry="95" fill="rgba(239,68,68,0.10)" stroke="#ef4444" stroke-width="2.5" style="cursor:pointer" onclick="toggleMainSite('right','후두부')"/>
+          <text x="405" y="336" text-anchor="middle" font-size="22" font-weight="700" fill="#ef4444" style="pointer-events:none" opacity=".9">후두부</text>
+          <text x="195" y="490" text-anchor="middle" font-size="16" fill="#3b82f6" font-weight="600" opacity=".8">← 왼쪽</text>
+          <text x="405" y="490" text-anchor="middle" font-size="16" fill="#ef4444" font-weight="600" opacity=".8">오른쪽 →</text>
         </svg>
       </div>
     </div>
