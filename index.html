@@ -3714,7 +3714,7 @@ function renderLogList() {
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`
+            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
             :((l.meds?.length||l.treatments?.length)?`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`:'')}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
@@ -3779,7 +3779,7 @@ function renderLogListInner() {
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`
+            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
             :((l.meds?.length||l.treatments?.length)?`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`:'')}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
@@ -3896,6 +3896,7 @@ function renderOutcomeCards() {
         <button onclick="rateOutcome(${idx},'same')" style="flex:1;padding:8px;border:2px solid #f59e0b;border-radius:8px;background:#f59e0b20;color:#b45309;font-size:.82rem;font-weight:700;cursor:pointer">🟡 비슷</button>
         <button onclick="rateOutcome(${idx},'worse')" style="flex:1;padding:8px;border:2px solid #ef4444;border-radius:8px;background:#ef444420;color:#ef4444;font-size:.82rem;font-weight:700;cursor:pointer">🔴 악화</button>
       </div>
+      <div style="margin-top:6px"><button onclick="rateOutcome(${idx},'unknown')" style="background:none;border:1px solid var(--bd);border-radius:6px;padding:3px 10px;font-size:.68rem;color:var(--mu);cursor:pointer">🤷 기억 안남</button></div>
     </div>`;
   }).join('');
 }
@@ -3925,7 +3926,10 @@ function editOutcome(logIdx) {
       <button onclick="updateOutcome(${logIdx},'same');closeConfirmModal()" style="flex:1;padding:10px;border:2px solid #f59e0b;border-radius:8px;background:#f59e0b20;color:#b45309;font-size:.85rem;font-weight:700;cursor:pointer">🟡 비슷</button>
       <button onclick="updateOutcome(${logIdx},'worse');closeConfirmModal()" style="flex:1;padding:10px;border:2px solid #ef4444;border-radius:8px;background:#ef444420;color:#ef4444;font-size:.85rem;font-weight:700;cursor:pointer">🔴 악화</button>
     </div>
-    <div style="text-align:center;margin-top:8px"><button onclick="updateOutcome(${logIdx},null);closeConfirmModal()" style="font-size:.7rem;color:var(--mu);background:none;border:none;cursor:pointer;text-decoration:underline">경과 삭제</button></div>`,
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+      <button onclick="updateOutcome(${logIdx},'unknown');closeConfirmModal()" style="font-size:.72rem;color:#6b7280;background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 10px;cursor:pointer">🤷 기억 안남</button>
+      <button onclick="updateOutcome(${logIdx},null);closeConfirmModal()" style="font-size:.7rem;color:var(--mu);background:none;border:none;cursor:pointer;text-decoration:underline">경과 삭제</button>
+    </div>`,
     []);
 }
 
