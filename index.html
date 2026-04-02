@@ -4664,7 +4664,7 @@ async function exportKeysEncrypted() {
   try {
     const key=await _deriveKey(pass);
     const iv=crypto.getRandomValues(new Uint8Array(12));
-    const data=new TextEncoder().encode(JSON.stringify({keys:S.keys,models:S.models}));
+    const data=new TextEncoder().encode(JSON.stringify(_getSettingsPayload()));
     const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,data);
     const payload=btoa(String.fromCharCode(...iv)+String.fromCharCode(...new Uint8Array(encrypted)));
     const blob=new Blob([payload],{type:'text/plain'});
@@ -4673,6 +4673,22 @@ async function exportKeysEncrypted() {
     document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
     showToast('🔐 키 백업 파일 저장됨');
   } catch(e){showToast('❌ 내보내기 실패: '+e.message,4000);}
+}
+
+function _getSettingsPayload() {
+  return {keys:S.keys,models:S.models,
+    ntfyOrangi:localStorage.getItem('om_ntfy_orangi')||'',
+    ntfyBung:localStorage.getItem('om_ntfy_bung')||'',
+    weatherKey:localStorage.getItem('om_weather_key')||'',
+    syncUrl:localStorage.getItem('om_quick_sync_url')||''};
+}
+function _restoreSettings(parsed) {
+  if(parsed.keys) Object.assign(S.keys,parsed.keys);
+  if(parsed.models) Object.assign(S.models,parsed.models);
+  if(parsed.ntfyOrangi) localStorage.setItem('om_ntfy_orangi',parsed.ntfyOrangi);
+  if(parsed.ntfyBung) localStorage.setItem('om_ntfy_bung',parsed.ntfyBung);
+  if(parsed.weatherKey) localStorage.setItem('om_weather_key',parsed.weatherKey);
+  if(parsed.syncUrl) localStorage.setItem('om_quick_sync_url',parsed.syncUrl);
 }
 
 // API 키 Google Drive 백업/복원
@@ -4685,7 +4701,7 @@ async function exportKeysToDrive() {
   try {
     const key=await _deriveKey(pass);
     const iv=crypto.getRandomValues(new Uint8Array(12));
-    const data=new TextEncoder().encode(JSON.stringify({keys:S.keys,models:S.models}));
+    const data=new TextEncoder().encode(JSON.stringify(_getSettingsPayload()));
     const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,data);
     const payload=btoa(String.fromCharCode(...iv)+String.fromCharCode(...new Uint8Array(encrypted)));
     const folderId=await getOrCreateFolder('Orangi Settings');
@@ -4712,14 +4728,13 @@ async function importKeysFromDrive() {
     const key=await _deriveKey(pass);
     const decrypted=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,encrypted);
     const parsed=JSON.parse(new TextDecoder().decode(decrypted));
-    if(parsed.keys) Object.assign(S.keys,parsed.keys);
-    if(parsed.models) Object.assign(S.models,parsed.models);
+    _restoreSettings(parsed);
     if(S._keyPin) await saveKeysEncrypted();
     else localStorage.setItem('om_keys',JSON.stringify(S.keys));
     localStorage.setItem('om_models',JSON.stringify(S.models));
     renderSidebarAIs();
     closeModal('keys-modal');openKeys();
-    showToast('☁️ Drive에서 키 복원 완료!');
+    showToast('☁️ Drive에서 설정 복원 완료!');
   } catch(e){showToast('❌ Drive 복원 실패 — 암호가 틀리거나 데이터가 손상됨',4000);}
 }
 
@@ -4737,8 +4752,7 @@ async function importKeysEncrypted() {
       const key=await _deriveKey(pass);
       const decrypted=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,encrypted);
       const parsed=JSON.parse(new TextDecoder().decode(decrypted));
-      if(parsed.keys) Object.assign(S.keys,parsed.keys);
-      if(parsed.models) Object.assign(S.models,parsed.models);
+      _restoreSettings(parsed);
       localStorage.setItem('om_keys',JSON.stringify(S.keys));
       localStorage.setItem('om_models',JSON.stringify(S.models));
       renderSidebarAIs();
