@@ -3809,6 +3809,26 @@ function toggleAllLogDates() {
 }
 
 // ── ntfy 푸시 알림 ──
+async function testNtfy() {
+  const bung=(document.getElementById('key-ntfy-bung')?.value||'').trim();
+  const orangi=(document.getElementById('key-ntfy-orangi')?.value||'').trim();
+  if(!bung&&!orangi){showToast('토픽을 먼저 입력하세요');return;}
+  var sent=0;
+  if(bung){
+    try{
+      const r=await fetch('https://ntfy.sh/'+encodeURIComponent(bung),{method:'POST',body:'🔔 테스트 알림 — 붕쌤 토픽 정상 작동!'});
+      if(r.ok){sent++;}else{showToast('❌ 붕쌤 토픽 실패: HTTP '+r.status,4000);return;}
+    }catch(e){showToast('❌ 네트워크 오류: '+e.message,4000);return;}
+  }
+  if(orangi){
+    try{
+      const r=await fetch('https://ntfy.sh/'+encodeURIComponent(orangi),{method:'POST',body:'🔔 테스트 알림 — 오랑이 토픽 정상 작동!'});
+      if(r.ok){sent++;}else{showToast('❌ 오랑이 토픽 실패: HTTP '+r.status,4000);return;}
+    }catch(e){showToast('❌ 네트워크 오류: '+e.message,4000);return;}
+  }
+  showToast('✅ 테스트 알림 '+sent+'건 전송 완료! ntfy 앱을 확인하세요.');
+}
+
 async function sendNtfyBung(entry) {
   const topic=localStorage.getItem('om_ntfy_bung');
   if(!topic||S.currentDomain!=='orangi-migraine') return;
@@ -4593,6 +4613,7 @@ function openKeys() {
       <input class="key-input ${localStorage.getItem('om_ntfy_bung')?'set':''}" type="text" id="key-ntfy-bung" value="${localStorage.getItem('om_ntfy_bung')||''}" placeholder="예: bung-notify-3k8m">
     </div>
     <div class="key-note">💡 오랑이 두통 기록 시 붕쌤에게 즉시 알림. 붕쌤 폰 ntfy 앱에서 같은 토픽 구독 필요.</div>
+    <button class="btn-cancel" onclick="testNtfy()" style="font-size:.68rem;margin-top:8px">🔔 ntfy 테스트 알림 보내기</button>
   </div>`;
   openModal('keys-modal');
   // #19 키 갱신 알림

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orangi-health-v9j';
+const CACHE_NAME = 'orangi-health-v9k';
 const PRECACHE = [
   './index.html',
   './style.css',
@@ -27,13 +27,14 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Never cache: Google auth/API, AI APIs, any google domain
+  // Never cache: Google auth/API, AI APIs, ntfy, any google domain
   if (url.hostname.includes('google') ||
       url.hostname.includes('gstatic') ||
       url.hostname.includes('googleapis') ||
       url.hostname.includes('anthropic') ||
       url.hostname.includes('openai') ||
-      url.hostname.includes('perplexity')) {
+      url.hostname.includes('perplexity') ||
+      url.hostname.includes('ntfy')) {
     return;
   }
 
