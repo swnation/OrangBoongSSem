@@ -3816,11 +3816,8 @@ async function sendNtfyBung(entry) {
   const sites=(entry.sites||[]).join(', ');
   const meds=(entry.meds||[]).join(', ');
   const tx=(entry.treatments||[]).join(', ');
-  const msg=`${entry.datetime.slice(11,16)} ${nrs} ${sites}\n${meds?'💊 '+meds:''}${tx?' 🩺 '+tx:''}`.trim();
-  try{
-    const resp=await fetch('https://ntfy.sh/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:topic,title:'🤕 오랑이 두통 기록',message:msg,priority:4,tags:['headache']})});
-    if(!resp.ok) console.warn('ntfy bung failed:',resp.status,await resp.text());
-  }catch(e){console.warn('ntfy bung error:',e);}
+  const body=`🤕 오랑이 두통 기록\n${entry.datetime.slice(11,16)} ${nrs} ${sites}\n${meds?'💊 '+meds:''}${tx?' 🩺 '+tx:''}`.trim();
+  try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body});}catch(e){console.warn('ntfy bung:',e);}
 }
 
 async function sendNtfyFollowup(entry) {
@@ -3828,13 +3825,9 @@ async function sendNtfyFollowup(entry) {
   if(!topic||S.currentDomain!=='orangi-migraine') return;
   const nrs=entry.nrs>=0?`NRS ${entry.nrs}`:'';
   const tx=[...(entry.meds||[]),...(entry.treatments||[])].join(', ');
-  const msg=`${entry.datetime.slice(11,16)} ${nrs} ${tx} → 지금 어때요?`;
-  // 2시간 후 알림 (setTimeout — 앱이 켜져 있을 때만)
+  const body=`🤕 두통 경과 확인\n${entry.datetime.slice(11,16)} ${nrs} ${tx} → 지금 어때요?`;
   setTimeout(async()=>{
-    try{
-      const resp=await fetch('https://ntfy.sh/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:topic,title:'🤕 두통 경과 확인',message:msg,priority:4,tags:['headache','followup']})});
-      if(!resp.ok) console.warn('ntfy followup failed:',resp.status);
-    }catch(e){console.warn('ntfy followup error:',e);}
+    try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body});}catch(e){console.warn('ntfy followup:',e);}
   },2*60*60*1000);
 }
 
