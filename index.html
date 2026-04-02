@@ -3714,7 +3714,8 @@ function renderLogList() {
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`:''}
+            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`
+            :((l.meds?.length||l.treatments?.length)?`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`:'')}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
@@ -3778,7 +3779,8 @@ function renderLogListInner() {
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`:''}
+            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':'🔴악화'}</span>`
+            :((l.meds?.length||l.treatments?.length)?`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`:'')}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}

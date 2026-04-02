@@ -146,10 +146,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
   </div>
   <div class="tabs">
     <button class="tab active" onclick="switchTab('form')">✏️ 기록</button>
+    <button class="tab" onclick="switchTab('outcome')">🩺 경과</button>
     <button class="tab" onclick="switchTab('list')">📋 목록</button>
   </div>
   <div class="body" id="tab-form">
     <!-- form is rendered by JS -->
+  </div>
+  <div class="body" id="tab-outcome" style="display:none">
   </div>
   <div class="body" id="tab-list" style="display:none">
   </div>
@@ -261,11 +264,13 @@ function updatePendingCount() {
 // ── Tab switching ──
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', (tab==='form' && i===0) || (tab==='list' && i===1));
+    t.classList.toggle('active', (tab==='form'&&i===0)||(tab==='outcome'&&i===1)||(tab==='list'&&i===2));
   });
   document.getElementById('tab-form').style.display = tab==='form' ? '' : 'none';
+  document.getElementById('tab-outcome').style.display = tab==='outcome' ? '' : 'none';
   document.getElementById('tab-list').style.display = tab==='list' ? '' : 'none';
   if (tab==='list') renderList();
+  if (tab==='outcome') renderOutcomeTab();
 }
 
 // ── Chip toggle ──
@@ -676,6 +681,95 @@ async function sendQuickNtfy(entry) {
       const fBody='🤕 두통 경과 확인\n'+((entry.datetime||'').slice(11,16)+' '+nrs+' '+(meds||'')+' → 지금 어때요?');
       try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',body:fBody.trim()});}catch(e){}
     },2*60*60*1000);
+  }
+}
+
+// ── 경과(Outcome) 탭 ──
+function renderOutcomeTab() {
+  const el=document.getElementById('tab-outcome');
+  const logs=getQuickLogs().slice().reverse();
+  const now=Date.now()+9*3600000;
+  // 최근 7일 내 투약/처치가 있는 기록
+  const recent=logs.filter(l=>{
+    const hasTx=(l.meds?.length>0)||(l.treatments?.length>0);
+    const age=now-new Date(l.datetime).getTime();
+    return hasTx&&age<7*86400000;
+  });
+
+  let html='<div style="margin-bottom:12px">'
+    +'<button class="btn-save" onclick="testFollowupNtfy()" style="background:#7c3aed;padding:10px;font-size:.82rem;margin-bottom:12px">🔔 경과 알림 테스트 보내기</button>'
+    +'</div>';
+
+  if(!recent.length){
+    html+='<div class="empty">최근 7일 내 투약/처치 기록이 없습니다.<br>두통 기록을 먼저 작성하세요.</div>';
+    el.innerHTML=html;return;
+  }
+
+  html+='<div style="font-size:.75rem;color:var(--mu);margin-bottom:10px">최근 기록의 경과를 평가하세요. 평가는 즉시 저장됩니다.</div>';
+
+  recent.forEach(function(l,i){
+    const idx=getQuickLogs().findIndex(function(x){return x.id===l.id;});
+    const date=(l.datetime||'').slice(5,10);
+    const time=(l.datetime||'').slice(11,16);
+    const nrs=l.nrs>=0?'NRS '+l.nrs:'';
+    const tx=[].concat(l.meds||[],l.treatments||[]).join(', ');
+    const outcome=l.outcome||{};
+    const rating=outcome.rating||null;
+    const ratingLabels={better:'🟢 호전',same:'🟡 비슷',worse:'🔴 악화'};
+    const ratingColors={better:'#16a34a',same:'#f59e0b',worse:'#dc2626'};
+
+    html+='<div class="log-item" style="border-left:3px solid '+(rating?ratingColors[rating]:'var(--ac)')+'">'
+      +'<div class="log-item-head">'
+      +'<span class="log-item-date">'+date+' '+time+'</span>'
+      +(l.nrs>=0?'<span class="log-item-nrs" style="background:'+nrsColor(l.nrs)+'">'+l.nrs+'</span>':'')
+      +(rating?'<span style="margin-left:auto;font-size:.75rem;font-weight:600;color:'+ratingColors[rating]+'">'+ratingLabels[rating]+'</span>':'')
+      +'</div>'
+      +'<div style="font-size:.78rem;color:var(--mu);margin-bottom:8px">'+esc(tx)+'</div>'
+      +'<div style="display:flex;gap:6px">'
+      +'<button onclick="rateQuickOutcome('+idx+',\'better\')" style="flex:1;padding:8px;border:1.5px solid #16a34a;border-radius:8px;background:'+(rating==='better'?'#16a34a':'#f0fdf4')+';color:'+(rating==='better'?'#fff':'#16a34a')+';font-size:.78rem;font-weight:600;cursor:pointer">🟢 호전</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'same\')" style="flex:1;padding:8px;border:1.5px solid #f59e0b;border-radius:8px;background:'+(rating==='same'?'#f59e0b':'#fffbeb')+';color:'+(rating==='same'?'#fff':'#f59e0b')+';font-size:.78rem;font-weight:600;cursor:pointer">🟡 비슷</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'worse\')" style="flex:1;padding:8px;border:1.5px solid #dc2626;border-radius:8px;background:'+(rating==='worse'?'#dc2626':'#fef2f2')+';color:'+(rating==='worse'?'#fff':'#dc2626')+';font-size:.78rem;font-weight:600;cursor:pointer">🔴 악화</button>'
+      +'</div>'
+      +(rating?'<div style="margin-top:6px;text-align:right"><button onclick="clearQuickOutcome('+idx+')" style="background:none;border:none;font-size:.68rem;color:var(--mu);cursor:pointer;text-decoration:underline">경과 삭제</button></div>':'')
+      +'</div>';
+  });
+
+  el.innerHTML=html;
+}
+
+function rateQuickOutcome(idx,rating) {
+  var logs=getQuickLogs();
+  if(!logs[idx]) return;
+  var now=new Date(Date.now()+9*3600000).toISOString();
+  logs[idx].outcome={rating:rating,ratedAt:now};
+  saveQuickLogs(logs);
+  renderOutcomeTab();
+  showToast('✅ 경과 저장됨: '+(rating==='better'?'호전':rating==='same'?'비슷':'악화'));
+  // 클라우드 동기화
+  cloudSave([logs[idx]]);
+}
+
+function clearQuickOutcome(idx) {
+  var logs=getQuickLogs();
+  if(!logs[idx]) return;
+  delete logs[idx].outcome;
+  saveQuickLogs(logs);
+  renderOutcomeTab();
+  showToast('경과 삭제됨');
+  cloudSave([logs[idx]]);
+}
+
+async function testFollowupNtfy() {
+  var topic=localStorage.getItem('om_ntfy_orangi');
+  if(!topic){showToast('⚠️ 오랑이 경과 알림 토픽이 설정되지 않았습니다');return;}
+  try{
+    var r=await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:'🔔 경과 알림 테스트\n이 알림이 보이면 정상 작동합니다!'});
+    if(r.ok) showToast('✅ 경과 테스트 알림 전송됨!');
+    else showToast('❌ 실패: HTTP '+r.status,4000);
+  }catch(e){showToast('❌ 네트워크 오류: '+e.message,4000);}
+  var bungTopic=localStorage.getItem('om_ntfy_bung');
+  if(bungTopic){
+    try{await fetch('https://ntfy.sh/'+encodeURIComponent(bungTopic),{method:'POST',body:'🔔 붕쌤 알림 테스트\n이 알림이 보이면 정상 작동합니다!'});}catch(e){}
   }
 }
 
