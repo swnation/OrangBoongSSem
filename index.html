@@ -540,7 +540,6 @@ const MODEL_OPTIONS = {
   grok: [
     {value:'grok-3',label:'Grok 3 (추천)'},
     {value:'grok-3-mini',label:'Grok 3 Mini (빠름)'},
-    {value:'grok-3',label:'Grok 3 Multi-Agent',multi:true},
   ],
   perp: [
     {value:'sonar',label:'Sonar (추천)'},
@@ -562,7 +561,7 @@ const DEFAULT_PRICE_TABLE = {
   'gpt-5.4':{in:2.50,out:15.00},'gpt-5.3-chat-latest':{in:2.50,out:10.00},'gpt-4o':{in:2.50,out:10.00},
   'claude-sonnet-4-6':{in:3.00,out:15.00},'claude-opus-4-6':{in:5.00,out:25.00},'claude-haiku-4-5-20251001':{in:1.00,out:5.00},
   'gemini-2.5-pro':{in:1.25,out:10.00},'gemini-2.5-flash':{in:0.15,out:0.60},
-  'grok-3':{in:3.00,out:15.00},'grok-3-mini':{in:0.30,out:0.50},
+  'grok-3':{in:3.00,out:15.00},'grok-3-mini':{in:0.30,out:0.50},'grok-4.20-multi-agent':{in:5.00,out:25.00},
   'sonar':{in:1.00,out:1.00},'sonar-pro':{in:3.00,out:15.00},
 };
 
@@ -1855,15 +1854,19 @@ SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요.
   const userPrompt=`${contextFull}\n\n[질문]\n${q}`;
 
   try {
-    const savedModel=S.models.grok;
-    // Multi-Agent 모델이 있으면 사용, 없으면 기본 grok 모델로 폴백
-    // Multi-Agent는 grok-3로 실행 (프롬프트로 멀티에이전트 시뮬레이션)
-    S.models.grok='grok-3';
-    const raw=await callAIStream('grok',system,userPrompt,(chunk)=>{
-      const el=document.getElementById('grok-timer');
-      if(el) el.textContent=Math.round((Date.now()-timerStart)/1000)+'s (스트리밍...)';
-    });
-    S.models.grok=savedModel;
+    // Grok 4.20 Multi-Agent: /v1/responses 엔드포인트
+    const maModel='grok-4.20-multi-agent';
+    const r=await fetchWithRetry('https://api.x.ai/v1/responses',{method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.keys.grok},
+      body:JSON.stringify({model:maModel,instructions:system,
+        input:[{role:'user',content:userPrompt}]})});
+    if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error('Grok: '+(d.error?.message||r.status));}
+    const data=await r.json();
+    // 응답 텍스트 추출
+    const raw=(data.output||[]).filter(o=>o.type==='message').map(o=>(o.content||[]).filter(c=>c.type==='output_text').map(c=>c.text).join('')).join('\n')||data.output_text||JSON.stringify(data);
+    // 토큰 비용 기록
+    const mu=data.usage||{};
+    recordUsage('grok',maModel,mu.input_tokens||0,mu.output_tokens||0);
 
     // JSON 추출 (기존 Claude runFinalSummary와 동일한 파싱)
     let parsed;
