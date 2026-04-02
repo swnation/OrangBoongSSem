@@ -3941,7 +3941,12 @@ async function saveLogEntry() {
   const triggers=[];document.querySelectorAll('.log-chip.sel[data-group="trigger"]').forEach(el=>triggers.push(el.dataset.val));
   const triggerOther=document.getElementById('trigger-other')?.value.trim();if(triggerOther)triggers.push(triggerOther);
   // 7-7: 생리주기 교차 태그 자동 추가
-  if(S.currentDomain==='orangi-migraine'){const mTag=getMenstrualTag();if(mTag&&triggers.indexOf(mTag)<0)triggers.push(mTag);}
+  if (S.currentDomain === 'orangi-migraine') {
+    const mTag = getMenstrualTag();
+    if (mTag && !triggers.includes(mTag)) {
+      triggers.push(mTag);
+    }
+  }
   const symptoms=[];document.querySelectorAll('.log-chip.sel[data-group="sym"]').forEach(el=>symptoms.push(el.dataset.val));
   const symOther=document.getElementById('sym-other')?.value.trim();if(symOther)symptoms.push(symOther);
   const meds=[];document.querySelectorAll('.log-chip.sel[data-group="med"]').forEach(el=>meds.push(el.dataset.val));
@@ -5405,61 +5410,14 @@ function isFertileWindow(dateStr, ovDate) {
   return diff >= -3 && diff <= 3;
 }
 
-function renderCycleTracker() {
-  var m = getBrkMaster();
-  if (!m) return '<div class="hint">데이터를 불러오는 중...</div>';
-  var cycles = m.menstrualCycles.slice().sort(function(a,b){return b.startDate.localeCompare(a.startDate);});
-  var avgLen = getAvgCycleLength(cycles);
-  var lastCycle = cycles[0] || null;
-
-  // Calendar: current month
-  var today = kstToday();
-  var calMonth = S._brkCalMonth || today.slice(0,7);
+function buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDays) {
   var year = parseInt(calMonth.slice(0,4));
   var month = parseInt(calMonth.slice(5,7));
   var firstDay = new Date(year, month-1, 1).getDay();
   var daysInMonth = new Date(year, month, 0).getDate();
-
-  // Build period/fertile maps for this month
-  var periodDays = {};
-  var fertileDays = {};
-  var ovDays = {};
-  cycles.forEach(function(c) {
-    var s = new Date(c.startDate+'T00:00:00');
-    var e = c.endDate ? new Date(c.endDate+'T00:00:00') : new Date(s.getTime() + 4*86400000);
-    for (var d = new Date(s); d <= e; d.setDate(d.getDate()+1)) {
-      periodDays[d.toISOString().slice(0,10)] = true;
-    }
-    var ovD = getOvulationDate(c.startDate, c.length || avgLen);
-    ovDays[ovD] = true;
-    for (var i = -3; i <= 3; i++) {
-      var fd = new Date(ovD+'T00:00:00');
-      fd.setDate(fd.getDate()+i);
-      fertileDays[fd.toISOString().slice(0,10)] = true;
-    }
-  });
-  // Predict next cycle if last cycle exists
-  if (lastCycle) {
-    var nextStart = new Date(lastCycle.startDate+'T00:00:00');
-    nextStart.setDate(nextStart.getDate() + avgLen);
-    for (var pd = 0; pd < 5; pd++) {
-      var pdate = new Date(nextStart.getTime() + pd*86400000);
-      var pstr = pdate.toISOString().slice(0,10);
-      if (!periodDays[pstr]) periodDays[pstr] = 'predicted';
-    }
-    var nextOv = getOvulationDate(nextStart.toISOString().slice(0,10), avgLen);
-    if (!ovDays[nextOv]) ovDays[nextOv] = 'predicted';
-    for (var fi = -3; fi <= 3; fi++) {
-      var fdd = new Date(nextOv+'T00:00:00');
-      fdd.setDate(fdd.getDate()+fi);
-      var fstr = fdd.toISOString().slice(0,10);
-      if (!fertileDays[fstr]) fertileDays[fstr] = 'predicted';
-    }
-  }
-
   var dayNames = ['일','월','화','수','목','금','토'];
-  var calCells = dayNames.map(function(d){return '<div style="text-align:center;font-size:.65rem;color:var(--mu);font-weight:600">'+d+'</div>';}).join('');
-  for (var blank = 0; blank < firstDay; blank++) calCells += '<div></div>';
+  var cells = dayNames.map(function(d){return '<div style="text-align:center;font-size:.65rem;color:var(--mu);font-weight:600">'+d+'</div>';}).join('');
+  for (var blank = 0; blank < firstDay; blank++) cells += '<div></div>';
   for (var day = 1; day <= daysInMonth; day++) {
     var ds = calMonth+'-'+(day<10?'0':'')+day;
     var isPeriod = periodDays[ds];
@@ -5476,23 +5434,26 @@ function renderCycleTracker() {
     else if (isFertile === true) { bg = '#ede9fe'; color = '#8b5cf6'; }
     else if (isFertile === 'predicted') { bg = '#f5f3ff'; color = '#a78bfa'; }
     if (isToday) border = '2px solid var(--ac)';
-    calCells += '<div onclick="brkTogglePeriodDay(\''+ds+'\')" style="text-align:center;padding:4px 0;font-size:.78rem;border-radius:6px;cursor:pointer;background:'+bg+';color:'+color+';border:'+border+';font-weight:'+(isToday?'700':'400')+'">'+day+(isOv?'<div style=\\"font-size:.5rem\\">🟣</div>':'')+'</div>';
+    cells += '<div onclick="brkTogglePeriodDay(\''+ds+'\')" style="text-align:center;padding:4px 0;font-size:.78rem;border-radius:6px;cursor:pointer;background:'+bg+';color:'+color+';border:'+border+';font-weight:'+(isToday?'700':'400')+'">'+day+(isOv?'<div style=\\"font-size:.5rem\\">🟣</div>':'')+'</div>';
   }
+  return cells;
+}
 
-  var nextInfo = '';
-  if (lastCycle) {
-    var daysSinceLMP = Math.round((new Date(today+'T00:00:00') - new Date(lastCycle.startDate+'T00:00:00')) / 86400000);
-    var daysUntilNext = avgLen - daysSinceLMP;
-    var nextOvDate = getOvulationDate(lastCycle.startDate, avgLen);
-    nextInfo = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
-      + '<span class="log-tag" style="background:#fee2e2;color:#dc2626">D+'+daysSinceLMP+'</span>'
-      + '<span class="log-tag" style="background:#ede9fe;color:#7c3aed">배란 추정 '+nextOvDate.slice(5)+'</span>'
-      + '<span class="log-tag" style="background:#f0f9ff;color:#0284c7">다음 생리 '+(daysUntilNext>0?daysUntilNext+'일 후':'예정일 지남')+'</span>'
-      + '<span class="log-tag" style="background:#f5f5f5;color:var(--mu)">평균 '+avgLen+'일</span>'
-      + '</div>';
-  }
+function renderNextCycleInfo(today, lastCycle, avgLen) {
+  if (!lastCycle) return '';
+  var daysSinceLMP = Math.round((new Date(today+'T00:00:00') - new Date(lastCycle.startDate+'T00:00:00')) / 86400000);
+  var daysUntilNext = avgLen - daysSinceLMP;
+  var nextOvDate = getOvulationDate(lastCycle.startDate, avgLen);
+  return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
+    + '<span class="log-tag" style="background:#fee2e2;color:#dc2626">D+'+daysSinceLMP+'</span>'
+    + '<span class="log-tag" style="background:#ede9fe;color:#7c3aed">배란 추정 '+nextOvDate.slice(5)+'</span>'
+    + '<span class="log-tag" style="background:#f0f9ff;color:#0284c7">다음 생리 '+(daysUntilNext>0?daysUntilNext+'일 후':'예정일 지남')+'</span>'
+    + '<span class="log-tag" style="background:#f5f5f5;color:var(--mu)">평균 '+avgLen+'일</span>'
+    + '</div>';
+}
 
-  var recentHtml = cycles.slice(0,3).map(function(c,i){
+function renderRecentCycles(cycles, avgLen) {
+  return cycles.slice(0,3).map(function(c,i){
     return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.78rem">'
       + '<span style="color:#dc2626;font-weight:600">'+esc(c.startDate.slice(5))+'</span>'
       + (c.endDate ? '<span style="color:var(--mu)">~ '+esc(c.endDate.slice(5))+'</span>' : '')
@@ -5502,6 +5463,41 @@ function renderCycleTracker() {
       + '<button class="accum-del" onclick="brkDeleteCycle('+i+')" style="margin-left:auto" title="삭제">🗑</button>'
       + '</div>';
   }).join('');
+}
+
+function renderCycleTracker() {
+  var m = getBrkMaster();
+  if (!m) return '<div class="hint">데이터를 불러오는 중...</div>';
+  var cycles = m.menstrualCycles.slice().sort(function(a,b){return b.startDate.localeCompare(a.startDate);});
+  var avgLen = getAvgCycleLength(cycles);
+  var lastCycle = cycles[0] || null;
+  var today = kstToday();
+  var calMonth = S._brkCalMonth || today.slice(0,7);
+  var year = parseInt(calMonth.slice(0,4));
+  var month = parseInt(calMonth.slice(5,7));
+
+  // Build period/fertile/ovulation maps
+  var periodDays = {}, fertileDays = {}, ovDays = {};
+  cycles.forEach(function(c) {
+    var s = new Date(c.startDate+'T00:00:00');
+    var e = c.endDate ? new Date(c.endDate+'T00:00:00') : new Date(s.getTime() + 4*86400000);
+    for (var d = new Date(s); d <= e; d.setDate(d.getDate()+1)) periodDays[d.toISOString().slice(0,10)] = true;
+    var ovD = getOvulationDate(c.startDate, c.length || avgLen);
+    ovDays[ovD] = true;
+    for (var i = -3; i <= 3; i++) { var fd = new Date(ovD+'T00:00:00'); fd.setDate(fd.getDate()+i); fertileDays[fd.toISOString().slice(0,10)] = true; }
+  });
+  if (lastCycle) {
+    var nextStart = new Date(lastCycle.startDate+'T00:00:00');
+    nextStart.setDate(nextStart.getDate() + avgLen);
+    for (var pd = 0; pd < 5; pd++) { var pdate = new Date(nextStart.getTime() + pd*86400000); var pstr = pdate.toISOString().slice(0,10); if (!periodDays[pstr]) periodDays[pstr] = 'predicted'; }
+    var nextOv = getOvulationDate(nextStart.toISOString().slice(0,10), avgLen);
+    if (!ovDays[nextOv]) ovDays[nextOv] = 'predicted';
+    for (var fi = -3; fi <= 3; fi++) { var fdd = new Date(nextOv+'T00:00:00'); fdd.setDate(fdd.getDate()+fi); var fstr = fdd.toISOString().slice(0,10); if (!fertileDays[fstr]) fertileDays[fstr] = 'predicted'; }
+  }
+
+  var calCells = buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDays);
+  var nextInfo = renderNextCycleInfo(today, lastCycle, avgLen);
+  var recentHtml = renderRecentCycles(cycles, avgLen);
 
   return '<div>'
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
@@ -5729,6 +5725,7 @@ async function brkSetWeight(val) {
   if (!m.dailyChecks[selDate].orangi) m.dailyChecks[selDate].orangi = {};
   m.dailyChecks[selDate].orangi.weight = parseFloat(val) || null;
   await saveBrkMaster();
+  renderView('meds');
 }
 
 async function brkSetExercise(val) {
@@ -6022,16 +6019,7 @@ function renderDrugSafety() {
     // Try to find safety info by matching English drug names
     var safety = _PREGNANCY_SAFETY[name];
     if (!safety) {
-      // Try English mapping
-      var engName = null;
-      if (typeof _DRUG_NAMES !== 'undefined') {
-        for (var i = 0; i < _DRUG_NAMES.length; i++) {
-          if (_DRUG_NAMES[i][0] === name || _DRUG_NAMES[i][1] === name) {
-            engName = _DRUG_NAMES[i][1];
-            break;
-          }
-        }
-      }
+      var engName = _DRUG_NAMES[name];
       if (engName) safety = _PREGNANCY_SAFETY[engName];
     }
 
