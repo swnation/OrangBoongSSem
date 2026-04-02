@@ -540,7 +540,7 @@ const MODEL_OPTIONS = {
   grok: [
     {value:'grok-3',label:'Grok 3 (추천)'},
     {value:'grok-3-mini',label:'Grok 3 Mini (빠름)'},
-    {value:'grok-4.20-multi-agent-0309',label:'Grok 4.20 Multi-Agent'},
+    {value:'grok-3',label:'Grok 3 Multi-Agent',multi:true},
   ],
   perp: [
     {value:'sonar',label:'Sonar (추천)'},
@@ -562,7 +562,7 @@ const DEFAULT_PRICE_TABLE = {
   'gpt-5.4':{in:2.50,out:15.00},'gpt-5.3-chat-latest':{in:2.50,out:10.00},'gpt-4o':{in:2.50,out:10.00},
   'claude-sonnet-4-6':{in:3.00,out:15.00},'claude-opus-4-6':{in:5.00,out:25.00},'claude-haiku-4-5-20251001':{in:1.00,out:5.00},
   'gemini-2.5-pro':{in:1.25,out:10.00},'gemini-2.5-flash':{in:0.15,out:0.60},
-  'grok-3':{in:3.00,out:15.00},'grok-3-mini':{in:0.30,out:0.50},'grok-4.20-multi-agent-0309':{in:5.00,out:25.00},
+  'grok-3':{in:3.00,out:15.00},'grok-3-mini':{in:0.30,out:0.50},
   'sonar':{in:1.00,out:1.00},'sonar-pro':{in:3.00,out:15.00},
 };
 
@@ -1378,7 +1378,7 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
   if(aiId==='grok') {
     const r=await fetchWithRetry('https://api.x.ai/v1/chat/completions',{method:'POST',
       headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},
-      body:JSON.stringify({model,max_tokens:4000,stream:true,
+      body:JSON.stringify({model,max_tokens:4000,stream:true,stream_options:{include_usage:true},
         messages:[{role:'system',content:system},{role:'user',content:user}]}),signal});
     if(!r.ok){const d=await r.json();throw new Error('Grok: '+(d.error?.message||r.status));}
     let text='',inT=0,outT=0;
@@ -1857,8 +1857,8 @@ SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요.
   try {
     const savedModel=S.models.grok;
     // Multi-Agent 모델이 있으면 사용, 없으면 기본 grok 모델로 폴백
-    const maModel=MODEL_OPTIONS.grok?.find(m=>m.value.includes('multi-agent'))?.value;
-    S.models.grok=maModel||savedModel;
+    // Multi-Agent는 grok-3로 실행 (프롬프트로 멀티에이전트 시뮬레이션)
+    S.models.grok='grok-3';
     const raw=await callAIStream('grok',system,userPrompt,(chunk)=>{
       const el=document.getElementById('grok-timer');
       if(el) el.textContent=Math.round((Date.now()-timerStart)/1000)+'s (스트리밍...)';
