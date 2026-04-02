@@ -1,6 +1,6 @@
 # HANDOFF — v9.2 세션 이어받기 가이드
 
-## 현재 상태: v9.2 (대규모 업데이트 완료)
+## 현재 상태: v9.2 (기능 1~6 완료, 기능 7 붕룩이 대시보드 구현 완료)
 
 ### 이번 세션 완료 작업 (PR #50~#71)
 
@@ -32,10 +32,12 @@
 ### 주요 아키텍처
 - **AI 5개**: GPT, Claude, Gemini, Grok(xAI), Perplexity
 - **세션 모드 5가지**: 일반 협진 / 디베이트 / Grok Multi-Agent / 빠른 질문 / 경량 모드
+- **비용 최적화**: R1에서 Grok 제외, R2+에서 Perplexity 제외 (디베이트 모드 예외)
 - **경과 체계**: better/same/worse (기존 good/partial/none 하위 호환)
 - **ntfy 알림**: 붕쌤 즉시 + 오랑이 2시간 후 경과
-- **컨텍스트**: `getFullContext(question)` 공통 헬퍼
+- **컨텍스트**: `getFullContext(question)` 공통 헬퍼 — `buildUserPrompt`와 `runGrokMultiAgent`에서 공유
 - **SSOT 백업**: Drive "Orangi SSOT Backups" 폴더, 최근 5개
+- **붕룩이 대시보드**: 생리주기/일일체크/검사결과/마일스톤/약물안전 5개 탭
 
 ### 백업 브랜치 (최근 5개 유지)
 - `backup/v9.2` ← v9.2 전체 기능
@@ -46,7 +48,7 @@
 > GitHub Actions가 5개 초과 시 자동 삭제
 
 ### 남은 작업 (SPEC-v9.2 참조)
-- **기능 7: 붕룩이 전용 대시보드** — 생리주기/일일체크/검사결과/마일스톤/약물안전 (대규모)
+- ~~**기능 7: 붕룩이 전용 대시보드** — 생리주기/일일체크/검사결과/마일스톤/약물안전~~ ✅ 완료
 - quick.html에 트리거 칩 + 경과 카드 미적용 (메인 앱만 구현)
 - ntfy 2시간 알림: 현재 setTimeout (앱 켜있을 때만). GAS 서버 트리거가 최종 해결책
 - startRandomDebate() 랜덤 팀 디베이트 — Grok 제안, 미구현
