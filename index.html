@@ -2208,12 +2208,12 @@ function renderView(view) {
   const area=document.getElementById('content');
   if(view==='home') area.innerHTML=renderHome();
   else if(view==='session') area.innerHTML=renderSession();
-  else if(view==='log') area.innerHTML=renderLog();
+  else if(view==='log') { try{area.innerHTML=renderLog();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 로그 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;} }
   else if(view==='history') area.innerHTML=renderHistory();
   else if(view==='templates') area.innerHTML=renderTemplates();
   else if(view==='meds') { area.innerHTML=renderMedsView(); loadAllUserDomains().then(()=>{if(S.currentView==='meds')area.innerHTML=renderMedsView();}); }
   else if(view==='stats') area.innerHTML=renderStatsView();
-  else if(view==='timeline') { area.innerHTML=renderTimelineView(); loadAllUserDomains().then(()=>{if(S.currentView==='timeline')area.innerHTML=renderTimelineView();}); }
+  else if(view==='timeline') { try{area.innerHTML=renderTimelineView();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 타임라인 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;} loadAllUserDomains().then(()=>{if(S.currentView==='timeline'){try{area.innerHTML=renderTimelineView();}catch(e){}};}); }
   else if(view==='crosslog') { area.innerHTML=renderCrossLogView(); loadAllUserDomains().then(()=>{if(S.currentView==='crosslog')area.innerHTML=renderCrossLogView();}); }
   else if(view==='usage') area.innerHTML=renderUsageView();
   else area.innerHTML='<div class="hint">뷰를 선택하세요.</div>';
