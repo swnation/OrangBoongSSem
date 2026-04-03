@@ -1435,9 +1435,12 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
         try{const ev=JSON.parse(line.slice(6));
           if(ev.choices?.[0]?.delta?.content){text+=ev.choices[0].delta.content;onChunk(text);}
           if(ev.usage){inT=ev.usage.prompt_tokens||0;outT=ev.usage.completion_tokens||0;}
+          if(ev.x_groq?.usage){inT=ev.x_groq.usage.prompt_tokens||inT;outT=ev.x_groq.usage.completion_tokens||outT;}
         }catch(e){}
       }
     }
+    // Fallback: usage가 0이면 텍스트 길이로 추정 (Grok 4 등 usage 미반환 시)
+    if(!inT&&!outT&&text.length>0){inT=Math.round((system.length+user.length)/3.5);outT=Math.round(text.length/3.5);}
     recordUsage(aiId,model,inT,outT);
     return text;
   }
@@ -3131,20 +3134,20 @@ function renderUsageView() {
     const aiDetail=Object.entries(AI_DEFS).map(([aiId,def])=>{
       const a=d.byAI?.[aiId];
       if(!a) return '';
-      return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0 3px 18px;font-size:.72rem">
-        <div style="width:6px;height:6px;border-radius:50%;background:${def.color};flex-shrink:0"></div>
-        <span style="min-width:60px;color:var(--mu)">${def.name}</span>
+      return `<div style="display:flex;align-items:center;gap:4px;padding:3px 0 3px 14px;font-size:.68rem">
+        <div style="width:5px;height:5px;border-radius:50%;background:${def.color};flex-shrink:0"></div>
+        <span style="flex:2;color:var(--mu)">${def.name}</span>
         <span style="font-family:var(--mono);color:var(--mu);flex:1;text-align:right">${krwShort(a.today)}</span>
-        <span style="font-family:var(--mono);min-width:100px;text-align:right">${krwShort(a.month)}</span>
-        <span style="font-family:var(--mono);min-width:100px;text-align:right">${krwShort(a.all)}</span>
+        <span style="font-family:var(--mono);flex:1;text-align:right">${krwShort(a.month)}</span>
+        <span style="font-family:var(--mono);flex:1;text-align:right">${krwShort(a.all)}</span>
       </div>`;
     }).filter(Boolean).join('');
     return `<div>
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.82rem;cursor:pointer" onclick="const det=this.nextElementSibling;det.style.display=det.style.display==='none'?'block':'none';this.querySelector('.dc-arrow').textContent=det.style.display==='none'?'▸':'▾'">
-        <span style="min-width:130px"><span class="dc-arrow" style="font-size:.6rem;color:var(--mu2);margin-right:4px">▸</span>${d.label}</span>
-        <span style="font-family:var(--mono);color:var(--mu);flex:1;text-align:right">${krwShort(d.today)}</span>
-        <span style="font-family:var(--mono);min-width:100px;text-align:right">${krwShort(d.month)}</span>
-        <span style="font-family:var(--mono);min-width:100px;text-align:right">${krwShort(d.all)}</span>
+      <div style="display:flex;align-items:center;gap:4px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.78rem;cursor:pointer" onclick="const det=this.nextElementSibling;det.style.display=det.style.display==='none'?'block':'none';this.querySelector('.dc-arrow').textContent=det.style.display==='none'?'▸':'▾'">
+        <span style="flex:2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="dc-arrow" style="font-size:.6rem;color:var(--mu2);margin-right:2px">▸</span>${d.label}</span>
+        <span style="font-family:var(--mono);color:var(--mu);flex:1;text-align:right;font-size:.72rem">${krwShort(d.today)}</span>
+        <span style="font-family:var(--mono);flex:1;text-align:right;font-size:.72rem">${krwShort(d.month)}</span>
+        <span style="font-family:var(--mono);flex:1;text-align:right;font-size:.72rem">${krwShort(d.all)}</span>
       </div>
       <div style="display:none;background:var(--sf2);border-radius:6px;margin:2px 0 4px;padding:4px 0">${aiDetail}</div>
     </div>`;
@@ -3203,8 +3206,8 @@ function renderUsageView() {
 
   ${Object.keys(domainCosts).length>1?`<div class="card">
     <div class="card-title">🔗 시스템별 비용</div>
-    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:.62rem;color:var(--mu2)">
-      <span style="min-width:130px">시스템</span><span style="flex:1;text-align:right">오늘</span><span style="min-width:100px;text-align:right">이번 달</span><span style="min-width:100px;text-align:right">누적</span>
+    <div style="display:flex;align-items:center;gap:4px;padding:4px 0;font-size:.58rem;color:var(--mu2)">
+      <span style="flex:2">시스템</span><span style="flex:1;text-align:right">오늘</span><span style="flex:1;text-align:right">이번달</span><span style="flex:1;text-align:right">누적</span>
     </div>
     ${domainRows}
   </div>`:''}
@@ -8815,7 +8818,11 @@ function toggleNotifications() {
   if(!('Notification' in window)) { showToast('이 브라우저는 알림을 지원하지 않습니다'); return; }
   const perm = Notification.permission;
   if(perm==='granted') {
-    showToast('✅ 알림이 이미 활성화되어 있습니다. 오랑이가 기록하면 알림이 옵니다.');
+    // 알림 켜짐/꺼짐 토글
+    const muted=localStorage.getItem('om_notif_muted')==='1';
+    localStorage.setItem('om_notif_muted',muted?'0':'1');
+    showToast(muted?'🔔 알림 켜짐':'🔕 알림 꺼짐 — 기록 알림이 표시되지 않습니다');
+    updateNotifButton();
   } else if(perm==='denied') {
     showToast('⚠️ 알림이 차단됨 — 주소창 왼쪽 🔒 → 알림 → 허용으로 변경해주세요', 5000);
   } else {
@@ -8823,19 +8830,26 @@ function toggleNotifications() {
   }
 }
 
+function isNotifEnabled() {
+  return ('Notification' in window) && Notification.permission==='granted' && localStorage.getItem('om_notif_muted')!=='1';
+}
+
 function updateNotifButton() {
   const btn=document.getElementById('notif-toggle-btn');
   if(!btn) return;
   if(!('Notification' in window)) { btn.textContent='🔕 알림 미지원'; return; }
   const perm=Notification.permission;
-  if(perm==='granted') btn.textContent='🔔 알림 켜짐';
+  if(perm==='granted') {
+    const muted=localStorage.getItem('om_notif_muted')==='1';
+    btn.textContent=muted?'🔕 알림 꺼짐':'🔔 알림 켜짐';
+  }
   else if(perm==='denied') btn.textContent='🔕 알림 차단됨';
   else btn.textContent='🔔 알림 설정';
 }
 setTimeout(updateNotifButton, 1000);
 
 function sendLogNotification(entry) {
-  if(!('Notification' in window)||Notification.permission!=='granted') return;
+  if(!isNotifEnabled()) return;
   const lc=DC().logConfig;
   const dc=DC();
   const nrsText=entry.nrs>=0?`NRS ${entry.nrs}/10`:(entry.mood||'기록');
