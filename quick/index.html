@@ -64,6 +64,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .chip.sel-sym{background:#8b5cf6;border-color:#8b5cf6}
 .chip.sel-med{background:#f59e0b;border-color:#f59e0b;color:var(--ink)}
 .chip.sel-tx{background:#10b981;border-color:#10b981}
+.chip.sel-trigger{background:#92400e;border-color:#92400e}
 .chip.sel-pain{background:#ec4899;border-color:#ec4899}
 .other-row{display:flex;gap:6px;margin-top:6px}
 .other-input{flex:1;border:1.5px solid var(--bd);border-radius:8px;padding:6px 10px;font-family:var(--font);font-size:.8rem;outline:none;background:var(--sf);color:var(--ink)}
@@ -187,6 +188,7 @@ const SYMPTOMS = ['구역','어지러움','손발저림','빛과민','소리과�
 const PAIN_TYPES = ['욱신거림','쥐어짜는','찌르는','묵직한','쑤시는','타는 듯한','전기 오는 듯한'];
 const MEDS = ['AAP 500mg','Loxoprofen','타 NSAID','Metoclopramide'];
 const TREATMENTS = ['GON block','LON block','SPG block'];
+const TRIGGERS = ['수면부족','과수면','스트레스','피로','카페인','알코올','공복','불규칙식사','강한빛','소음','냄새','운동후','긴장/자세','생리전후','날씨변화'];
 
 const LS_KEY = 'om_quick_logs';
 
@@ -194,6 +196,7 @@ const LS_KEY = 'om_quick_logs';
 const _QC_KEY_MAP={
   'med':'om_custom_meds_orangi-migraine','sym':'om_custom_syms_orangi-migraine',
   'tx':'om_custom_tx_orangi-migraine','pain':'om_custom_pain_orangi-migraine',
+  'trigger':'om_custom_triggers_orangi-migraine',
   'site-left':'om_custom_sites_left_orangi-migraine','site-right':'om_custom_sites_right_orangi-migraine'
 };
 function getCustom(key) {
@@ -321,14 +324,15 @@ function getQuickEntries() {
 (function recoverCustomsFromLogs(){
   const logs=getQuickLogs();
   if(!logs.length) return;
-  const sets={med:new Set(MEDS),sym:new Set(SYMPTOMS),tx:new Set(TREATMENTS),pain:new Set(PAIN_TYPES)};
+  const sets={med:new Set(MEDS),sym:new Set(SYMPTOMS),tx:new Set(TREATMENTS),pain:new Set(PAIN_TYPES),trigger:new Set(TRIGGERS)};
   const siteL=new Set(SITES.left||[]),siteR=new Set(SITES.right||[]);
-  const found={med:new Set(),sym:new Set(),tx:new Set(),pain:new Set(),'site-left':new Set(),'site-right':new Set()};
+  const found={med:new Set(),sym:new Set(),tx:new Set(),pain:new Set(),trigger:new Set(),'site-left':new Set(),'site-right':new Set()};
   logs.forEach(l=>{
     (l.meds||[]).forEach(v=>{if(!sets.med.has(v))found.med.add(v);});
     (l.symptoms||[]).forEach(v=>{if(!sets.sym.has(v))found.sym.add(v);});
     (l.treatments||[]).forEach(v=>{if(!sets.tx.has(v))found.tx.add(v);});
     (l.painType||[]).forEach(v=>{if(!sets.pain.has(v))found.pain.add(v);});
+    (l.triggers||[]).forEach(v=>{if(!sets.trigger.has(v))found.trigger.add(v);});
     (l.sites||[]).forEach(s=>{
       const m=s.match(/^(왼쪽|오른쪽)\s+(.+)$/);
       if(!m) return;
@@ -576,6 +580,13 @@ function renderForm(entry) {
     return `<span class="chip ${sel?'sel sel-tx':''}" data-val="${esc(t)}" data-group="tx" onclick="toggleChip(this,'sel-tx')">${esc(t)}</span>`;
   }).join('');
 
+  const customTriggers = getCustom('trigger');
+  const extraTriggers = (e.triggers||[]).filter(t => !TRIGGERS.includes(t) && !customTriggers.includes(t));
+  const triggerChips = [...TRIGGERS, ...customTriggers, ...extraTriggers].map(t => {
+    const sel = e.triggers?.includes(t);
+    return `<span class="chip ${sel?'sel sel-trigger':''}" data-val="${esc(t)}" data-group="trigger" onclick="toggleChip(this,'sel-trigger')">${esc(t)}</span>`;
+  }).join('');
+
   const datetime = e.datetime || '';
   const dateVal = datetime ? datetime.split('T')[0] : now.date;
   const timeRaw = datetime ? datetime.split('T')[1] : now.time;
@@ -660,8 +671,17 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
+      <div class="section-title">⚡ 추정 트리거</div>
+      <div class="chips" id="trigger-chips">${triggerChips}</div>
+      <div class="other-row">
+        <input class="other-input" id="trigger-other" placeholder="직접 입력">
+        <button class="btn-other-add" onclick="addOtherChip('trigger-other','trigger-chips','trigger','sel-trigger')">+</button>
+      </div>
+    </div>
+
+    <div class="section">
       <div class="section-title">메모</div>
-      <textarea class="memo" id="q-memo" rows="3" placeholder="상태, 트리거 등 자유 기록">${esc(e.memo||'')}</textarea>
+      <textarea class="memo" id="q-memo" rows="3" placeholder="상태 등 자유 기록">${esc(e.memo||'')}</textarea>
     </div>
 
     <button class="btn-save" id="q-save-btn" onclick="this.disabled=true;this.textContent='저장 중...';saveEntry().finally(()=>{const b=document.getElementById('q-save-btn');if(b){b.disabled=false;b.textContent='💾 기록 저장';}})">${isEdit ? '✏️ 수정 완료' : '💾 기록 저장'}</button>
@@ -695,6 +715,7 @@ function renderRecentQuickLogs() {
           ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
           ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
           ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
+          ...(l.triggers||[]).map(t => `<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`),
         ].join('');
         return `<div class="log-item" style="opacity:${l.synced?'.6':'1'}">
           <div class="log-item-head">
@@ -745,6 +766,8 @@ async function saveEntry() {
   document.querySelectorAll('.chip.sel[data-group="med"]').forEach(el => meds.push(el.dataset.val));
   const treatments = [];
   document.querySelectorAll('.chip.sel[data-group="tx"]').forEach(el => treatments.push(el.dataset.val));
+  const triggers = [];
+  document.querySelectorAll('.chip.sel[data-group="trigger"]').forEach(el => triggers.push(el.dataset.val));
   const memo = document.getElementById('q-memo')?.value.trim() || '';
 
   const editId = document.getElementById('q-edit-id')?.value;
@@ -753,7 +776,7 @@ async function saveEntry() {
   if (editId) {
     const idx = logs.findIndex(l => String(l.id) === editId);
     if (idx >= 0) {
-      const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, painType, symptoms, meds, treatments, memo, synced: false };
+      const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, painType, symptoms, meds, treatments, triggers, memo, synced: false };
       logs[idx] = updated;
       saveQuickLogs(logs);
       showToast('💾 저장 중...');
@@ -767,7 +790,7 @@ async function saveEntry() {
   const entry = {
     id: Date.now(),
     datetime: `${date}T${time}`,
-    nrs, sites, painType, symptoms, meds, treatments, memo,
+    nrs, sites, painType, symptoms, meds, treatments, triggers, memo,
     synced: false,
     createdAt: new Date(Date.now() + 9*3600000).toISOString()
   };
@@ -789,7 +812,8 @@ async function sendQuickNtfy(entry) {
   const sites=(entry.sites||[]).join(', ');
   const meds=(entry.meds||[]).join(', ');
   const tx=(entry.treatments||[]).join(', ');
-  const body='🤕 오랑이 두통 기록 (빠른기록)\n'+((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim()+'\n'+(meds?'💊 '+meds:'')+(tx?' 🩺 '+tx:'');
+  const trg=(entry.triggers||[]).join(', ');
+  const body='🤕 오랑이 두통 기록 (빠른기록)\n'+((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim()+'\n'+(meds?'💊 '+meds:'')+(tx?' 🩺 '+tx:'')+(trg?'\n⚡ '+trg:'');
   try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
   // 2시간 후 경과 확인 (ntfy 예약 발송 — 서버측 타이머, 앱 꺼도 동작)
   const orangiTopic=localStorage.getItem('om_ntfy_orangi');
@@ -907,6 +931,7 @@ function renderList() {
       ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
       ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
       ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
+      ...(l.triggers||[]).map(t => `<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`),
     ].join('');
     const nrsHtml = l.nrs >= 0
       ? `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`
