@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orangi-quick-v3';
+const CACHE_NAME = 'orangi-quick-v4';
 const PRECACHE = [
   './',
   '../style.css',
