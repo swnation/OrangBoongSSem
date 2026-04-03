@@ -1556,7 +1556,7 @@ async function runBasicMode() {
   S.generating=true; S._dirty=true;
   S.session.currentRound=1;
   document.getElementById('session-round-badge').textContent='R1';
-  const stopAllBar=document.getElementById('stop-all-bar');if(stopAllBar)stopAllBar.style.display='';
+  const stopAllBar=document.getElementById('stop-all-bar');if(stopAllBar)stopAllBar.style.display='flex';
   if(!S.session.rounds[0]) S.session.rounds[0]={round:1,answers:{},errors:{}};
 
   // Hide non-basic AI cards
@@ -1754,7 +1754,7 @@ async function runRound(roundNum, errorsOnly) {
   S.generating = true; S._dirty = true;
   S.session.currentRound = roundNum;
   document.getElementById('session-round-badge').textContent = `R${roundNum}`;
-  const stopAllBar=document.getElementById('stop-all-bar');if(stopAllBar)stopAllBar.style.display='';
+  const stopAllBar=document.getElementById('stop-all-bar');if(stopAllBar)stopAllBar.style.display='flex';
   if(!S.session.rounds[roundNum-1]) S.session.rounds[roundNum-1]={round:roundNum,answers:{},errors:{}};
   enabledAIs.forEach(id=>setCardStatus(id,'loading'));
   // Hide disabled AI cards (only when running full round, not error-only retry)
