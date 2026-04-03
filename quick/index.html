@@ -149,12 +149,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
         <div style="flex:1">
           <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">붕쌤 (즉시 알림)</div>
           <input class="settings-input" id="ntfy-bung-input" placeholder="붕쌤 ntfy 토픽"
-            onchange="localStorage.setItem('om_ntfy_bung',this.value.trim());syncCustomsToCloud()">
+            onchange="localStorage.setItem('om_ntfy_bung',this.value.trim());syncNtfyConfig()">
         </div>
         <div style="flex:1">
           <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">오랑이 (경과 알림)</div>
           <input class="settings-input" id="ntfy-orangi-input" placeholder="오랑이 ntfy 토픽"
-            onchange="localStorage.setItem('om_ntfy_orangi',this.value.trim());syncCustomsToCloud()">
+            onchange="localStorage.setItem('om_ntfy_orangi',this.value.trim());syncNtfyConfig()">
         </div>
       </div>
       <div class="settings-note">기록 저장 시 붕쌤에게 즉시 알림, 오랑이에게 2시간 후 경과 확인 알림을 보냅니다.</div>
@@ -247,6 +247,37 @@ function syncCustomsToCloud() {
   },500);
 }
 
+// ── 설정(ntfy 등)을 quickLogs 안에 특수 항목으로 저장 → 기존 클라우드 동기화로 기기간 공유 ──
+const _CONFIG_ID='_quick_config';
+function getQuickConfig(){
+  const logs=getQuickLogs();
+  return logs.find(l=>l.id===_CONFIG_ID)||{};
+}
+function saveQuickConfig(cfg){
+  const logs=getQuickLogs();
+  const idx=logs.findIndex(l=>l.id===_CONFIG_ID);
+  const entry={...cfg,id:_CONFIG_ID,_type:'config'};
+  if(idx>=0) logs[idx]=entry; else logs.push(entry);
+  saveQuickLogs(logs);
+  return entry;
+}
+function applyQuickConfig(){
+  const cfg=getQuickConfig();
+  if(cfg.ntfy_bung&&!localStorage.getItem('om_ntfy_bung')) localStorage.setItem('om_ntfy_bung',cfg.ntfy_bung);
+  if(cfg.ntfy_orangi&&!localStorage.getItem('om_ntfy_orangi')) localStorage.setItem('om_ntfy_orangi',cfg.ntfy_orangi);
+  // 항상 최신으로 덮어쓰기 (클라우드에서 온 값이 더 최신)
+  if(cfg.ntfy_bung) localStorage.setItem('om_ntfy_bung',cfg.ntfy_bung);
+  if(cfg.ntfy_orangi) localStorage.setItem('om_ntfy_orangi',cfg.ntfy_orangi);
+}
+function syncNtfyConfig(){
+  const nb=localStorage.getItem('om_ntfy_bung')||'';
+  const no=localStorage.getItem('om_ntfy_orangi')||'';
+  if(!nb&&!no) return;
+  const entry=saveQuickConfig({ntfy_bung:nb,ntfy_orangi:no});
+  // 클라우드에도 즉시 전송
+  cloudSave([entry]);
+}
+
 // ── Helpers ──
 function kstNow() {
   const d = new Date(Date.now() + 9*3600000);
@@ -260,6 +291,10 @@ function esc(s) {
 function getQuickLogs() {
   try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }
   catch { return []; }
+}
+// 기록만 반환 (설정 항목 제외)
+function getQuickEntries() {
+  return getQuickLogs().filter(l=>l._type!=='config');
 }
 
 // v9.0 부위명 마이그레이션
@@ -641,7 +676,7 @@ function renderForm(entry) {
 function renderRecentQuickLogs() {
   const container = document.getElementById('recent-quick-logs');
   if (!container) return;
-  const logs = getQuickLogs().slice(-5).reverse();
+  const logs = getQuickEntries().slice(-5).reverse();
   if (!logs.length) { container.innerHTML = ''; return; }
   container.innerHTML = `
     <div style="margin-top:20px;padding-top:14px;border-top:1.5px solid var(--bd)">
@@ -767,7 +802,7 @@ async function sendQuickNtfy(entry) {
 // ── 경과(Outcome) 탭 ──
 function renderOutcomeTab() {
   const el=document.getElementById('tab-outcome');
-  const logs=getQuickLogs().slice().reverse();
+  const logs=getQuickEntries().slice().reverse();
   const now=Date.now()+9*3600000;
   // 최근 7일 내 투약/처치가 있는 기록
   const recent=logs.filter(l=>{
@@ -858,7 +893,7 @@ async function testFollowupNtfy() {
 
 // ── List ──
 function renderList() {
-  const logs = getQuickLogs().slice().reverse();
+  const logs = getQuickEntries().slice().reverse();
   if (!logs.length) {
     document.getElementById('tab-list').innerHTML = '<div class="empty">아직 기록이 없어요.<br>두통이 생기면 ✏️ 기록 탭에서 빠르게 남겨보세요.</div>';
     return;
@@ -1043,10 +1078,13 @@ async function fetchCloudStatus() {
       renderRecentQuickLogs();
       updatePendingCount();
     }
+    // 클라우드에서 받은 설정(ntfy 등) 적용
+    applyQuickConfig();
   } catch (e) { /* 오프라인 — 로컬 캐시 사용 */ }
 }
 
 // ── Init ──
+applyQuickConfig(); // 로컬 기록에서도 설정 복원
 renderForm();
 updatePendingCount();
 // 앱 시작 시 클라우드에서 전체 동기화
