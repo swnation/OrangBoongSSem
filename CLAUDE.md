@@ -66,14 +66,47 @@ UTC+9 오프셋을 수동 적용하는 방식.
 - `callAIStream(aiId, system, user, onChunk, signal)`: SSE 스트리밍 + AbortController 지원
 - `callAI(aiId, system, user)`: 비스트리밍 래퍼 (요약 등에 사용)
 - AI 5개: gpt(OpenAI), claude(Anthropic), gemini(Google), grok(xAI), perp(Perplexity)
+- **Grok Multi-Agent**: `grok-4.20-multi-agent` 모델, `/v1/responses` 엔드포인트 (chat/completions 아님)
 - 비용 최적화: R1에서 Grok 제외, R2+에서 Perplexity 제외
+- Grok 스트리밍: `stream_options: {include_usage: true}` 필수 (비용 추적용)
 - OAuth 토큰 자동 갱신 (`scheduleTokenRefresh`, `ensureValidToken`)
+
+### ntfy 알림
+- **quick.html에서만 발송** (메인앱은 본인 기록이라 불필요)
+- 붕쌤 토픽: 즉시 알림 (`POST ntfy.sh/TOPIC` 단순 POST, 커스텀 헤더 금지→CORS)
+- 오랑이 토픽: 2시간 후 예약 발송 (`At: 2h` 헤더 → ntfy 서버측 타이머)
+- SW에서 ntfy.sh 도메인 제외 필수
+
+### 경과(Outcome) 체계
+- `outcome.rating`: `better` / `same` / `worse` / `unknown` (기존 good/partial/none 하위 호환)
+- quick.html에 🩺 경과 탭 (기록/경과/목록 3탭)
+- 메인앱 로그 목록에 경과 태그 클릭→수정 모달
+- 미평가 기록에 "+ 경과" 태그 표시
+
+### 붕룩이 대시보드
+- `renderBungrukiDashboard()` → meds 뷰에서 bungruki 도메인일 때 호출
+- 5개 탭: `_brkDashTab` = cycle / daily / lab / milestone / safety
+- `getBrkMaster()` / `saveBrkMaster()` 헬퍼
+- `getMenstrualTag()`: 생리주기→편두통 트리거 교차 태그
+- 📷 사진 OCR: AI Vision으로 생리주기 앱 스크린샷에서 날짜 추출
+- 사이드바 탭명: 🍼 임신 준비 대시보드 / 📝 일지 기록 / 📈 임신 준비 통계
+
+### 머리 다이어그램
+- `icons/head-front.png`, `icons/head-back.png` (600x500 동일 크기)
+- `<img>` + 투명 SVG 오버레이 (인터랙티브 클릭 영역)
+- `syncMainHeadDiagram()`: 선택 상태 동기화
+- index.html + quick.html 양쪽 동일 이미지 사용
 
 ### 자동완성 시스템
 - 내장 DB: 약품 80개 + 증상 187개 + 치료 114개 + 질환 100개
-- 약품 한영 매핑: 310쌍 (`_DRUG_NAMES`)
+- 약품 한영 매핑: 310쌍 (`_DRUG_NAMES` — 객체, 배열 아님!)
 - 식약처 API: 실시간 검색 + `MAIN_ITEM_INGR`에서 동적 매핑 학습
 - `setupAutocomplete(inputId, list, useAPI)`: datalist 기반, `_acSetup` 플래그로 중복 방지
+
+### 커스텀(+고정) 항목
+- `_CUSTOM_KEYS`: `['meds','syms','tx','sites_left','sites_right','pain','triggers']`
+- localStorage에 저장 + `_syncCustomItemsToMaster()` + `saveMaster()`로 Drive 동기화
+- `addCustomChip/addCustomSite/addCustomPainType/addCustomTrigger` 모두 동기화 호출 필수
 
 ### 질환 관리
 - 유저 단위 통합 (`getAllUserConditions`)
@@ -127,6 +160,10 @@ backup/v8.3  ← KST/한영매핑/PDF/캘린더/시술추적
 7. onclick에 사용자/AI 텍스트 직접 삽입 금지 → 전역 변수 참조 방식 사용
 8. 자동완성 리스너 중복 방지: `input._acSetup` 플래그 확인
 9. API 키는 AES-GCM 암호화 후 localStorage 저장 (`om_keys_enc`). 평문 저장 금지
+10. +고정 항목 추가 시 `_syncCustomItemsToMaster()` + `saveMaster()` 호출 필수
+11. ntfy 호출은 단순 POST만 (커스텀 헤더/JSON 금지 → CORS 문제)
+12. Grok Multi-Agent는 `/v1/responses` 엔드포인트 사용 (chat/completions 아님)
+13. 머리 이미지: SVG가 아닌 PNG + 투명 SVG 오버레이. `icons/head-front.png`, `head-back.png`
 10. 버전 업 시 `APP_VERSION` 배열에 새 항목 추가 필수
 11. 버전 업 시 **백업 자동화 절차** (위 "버전업 시 백업 자동화 절차" 섹션) 반드시 수행
 12. 버전 업 시 `codeBackupToDrive()` 실행하여 Google Drive에 코드+맥락 백업 필수 (사용자가 로그인 상태일 때 자동 호출)
