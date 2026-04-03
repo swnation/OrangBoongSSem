@@ -6691,23 +6691,35 @@ function renderMedsViewLegacy() {
       </div>
       <div class="dx-body">
         ${c.diagnosisDate?`<strong>${isBungruki?'시작':'진단'}:</strong> ${esc(c.diagnosisDate)}<br>`:''}
-        ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'현재 투약'}</div>
+        ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'■ 현재 투약'}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">${c.medsList.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`).join('')}</div></div>`:''}
         ${c.medications&&!c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'현재 투약'}</div>${esc(c.medications)}</div>`:''}
         ${c.medHistory?.length?`<div class="dx-section">
           <div class="dx-section-title" style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="const t=this.parentElement.querySelector('.mh-timeline');t.style.display=t.style.display==='none'?'block':'none';this.querySelector('.mh-arr').textContent=t.style.display==='none'?'▸':'▾'">
             <span class="mh-arr">▸</span> 💊 투약 변경 이력 <span style="font-size:.6rem;color:var(--mu2);font-weight:400">${c.medHistory.length}건</span>
           </div>
-          <div class="mh-timeline" style="display:none;margin-top:6px;padding-left:12px;border-left:2px solid var(--bd)">
-            ${c.medHistory.slice().reverse().map((h,i)=>`<div style="position:relative;padding:6px 0 10px 12px;font-size:.75rem${i<c.medHistory.length-1?';border-bottom:1px dashed var(--bd)':''}">
-              <div style="position:absolute;left:-7px;top:10px;width:10px;height:10px;border-radius:50%;background:${h.type==='start'?'#22c55e':h.type==='stop'?'#ef4444':'var(--ac)'};border:2px solid var(--sf)"></div>
-              <div style="font-weight:600;color:var(--ink)">${esc(h.date)} <span style="font-weight:400;color:var(--mu2)">${{change:'변경',start:'시작',stop:'중단',dose:'용량 조절'}[h.type]||h.type}</span></div>
-              ${h.detail?`<div style="color:var(--ink);margin-top:2px">${esc(h.detail)}</div>`:''}
-              ${h.added?.length?`<div style="color:#16a34a;margin-top:2px">+ ${h.added.map(m=>esc(m)).join(', ')}</div>`:''}
-              ${h.removed?.length?`<div style="color:#dc2626;margin-top:2px">− ${h.removed.map(m=>esc(m)).join(', ')}</div>`:''}
-              ${h.meds?.length?`<div style="color:var(--mu);margin-top:2px">→ ${h.meds.map(m=>esc(m)).join(', ')}</div>`:''}
-              ${h.reason?`<div style="color:var(--mu2);margin-top:2px;font-size:.7rem">사유: ${esc(h.reason)}</div>`:''}
-            </div>`).join('')}
+          <div class="mh-timeline" style="display:none;margin-top:8px">
+            ${c.medHistory.slice().reverse().map((h,i,arr)=>{
+              const typeLabel={change:'변경',start:'최초 처방',stop:'중단',dose:'용량 조절'}[h.type]||h.type;
+              const dotColor=h.type==='start'?'#22c55e':h.type==='stop'?'#ef4444':'var(--ac)';
+              const isFirst=i===arr.length-1;
+              const borderColor=isFirst?'#22c55e':h.type==='stop'?'#ef4444':'var(--ac)';
+              return `<div style="border-left:3px solid ${borderColor};margin-bottom:8px;padding:8px 10px;border-radius:0 8px 8px 0;background:var(--sf)">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
+                  <span style="font-size:.78rem;font-weight:600;color:var(--ink)">${esc(h.date)}</span>
+                  <span style="font-size:.65rem;padding:1px 8px;border-radius:10px;background:${dotColor}18;color:${dotColor};font-weight:600">${typeLabel}</span>
+                </div>
+                ${h.detail?`<div style="font-size:.75rem;color:var(--ink);margin-bottom:4px">${esc(h.detail)}</div>`:''}
+                ${h.added?.length?`<div style="font-size:.72rem;margin-bottom:2px"><span style="color:#16a34a;font-weight:600">+ 추가:</span> ${h.added.map(m=>`<span style="display:inline-block;padding:1px 6px;margin:1px;border-radius:4px;background:#dcfce7;color:#15803d;font-size:.68rem">${esc(m)}</span>`).join('')}</div>`:''}
+                ${h.removed?.length?`<div style="font-size:.72rem;margin-bottom:2px"><span style="color:#dc2626;font-weight:600">− 제거:</span> ${h.removed.map(m=>`<span style="display:inline-block;padding:1px 6px;margin:1px;border-radius:4px;background:#fef2f2;color:#b91c1c;font-size:.68rem;text-decoration:line-through">${esc(m)}</span>`).join('')}</div>`:''}
+                ${h.meds?.length?`<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd)">
+                  <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">${isFirst?'처방 약물':'변경 후 약물'} (${h.meds.length}개)</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:3px">${h.meds.map(m=>`<span style="display:inline-block;padding:1px 6px;border-radius:4px;background:${isFirst?'#dbeafe':'#f3f4f6'};color:${isFirst?'#1e40af':'#374151'};font-size:.67rem">${esc(m)}</span>`).join('')}</div>
+                </div>`:''}
+                ${h.reason?`<div style="font-size:.68rem;color:var(--mu2);margin-top:4px">💬 ${esc(h.reason)}</div>`:''}
+              </div>`;
+            }).join('')}
           </div>
         </div>`:''}
         ${c.drugResponse?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'효과/반응':'약물 반응'}</div>${esc(c.drugResponse)}</div>`:''}
@@ -6810,7 +6822,8 @@ function renderMedsViewLegacy() {
                 <option value="change">변경</option><option value="start">시작</option><option value="stop">중단</option><option value="dose">용량 조절</option>
               </select>
             </div>
-            <input class="dx-form-input" id="dx-mh-detail" placeholder="내용: 예) Amitriptyline 10mg → 25mg, Topiramate 추가" style="margin-bottom:6px">
+            <input class="dx-form-input" id="dx-mh-detail" placeholder="변경 내용: 예) Amitriptyline 10mg → 25mg, Topiramate 추가" style="margin-bottom:6px">
+            <input class="dx-form-input" id="dx-mh-meds" placeholder="당시 약물 세트 (쉼표 구분): 예) Escitalopram 10mg, Bupropion 150mg" style="margin-bottom:6px">
             <input class="dx-form-input" id="dx-mh-reason" placeholder="사유: 예) 통증 조절 불충분" style="margin-bottom:6px">
             <button class="btn-accum-add" onclick="addManualMedHistory()" style="font-size:.72rem">+ 이력 추가</button>
             <div id="dx-mh-list" style="margin-top:6px"></div>
@@ -6844,12 +6857,15 @@ function addManualMedHistory() {
   const date=document.getElementById('dx-mh-date')?.value;
   const type=document.getElementById('dx-mh-type')?.value||'change';
   const detail=(document.getElementById('dx-mh-detail')?.value||'').trim();
+  const medsRaw=(document.getElementById('dx-mh-meds')?.value||'').trim();
   const reason=(document.getElementById('dx-mh-reason')?.value||'').trim();
   if(!date){showToast('날짜를 선택하세요.');return;}
-  if(!detail){showToast('내용을 입력하세요.');return;}
-  _dxManualHistory.push({date,type,detail,reason});
+  if(!detail&&!medsRaw){showToast('변경 내용 또는 당시 약물을 입력하세요.');return;}
+  const meds=medsRaw?medsRaw.split(',').map(s=>s.trim()).filter(Boolean):[];
+  _dxManualHistory.push({date,type,detail,meds,reason});
   document.getElementById('dx-mh-date').value='';
   document.getElementById('dx-mh-detail').value='';
+  document.getElementById('dx-mh-meds').value='';
   document.getElementById('dx-mh-reason').value='';
   renderManualHistList();
 }
@@ -6857,12 +6873,15 @@ function removeManualHist(idx){_dxManualHistory.splice(idx,1);renderManualHistLi
 function renderManualHistList(){
   const el=document.getElementById('dx-mh-list');if(!el) return;
   const typeLabels={change:'변경',start:'시작',stop:'중단',dose:'용량 조절'};
-  el.innerHTML=_dxManualHistory.map((h,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px dashed var(--bd);font-size:.72rem">
-    <span style="color:var(--ac);font-weight:600">${esc(h.date)}</span>
-    <span style="background:var(--sf2);padding:1px 6px;border-radius:4px">${typeLabels[h.type]||h.type}</span>
-    <span style="flex:1">${esc(h.detail)}</span>
-    ${h.reason?`<span style="color:var(--mu2)">${esc(h.reason)}</span>`:''}
-    <span style="cursor:pointer;color:var(--r3)" onclick="removeManualHist(${i})">✕</span>
+  el.innerHTML=_dxManualHistory.map((h,i)=>`<div style="padding:6px 0;border-bottom:1px dashed var(--bd);font-size:.72rem">
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="color:var(--ac);font-weight:600">${esc(h.date)}</span>
+      <span style="background:var(--sf2);padding:1px 6px;border-radius:4px">${typeLabels[h.type]||h.type}</span>
+      <span style="flex:1">${h.detail?esc(h.detail):''}</span>
+      <span style="cursor:pointer;color:var(--r3)" onclick="removeManualHist(${i})">✕</span>
+    </div>
+    ${h.meds?.length?`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:3px">${h.meds.map(m=>`<span style="padding:1px 6px;border-radius:4px;background:#f3f4f6;color:#374151;font-size:.65rem">${esc(m)}</span>`).join('')}</div>`:''}
+    ${h.reason?`<div style="color:var(--mu2);margin-top:2px;font-size:.65rem">💬 ${esc(h.reason)}</div>`:''}
   </div>`).join('');
 }
 
@@ -7059,9 +7078,12 @@ async function saveCondition() {
       data.medHistory.push({date:kstToday(),type:histType,added,removed,meds:[...newMeds],reason});
       data.drugChangeDate=kstToday();
     }
-    // Merge manual history entries
+    // Merge manual history entries (with optional meds snapshot)
     _dxManualHistory.forEach(h=>{
-      data.medHistory.push({date:h.date,type:h.type,detail:h.detail,reason:h.reason});
+      const entry={date:h.date,type:h.type,reason:h.reason};
+      if(h.detail) entry.detail=h.detail;
+      if(h.meds?.length) entry.meds=[...h.meds];
+      data.medHistory.push(entry);
     });
     if(data.medHistory.length) data.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
     if(editDomain===targetDomain) {
@@ -7087,7 +7109,10 @@ async function saveCondition() {
       data.medHistory.push({date:kstToday(),type:'start',added:[...data.medsList],removed:[],meds:[...data.medsList],reason:'최초 등록'});
     }
     _dxManualHistory.forEach(h=>{
-      data.medHistory.push({date:h.date,type:h.type,detail:h.detail,reason:h.reason});
+      const entry={date:h.date,type:h.type,reason:h.reason};
+      if(h.detail) entry.detail=h.detail;
+      if(h.meds?.length) entry.meds=[...h.meds];
+      data.medHistory.push(entry);
     });
     if(data.medHistory.length) data.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
     ds.master.conditions.push(data);
