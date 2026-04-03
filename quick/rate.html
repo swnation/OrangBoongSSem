@@ -91,11 +91,11 @@ function showEntry(id){
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
   const sites=(entry.sites||[]).join(', ');
   const meds=(entry.meds||[]).join(', ');
-  el.innerHTML=`<b>${dt.slice(0,10)} ${dt.slice(11,16)}</b> ${nrs} ${sites}${meds?' · 💊'+meds:''}`;
+  el.textContent=`${dt.slice(0,10)} ${dt.slice(11,16)} ${nrs} ${sites}${meds?' · 💊'+meds:''}`;
   el.style.display='';
 }
 
-function rate(rating){
+async function rate(rating){
   const {id}=parseHash();
   const logs=getLogs();
   let idx=-1;
@@ -121,7 +121,7 @@ function rate(rating){
   saveLogs(logs);
 
   // 클라우드에도 동기화
-  syncToCloud(logs[idx]);
+  await syncToCloud(logs[idx]);
 
   // 완료 UI
   document.getElementById('buttons').style.display='none';
@@ -133,7 +133,7 @@ function rate(rating){
 
 async function syncToCloud(entry){
   try{
-    const url=localStorage.getItem('om_quick_sync_url');
+    const url=localStorage.getItem('om_quick_sync_url')||'https://script.google.com/macros/s/AKfycbzYF46qeLJRGIQsqfXbic6ITRGKr1eA9chrVJ8Fu5_gM7TDSYUFlpaWQGmSR9RdAACjzw/exec';
     if(!url) return;
     await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'save',entries:[entry]}),redirect:'follow'});
