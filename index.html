@@ -6708,7 +6708,7 @@ function renderMedsViewLegacy() {
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
                   <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
                   <span style="font-size:.78rem;font-weight:600;color:var(--ink)">${esc(h.date)}</span>
-                  <span style="font-size:.65rem;padding:1px 8px;border-radius:10px;background:${dotColor}18;color:${dotColor};font-weight:600">${typeLabel}</span>
+                  <span style="font-size:.65rem;padding:1px 8px;border-radius:10px;background:color-mix(in srgb, ${dotColor}, transparent 90%);color:${dotColor};font-weight:600">${typeLabel}</span>
                 </div>
                 ${h.detail?`<div style="font-size:.75rem;color:var(--ink);margin-bottom:4px">${esc(h.detail)}</div>`:''}
                 ${h.added?.length?`<div style="font-size:.72rem;margin-bottom:2px"><span style="color:#16a34a;font-weight:600">+ 추가:</span> ${h.added.map(m=>`<span style="display:inline-block;padding:1px 6px;margin:1px;border-radius:4px;background:#dcfce7;color:#15803d;font-size:.68rem">${esc(m)}</span>`).join('')}</div>`:''}
