@@ -6340,6 +6340,22 @@ function renderMedsViewLegacy() {
         ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'현재 투약'}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">${c.medsList.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`).join('')}</div></div>`:''}
         ${c.medications&&!c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'현재 투약'}</div>${esc(c.medications)}</div>`:''}
+        ${c.medHistory?.length?`<div class="dx-section">
+          <div class="dx-section-title" style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="const t=this.parentElement.querySelector('.mh-timeline');t.style.display=t.style.display==='none'?'block':'none';this.querySelector('.mh-arr').textContent=t.style.display==='none'?'▸':'▾'">
+            <span class="mh-arr">▸</span> 💊 투약 변경 이력 <span style="font-size:.6rem;color:var(--mu2);font-weight:400">${c.medHistory.length}건</span>
+          </div>
+          <div class="mh-timeline" style="display:none;margin-top:6px;padding-left:12px;border-left:2px solid var(--bd)">
+            ${c.medHistory.slice().reverse().map((h,i)=>`<div style="position:relative;padding:6px 0 10px 12px;font-size:.75rem${i<c.medHistory.length-1?';border-bottom:1px dashed var(--bd)':''}">
+              <div style="position:absolute;left:-7px;top:10px;width:10px;height:10px;border-radius:50%;background:${h.type==='start'?'#22c55e':h.type==='stop'?'#ef4444':'var(--ac)'};border:2px solid var(--sf)"></div>
+              <div style="font-weight:600;color:var(--ink)">${esc(h.date)} <span style="font-weight:400;color:var(--mu2)">${{change:'변경',start:'시작',stop:'중단',dose:'용량 조절'}[h.type]||h.type}</span></div>
+              ${h.detail?`<div style="color:var(--ink);margin-top:2px">${esc(h.detail)}</div>`:''}
+              ${h.added?.length?`<div style="color:#16a34a;margin-top:2px">+ ${h.added.map(m=>esc(m)).join(', ')}</div>`:''}
+              ${h.removed?.length?`<div style="color:#dc2626;margin-top:2px">− ${h.removed.map(m=>esc(m)).join(', ')}</div>`:''}
+              ${h.meds?.length?`<div style="color:var(--mu);margin-top:2px">→ ${h.meds.map(m=>esc(m)).join(', ')}</div>`:''}
+              ${h.reason?`<div style="color:var(--mu2);margin-top:2px;font-size:.7rem">사유: ${esc(h.reason)}</div>`:''}
+            </div>`).join('')}
+          </div>
+        </div>`:''}
         ${c.drugResponse?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'효과/반응':'약물 반응'}</div>${esc(c.drugResponse)}</div>`:''}
         ${c.course?`<div class="dx-section"><div class="dx-section-title">경과</div>${esc(c.course)}</div>`:''}
         ${c.notes?`<div class="dx-section"><div class="dx-section-title">메모</div>${esc(c.notes)}</div>`:''}
@@ -6428,8 +6444,23 @@ function renderMedsViewLegacy() {
           </div>
         </div>
         <div class="dx-form-group">
-          <div class="dx-form-label">마지막 약물 변경일 <span style="font-size:.6rem;color:var(--mu2)">(전후 비교에 사용)</span></div>
-          <input class="dx-form-input" id="dx-drug-change" type="date" style="width:160px">
+          <div class="dx-form-label">💊 투약 변경 사유 <span style="font-size:.6rem;color:var(--mu2)">(약 변경 시 자동 기록됨)</span></div>
+          <input class="dx-form-input" id="dx-hist-reason" placeholder="예: 부작용으로 교체, 용량 증량, 효과 부족">
+        </div>
+        <div class="dx-form-group">
+          <div class="dx-form-label">📜 과거 이력 수동 추가 <span style="font-size:.6rem;color:var(--mu2)">(이전 변경 기록)</span></div>
+          <div id="dx-manual-hist" style="border:1px solid var(--bd);border-radius:8px;padding:8px;background:var(--sf)">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+              <input class="dx-form-input" id="dx-mh-date" type="date" style="width:140px">
+              <select class="dx-form-input" id="dx-mh-type" style="width:120px;cursor:pointer">
+                <option value="change">변경</option><option value="start">시작</option><option value="stop">중단</option><option value="dose">용량 조절</option>
+              </select>
+            </div>
+            <input class="dx-form-input" id="dx-mh-detail" placeholder="내용: 예) Amitriptyline 10mg → 25mg, Topiramate 추가" style="margin-bottom:6px">
+            <input class="dx-form-input" id="dx-mh-reason" placeholder="사유: 예) 통증 조절 불충분" style="margin-bottom:6px">
+            <button class="btn-accum-add" onclick="addManualMedHistory()" style="font-size:.72rem">+ 이력 추가</button>
+            <div id="dx-mh-list" style="margin-top:6px"></div>
+          </div>
         </div>
         <div class="dx-form-group">
           <div class="dx-form-label">${isBungruki?'효과/반응':'약물 반응 (효과, 부작용)'}</div>
@@ -6453,6 +6484,33 @@ function renderMedsViewLegacy() {
 }
 
 let _dxMedsList=[]; // temp med list for form
+let _dxManualHistory=[]; // temp manual history entries for form
+
+function addManualMedHistory() {
+  const date=document.getElementById('dx-mh-date')?.value;
+  const type=document.getElementById('dx-mh-type')?.value||'change';
+  const detail=(document.getElementById('dx-mh-detail')?.value||'').trim();
+  const reason=(document.getElementById('dx-mh-reason')?.value||'').trim();
+  if(!date){showToast('날짜를 선택하세요.');return;}
+  if(!detail){showToast('내용을 입력하세요.');return;}
+  _dxManualHistory.push({date,type,detail,reason});
+  document.getElementById('dx-mh-date').value='';
+  document.getElementById('dx-mh-detail').value='';
+  document.getElementById('dx-mh-reason').value='';
+  renderManualHistList();
+}
+function removeManualHist(idx){_dxManualHistory.splice(idx,1);renderManualHistList();}
+function renderManualHistList(){
+  const el=document.getElementById('dx-mh-list');if(!el) return;
+  const typeLabels={change:'변경',start:'시작',stop:'중단',dose:'용량 조절'};
+  el.innerHTML=_dxManualHistory.map((h,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px dashed var(--bd);font-size:.72rem">
+    <span style="color:var(--ac);font-weight:600">${esc(h.date)}</span>
+    <span style="background:var(--sf2);padding:1px 6px;border-radius:4px">${typeLabels[h.type]||h.type}</span>
+    <span style="flex:1">${esc(h.detail)}</span>
+    ${h.reason?`<span style="color:var(--mu2)">${esc(h.reason)}</span>`:''}
+    <span style="cursor:pointer;color:var(--r3)" onclick="removeManualHist(${i})">✕</span>
+  </div>`).join('');
+}
 
 function onDxNameInput(val) {
   const suggest=document.getElementById('dx-suggest');
@@ -6577,7 +6635,7 @@ function openConditionForm(domainId, idx) {
   document.getElementById('dx-edit-idx').value=idx!==undefined?idx:-1;
   document.getElementById('dx-edit-domain').value=domainId||S.currentDomain;
   if(domainId) document.getElementById('dx-domain').value=domainId;
-  _conditionFiles=[];_dxMedsList=[];
+  _conditionFiles=[];_dxMedsList=[];_dxManualHistory=[];
   const fileList=document.getElementById('dx-file-list');if(fileList)fileList.innerHTML='';
   if(idx!==undefined && domainId) {
     const ds=S.domainState[domainId];
@@ -6587,7 +6645,6 @@ function openConditionForm(domainId, idx) {
     document.getElementById('dx-date').value=c.diagnosisDate||'';
     document.getElementById('dx-status').value=c.status||'active';
     const dxType=document.getElementById('dx-type');if(dxType)dxType.value=c.diseaseType||_DISEASE_TYPE_MAP[c.name]||'chronic';
-    document.getElementById('dx-drug-change').value=c.drugChangeDate||'';
     document.getElementById('dx-response').value=c.drugResponse||'';
     document.getElementById('dx-course').value=c.course||'';
     document.getElementById('dx-notes').value=c.notes||'';
@@ -6600,6 +6657,7 @@ function openConditionForm(domainId, idx) {
     renderDxMedChips();
     document.getElementById('dx-med-suggest').style.display='none';
   }
+  renderManualHistList();
   // Setup med input autocomplete
   setTimeout(()=>setupAutocomplete('dx-med-input',_AC_MEDS,true),50);
   document.getElementById('dx-form').scrollIntoView({behavior:'smooth'});
@@ -6633,7 +6691,25 @@ async function saveCondition() {
   const editDomain=document.getElementById('dx-edit-domain').value;
   const editIdx=parseInt(document.getElementById('dx-edit-idx').value);
   if(editIdx>=0 && editDomain && S.domainState[editDomain]?.master?.conditions?.[editIdx]) {
-    data.id=S.domainState[editDomain].master.conditions[editIdx].id;
+    const prev=S.domainState[editDomain].master.conditions[editIdx];
+    data.id=prev.id;
+    // Auto-detect medication changes → append to medHistory
+    data.medHistory=prev.medHistory?[...prev.medHistory]:[];
+    const oldMeds=prev.medsList||[];
+    const newMeds=data.medsList||[];
+    const added=newMeds.filter(m=>!oldMeds.includes(m));
+    const removed=oldMeds.filter(m=>!newMeds.includes(m));
+    if(added.length||removed.length) {
+      const reason=document.getElementById('dx-hist-reason')?.value?.trim()||'';
+      const histType=oldMeds.length===0?'start':newMeds.length===0?'stop':'change';
+      data.medHistory.push({date:kstToday(),type:histType,added,removed,meds:[...newMeds],reason});
+      data.drugChangeDate=kstToday();
+    }
+    // Merge manual history entries
+    _dxManualHistory.forEach(h=>{
+      data.medHistory.push({date:h.date,type:h.type,detail:h.detail,reason:h.reason});
+    });
+    if(data.medHistory.length) data.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
     if(editDomain===targetDomain) {
       ds.master.conditions[editIdx]=data;
     } else {
@@ -6651,11 +6727,20 @@ async function saveCondition() {
       ds.master.conditions.push(data);
     }
   } else {
+    // New condition — add manual history + auto start entry
+    data.medHistory=[];
+    if(data.medsList?.length) {
+      data.medHistory.push({date:kstToday(),type:'start',added:[...data.medsList],removed:[],meds:[...data.medsList],reason:'최초 등록'});
+    }
+    _dxManualHistory.forEach(h=>{
+      data.medHistory.push({date:h.date,type:h.type,detail:h.detail,reason:h.reason});
+    });
+    if(data.medHistory.length) data.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
     ds.master.conditions.push(data);
   }
 
   if(ds.masterFileId){try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){}}
-  _conditionFiles=[];_dxMedsList=[];
+  _conditionFiles=[];_dxMedsList=[];_dxManualHistory=[];
   closeConditionForm();
   renderView('meds');
   showToast('✅ 질환 정보 저장됨');
@@ -6680,6 +6765,10 @@ function getConditionsContext() {
     let line = `- ${c.name} (${statusLabels[c.status]||c.status})`;
     if (c.diagnosisDate) line += ` [진단: ${c.diagnosisDate}]`;
     if (c.medications) line += `\n  투약: ${c.medications}`;
+    if (c.medHistory?.length) {
+      const recent=c.medHistory.slice(-3);
+      line += `\n  투약이력(최근): ${recent.map(h=>`${h.date} ${h.type}${h.added?.length?' +'+h.added.join(','):''}${h.removed?.length?' -'+h.removed.join(','):''}${h.detail||''}${h.reason?' ('+h.reason+')':''}`).join(' → ')}`;
+    }
     if (c.drugResponse) line += `\n  반응: ${c.drugResponse}`;
     if (c.course) line += `\n  경과: ${c.course}`;
     return line;
