@@ -819,7 +819,14 @@ async function sendQuickNtfy(entry) {
   const body=['🤕 오랑이 두통 기록 (빠른기록)',((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim(),meds?'💊 '+meds:'',tx?'🩺 '+tx:'',trg?'⚡ '+trg:''].filter(Boolean).join('\n');
   try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
   // 1시간 후 경과 확인 (ntfy 예약 발송 — 서버측 타이머, 앱 꺼도 동작)
+  // 1시간 이내 이전 기록이 있으면 새 알림 스킵 (이전 알림이 rate.html에서 최신 기록을 보여줌)
   const orangiTopic=localStorage.getItem('om_ntfy_orangi');
+  if(orangiTopic){
+    const logs=getQuickEntries();
+    const now=Date.now();
+    const recentOther=logs.find(l=>String(l.id)!==String(entry.id)&&l.datetime&&(now-new Date(l.datetime).getTime())<3600000);
+    if(recentOther){/* 1시간 이내 이전 기록 있음 → 경과 알림 스킵 */return;}
+  }
   if(orangiTopic){
     const eid=entry.id;
     const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
