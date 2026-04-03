@@ -832,12 +832,14 @@ async function saveEntry() {
     createdAt: new Date(Date.now() + 9*3600000).toISOString()
   };
 
-  // 날씨 자동 첨부
-  try{const w=await fetchWeather();if(w)entry.weather=w;}catch(e){}
-
+  // 로컬 저장 먼저 (날씨 fetch 대기 중 데이터 유실 방지)
   logs.push(entry);
   saveQuickLogs(logs);
   showToast('💾 저장 중...');
+
+  // 날씨 자동 첨부 (백그라운드)
+  try{const w=await fetchWeather();if(w){entry.weather=w;const idx2=logs.findIndex(l=>l.id===entry.id);if(idx2>=0){logs[idx2].weather=w;saveQuickLogs(logs);}}}catch(e){}
+
   const ok = await cloudSave([entry]);
   await sendQuickNtfy(entry);
   showToast(ok ? '✅ 저장 완료 + ☁️ 붕쌤에게 전송됨' : '✅ 로컬 저장됨 (☁️ 업로드 실패)');
@@ -861,32 +863,30 @@ async function sendQuickNtfy(entry) {
 }
 
 let _outcomeTimer=null;
-function getOutcomeDelay(){return parseInt(localStorage.getItem('om_outcome_delay')||'60')*60000;}
 
-function scheduleOutcomeNtfy(entry,customDelayMin){
+function _setOutcomeTimer(entryId,delayMin){
   if(_outcomeTimer) clearTimeout(_outcomeTimer);
-  const delayMs=customDelayMin?customDelayMin*60000:getOutcomeDelay();
-  const sendAt=Date.now()+delayMs;
-  // 예약 정보를 기록 자체에 저장 (클라우드 동기화 대상)
-  const logs=getQuickLogs();
-  const idx=logs.findIndex(l=>String(l.id)===String(entry.id));
-  if(idx>=0){logs[idx].outcomeNotifyAt=sendAt;saveQuickLogs(logs);cloudSave([logs[idx]]);}
-  _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(entry.id),delayMs);
-}
-
-function rescheduleOutcome(entryId,delayMin){
   const logs=getQuickLogs();
   const idx=logs.findIndex(l=>String(l.id)===String(entryId));
-  if(idx<0) return;
-  if(_outcomeTimer) clearTimeout(_outcomeTimer);
+  if(idx<0) return false;
   const delayMs=delayMin*60000;
-  const sendAt=Date.now()+delayMs;
-  logs[idx].outcomeNotifyAt=sendAt;
+  logs[idx].outcomeNotifyAt=Date.now()+delayMs;
   saveQuickLogs(logs);
   cloudSave([logs[idx]]);
   _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(entryId),delayMs);
-  showToast(`⏱ ${delayMin}분 후 경과 알림 재설정`);
-  renderOutcomeTab();
+  return true;
+}
+
+function scheduleOutcomeNtfy(entry,customDelayMin){
+  const delayMin=customDelayMin||parseInt(localStorage.getItem('om_outcome_delay')||'60');
+  _setOutcomeTimer(String(entry.id),delayMin);
+}
+
+function rescheduleOutcome(entryId,delayMin){
+  if(_setOutcomeTimer(String(entryId),delayMin)){
+    showToast(`⏱ ${delayMin}분 후 경과 알림 재설정`);
+    renderOutcomeTab();
+  }
 }
 
 async function sendOutcomeNtfy(entryId){
@@ -896,7 +896,7 @@ async function sendOutcomeNtfy(entryId){
   // 발송 완료 표시
   const allLogs=getQuickLogs();
   const idx=allLogs.findIndex(l=>String(l.id)===String(entryId));
-  if(idx>=0){allLogs[idx].outcomeNotifySent=true;saveQuickLogs(allLogs);}
+  if(idx>=0){allLogs[idx].outcomeNotifySent=true;saveQuickLogs(allLogs);cloudSave([allLogs[idx]]);}
   const orangiTopic=localStorage.getItem('om_ntfy_orangi');
   if(!orangiTopic) return;
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
@@ -988,7 +988,7 @@ function renderOutcomeTab() {
         +'<span style="color:var(--ac)">⏱ 경과 알림: '+(remMin>0?remMin+'분 후':'곧 발송')+'</span>'
         +'<span style="color:var(--mu2)">('+notifyAt.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})+')</span>'
         +'<select onchange="if(this.value)rescheduleOutcome('+l.id+',+this.value)" style="margin-left:auto;border:1px solid var(--bd);border-radius:4px;padding:2px 4px;font-size:.65rem;background:var(--sf);color:var(--ink)">'
-        +'<option value="">⏱ 변경</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option><option value="180">3시간</option>'
+        +'<option value="">⏱ 변경</option><option value="30">30분</option><option value="60">1시간</option><option value="90">1시간30분</option><option value="120">2시간</option><option value="180">3시간</option>'
         +'</select>'
         +'</div>';
     } else if(!l.outcome&&!l.outcomeNotifyAt){
@@ -996,7 +996,7 @@ function renderOutcomeTab() {
       html+='<div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:.68rem">'
         +'<span style="color:var(--mu2)">⏱ 알림 없음</span>'
         +'<select onchange="if(this.value)rescheduleOutcome('+l.id+',+this.value)" style="border:1px solid var(--bd);border-radius:4px;padding:2px 4px;font-size:.65rem;background:var(--sf);color:var(--ink)">'
-        +'<option value="">알림 예약</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option>'
+        +'<option value="">알림 예약</option><option value="30">30분</option><option value="60">1시간</option><option value="90">1시간30분</option><option value="120">2시간</option><option value="180">3시간</option>'
         +'</select></div>';
     }
     // 날씨 표시
