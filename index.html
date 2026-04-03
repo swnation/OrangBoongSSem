@@ -4783,8 +4783,8 @@ function getTriggerCorrelation(logs) {
   });
   const lines=Object.entries(triggerStats)
     .filter(([,v])=>v.count>=2)
-    .map(([t,v])=>{const avg=(v.nrsSum/v.count).toFixed(1);const pct=Math.round(v.count/withNrs.length*100);return `${t}: ${v.count}회(${pct}%) 평균NRS${avg} (전체평균${avgAll.toFixed(1)})`;})
-    .sort((a,b)=>b.split('회')[0]-a.split('회')[0]);
+    .sort(([,a],[,b])=>b.count-a.count)
+    .map(([t,v])=>{const avg=(v.nrsSum/v.count).toFixed(1);const pct=Math.round(v.count/withNrs.length*100);return `${t}: ${v.count}회(${pct}%) 평균NRS${avg} (전체평균${avgAll.toFixed(1)})`;});
   return lines.length?`\n[트리거 상관분석]\n${lines.join('\n')}`:'';
 }
 
