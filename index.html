@@ -3851,9 +3851,8 @@ async function sendNtfyFollowup(entry) {
   const nrs=entry.nrs>=0?`NRS ${entry.nrs}`:'';
   const tx=[...(entry.meds||[]),...(entry.treatments||[])].join(', ');
   const body=`🤕 두통 경과 확인\n${entry.datetime.slice(11,16)} ${nrs} ${tx} → 지금 어때요?`;
-  setTimeout(async()=>{
-    try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body});}catch(e){console.warn('ntfy followup:',e);}
-  },2*60*60*1000);
+  // ntfy 예약 발송 (At: 2h) — 서버측 타이머, 앱 꺼도 동작
+  try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',headers:{'At':'2h'},body:body});}catch(e){console.warn('ntfy followup:',e);}
 }
 
 // ── 날씨 자동 수집 (OpenWeatherMap) ──
