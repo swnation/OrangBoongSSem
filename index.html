@@ -3097,7 +3097,7 @@ function renderUsageView() {
     Object.entries(ds.master.usage_data).forEach(([date,aiMap])=>{
       let dayCost=0;
       Object.entries(aiMap).forEach(([aiId,data])=>{
-        const cost=data.cost||0;
+        const cost=data.cost||calcCost(data.model||aiId,data.in||0,data.out||0);
         dayCost+=cost;
         if(!allUsageByDate[date]) allUsageByDate[date]={cost:0,byAI:{}};
         allUsageByDate[date].cost+=cost;
@@ -3141,11 +3141,14 @@ function renderUsageView() {
       const pct=Math.round(((byAI[id]||0)/totalC)*100);
       return pct>0?`<div style="width:100%;height:${Math.max(1,Math.round(h*pct/100))}px;background:${def.color};border-radius:1px" title="${def.name}: $${(byAI[id]||0).toFixed(4)}"></div>`:'';
     }).join('');
-    return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0" title="${date}: $${cost.toFixed(4)}">
+    const aiDetail=cost>0?Object.entries(AI_DEFS).filter(([id])=>(byAI[id]||0)>0).map(([id,def])=>`<div style="font-size:.55rem;color:${def.color}">$${(byAI[id]||0).toFixed(3)}</div>`).join(''):'';
+    const detailId='dcost-'+date.replace(/-/g,'');
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0;cursor:pointer" title="${date}: $${cost.toFixed(4)}" onclick="const d=document.getElementById('${detailId}');if(d)d.style.display=d.style.display==='none'?'block':'none'">
       <div style="font-size:.55rem;color:var(--mu2)">${cost>0?'$'+cost.toFixed(3):''}</div>
       <div style="width:100%;max-width:20px;display:flex;flex-direction:column;justify-content:flex-end;height:60px">${cost>0?segments:`<div style="height:2px;background:var(--bd);border-radius:1px"></div>`}</div>
       <div style="font-size:.58rem;color:${isToday?'var(--ac)':'var(--mu2)'};font-weight:${isToday?'700':'400'}">${label}</div>
       <div style="font-size:.5rem;color:var(--mu2)">${dayName}</div>
+      <div id="${detailId}" style="display:none">${aiDetail}</div>
     </div>`;
   }).join('');
 
@@ -3195,7 +3198,8 @@ function renderUsageView() {
     if(!date.startsWith(monthStr)) return;
     Object.entries(aiMap).forEach(([aiId,data])=>{
       if(!curByAI[aiId]) curByAI[aiId]={cost:0,inT:0,outT:0};
-      curByAI[aiId].cost+=(data.cost||0);
+      const cost=data.cost||calcCost(data.model||aiId,data.in||0,data.out||0);
+      curByAI[aiId].cost+=cost;
       curByAI[aiId].inT+=(data.in||0);
       curByAI[aiId].outT+=(data.out||0);
     });
