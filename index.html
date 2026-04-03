@@ -559,11 +559,21 @@ const KEY_INFO = {
 };
 
 const DEFAULT_PRICE_TABLE = {
-  'gpt-5.4':{in:2.50,out:15.00},'gpt-5.3-chat-latest':{in:2.50,out:10.00},'gpt-4o':{in:2.50,out:10.00},
-  'claude-sonnet-4-6':{in:3.00,out:15.00},'claude-opus-4-6':{in:5.00,out:25.00},'claude-haiku-4-5-20251001':{in:1.00,out:5.00},
-  'gemini-2.5-pro':{in:1.25,out:10.00},'gemini-2.5-flash':{in:0.15,out:0.60},
-  'grok-4':{in:5.00,out:25.00},'grok-4-1-fast':{in:3.00,out:15.00},'grok-3':{in:3.00,out:15.00},'grok-3-mini':{in:0.30,out:0.50},'grok-4.20-multi-agent':{in:5.00,out:25.00},
-  'sonar':{in:1.00,out:1.00},'sonar-pro':{in:3.00,out:15.00},
+  'gpt-5.4':{in:2.50,out:15.00},
+  'gpt-5.3-chat-latest':{in:2.50,out:10.00},
+  'gpt-4o':{in:2.50,out:10.00},
+  'claude-sonnet-4-6':{in:3.00,out:15.00},
+  'claude-opus-4-6':{in:5.00,out:25.00},
+  'claude-haiku-4-5-20251001':{in:1.00,out:5.00},
+  'gemini-2.5-pro':{in:1.25,out:10.00},
+  'gemini-2.5-flash':{in:0.15,out:0.60},
+  'grok-4':{in:5.00,out:25.00},
+  'grok-4-1-fast':{in:3.00,out:15.00},
+  'grok-3':{in:3.00,out:15.00},
+  'grok-3-mini':{in:0.30,out:0.50},
+  'grok-4.20-multi-agent':{in:5.00,out:25.00},
+  'sonar':{in:1.00,out:1.00},
+  'sonar-pro':{in:3.00,out:15.00},
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -1727,9 +1737,7 @@ async function runRound(roundNum, errorsOnly) {
     S.session._attachments = _sessionFiles.map(f=>({name:f.name,type:f.type,size:f.size,driveId:f.driveId,webLink:f.webLink}));
   }
   let enabledAIs = getEnabledAIs();
-  // 심층 협진(normal): 5개 AI 모두 실행 (비용 최적화는 기본 모드에서 처리)
-  // 디베이트/multi-grok: 자체 로직 사용
-  const mode=S.session?.mode||'normal';
+  // 디베이트: 자체 로직 사용 (multi-grok은 별도 함수 사용)
   // errorsOnly: only re-run AIs that had errors in this round
   if(errorsOnly && S.session.rounds[roundNum-1]) {
     const rd = S.session.rounds[roundNum-1];
