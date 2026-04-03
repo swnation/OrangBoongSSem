@@ -3265,7 +3265,7 @@ let _quickLogCache = null; // 클라우드+로컬 병합 캐시
 
 function getQuickLogs() {
   if (_quickLogCache) return _quickLogCache;
-  try { return JSON.parse(localStorage.getItem('om_quick_logs') || '[]'); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem('om_quick_logs') || '[]').filter(l=>l._type!=='config'); } catch { return []; }
 }
 function getPendingQuickLogs() { return getQuickLogs().filter(l => !l.synced); }
 function saveQuickLogs(logs) {
@@ -8329,7 +8329,7 @@ function renderTimelineView() {
 
   if(!events.length) return '<div class="hint">데이터를 로딩 중입니다... 잠시만 기다려 주세요.</div>';
 
-  events.sort((a,b)=>b.date.localeCompare(a.date));
+  events.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
   const items=events.slice(0,50).map(e=>{
     const typeIcon=e.type==='log'?'📊':'💬';
