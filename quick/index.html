@@ -160,7 +160,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
             onchange="localStorage.setItem('om_ntfy_orangi',this.value.trim());syncNtfyConfig()">
         </div>
       </div>
-      <div class="settings-note">기록 저장 시 붕쌤에게 즉시 알림, 오랑이에게 2시간 후 경과 확인 알림을 보냅니다.</div>
+      <div class="settings-note">기록 저장 시 붕쌤에게 즉시 알림, 오랑이에게 1시간 후 경과 확인 알림을 보냅니다.</div>
     </div>
   </div>
   <div class="tabs">
@@ -818,12 +818,18 @@ async function sendQuickNtfy(entry) {
   const trg=(entry.triggers||[]).join(', ');
   const body=['🤕 오랑이 두통 기록 (빠른기록)',((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim(),meds?'💊 '+meds:'',tx?'🩺 '+tx:'',trg?'⚡ '+trg:''].filter(Boolean).join('\n');
   try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
-  // 2시간 후 경과 확인 (ntfy 예약 발송 — 서버측 타이머, 앱 꺼도 동작)
+  // 1시간 후 경과 확인 (ntfy 예약 발송 — 서버측 타이머, 앱 꺼도 동작)
   const orangiTopic=localStorage.getItem('om_ntfy_orangi');
   if(orangiTopic){
-    const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''}\n→ 지금 어때요? 탭하면 경과 입력 화면으로 이동합니다`;
-    const quickUrl=location.href.split('#')[0].split('?')[0]+'#outcome';
-    try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'At':'2h','Click':quickUrl,'Actions':'view, 🩺 경과 입력, '+quickUrl+', clear=true'},body:fBody.trim()});}catch(e){}
+    const eid=entry.id;
+    const baseUrl=location.href.split('#')[0].split('?')[0];
+    const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''}\n아래 버튼으로 바로 기록하세요!`;
+    const actions=[
+      `view, 😊 호전, ${baseUrl}#rate-better-${eid}, clear=true`,
+      `view, 😐 비슷, ${baseUrl}#rate-same-${eid}, clear=true`,
+      `view, 😣 악화, ${baseUrl}#rate-worse-${eid}, clear=true`
+    ].join('; ');
+    try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'At':'1h','Click':baseUrl+'#outcome','Actions':actions},body:fBody.trim()});}catch(e){}
   }
 }
 
@@ -881,6 +887,13 @@ function renderOutcomeTab() {
   });
 
   el.innerHTML=html;
+}
+
+function rateQuickOutcomeById(id,rating) {
+  var logs=getQuickLogs();
+  var idx=logs.findIndex(l=>String(l.id)===String(id));
+  if(idx<0){showToast('⚠️ 해당 기록을 찾을 수 없습니다');return;}
+  rateQuickOutcome(idx,rating);
 }
 
 function rateQuickOutcome(idx,rating) {
@@ -1121,9 +1134,19 @@ renderForm();
 updatePendingCount();
 // URL 해시로 탭 자동 전환 (#outcome → 경과 탭)
 const _handleHash=()=>{
-  if(location.hash==='#outcome') switchTab('outcome');
-  else if(location.hash==='#list') switchTab('list');
-  else if(!location.hash || location.hash==='#form') switchTab('form');
+  const h=location.hash;
+  // #rate-{rating}-{id} → 경과 바로 기록
+  const rateMatch=h.match(/^#rate-(better|same|worse)-(\d+)$/);
+  if(rateMatch){
+    const [,rating,id]=rateMatch;
+    rateQuickOutcomeById(id,rating);
+    location.hash=''; // 해시 제거
+    switchTab('outcome');
+    return;
+  }
+  if(h==='#outcome') switchTab('outcome');
+  else if(h==='#list') switchTab('list');
+  else if(!h || h==='#form') switchTab('form');
 };
 window.addEventListener('hashchange',_handleHash);
 _handleHash();
