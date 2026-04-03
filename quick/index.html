@@ -160,7 +160,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
             onchange="localStorage.setItem('om_ntfy_orangi',this.value.trim());syncNtfyConfig()">
         </div>
       </div>
-      <div class="settings-note">기록 저장 시 붕쌤에게 즉시 알림, 오랑이에게 1시간 후 경과 확인 알림을 보냅니다.</div>
+      <div class="settings-note">기록 저장 시 붕쌤에게 즉시 알림, 오랑이에게 경과 확인 알림을 보냅니다.</div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:.72rem;color:var(--mu)">기본 경과 알림:</span>
+        <input type="number" class="settings-input" id="ntfy-delay-input" style="width:60px;text-align:center" min="10" max="480" value="60"
+          onchange="localStorage.setItem('om_outcome_delay',this.value)">
+        <span style="font-size:.72rem;color:var(--mu)">분 후</span>
+      </div>
     </div>
   </div>
   <div class="tabs">
@@ -686,11 +692,26 @@ function renderForm(entry) {
       <textarea class="memo" id="q-memo" rows="3" placeholder="상태 등 자유 기록">${esc(e.memo||'')}</textarea>
     </div>
 
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:8px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:8px">
+      <span style="font-size:.72rem;color:var(--mu)">⏱ 경과 알림</span>
+      <select id="q-outcome-delay" style="border:1px solid var(--bd);border-radius:6px;padding:3px 8px;font-size:.75rem;background:var(--sf);color:var(--ink);font-family:inherit">
+        <option value="0">안 보냄</option>
+        <option value="30">30분 후</option>
+        <option value="60" selected>1시간 후</option>
+        <option value="90">1시간 30분</option>
+        <option value="120">2시간 후</option>
+        <option value="180">3시간 후</option>
+      </select>
+    </div>
     <button class="btn-save" id="q-save-btn" onclick="this.disabled=true;this.textContent='저장 중...';saveEntry().finally(()=>{const b=document.getElementById('q-save-btn');if(b){b.disabled=false;b.textContent='💾 기록 저장';}})">${isEdit ? '✏️ 수정 완료' : '💾 기록 저장'}</button>
     <div id="recent-quick-logs"></div>
   `;
   renderRecentQuickLogs();
   renderHeadDiagram();
+  // 기본 알림 시간 반영
+  const defDelay=localStorage.getItem('om_outcome_delay')||'60';
+  const delSel=document.getElementById('q-outcome-delay');
+  if(delSel){if([...delSel.options].some(o=>o.value===defDelay))delSel.value=defDelay;else delSel.value='60';}
   // Sync diagram with pre-selected chips (edit mode)
   setTimeout(()=>syncHeadDiagram(),50);
 }
@@ -818,26 +839,48 @@ async function sendQuickNtfy(entry) {
   const trg=(entry.triggers||[]).join(', ');
   const body=['🤕 오랑이 두통 기록 (빠른기록)',((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim(),meds?'💊 '+meds:'',tx?'🩺 '+tx:'',trg?'⚡ '+trg:''].filter(Boolean).join('\n');
   try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
-  // 1시간 후 경과 알림 예약 (클라이언트 타이머 — 새 기록 시 이전 예약 자동 취소)
-  scheduleOutcomeNtfy(entry);
+  // 경과 알림 예약 (클라이언트 타이머 — 새 기록 시 이전 예약 자동 취소)
+  const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||'0');
+  if(outcomeDelay>0) scheduleOutcomeNtfy(entry,outcomeDelay);
 }
 
 let _outcomeTimer=null;
-function scheduleOutcomeNtfy(entry){
-  // 이전 타이머 취소
+function getOutcomeDelay(){return parseInt(localStorage.getItem('om_outcome_delay')||'60')*60000;}
+
+function scheduleOutcomeNtfy(entry,customDelayMin){
   if(_outcomeTimer) clearTimeout(_outcomeTimer);
-  // localStorage에 예약 정보 저장 (페이지 닫힌 후 재진입 시 체크용)
-  const sendAt=Date.now()+3600000; // 1시간 후
-  localStorage.setItem('om_outcome_pending',JSON.stringify({id:entry.id,sendAt,datetime:entry.datetime}));
-  _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(entry.id),3600000);
+  const delayMs=customDelayMin?customDelayMin*60000:getOutcomeDelay();
+  const sendAt=Date.now()+delayMs;
+  // 예약 정보를 기록 자체에 저장 (클라우드 동기화 대상)
+  const logs=getQuickLogs();
+  const idx=logs.findIndex(l=>String(l.id)===String(entry.id));
+  if(idx>=0){logs[idx].outcomeNotifyAt=sendAt;saveQuickLogs(logs);cloudSave([logs[idx]]);}
+  _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(entry.id),delayMs);
+}
+
+function rescheduleOutcome(entryId,delayMin){
+  const logs=getQuickLogs();
+  const idx=logs.findIndex(l=>String(l.id)===String(entryId));
+  if(idx<0) return;
+  if(_outcomeTimer) clearTimeout(_outcomeTimer);
+  const delayMs=delayMin*60000;
+  const sendAt=Date.now()+delayMs;
+  logs[idx].outcomeNotifyAt=sendAt;
+  saveQuickLogs(logs);
+  cloudSave([logs[idx]]);
+  _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(entryId),delayMs);
+  showToast(`⏱ ${delayMin}분 후 경과 알림 재설정`);
+  renderOutcomeTab();
 }
 
 async function sendOutcomeNtfy(entryId){
-  localStorage.removeItem('om_outcome_pending');
-  // 이미 경과 기록됐으면 알림 안 보냄
   const logs=getQuickEntries();
   const entry=logs.find(l=>String(l.id)===String(entryId));
   if(!entry||entry.outcome) return;
+  // 발송 완료 표시
+  const allLogs=getQuickLogs();
+  const idx=allLogs.findIndex(l=>String(l.id)===String(entryId));
+  if(idx>=0){allLogs[idx].outcomeNotifySent=true;saveQuickLogs(allLogs);}
   const orangiTopic=localStorage.getItem('om_ntfy_orangi');
   if(!orangiTopic) return;
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
@@ -853,22 +896,21 @@ async function sendOutcomeNtfy(entryId){
   try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'Click':rateUrl+'#'+entryId,'Actions':actions},body:fBody.trim()});}catch(e){}
 }
 
-// 페이지 로드/복귀 시 미발송 경과 알림 체크
 function checkPendingOutcome(){
-  const raw=localStorage.getItem('om_outcome_pending');
-  if(!raw) return;
-  try{
-    const {id,sendAt}=JSON.parse(raw);
-    const now=Date.now();
-    if(now>=sendAt){
-      // 시간 지남 → 즉시 발송
-      sendOutcomeNtfy(id);
+  // 기록에 저장된 outcomeNotifyAt을 기준으로 체크
+  const logs=getQuickEntries();
+  const now=Date.now();
+  for(let i=logs.length-1;i>=0;i--){
+    const l=logs[i];
+    if(l.outcome||l.outcomeNotifySent||!l.outcomeNotifyAt) continue;
+    if(now>=l.outcomeNotifyAt){
+      sendOutcomeNtfy(l.id);
     } else {
-      // 아직 안 됨 → 남은 시간만큼 타이머
       if(_outcomeTimer) clearTimeout(_outcomeTimer);
-      _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(id),sendAt-now);
+      _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(l.id),l.outcomeNotifyAt-now);
     }
-  }catch(e){localStorage.removeItem('om_outcome_pending');}
+    break; // 가장 최근 미발송 1건만
+  }
 }
 
 // ── 경과(Outcome) 탭 ──
@@ -920,8 +962,21 @@ function renderOutcomeTab() {
       +'<div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">'
       +'<button onclick="rateQuickOutcome('+idx+',\'unknown\')" style="background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:.68rem;color:var(--mu);cursor:pointer;'+(rating==='unknown'?'background:var(--bd);font-weight:600':'')+'">🤷 기억 안남</button>'
       +(rating?'<button onclick="clearQuickOutcome('+idx+')" style="background:none;border:none;font-size:.68rem;color:var(--mu);cursor:pointer;text-decoration:underline">경과 삭제</button>':'')
-      +'</div>'
       +'</div>';
+    // 알림 예정 표시
+    if(l.outcomeNotifyAt&&!l.outcome&&!l.outcomeNotifySent){
+      const notifyAt=new Date(l.outcomeNotifyAt);
+      const remaining=l.outcomeNotifyAt-Date.now();
+      const remMin=Math.max(0,Math.round(remaining/60000));
+      html+='<div style="margin-top:6px;padding:6px 8px;background:var(--sf);border-radius:6px;display:flex;align-items:center;gap:6px;font-size:.68rem">'
+        +'<span style="color:var(--ac)">⏱ 경과 알림: '+(remMin>0?remMin+'분 후':'곧 발송')+'</span>'
+        +'<span style="color:var(--mu2)">('+notifyAt.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})+')</span>'
+        +'<select onchange="if(this.value)rescheduleOutcome('+l.id+',+this.value)" style="margin-left:auto;border:1px solid var(--bd);border-radius:4px;padding:2px 4px;font-size:.65rem;background:var(--sf);color:var(--ink)">'
+        +'<option value="">⏱ 변경</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option><option value="180">3시간</option>'
+        +'</select>'
+        +'</div>';
+    }
+    html+='</div>';
   });
 
   el.innerHTML=html;
@@ -1088,6 +1143,7 @@ function toggleSettings() {
       ? '<span style="color:#2d6a4f">☁️ 동기화 활성</span>' : '<span style="color:#c03030">동기화 꺼짐</span>';
     document.getElementById('ntfy-bung-input').value = localStorage.getItem('om_ntfy_bung')||'';
     document.getElementById('ntfy-orangi-input').value = localStorage.getItem('om_ntfy_orangi')||'';
+    document.getElementById('ntfy-delay-input').value = localStorage.getItem('om_outcome_delay')||'60';
   }
 }
 

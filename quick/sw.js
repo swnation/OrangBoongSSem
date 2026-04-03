@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orangi-quick-v13';
+const CACHE_NAME = 'orangi-quick-v14';
 const PRECACHE = [
   './',
   './rate.html',
