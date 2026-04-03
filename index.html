@@ -5604,29 +5604,102 @@ function getConditionMeds() {
 
 // ── 붕룩이 전용 대시보드 (기능 7) ──
 
+// 3소스 임신 약물 안전성 DB: fda(FDA등급), pllr(PLLR 요약), kfda(한국 식약처)
 const _PREGNANCY_SAFETY = {
-  'Acetaminophen': { grade: 'B', note: '임신 전 기간 사용 가능, 1차 선택 진통제' },
-  'Ibuprofen': { grade: 'D(3rd)', note: '3분기 금기, 1-2분기 단기 사용 가능' },
-  'Loxoprofen': { grade: 'X(3rd)', note: '3분기 금기, 가급적 회피' },
-  'Venlafaxine': { grade: 'C', note: '신생아 적응 증후군 위험, 이익-위험 평가 필요' },
-  'Bupropion': { grade: 'C', note: '비교적 안전, 금연 목적 사용 데이터 있음' },
-  'Lithium': { grade: 'D', note: 'Ebstein anomaly 위험, 임신 시 중단 또는 최소 용량' },
-  'Atomoxetine': { grade: 'C', note: '동물실험 데이터만, 가급적 회피' },
-  'Desvenlafaxine': { grade: 'C', note: 'Venlafaxine과 유사, 이익-위험 평가' },
-  'Febuxostat': { grade: 'C', note: '임신 중 사용 데이터 제한적, 회피 권장' },
-  'Metoclopramide': { grade: 'B', note: '임신 오심에 사용 가능' },
-  'Propranolol': { grade: 'C', note: '편두통 예방, IUGR 위험 모니터링 필요' },
-  'Topiramate': { grade: 'D', note: '구개열 위험 증가, 임신 중 금기' },
-  'Valproate': { grade: 'X', note: '절대 금기, 신경관 결손 위험' },
-  'Lamotrigine': { grade: 'C', note: '비교적 안전, 용량 모니터링 필요' },
-  'Sumatriptan': { grade: 'C', note: '제한적 데이터, 필요 시 단기 사용' },
-  'Concerta': { grade: 'C', note: 'Methylphenidate, 동물실험 데이터, 가급적 회피' },
-  'Folic Acid': { grade: 'A', note: '필수 보충제, 신경관 결손 예방' },
-  'Iron': { grade: 'A', note: '빈혈 예방, 필요 시 보충' },
-  'Vitamin D': { grade: 'A', note: '적정 용량 안전' },
-  'CoQ10': { grade: 'B', note: '제한적 데이터, 일반적으로 안전' },
-  'Arginine': { grade: 'C', note: '고용량 데이터 부족' },
-  'Silymarin': { grade: 'C', note: '데이터 제한적' },
+  // ── 진통제/NSAID ──
+  'Acetaminophen': { fda:'B', pllr:'전 기간 사용 가능, 장기 고용량 시 태아 간 영향 보고', kfda:'안전', note:'1차 선택 진통제' },
+  'Ibuprofen': { fda:'C→D', pllr:'20주 이후 태아동맥관 조기폐쇄·양수과소증 위험', kfda:'2등급', note:'1-2분기 단기만, 3분기 금기' },
+  'Naproxen': { fda:'C→D', pllr:'20주 이후 동맥관폐쇄·신장 영향', kfda:'2등급', note:'3분기 금기, NSAID 공통' },
+  'Loxoprofen': { fda:'X(3rd)', pllr:'동물실험 태자독성, 3분기 금기', kfda:'금기', note:'가급적 회피' },
+  'Diclofenac': { fda:'C→D', pllr:'3분기 동맥관폐쇄 위험', kfda:'2등급', note:'3분기 금기' },
+  'Celecoxib': { fda:'C→D', pllr:'3분기 금기, 동맥관폐쇄', kfda:'2등급', note:'COX-2 선택적이나 3분기 회피' },
+  'Aspirin': { fda:'C→D', pllr:'저용량(≤150mg) 전자간증 예방 사용, 고용량 금기', kfda:'2등급', note:'저용량은 예방 목적 사용 가능' },
+  // ── 편두통 ──
+  'Sumatriptan': { fda:'C', pllr:'임신 레지스트리 데이터 기형 증가 미관찰, 제한적', kfda:'2등급', note:'필요 시 단기 사용' },
+  'Rizatriptan': { fda:'C', pllr:'동물실험 고용량 기형, 인체 데이터 부족', kfda:'2등급', note:'수마트립탄 우선' },
+  'Zolmitriptan': { fda:'C', pllr:'동물실험 배아독성, 인체 데이터 제한적', kfda:'2등급', note:'가급적 회피' },
+  'Ergotamine': { fda:'X', pllr:'자궁수축 유발, 태반혈류 감소', kfda:'금기', note:'절대 금기' },
+  // ── CGRP 항체 ──
+  'Erenumab': { fda:'N/A', pllr:'동물실험 유해 없음, 인체 데이터 없음', kfda:'정보없음', note:'임상 데이터 없음, 비권장' },
+  'Fremanezumab': { fda:'N/A', pllr:'동물실험 유해 없음, 인체 데이터 없음', kfda:'정보없음', note:'임신 계획 시 중단 권장' },
+  'Galcanezumab': { fda:'N/A', pllr:'동물실험 유해 없음, 인체 데이터 없음', kfda:'정보없음', note:'반감기 길어 사전 중단' },
+  // ── 항우울제 ──
+  'Escitalopram': { fda:'C', pllr:'3분기 PPHN·신생아 적응증후군 위험', kfda:'2등급', note:'위험-편익 평가 필요' },
+  'Sertraline': { fda:'C', pllr:'SSRI 중 임신 데이터 가장 많음, 3분기 PPHN', kfda:'2등급', note:'SSRI 중 상대적 안전' },
+  'Fluoxetine': { fda:'C', pllr:'1분기 심장기형 일부 보고, 3분기 PPHN', kfda:'2등급', note:'장기 반감기 주의' },
+  'Paroxetine': { fda:'D', pllr:'1분기 심장기형(ASD/VSD) 위험 증가', kfda:'금기', note:'임신 중 금기' },
+  'Venlafaxine': { fda:'C', pllr:'신생아 적응 증후군 위험', kfda:'2등급', note:'위험-편익 평가' },
+  'Desvenlafaxine': { fda:'C', pllr:'Venlafaxine 활성대사체, 유사 위험', kfda:'2등급', note:'위험-편익 평가' },
+  'Duloxetine': { fda:'C', pllr:'3분기 신생아 금단증상', kfda:'2등급', note:'가급적 회피' },
+  'Bupropion': { fda:'C', pllr:'심장기형 위험 미증가, 비교적 안전', kfda:'2등급', note:'금연 목적 데이터 있음' },
+  'Mirtazapine': { fda:'C', pllr:'제한적 데이터, 조산 위험 일부 보고', kfda:'2등급', note:'SSRI 불가 시 대안' },
+  'Amitriptyline': { fda:'C', pllr:'오랜 사용 경험, 대규모 기형 증가 미보고', kfda:'2등급', note:'편두통 예방 목적 저용량 사용' },
+  'Nortriptyline': { fda:'C', pllr:'TCA 중 데이터 양호', kfda:'2등급', note:'편두통 예방 대안' },
+  // ── 항불안/수면 ──
+  'Lorazepam': { fda:'D', pllr:'1분기 구순열 위험 보고(논쟁), 신생아 금단', kfda:'금기', note:'임신 중 회피' },
+  'Alprazolam': { fda:'D', pllr:'신생아 금단증후군, 근긴장저하', kfda:'금기', note:'임신 중 회피' },
+  'Zolpidem': { fda:'C', pllr:'제한적 데이터, 조산 위험 일부 보고', kfda:'2등급', note:'단기 사용만' },
+  'Hydroxyzine': { fda:'C', pllr:'1분기 구개열 보고(구 데이터), 단기 사용', kfda:'2등급', note:'항히스타민계, 필요 시' },
+  // ── 기분안정제 ──
+  'Lithium': { fda:'D', pllr:'Ebstein anomaly 위험(절대위험 낮음), 임신 시 용량 조절', kfda:'금기', note:'중단 또는 최소 용량' },
+  'Valproate': { fda:'X', pllr:'신경관결손(6-10%), IQ 저하, 절대 금기', kfda:'금기', note:'절대 금기' },
+  'Carbamazepine': { fda:'D', pllr:'신경관결손 0.5-1%, 엽산 고용량 병용', kfda:'금기', note:'가급적 회피' },
+  'Lamotrigine': { fda:'C', pllr:'기분안정제 중 가장 안전, 구순열 미미한 증가', kfda:'2등급', note:'임신 중 용량 모니터링 필수' },
+  'Topiramate': { fda:'D', pllr:'구개열 위험 2-3배 증가, 저체중아', kfda:'금기', note:'임신 중 금기' },
+  // ── ADHD ──
+  'Concerta': { fda:'C', pllr:'Methylphenidate, 대규모 연구 기형 미증가', kfda:'2등급', note:'가급적 회피, 필요 시 상담' },
+  'Atomoxetine': { fda:'C', pllr:'동물실험 데이터만', kfda:'2등급', note:'가급적 회피' },
+  // ── 항정신병 ──
+  'Quetiapine': { fda:'C', pllr:'임신 레지스트리 데이터 축적 중, 체중 증가 주의', kfda:'2등급', note:'비정형 중 비교적 안전' },
+  'Olanzapine': { fda:'C', pllr:'임신성 당뇨 위험 증가, 거대아', kfda:'2등급', note:'대사 부작용 주의' },
+  'Aripiprazole': { fda:'C', pllr:'제한적 데이터, 동물실험 안전', kfda:'2등급', note:'필요 시 사용' },
+  'Haloperidol': { fda:'C', pllr:'오랜 사용 경험, 1분기 사지기형 일부 보고(논쟁)', kfda:'2등급', note:'급성기 필요 시' },
+  // ── 소화기 ──
+  'Metoclopramide': { fda:'B', pllr:'임신 오심에 광범위 사용, 안전 데이터 풍부', kfda:'안전', note:'입덧 1차 약제' },
+  'Ondansetron': { fda:'B', pllr:'1분기 구개열 일부 보고(논쟁), 대체로 안전', kfda:'2등급', note:'심한 입덧 시' },
+  'Omeprazole': { fda:'C', pllr:'동물실험 고용량 영향, 인체 대규모 연구 안전', kfda:'2등급', note:'필요 시 사용 가능' },
+  'Ranitidine': { fda:'B', pllr:'안전 데이터 풍부(현재 NDMA 이슈로 시판 중단)', kfda:'안전', note:'시판 중단, 파모티딘 대체' },
+  'Famotidine': { fda:'B', pllr:'안전 데이터 양호', kfda:'안전', note:'H2차단제 중 1차 선택' },
+  // ── 심혈관 ──
+  'Propranolol': { fda:'C', pllr:'IUGR 위험, 신생아 저혈당/서맥', kfda:'2등급', note:'편두통 예방, 모니터링 필요' },
+  'Labetalol': { fda:'C', pllr:'임신성 고혈압 1차 약제, 광범위 사용', kfda:'안전', note:'임신 고혈압 1차 선택' },
+  'Nifedipine': { fda:'C', pllr:'임신성 고혈압/자궁수축억제 사용', kfda:'2등급', note:'고혈압 2차 선택' },
+  'Methyldopa': { fda:'B', pllr:'임신 고혈압 가장 오래된 데이터, 안전', kfda:'안전', note:'임신 고혈압 1차' },
+  'Amlodipine': { fda:'C', pllr:'동물실험 데이터, 인체 제한적', kfda:'2등급', note:'니페디핀 우선' },
+  'Losartan': { fda:'D', pllr:'2-3분기 태아 신부전·양수과소증·두개골 저형성', kfda:'금기', note:'임신 확인 즉시 중단' },
+  'Enalapril': { fda:'D', pllr:'ARB와 동일 — 태아 신장/두개골 독성', kfda:'금기', note:'임신 확인 즉시 중단' },
+  // ── 내분비 ──
+  'Metformin': { fda:'B', pllr:'PCOS/GDM 사용 데이터 풍부, 태반 통과', kfda:'안전', note:'임신성 당뇨 인슐린 대안' },
+  'Insulin': { fda:'B', pllr:'태반 미통과, 임신 당뇨 1차', kfda:'안전', note:'혈당 관리 1차' },
+  'Levothyroxine': { fda:'A', pllr:'갑상선 기능 유지 필수, 용량 증가 필요', kfda:'안전', note:'임신 중 필수' },
+  'PTU': { fda:'D', pllr:'1분기 항갑상선 1차(간독성 주의), 2분기부터 MMI 전환', kfda:'2등급', note:'1분기만 사용' },
+  'Methimazole': { fda:'D', pllr:'1분기 두피결손·식도폐쇄증 위험, 2분기부터 사용', kfda:'금기(1분기)', note:'2-3분기 항갑상선' },
+  // ── 항생제 ──
+  'Amoxicillin': { fda:'B', pllr:'페니실린계, 안전', kfda:'안전', note:'1차 항생제' },
+  'Azithromycin': { fda:'B', pllr:'안전 데이터 양호', kfda:'안전', note:'마크로라이드 중 안전' },
+  'Cephalexin': { fda:'B', pllr:'세팔로스포린계, 안전', kfda:'안전', note:'요로감염 등' },
+  'Doxycycline': { fda:'D', pllr:'치아 착색, 뼈 성장 영향', kfda:'금기', note:'임신 중 금기' },
+  'Ciprofloxacin': { fda:'C', pllr:'연골 독성 동물실험, 인체 데이터 부족', kfda:'2등급', note:'대안 없을 때만' },
+  'Metronidazole': { fda:'B', pllr:'1분기 안전성 논쟁 있으나 대규모 연구 안전', kfda:'2등급', note:'2-3분기 안전' },
+  // ── 알레르기 ──
+  'Cetirizine': { fda:'B', pllr:'2세대 항히스타민, 안전', kfda:'안전', note:'임신 중 사용 가능' },
+  'Loratadine': { fda:'B', pllr:'안전 데이터 양호', kfda:'안전', note:'알레르기 1차' },
+  'Chlorpheniramine': { fda:'B', pllr:'1세대, 오랜 사용 경험', kfda:'안전', note:'졸음 부작용' },
+  // ── 보충제 ──
+  'Folic Acid': { fda:'A', pllr:'신경관결손 예방, 0.4-5mg 권장', kfda:'안전', note:'필수 보충제' },
+  'Iron': { fda:'A', pllr:'빈혈 예방, 적정 용량 안전', kfda:'안전', note:'필요 시 보충' },
+  'Vitamin D': { fda:'A', pllr:'적정 용량(1000-4000IU) 안전', kfda:'안전', note:'칼슘 흡수 필수' },
+  'Calcium': { fda:'A', pllr:'1000mg/일 안전, 전자간증 예방 효과', kfda:'안전', note:'유제품 섭취 보충' },
+  'DHA': { fda:'B', pllr:'태아 뇌발달, 200-300mg 권장', kfda:'안전', note:'오메가3, 수은 프리 제품' },
+  'CoQ10': { fda:'B', pllr:'제한적 데이터, 일반적으로 안전', kfda:'정보없음', note:'난자 질 개선 목적' },
+  'Arginine': { fda:'C', pllr:'고용량 데이터 부족', kfda:'정보없음', note:'정자 운동성 목적' },
+  'Silymarin': { fda:'C', pllr:'데이터 제한적', kfda:'정보없음', note:'간보호 목적' },
+  'Zinc': { fda:'A', pllr:'적정 용량(11mg) 안전, 면역·정자 기능', kfda:'안전', note:'보충제' },
+  // ── 기타 ──
+  'Febuxostat': { fda:'C', pllr:'임신 중 사용 데이터 제한적', kfda:'2등급', note:'회피 권장' },
+  'Colchicine': { fda:'C', pllr:'동물실험 기형, 인체 데이터 제한적', kfda:'2등급', note:'가급적 회피' },
+  'Prednisone': { fda:'C', pllr:'1분기 구개열 미미한 증가(0.3→0.5%)', kfda:'2등급', note:'최소 용량 단기' },
+  'Magnesium': { fda:'A', pllr:'안전, 전자간증 예방/치료', kfda:'안전', note:'편두통 예방에도 사용' },
 };
 
 const _DEFAULT_MILESTONES = [
@@ -6348,12 +6421,104 @@ async function brkAddMilestone() {
   showToast('항목 추가됨');
 }
 
-// ── 7-5: 약물 안전 등급 ──
+// ── 7-5: 약물 안전 등급 (3소스 교차검증) ──
+
+function _fdaColor(g){
+  if(!g||g==='?'||g==='N/A') return '#6b7280';
+  if(g==='A') return '#16a34a';
+  if(g==='B') return '#65a30d';
+  if(g.startsWith('C')) return '#f59e0b';
+  if(g.startsWith('D')||g.includes('D')) return '#ea580c';
+  if(g.startsWith('X')||g.includes('X')) return '#dc2626';
+  return '#6b7280';
+}
+function _fdaBg(g){
+  if(!g||g==='?'||g==='N/A') return '#f9fafb';
+  if(g==='A') return '#f0fdf4';
+  if(g==='B') return '#f7fee7';
+  if(g.startsWith('C')) return '#fffbeb';
+  if(g.startsWith('D')||g.includes('D')) return '#fff7ed';
+  if(g.startsWith('X')||g.includes('X')) return '#fef2f2';
+  return '#f9fafb';
+}
+function _kfdaColor(k){
+  if(k==='안전') return '#16a34a';
+  if(k==='2등급') return '#f59e0b';
+  if(k==='금기'||k?.includes('금기')) return '#dc2626';
+  return '#6b7280';
+}
+
+function _lookupDrugSafety(name) {
+  // 1) 내장 DB 직접 매칭
+  var safety=_PREGNANCY_SAFETY[name];
+  if(safety) return {...safety,source:'내장DB'};
+  // 2) 한영 매핑 후 내장 DB
+  var eng=_DRUG_NAMES[name];
+  if(eng) { safety=_PREGNANCY_SAFETY[eng]; if(safety) return {...safety,source:'내장DB'}; }
+  // 3) localStorage 캐시
+  try {
+    var cache=JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
+    if(cache[name]) return {...cache[name],source:'AI검색'};
+    if(eng&&cache[eng]) return {...cache[eng],source:'AI검색'};
+  } catch(e){}
+  return null;
+}
+
+function _cacheDrugSafety(name, data) {
+  try {
+    var cache=JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
+    cache[name]={...data,searchedAt:new Date().toISOString()};
+    localStorage.setItem('om_preg_drug_db',JSON.stringify(cache));
+  } catch(e){}
+}
+
+async function fetchDrugSafetyPerplexity(drugName) {
+  if(!S.keys?.perp){showToast('Perplexity API 키 필요');return null;}
+  const prompt=`약물 '${drugName}'의 임신 안전성 정보를 JSON으로 반환하세요.
+{"fda":"FDA등급(A/B/C/D/X)","pllr":"PLLR 요약(태아 위험 1-2문장)","kfda":"한국식약처(안전/2등급/금기 중 택1)","note":"핵심 요약 1문장"}
+불확실하면 "정보부족". JSON만 출력.`;
+  try {
+    const r=await fetchWithRetry('https://api.perplexity.ai/chat/completions',{method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+S.keys.perp},
+      body:JSON.stringify({model:'sonar',max_tokens:300,messages:[{role:'user',content:prompt}]})});
+    const d=await r.json();
+    const text=d.choices?.[0]?.message?.content||'';
+    const match=text.match(/\{[\s\S]*\}/);
+    if(match){
+      const parsed=JSON.parse(match[0]);
+      _cacheDrugSafety(drugName,parsed);
+      recordUsage('perp','sonar',d.usage?.prompt_tokens||0,d.usage?.completion_tokens||0);
+      return parsed;
+    }
+  } catch(e){console.error('Drug safety Perplexity error:',e);}
+  return null;
+}
+
+async function fetchDrugSafetyDUR(drugName) {
+  try {
+    const url=`https://apis.data.go.kr/1471000/DURPrdlstInfoService03/getPwnmTabooInfoList2?serviceKey=${_DRUG_API_KEY}&type=json&typeName=${encodeURIComponent(drugName)}&numOfRows=5`;
+    const r=await fetchWithRetry(url,{},{signal:AbortSignal.timeout(3000)});
+    const d=await r.json();
+    const items=d?.body?.items||[];
+    if(items.length) {
+      const item=items[0];
+      const grade=item.PRHIBT_CONTENT?.includes('1등급')?'금기':item.PRHIBT_CONTENT?.includes('2등급')?'2등급':'정보없음';
+      return {kfda_dur:grade, detail:item.PRHIBT_CONTENT||''};
+    }
+  } catch(e){}
+  return null;
+}
+
+async function refreshDrugSafety(drugName) {
+  const el=document.getElementById('ds-loading-'+CSS.escape(drugName));
+  if(el) el.style.display='inline';
+  const result=await fetchDrugSafetyPerplexity(drugName);
+  if(el) el.style.display='none';
+  if(result){showToast('✅ '+drugName+' 안전 정보 갱신');renderView('meds');}
+  else showToast('⚠️ 검색 실패');
+}
 
 function renderDrugSafety() {
-  var gradeColors = {A:'#16a34a',B:'#65a30d',C:'#f59e0b',D:'#ea580c','D(3rd)':'#ea580c',X:'#dc2626','X(3rd)':'#dc2626'};
-  var gradeBg = {A:'#f0fdf4',B:'#f7fee7',C:'#fffbeb',D:'#fff7ed','D(3rd)':'#fff7ed',X:'#fef2f2','X(3rd)':'#fef2f2'};
-
   // Collect meds from cross-domain conditions
   var currentUser = DC().user;
   var allMeds = {};
@@ -6372,43 +6537,70 @@ function renderDrugSafety() {
     });
   });
 
-  // Also check _DRUG_NAMES mapping for English names
   var cards = Object.entries(allMeds).map(function(entry){
     var name = entry[0], info = entry[1];
-    // Try to find safety info by matching English drug names
-    var safety = _PREGNANCY_SAFETY[name];
-    if (!safety) {
-      var engName = _DRUG_NAMES[name];
-      if (engName) safety = _PREGNANCY_SAFETY[engName];
-    }
+    var safety = _lookupDrugSafety(name);
+    var fda = safety?.fda || '?';
+    var pllr = safety?.pllr || '';
+    var kfda = safety?.kfda || '정보없음';
+    var note = safety?.note || '';
+    var source = safety?.source || '';
+    var fc = _fdaColor(fda), fb = _fdaBg(fda), kc = _kfdaColor(kfda);
 
-    var grade = safety ? safety.grade : '?';
-    var note = safety ? safety.note : '데이터 없음 — 의사와 상담 필요';
-    var color = gradeColors[grade] || '#6b7280';
-    var bg = gradeBg[grade] || '#f9fafb';
+    var badges = '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">'
+      + '<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:700;background:'+fc+'18;color:'+fc+';border:1px solid '+fc+'40">FDA: '+esc(fda)+'</span>'
+      + '<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:600;background:'+kc+'18;color:'+kc+';border:1px solid '+kc+'40">식약처: '+esc(kfda)+'</span>'
+      + (pllr?'<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd">PLLR</span>':'')
+      + '</div>';
 
-    return '<div style="padding:10px 12px;background:'+bg+';border:1.5px solid '+color+'30;border-radius:8px;margin-bottom:6px">'
+    var detail = (pllr?'<div style="font-size:.72rem;color:#0369a1;margin-top:4px"><b>PLLR:</b> '+esc(pllr)+'</div>':'')
+      + (note?'<div style="font-size:.72rem;color:var(--mu);margin-top:2px">'+esc(note)+'</div>':'');
+
+    var srcLabel = source==='내장DB'?'<span style="font-size:.58rem;color:var(--mu2)">✓ 공식</span>'
+      :source==='AI검색'?'<span style="font-size:.58rem;color:#f59e0b">🔍 AI검색 (확인 권장)</span>'
+      :'<span style="font-size:.58rem;color:var(--mu2)">데이터 없음</span>';
+
+    var refreshBtn = !safety?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--ac)" title="Perplexity로 검색">🔍 검색</button>`
+      :(source==='AI검색'?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--mu)" title="재검색">🔄</button>`:'');
+
+    return '<div style="padding:10px 12px;background:'+fb+';border:1.5px solid '+fc+'30;border-radius:8px;margin-bottom:6px">'
       + '<div style="display:flex;align-items:center;gap:8px">'
-      + '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:'+color+';color:white;font-size:.75rem;font-weight:700">'+grade+'</span>'
+      + '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:'+fc+';color:white;font-size:.72rem;font-weight:700">'+fda.charAt(0)+'</span>'
       + '<div style="flex:1">'
       + '<div style="font-size:.82rem;font-weight:600">'+esc(info.originalNames[0])+'</div>'
       + '<div style="font-size:.68rem;color:var(--mu)">'+info.domains.join(', ')+'</div>'
-      + '</div></div>'
-      + '<div style="font-size:.75rem;color:'+color+';margin-top:4px">'+esc(note)+'</div>'
+      + '</div>'
+      + srcLabel + refreshBtn
+      + '<span id="ds-loading-'+esc(name)+'" style="display:none;font-size:.6rem;color:var(--ac)">검색중...</span>'
+      + '</div>'
+      + badges + detail
       + '</div>';
   }).join('');
 
   if (!cards) cards = '<div class="hint">교차 도메인에서 활성 약물이 없습니다.<br>다른 도메인에서 질환/투약을 등록하면 여기에 자동 표시됩니다.</div>';
 
+  // Cache stats
+  var cacheStats='';
+  try {
+    var cache=JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
+    var cacheCount=Object.keys(cache).length;
+    var cacheSize=new Blob([JSON.stringify(cache)]).size;
+    if(cacheCount) cacheStats='<div style="font-size:.62rem;color:var(--mu2);margin-top:8px;text-align:right">💾 캐시: '+cacheCount+'개 약물 · '+Math.round(cacheSize/1024)+'KB</div>';
+  } catch(e){}
+
   return '<div>'
-    + '<div style="font-size:.78rem;color:var(--mu);margin-bottom:10px">다른 도메인에서 복용 중인 약물의 임신 안전 등급입니다.</div>'
+    + '<div style="font-size:.78rem;color:var(--mu);margin-bottom:10px">복용 중인 약물의 임신 안전성을 3개 소스로 교차 비교합니다.</div>'
     + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;font-size:.65rem">'
-    + ['A:안전','B:대체로 안전','C:위험-이익 평가','D:위험','X:금기'].map(function(g){
-      var p = g.split(':');
-      return '<span style="padding:2px 8px;border-radius:10px;background:'+(gradeBg[p[0]]||'#f9fafb')+';color:'+(gradeColors[p[0]]||'#6b7280')+';border:1px solid '+(gradeColors[p[0]]||'#6b7280')+'30">'+p[0]+': '+p[1]+'</span>';
+    + [['A','안전','#16a34a'],['B','대체로 안전','#65a30d'],['C','위험-이익','#f59e0b'],['D','위험','#ea580c'],['X','금기','#dc2626']].map(function(g){
+      return '<span style="padding:2px 8px;border-radius:10px;background:'+g[2]+'15;color:'+g[2]+';border:1px solid '+g[2]+'30">'+g[0]+': '+g[1]+'</span>';
     }).join('')
     + '</div>'
+    + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px;font-size:.6rem;color:var(--mu2)">'
+    + '<span>📊 3소스:</span> <span style="color:#16a34a">FDA</span> · <span style="color:#0369a1">PLLR</span> · <span style="color:#f59e0b">식약처</span>'
+    + ' | <span>✓ 공식 = 내장DB</span> · <span>🔍 = AI검색(Perplexity)</span>'
+    + '</div>'
     + cards
+    + cacheStats
     + '</div>';
 }
 
