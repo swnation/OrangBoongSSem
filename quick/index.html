@@ -1123,7 +1123,7 @@ updatePendingCount();
 const _handleHash=()=>{
   if(location.hash==='#outcome') switchTab('outcome');
   else if(location.hash==='#list') switchTab('list');
-  else switchTab('form');
+  else if(!location.hash || location.hash==='#form') switchTab('form');
 };
 window.addEventListener('hashchange',_handleHash);
 _handleHash();
