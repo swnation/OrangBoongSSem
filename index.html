@@ -560,13 +560,21 @@ const KEY_INFO = {
 
 const DEFAULT_PRICE_TABLE = {
   'gpt-5.4':{in:2.50,out:15.00},
+  'gpt-5.4-mini':{in:0.40,out:1.60},
   'gpt-5.3-chat-latest':{in:2.50,out:10.00},
+  'gpt-4.1':{in:2.00,out:8.00},
+  'gpt-4.1-mini':{in:0.40,out:1.60},
   'gpt-4o':{in:2.50,out:10.00},
+  'o3':{in:10.00,out:40.00},
+  'o4-mini':{in:1.10,out:4.40},
   'claude-sonnet-4-6':{in:3.00,out:15.00},
   'claude-opus-4-6':{in:5.00,out:25.00},
   'claude-haiku-4-5-20251001':{in:1.00,out:5.00},
+  'gemini-3.1-pro-preview':{in:2.50,out:15.00},
+  'gemini-3-flash-preview':{in:0.15,out:0.60},
   'gemini-2.5-pro':{in:1.25,out:10.00},
   'gemini-2.5-flash':{in:0.15,out:0.60},
+  'gemini-2.5-flash-lite':{in:0.04,out:0.15},
   'grok-4':{in:5.00,out:25.00},
   'grok-4-1-fast':{in:3.00,out:15.00},
   'grok-3':{in:3.00,out:15.00},
@@ -574,6 +582,8 @@ const DEFAULT_PRICE_TABLE = {
   'grok-4.20-multi-agent':{in:5.00,out:25.00},
   'sonar':{in:1.00,out:1.00},
   'sonar-pro':{in:3.00,out:15.00},
+  'sonar-reasoning-pro':{in:2.00,out:8.00},
+  'sonar-reasoning':{in:1.00,out:5.00},
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -1440,7 +1450,7 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
       }
     }
     // Fallback: usage가 0이면 텍스트 길이로 추정 (Grok 4 등 usage 미반환 시)
-    if(!inT&&!outT&&text.length>0){inT=Math.round((system.length+user.length)/3.5);outT=Math.round(text.length/3.5);}
+    if(!inT&&!outT&&text.length>0){inT=Math.round((system.length+user.length)*1.2);outT=Math.round(text.length*1.2);}
     recordUsage(aiId,model,inT,outT);
     return text;
   }
@@ -1497,6 +1507,14 @@ function buildUserPrompt(aiId, roundNum) {
   const question = sess.question || '(질문 미입력)';
 
   if (roundNum === 1) {
+    const mode=sess.mode||'normal';
+    // 디베이트 R1 심판(Claude): 다른 AI 답변을 포함하여 판정
+    if(mode==='debate'&&aiId==='claude'&&sess.rounds[0]?.answers) {
+      const others=Object.entries(AI_DEFS)
+        .filter(([id])=>id!=='claude'&&sess.rounds[0].answers[id])
+        .map(([id,def])=>`▶ [${def.name} — ${getDebateRole(id,sess.debateReversed)}]\n${sess.rounds[0].answers[id]}`).join('\n\n---\n\n');
+      return `${contextFull}\n\n[오늘 세션 질문]\n${question}\n\n[각 측 주장]\n${others}\n\n위 주장들을 심판으로서 평가하세요. 논거 강도, 근거 타당성, 과단정 여부를 체크하고 잠정 결론을 내려주세요.`;
+    }
     return `${contextFull}\n\n[오늘 세션 질문]\n${question}\n\n분석해 주세요. 서론/인사 없이 바로 핵심. 항목당 1문장. 최종 정리는 별도 요약 단계에서 하므로 여기선 분석 데이터만.`;
   }
   const prevRound = sess.rounds[roundNum-2];
@@ -1769,10 +1787,12 @@ async function runRound(roundNum, errorsOnly) {
   }
   const runBtn=document.getElementById('run-btn'); if(runBtn) runBtn.disabled=true;
 
-  await Promise.all(enabledAIs.map(async aiId=>{
+  // AI 1개 실행 헬퍼
+  const _runOneAI=async(aiId)=>{
     const ac=new AbortController();
     if(!S._abortControllers) S._abortControllers={};
     S._abortControllers[aiId]=ac;
+    setCardStatus(aiId,'loading');
     updateStopBtn(aiId,true); startAITimer(aiId);
     try {
       const answer = await callAIStream(aiId, getRoleSystem(aiId), buildUserPrompt(aiId,roundNum), (chunk)=>{
@@ -1802,7 +1822,22 @@ async function runRound(roundNum, errorsOnly) {
     }
     delete S._abortControllers?.[aiId];
     updateStopBtn(aiId,false); stopAITimer(aiId);
-  }));
+  };
+
+  const mode=S.session?.mode||'normal';
+  if(mode==='debate'&&roundNum===1) {
+    // 디베이트 R1: Phase1(찬반+중도+팩트 병렬) → Phase2(심판 Claude 순차)
+    const phase1=enabledAIs.filter(id=>id!=='claude');
+    const phase2=enabledAIs.filter(id=>id==='claude');
+    if(phase1.length) {
+      phase2.forEach(id=>setCardStatus(id,'waiting'));
+      await Promise.all(phase1.map(_runOneAI));
+    }
+    // Phase2: Claude 심판 — 다른 AI 답변을 context로 포함하여 실행
+    if(phase2.length) await Promise.all(phase2.map(_runOneAI));
+  } else {
+    await Promise.all(enabledAIs.map(_runOneAI));
+  }
 
   S.generating=false; if(runBtn) runBtn.disabled=false;
   const stopAllBar2=document.getElementById('stop-all-bar');if(stopAllBar2)stopAllBar2.style.display='none';
