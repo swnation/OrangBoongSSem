@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orangi-quick-v2';
+const CACHE_NAME = 'orangi-quick-v3';
 const PRECACHE = [
   './',
   '../style.css',
@@ -26,7 +26,8 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (url.hostname.includes('google') || url.hostname.includes('gstatic') ||
       url.hostname.includes('googleapis') || url.hostname.includes('script') ||
-      url.hostname.includes('ntfy')) {
+      url.hostname.includes('anthropic') || url.hostname.includes('openai') ||
+      url.hostname.includes('perplexity') || url.hostname.includes('ntfy')) {
     return;
   }
   if (e.request.destination === 'document' || url.pathname.endsWith('.css') || url.pathname.endsWith('.html')) {
