@@ -371,7 +371,7 @@ function showToast(msg, dur) {
 }
 
 function updatePendingCount() {
-  const logs = getQuickLogs();
+  const logs = getQuickEntries();
   const pending = logs.filter(l => !l.synced).length;
   const el = document.getElementById('pending-count');
   if (pending > 0) {
@@ -712,6 +712,7 @@ function renderRecentQuickLogs() {
           : '<span class="log-item-badge pending">미반영</span>';
         const tags = [
           ...(l.sites||[]).map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
+          ...(l.painType||[]).map(p => `<span class="log-tag" style="background:#fce7f3;color:#9d174d">${esc(p)}</span>`),
           ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
           ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
           ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
@@ -829,7 +830,7 @@ function renderOutcomeTab() {
   const el=document.getElementById('tab-outcome');
   const logs=getQuickEntries().slice().reverse();
   const now=Date.now()+9*3600000;
-  // 최근 7일 내 투약/처치가 있는 기록
+  // 최근 3일 내 투약/처치가 있는 기록
   const recent=logs.filter(l=>{
     const hasTx=(l.meds?.length>0)||(l.treatments?.length>0);
     const age=now-new Date(l.datetime).getTime();
@@ -841,7 +842,7 @@ function renderOutcomeTab() {
     +'</div>';
 
   if(!recent.length){
-    html+='<div class="empty">최근 7일 내 투약/처치 기록이 없습니다.<br>두통 기록을 먼저 작성하세요.</div>';
+    html+='<div class="empty">최근 3일 내 투약/처치 기록이 없습니다.<br>두통 기록을 먼저 작성하세요.</div>';
     el.innerHTML=html;return;
   }
 
@@ -929,6 +930,7 @@ function renderList() {
     const timeStr = dt[1] === '시간미상' ? '시간미상' : dt[1];
     const tags = [
       ...(l.sites||[]).map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
+      ...(l.painType||[]).map(p => `<span class="log-tag" style="background:#fce7f3;color:#9d174d">${esc(p)}</span>`),
       ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
       ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
       ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
@@ -950,9 +952,11 @@ function renderList() {
       ${l.synced?`<div id="log-detail-${l.id}" class="log-detail" style="display:none">
         <div style="font-size:.72rem;color:var(--mu);border-top:1px solid var(--bd);padding-top:8px;margin-top:6px">
           ${(l.sites||[]).length?`<div><strong>부위:</strong> ${(l.sites||[]).map(s=>esc(s)).join(', ')}</div>`:''}
+          ${(l.painType||[]).length?`<div><strong>통증:</strong> ${(l.painType||[]).map(p=>esc(p)).join(', ')}</div>`:''}
           ${(l.symptoms||[]).length?`<div><strong>증상:</strong> ${(l.symptoms||[]).map(s=>esc(s)).join(', ')}</div>`:''}
           ${(l.meds||[]).length?`<div><strong>투약:</strong> ${(l.meds||[]).map(m=>esc(m)).join(', ')}</div>`:''}
           ${(l.treatments||[]).length?`<div><strong>치료:</strong> ${(l.treatments||[]).map(t=>esc(t)).join(', ')}</div>`:''}
+          ${(l.triggers||[]).length?`<div><strong>트리거:</strong> ${(l.triggers||[]).map(t=>esc(t)).join(', ')}</div>`:''}
           ${l.memo?`<div><strong>메모:</strong> ${esc(l.memo)}</div>`:''}
           <div style="color:var(--mu2);margin-top:4px">✅ 반영 완료 · 수정 불가</div>
         </div>
