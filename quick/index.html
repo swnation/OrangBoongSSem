@@ -794,7 +794,7 @@ async function sendQuickNtfy(entry) {
   // 2시간 후 경과 확인 (ntfy 예약 발송 — 서버측 타이머, 앱 꺼도 동작)
   const orangiTopic=localStorage.getItem('om_ntfy_orangi');
   if(orangiTopic){
-    const fBody='🤕 두통 경과 확인\n'+((entry.datetime||'').slice(11,16)+' '+nrs+' '+(meds||'')+'\n→ 지금 어때요? 빠른기록 앱 → 🩺 경과 탭에서 입력해주세요!');
+    const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''}\n→ 지금 어때요? 빠른기록 앱 → 🩺 경과 탭에서 입력해주세요!`;
     try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'At':'2h'},body:fBody.trim()});}catch(e){}
   }
 }
