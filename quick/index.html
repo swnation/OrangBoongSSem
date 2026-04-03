@@ -818,8 +818,9 @@ async function sendQuickNtfy(entry) {
   // 2시간 후 경과 확인 (ntfy 예약 발송 — 서버측 타이머, 앱 꺼도 동작)
   const orangiTopic=localStorage.getItem('om_ntfy_orangi');
   if(orangiTopic){
-    const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''}\n→ 지금 어때요? 빠른기록 앱 → 🩺 경과 탭에서 입력해주세요!`;
-    try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'At':'2h'},body:fBody.trim()});}catch(e){}
+    const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''}\n→ 지금 어때요? 탭하면 경과 입력 화면으로 이동합니다`;
+    const quickUrl=(location.origin+location.pathname).replace(/\/[^/]*$/,'/quick/')+'#outcome';
+    try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'At':'2h','Click':quickUrl,'Actions':'view, 🩺 경과 입력, '+quickUrl+', clear=true'},body:fBody.trim()});}catch(e){}
   }
 }
 
@@ -1112,6 +1113,9 @@ async function fetchCloudStatus() {
 applyQuickConfig(); // 로컬 기록에서도 설정 복원
 renderForm();
 updatePendingCount();
+// URL 해시로 탭 자동 전환 (#outcome → 경과 탭)
+if(location.hash==='#outcome') { setTimeout(()=>switchTab('outcome'),100); }
+if(location.hash==='#list') { setTimeout(()=>switchTab('list'),100); }
 // 앱 시작 시 클라우드에서 전체 동기화
 fetchCloudStatus();
 // 포그라운드 복귀 시 재동기화
