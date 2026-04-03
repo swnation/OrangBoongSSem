@@ -1726,17 +1726,9 @@ async function runRound(roundNum, errorsOnly) {
     S.session._attachments = _sessionFiles.map(f=>({name:f.name,type:f.type,size:f.size,driveId:f.driveId,webLink:f.webLink}));
   }
   let enabledAIs = getEnabledAIs();
-  // 비용 최적화: 라운드별 AI 자동 선택 (일반/디베이트 모드)
+  // 심층 협진(normal): 5개 AI 모두 실행 (비용 최적화는 기본 모드에서 처리)
+  // 디베이트/multi-grok: 자체 로직 사용
   const mode=S.session?.mode||'normal';
-  if(!errorsOnly && mode!=='multi-grok' && mode!=='debate') {
-    if(roundNum===1) {
-      // R1: Perp(팩트수집) + GPT/Claude/Gemini. Grok은 R2부터
-      enabledAIs=enabledAIs.filter(id=>id!=='grok');
-    } else if(roundNum>=2) {
-      // R2+: Grok 포함, Perp는 제외 (팩트는 R1에서 충분)
-      enabledAIs=enabledAIs.filter(id=>id!=='perp');
-    }
-  }
   // errorsOnly: only re-run AIs that had errors in this round
   if(errorsOnly && S.session.rounds[roundNum-1]) {
     const rd = S.session.rounds[roundNum-1];
