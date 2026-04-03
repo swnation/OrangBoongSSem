@@ -2895,7 +2895,18 @@ function renderUsageView() {
       if(date.startsWith(monthStr)){dMonth+=dayCost;totalMonth+=dayCost;}
       dAll+=dayCost; totalAll+=dayCost;
     });
-    if(dToday>0||dMonth>0||dAll>0) domainCosts[domainId]={label:`${dd.icon} ${dd.user}·${dd.label}`,today:dToday,month:dMonth,all:dAll};
+    // Per-domain AI breakdown
+    const dByAI={};
+    Object.entries(ds.master.usage_data).forEach(([date,aiMap])=>{
+      Object.entries(aiMap).forEach(([aiId,data])=>{
+        if(!dByAI[aiId]) dByAI[aiId]={today:0,month:0,all:0};
+        const cost=data.cost||0;
+        if(date===todayStr) dByAI[aiId].today+=cost;
+        if(date.startsWith(monthStr)) dByAI[aiId].month+=cost;
+        dByAI[aiId].all+=cost;
+      });
+    });
+    if(dToday>0||dMonth>0||dAll>0) domainCosts[domainId]={label:`${dd.icon} ${dd.user}·${dd.label}`,today:dToday,month:dMonth,all:dAll,byAI:dByAI};
   });
 
   // ── 최근 14일 일별 차트 ──
@@ -2942,13 +2953,28 @@ function renderUsageView() {
     </div>`).join('');
 
   // ── 도메인별 ──
-  const domainRows=Object.entries(domainCosts).map(([id,d])=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.82rem">
-      <span style="min-width:130px">${d.label}</span>
-      <span style="font-family:var(--mono);color:var(--mu);flex:1;text-align:right">${krwShort(d.today)}</span>
-      <span style="font-family:var(--mono);min-width:100px;text-align:right">${krwShort(d.month)}</span>
-      <span style="font-family:var(--mono);min-width:100px;text-align:right">${krwShort(d.all)}</span>
-    </div>`).join('');
+  const domainRows=Object.entries(domainCosts).map(([id,d])=>{
+    const aiDetail=Object.entries(AI_DEFS).map(([aiId,def])=>{
+      const a=d.byAI?.[aiId];
+      if(!a) return '';
+      return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0 3px 18px;font-size:.72rem">
+        <div style="width:6px;height:6px;border-radius:50%;background:${def.color};flex-shrink:0"></div>
+        <span style="min-width:60px;color:var(--mu)">${def.name}</span>
+        <span style="font-family:var(--mono);color:var(--mu);flex:1;text-align:right">${krwShort(a.today)}</span>
+        <span style="font-family:var(--mono);min-width:100px;text-align:right">${krwShort(a.month)}</span>
+        <span style="font-family:var(--mono);min-width:100px;text-align:right">${krwShort(a.all)}</span>
+      </div>`;
+    }).filter(Boolean).join('');
+    return `<div>
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.82rem;cursor:pointer" onclick="const det=this.nextElementSibling;det.style.display=det.style.display==='none'?'block':'none';this.querySelector('.dc-arrow').textContent=det.style.display==='none'?'▸':'▾'">
+        <span style="min-width:130px"><span class="dc-arrow" style="font-size:.6rem;color:var(--mu2);margin-right:4px">▸</span>${d.label}</span>
+        <span style="font-family:var(--mono);color:var(--mu);flex:1;text-align:right">${krwShort(d.today)}</span>
+        <span style="font-family:var(--mono);min-width:100px;text-align:right">${krwShort(d.month)}</span>
+        <span style="font-family:var(--mono);min-width:100px;text-align:right">${krwShort(d.all)}</span>
+      </div>
+      <div style="display:none;background:var(--sf2);border-radius:6px;margin:2px 0 4px;padding:4px 0">${aiDetail}</div>
+    </div>`;
+  }).join('');
 
   // ── Current domain AI breakdown ──
   const usage=DM()?.usage_data||{};
