@@ -149,12 +149,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
         <div style="flex:1">
           <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">붕쌤 (즉시 알림)</div>
           <input class="settings-input" id="ntfy-bung-input" placeholder="붕쌤 ntfy 토픽"
-            onchange="localStorage.setItem('om_ntfy_bung',this.value.trim())">
+            onchange="localStorage.setItem('om_ntfy_bung',this.value.trim());syncCustomsToCloud()">
         </div>
         <div style="flex:1">
           <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">오랑이 (경과 알림)</div>
           <input class="settings-input" id="ntfy-orangi-input" placeholder="오랑이 ntfy 토픽"
-            onchange="localStorage.setItem('om_ntfy_orangi',this.value.trim())">
+            onchange="localStorage.setItem('om_ntfy_orangi',this.value.trim());syncCustomsToCloud()">
         </div>
       </div>
       <div class="settings-note">기록 저장 시 붕쌤에게 즉시 알림, 오랑이에게 2시간 후 경과 확인 알림을 보냅니다.</div>
@@ -216,11 +216,19 @@ function saveCustom(key, arr) {
 function getAllCustoms() {
   const result={};
   Object.keys(_QC_KEY_MAP).forEach(k=>{result[k]=getCustom(k);});
+  // ntfy 토픽도 포함 (기기간 공유)
+  const nb=localStorage.getItem('om_ntfy_bung');if(nb) result._ntfy_bung=nb;
+  const no=localStorage.getItem('om_ntfy_orangi');if(no) result._ntfy_orangi=no;
   return result;
 }
 function setAllCustoms(obj) {
   if(!obj) return;
+  // ntfy 토픽 복원
+  if(obj._ntfy_bung&&!localStorage.getItem('om_ntfy_bung')) localStorage.setItem('om_ntfy_bung',obj._ntfy_bung);
+  if(obj._ntfy_orangi&&!localStorage.getItem('om_ntfy_orangi')) localStorage.setItem('om_ntfy_orangi',obj._ntfy_orangi);
+  // 커스텀 칩 복원
   Object.entries(obj).forEach(([k,arr])=>{
+    if(k.startsWith('_')) return; // skip settings keys
     if(!Array.isArray(arr)||!arr.length) return;
     const existing=getCustom(k);
     const merged=[...new Set([...existing,...arr])];
