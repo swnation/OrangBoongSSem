@@ -818,21 +818,57 @@ async function sendQuickNtfy(entry) {
   const trg=(entry.triggers||[]).join(', ');
   const body=['🤕 오랑이 두통 기록 (빠른기록)',((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim(),meds?'💊 '+meds:'',tx?'🩺 '+tx:'',trg?'⚡ '+trg:''].filter(Boolean).join('\n');
   try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
-  // 1시간 후 경과 확인 (ntfy 예약 발송 — 항상 최신 기록 기준으로 발송)
-  // 이전 알림이 먼저 도착해도 rate.html이 최신 미평가 기록을 보여줌
+  // 1시간 후 경과 알림 예약 (클라이언트 타이머 — 새 기록 시 이전 예약 자동 취소)
+  scheduleOutcomeNtfy(entry);
+}
+
+let _outcomeTimer=null;
+function scheduleOutcomeNtfy(entry){
+  // 이전 타이머 취소
+  if(_outcomeTimer) clearTimeout(_outcomeTimer);
+  // localStorage에 예약 정보 저장 (페이지 닫힌 후 재진입 시 체크용)
+  const sendAt=Date.now()+3600000; // 1시간 후
+  localStorage.setItem('om_outcome_pending',JSON.stringify({id:entry.id,sendAt,datetime:entry.datetime}));
+  _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(entry.id),3600000);
+}
+
+async function sendOutcomeNtfy(entryId){
+  localStorage.removeItem('om_outcome_pending');
+  // 이미 경과 기록됐으면 알림 안 보냄
+  const logs=getQuickEntries();
+  const entry=logs.find(l=>String(l.id)===String(entryId));
+  if(!entry||entry.outcome) return;
   const orangiTopic=localStorage.getItem('om_ntfy_orangi');
-  if(orangiTopic){
-    const eid=entry.id;
-    const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
-    const rateUrl=baseUrl+'rate.html';
-    const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''}\n아래 버튼으로 바로 기록하세요!`;
-    const actions=[
-      `view, 😊 호전, ${rateUrl}#rate-better-${eid}, clear=true`,
-      `view, 😐 비슷, ${rateUrl}#rate-same-${eid}, clear=true`,
-      `view, 😣 악화, ${rateUrl}#rate-worse-${eid}, clear=true`
-    ].join('; ');
-    try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'At':'1h','Click':rateUrl+'#'+eid,'Actions':actions},body:fBody.trim()});}catch(e){}
-  }
+  if(!orangiTopic) return;
+  const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
+  const meds=(entry.meds||[]).join(', ');
+  const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
+  const rateUrl=baseUrl+'rate.html';
+  const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''}\n아래 버튼으로 바로 기록하세요!`;
+  const actions=[
+    `view, 😊 호전, ${rateUrl}#rate-better-${entryId}, clear=true`,
+    `view, 😐 비슷, ${rateUrl}#rate-same-${entryId}, clear=true`,
+    `view, 😣 악화, ${rateUrl}#rate-worse-${entryId}, clear=true`
+  ].join('; ');
+  try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'Click':rateUrl+'#'+entryId,'Actions':actions},body:fBody.trim()});}catch(e){}
+}
+
+// 페이지 로드/복귀 시 미발송 경과 알림 체크
+function checkPendingOutcome(){
+  const raw=localStorage.getItem('om_outcome_pending');
+  if(!raw) return;
+  try{
+    const {id,sendAt}=JSON.parse(raw);
+    const now=Date.now();
+    if(now>=sendAt){
+      // 시간 지남 → 즉시 발송
+      sendOutcomeNtfy(id);
+    } else {
+      // 아직 안 됨 → 남은 시간만큼 타이머
+      if(_outcomeTimer) clearTimeout(_outcomeTimer);
+      _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(id),sendAt-now);
+    }
+  }catch(e){localStorage.removeItem('om_outcome_pending');}
 }
 
 // ── 경과(Outcome) 탭 ──
@@ -1140,9 +1176,10 @@ async function fetchCloudStatus() {
 }
 
 // ── Init ──
-applyQuickConfig(); // 로컬 기록에서도 설정 복원
+applyQuickConfig();
 renderForm();
 updatePendingCount();
+checkPendingOutcome(); // 미발송 경과 알림 체크
 // URL 해시로 탭 자동 전환 (#outcome → 경과 탭)
 const _handleHash=()=>{
   const h=location.hash;
@@ -1165,7 +1202,7 @@ _handleHash();
 fetchCloudStatus();
 // 포그라운드 복귀 시 재동기화
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) fetchCloudStatus();
+  if (!document.hidden) { fetchCloudStatus(); checkPendingOutcome(); }
 });
 
 // Register service worker
