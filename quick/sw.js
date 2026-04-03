@@ -1,6 +1,7 @@
-const CACHE_NAME = 'orangi-quick-v12';
+const CACHE_NAME = 'orangi-quick-v13';
 const PRECACHE = [
   './',
+  './rate.html',
   '../style.css',
   'https://cdn.jsdelivr.net/npm/marked@15/marked.min.js',
   'https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js',
