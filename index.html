@@ -1249,6 +1249,39 @@ function getRoleSystem(aiId) {
   const dc = DC();
   const mode=S.session?.mode||'normal';
 
+  if(mode==='basic') {
+    const basicRoles={
+      gpt: `당신은 환자 데이터 분석 전담자입니다.
+【역할 제약】의료적 판단·약물 추천·진단명 제시 금지. 데이터 패턴만 도출.
+【할 일】
+1. 패턴 분석: 구체적 수치 필수 (예: "기압 저하 시 NRS +2.1점, n=8")
+2. 상관관계: 확률/비율 포함 (예: "스트레스 있는 날 70% 두통")
+3. 약물 반응도: 복용 후 NRS 변화, 반응시간
+4. 추세: 월별/주별 변화율
+【형식】## 📊 데이터 분석 (GPT) 헤딩 아래 각 항목 불릿. 데이터 5건 미만이면 "데이터 부족" 명시.`,
+
+      perp: `당신은 의료 근거 검색 전담자입니다.
+【역할 제약】의료적 판단·권고 금지. 객관적 근거(가이드라인·논문·통계)만 제공.
+【할 일】
+1. 최신 임상 가이드라인 (출처+년도 필수)
+2. 관련 논문/메타분석 (최근 3년 우선)
+3. 약물/치료 효과 통계 (효과율, 95% CI 등)
+4. 임신 관련 안전성 정보 (해당 시)
+【형식】## 📚 근거 검색 (Perplexity) 헤딩 아래 각 항목 불릿+출처. 불확실하면 "정보 부족" 명시.`,
+
+      claude: `당신은 주치의(attending physician)입니다.
+【역할】GPT의 환자 데이터 분석과 Perplexity의 외부 근거를 종합하여 최종 임상 판단과 액션 플랜을 도출하세요.
+【주의】
+- 데이터↔근거 충돌 시 명시적 언급 ("데이터는 A를 시사하지만, 가이드라인은 B를 권고")
+- 환자 특수성(임신 준비, 만성 질환 등) 반드시 고려
+- 모호함 피하고 구체적 액션으로 마무리
+【형식】
+## 🏥 최종 판단 & 액션 플랜 (Claude)
+**상황 요약** → **임상 판단** (근거 1~2문장) → **권장 액션** (1순위/2순위/금기) → **모니터링 포인트** → **환자 설명용 문장**`,
+    };
+    return `${dc.user} ${dc.label} 기본 협진 — ${AI_DEFS[aiId].name}\n${basicRoles[aiId]||basicRoles.claude}`;
+  }
+
   if(mode==='debate') {
     const rev=S.session?.debateReversed;
     const debateRoles={
@@ -1471,7 +1504,7 @@ function startNewSession(prefillQuestion, mode) {
     id:Date.now(), date:kstToday(),
     question:prefillQuestion||'', rounds:[], currentRound:0, summary:null,
     new_consensus:[], new_discarded:[], updated_issues:[],
-    mode: mode||'normal', // 'normal','debate','quick','multi-grok'
+    mode: mode||'basic', // 'basic','normal','debate','quick','multi-grok'
     debateReversed: false,
     grokAgentLevel: 4,
   };
@@ -1489,21 +1522,129 @@ function startSessionFromLogs() {
   startNewSession(question);
 }
 
-// ── 경량 모드 (빠른 체크) ──
+// ── 기본 모드 (GPT||Perp → Claude) ──
 function startLightMode() {
-  const preferred=['claude','gpt','gemini','grok','perp'];
-  const aiId=preferred.find(id=>S.keys[id]);
-  if(!aiId){showToast('❌ API 키가 없습니다.');return;}
-  const recentSummary=getRecentLogSummary();
-  const crossCtx=getCrossDomainContext();
-  const autoQuestion=`최근 기록 기반 빠른 상태 체크를 해주세요.\n${recentSummary||'(최근 기록 없음)'}${crossCtx}\n\n다음을 간결하게 (5문장 이내) 답해주세요:\n1. 현재 상태 요약 (추세)\n2. 주의할 점\n3. 다음 조치 권장사항`;
-  _sessionFiles=[];
-  S.session={id:Date.now(),date:kstToday(),question:autoQuestion,rounds:[],currentRound:0,summary:null,new_consensus:[],new_discarded:[],updated_issues:[],mode:'light',lightAI:aiId,debateReversed:false,grokAgentLevel:4};
-  S._dirty=true;
-  switchView('session');
-  document.getElementById('session-round-badge').style.display='inline';
-  document.getElementById('session-round-badge').textContent='⚡';
-  setTimeout(()=>runQuickQuestion(aiId),100);
+  // Legacy: redirect to basic mode session
+  startNewSession('', 'basic');
+}
+
+async function runBasicMode() {
+  if(S.generating) return;
+  const q=document.getElementById('q-input')?.value?.trim();
+  if(!q){showToast('❌ 질문을 입력해 주세요.');return;}
+
+  // Check required AI keys
+  const needed=['gpt','perp','claude'];
+  const missing=needed.filter(id=>!S.keys[id]);
+  if(missing.length){showToast('❌ API 키 없음: '+missing.map(id=>AI_DEFS[id].name).join(', '));return;}
+
+  S.session.question=q;
+  if(_sessionFiles.length) S.session._attachments=_sessionFiles.map(f=>({name:f.name,type:f.type,size:f.size,driveId:f.driveId,webLink:f.webLink}));
+
+  saveSessionSnapshot();
+  S.generating=true; S._dirty=true;
+  S.session.currentRound=1;
+  document.getElementById('session-round-badge').textContent='R1';
+  const stopAllBar=document.getElementById('stop-all-bar');if(stopAllBar)stopAllBar.style.display='';
+  if(!S.session.rounds[0]) S.session.rounds[0]={round:1,answers:{},errors:{}};
+
+  // Hide non-basic AI cards
+  Object.keys(AI_DEFS).forEach(id=>{
+    const card=document.querySelector(`[data-ai="${id}"]`);
+    if(card) card.style.display=['gpt','perp','claude'].includes(id)?'':'none';
+  });
+
+  // ── R1: GPT + Perplexity 병렬 ──
+  const contextFull=getFullContext(q);
+  const r1Prompt=`${contextFull}\n\n[오늘 세션 질문]\n${q}\n\n분석해 주세요. 서론/인사 없이 바로 핵심.`;
+
+  setCardStatus('gpt','loading'); setCardStatus('perp','loading');
+  setCardStatus('claude','waiting');
+  startAITimer('gpt'); startAITimer('perp');
+
+  const r1Results={};
+  await Promise.all(['gpt','perp'].map(async aiId=>{
+    const ac=new AbortController();
+    if(!S._abortControllers) S._abortControllers={};
+    S._abortControllers[aiId]=ac;
+    updateStopBtn(aiId,true);
+    try {
+      const answer=await callAIStream(aiId,getRoleSystem(aiId),r1Prompt,(chunk)=>{
+        const ta=document.getElementById('ans-'+aiId);
+        if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
+      },ac.signal);
+      r1Results[aiId]=answer;
+      S.session.rounds[0].answers[aiId]=answer;
+      delete S.session.rounds[0].errors[aiId];
+      const ta=document.getElementById('ans-'+aiId);
+      if(ta){ta.value=answer;ta.classList.remove('gen');}
+      updateAICardMD(aiId,answer);
+      setCardStatus(aiId,'done');
+    } catch(e) {
+      if(e.name==='AbortError'){
+        const ta=document.getElementById('ans-'+aiId);
+        const partial=ta?.value||'';
+        if(partial){r1Results[aiId]=partial;S.session.rounds[0].answers[aiId]=partial;delete S.session.rounds[0].errors[aiId];setCardStatus(aiId,'done');}
+        else{S.session.rounds[0].errors[aiId]=true;setCardStatus(aiId,'error');}
+      } else {
+        const msg='⚠️ 오류: '+e.message;
+        S.session.rounds[0].answers[aiId]=msg;
+        S.session.rounds[0].errors[aiId]=true;
+        setCardStatus(aiId,'error');
+      }
+    }
+    delete S._abortControllers?.[aiId];
+    updateStopBtn(aiId,false); stopAITimer(aiId);
+  }));
+
+  // ── R2: Claude 순차 (R1 결과를 context로) ──
+  S.session.currentRound=2;
+  if(!S.session.rounds[1]) S.session.rounds[1]={round:2,answers:{},errors:{}};
+  document.getElementById('session-round-badge').textContent='R2';
+
+  const claudePrompt=`${contextFull}\n\n[오늘 세션 질문]\n${q}\n\n[GPT 데이터 분석]\n${r1Results.gpt||'(실패)'}\n\n[Perplexity 근거 검색]\n${r1Results.perp||'(실패)'}\n\n위 두 AI의 분석과 근거를 종합하여 최종 임상 판단과 액션 플랜을 도출하세요.`;
+
+  setCardStatus('claude','loading');
+  startAITimer('claude');
+  const ac=new AbortController();
+  if(!S._abortControllers) S._abortControllers={};
+  S._abortControllers.claude=ac;
+  updateStopBtn('claude',true);
+  try {
+    const answer=await callAIStream('claude',getRoleSystem('claude'),claudePrompt,(chunk)=>{
+      const ta=document.getElementById('ans-claude');
+      if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
+    },ac.signal);
+    S.session.rounds[1].answers.claude=answer;
+    delete S.session.rounds[1].errors.claude;
+    const ta=document.getElementById('ans-claude');
+    if(ta){ta.value=answer;ta.classList.remove('gen');}
+    updateAICardMD('claude',answer);
+    setCardStatus('claude','done');
+  } catch(e) {
+    if(e.name==='AbortError'){
+      const ta=document.getElementById('ans-claude');
+      const partial=ta?.value||'';
+      if(partial){S.session.rounds[1].answers.claude=partial;delete S.session.rounds[1].errors.claude;setCardStatus('claude','done');}
+      else{S.session.rounds[1].errors.claude=true;setCardStatus('claude','error');}
+    } else {
+      S.session.rounds[1].answers.claude='⚠️ 오류: '+e.message;
+      S.session.rounds[1].errors.claude=true;
+      setCardStatus('claude','error');
+    }
+  }
+  delete S._abortControllers?.claude;
+  updateStopBtn('claude',false); stopAITimer('claude');
+
+  S.generating=false;
+  const stopAllBar2=document.getElementById('stop-all-bar');if(stopAllBar2)stopAllBar2.style.display='none';
+  try{await saveMaster();
+    const bar=document.getElementById('autosave-bar');
+    if(bar){bar.textContent=`✓ 기본 협진 자동저장 ${new Date().toLocaleTimeString('ko-KR')}`;bar.classList.add('autosave-pulse');setTimeout(()=>bar.classList.remove('autosave-pulse'),2000);}
+  }catch(e){}
+  const actionBar=document.getElementById('action-bar');
+  if(actionBar) actionBar.innerHTML=renderActionBar(S.session.currentRound);
+  updateSidebarCost();
 }
 
 // Session mode suggestion (keyword-based, no AI)
@@ -1809,9 +1950,9 @@ function setCardStatus(aiId,status) {
   if(status==='error') card.classList.add('error');
   const chip=document.getElementById('chip-'+aiId);
   if(chip){
-    const labels={loading:'생성중...',done:'완료',error:'오류',idle:''};
-    const bg={loading:'#1a2535',done:'#0d2a1a',error:'#2a1010',idle:'transparent'};
-    const fg={loading:'#60a0c8',done:'#2d8a5a',error:'#c05050',idle:'inherit'};
+    const labels={loading:'생성중...',done:'완료',error:'오류',waiting:'대기중',idle:''};
+    const bg={loading:'#1a2535',done:'#0d2a1a',error:'#2a1010',waiting:'#1a1a2a',idle:'transparent'};
+    const fg={loading:'#60a0c8',done:'#2d8a5a',error:'#c05050',waiting:'#8888aa',idle:'inherit'};
     chip.textContent=labels[status]||'';
     chip.style.cssText=`background:${bg[status]};color:${fg[status]};font-size:.62rem;font-family:var(--mono);padding:2px 6px;border-radius:3px;margin-left:auto`;
   }
@@ -2159,7 +2300,7 @@ function renderSession() {
 
   // Mode selector (only at R0)
   const modeSelector = curRound===0 ? `<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
-    ${[['normal','⚡ 일반 협진'],['debate','⚔️ 디베이트'],['multi-grok','🤖 Grok Multi-Agent'],['quick','💬 빠른 질문'],['light','⚡ 빠른 체크']].map(([m,label])=>
+    ${[['basic','🌱 기본 협진'],['normal','⚡ 심층 협진'],['debate','⚔️ 디베이트'],['multi-grok','🤖 Grok Multi-Agent'],['quick','💬 빠른 질문']].map(([m,label])=>
       `<button class="log-vtab ${mode===m?'active':''}" onclick="S.session.mode='${m}';renderView('session')">${label}</button>`).join('')}
   </div>` : '';
 
@@ -2167,6 +2308,12 @@ function renderSession() {
   const grokAgentSelector = mode==='multi-grok'&&curRound===0 ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
     <span style="font-size:.72rem;color:var(--mu)">에이전트 수:</span>
     ${[4,8,16].map(n=>`<button class="log-vtab ${(sess.grokAgentLevel||4)===n?'active':''}" onclick="S.session.grokAgentLevel=${n};renderView('session')" style="font-size:.72rem;padding:4px 12px">${n}${n===4?' (빠름)':n===8?' (균형)':' (심층)'}</button>`).join('')}
+  </div>` : '';
+
+  // Basic mode description
+  const basicDesc = mode==='basic'&&curRound===0 ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:10px;padding:10px 12px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0">
+    <span style="font-size:.72rem;color:#15803d">🌱 <b>기본 모드</b>: GPT(데이터분석) + Perplexity(근거검색) 병렬 → Claude(최종판단) 순차</span>
+    <span style="font-size:.65rem;color:#16a34a;margin-left:auto">3개 AI · 비용↓ · 일상 진료 최적</span>
   </div>` : '';
 
   // Debate reverse toggle
@@ -2181,6 +2328,8 @@ function renderSession() {
   </div>` : '';
 
   const aiCards=Object.entries(AI_DEFS).map(([id,def])=>{
+    // Basic mode: GPT, Perplexity, Claude만 표시
+    if(mode==='basic'&&id!=='gpt'&&id!=='perp'&&id!=='claude') return '';
     // Grok Multi-Agent: Grok 카드만 표시
     if(mode==='multi-grok'&&id!=='grok') return '';
     const ans=curRound>0?(sess.rounds[curRound-1]?.answers?.[id]||''):'';
@@ -2254,10 +2403,11 @@ function renderSession() {
       <div style="margin-top:8px;text-align:right"><button class="btn-accum-add" style="font-size:.72rem;padding:4px 12px" onclick="saveAsTemplate()">📌 템플릿 저장</button></div>
       `:curRound<4&&sess._attachments?.length?`<div style="margin-top:6px;font-size:.72rem;color:var(--mu)">📎 첨부 ${sess._attachments.length}건</div>`:''}
     </div>
+    ${basicDesc}
     ${debateToggle}
     ${grokAgentSelector||''}
     ${mode!=='quick'?`<div class="round-bar">
-      <span style="font-size:.72rem;color:#5a7a95;font-family:var(--mono)">${mode==='debate'?'⚔️ 디베이트':'진행'}:</span>
+      <span style="font-size:.72rem;color:#5a7a95;font-family:var(--mono)">${mode==='debate'?'⚔️ 디베이트':mode==='basic'?'🌱 기본':'진행'}:</span>
       ${roundDots}
       <span style="font-size:.72rem;color:#3a5a6a;margin-left:auto;font-family:var(--mono)">${curRound===0?'시작 전':curRound===4?'완료':`R${curRound} 완료`}</span>
     </div>`:''}
@@ -2286,8 +2436,8 @@ function _detectConflict() {
 function renderActionBar(curRound) {
   const mode=S.session?.mode||'normal';
 
-  // Quick question / light mode
-  if(mode==='quick'||mode==='light') {
+  // Quick question mode
+  if(mode==='quick') {
     if(curRound>=4) return `<div class="round-action-bar" style="border-color:#10b98155;background:#f0fdf4"><span style="color:var(--gr);font-size:.85rem;font-weight:600">✅ 빠른 질문 완료</span><button class="btn-run-round green" onclick="startNewSession()" style="margin-left:auto">새 세션</button></div>`;
     const selAI=S.session._quickSelectedAI||'';
     return `<div class="round-action-bar ${selAI?'selection-active':''}" style="flex-wrap:wrap;gap:6px;align-items:center">
@@ -2334,11 +2484,24 @@ function renderActionBar(curRound) {
   }
 
   // R0 start
+  // Basic mode
+  if(mode==='basic') {
+    if(curRound>=4) return `<div class="round-action-bar" style="border-color:#10b98155;background:#f0fdf4"><span style="color:var(--gr);font-size:.85rem;font-weight:600">✅ 기본 협진 완료</span><button class="btn-run-round green" onclick="startNewSession()">새 세션</button><button class="btn-run-round" onclick="continueSession()" style="background:var(--ac)">🔄 이어서 질문</button></div>`;
+    if(curRound>0) {
+      return `<div class="round-action-bar" style="flex-wrap:wrap">
+        <button class="btn-run-round green" onclick="runFinalSummary()" style="font-size:.78rem;padding:8px 14px">✅ 요약 & 종료</button>
+        <button class="btn-run-round" onclick="S.session.mode='normal';runRound(${curRound+1})">⚡ 심층 모드로 전환</button>
+        <button class="btn-undo" onclick="undoSession()" ${_sessionHistory.length?'':'disabled'}>↩ Undo</button>
+      </div>`;
+    }
+    return `<div class="round-action-bar"><button class="btn-run-round" id="run-btn" onclick="runBasicMode()">🌱 기본 협진 시작 — GPT+Perplexity→Claude</button><span class="run-note">데이터분석+근거검색 → 최종판단</span></div>`;
+  }
+
   if(mode==='multi-grok') {
     return `<div class="round-action-bar"><button class="btn-run-round" id="run-btn" onclick="runGrokMultiAgent()" style="background:#1DA1F2">🤖 Grok Multi-Agent 시작 (${S.session?.grokAgentLevel||4} 에이전트)</button><span class="run-note">Grok 내부 토론 → Claude 형식 요약</span></div>`;
   }
-  const startLabel=mode==='debate'?'⚔️ R1 시작 — 5역할 디베이트':'⚡ R1 시작 — 5개 AI 동시 답변';
-  return `<div class="round-action-bar"><button class="btn-run-round" id="run-btn" onclick="runRound(1)">${startLabel}</button><span class="run-note">${mode==='debate'?'디베이트 시작':'독립 분석 시작'}</span></div>`;
+  const startLabel=mode==='debate'?'⚔️ R1 시작 — 5역할 디베이트':'⚡ R1 시작 — 5개 AI 심층 협진';
+  return `<div class="round-action-bar"><button class="btn-run-round" id="run-btn" onclick="runRound(1)">${startLabel}</button><span class="run-note">${mode==='debate'?'디베이트 시작':'5개 AI 독립 분석 시작'}</span></div>`;
 }
 
 // Mode suggestion UI update
