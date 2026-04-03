@@ -295,6 +295,18 @@ function kstNow() {
   return { date: d.toISOString().slice(0,10), time: d.toISOString().slice(11,16) };
 }
 
+// 날씨 자동 수집 (메인앱과 동일)
+async function fetchWeather(){
+  const key=localStorage.getItem('om_weather_key')||'';
+  if(!key) return null;
+  try{
+    const r=await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=37.5326&lon=127.1378&appid=${key}&units=metric&lang=kr`,{signal:AbortSignal.timeout(2000)});
+    if(!r.ok) return null;
+    const d=await r.json();
+    return{temp:Math.round(d.main.temp*10)/10,humidity:d.main.humidity,pressure:d.main.pressure,condition:d.weather?.[0]?.description||''};
+  }catch(e){return null;}
+}
+
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
@@ -745,6 +757,7 @@ function renderRecentQuickLogs() {
           <div class="log-item-head">
             <span class="log-item-date">${dt[0].slice(5)} ${timeStr}</span>
             ${nrsHtml} ${badge}
+            ${l.weather?`<span style="font-size:.55rem;color:var(--mu2);margin-left:auto">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</span>`:''}
           </div>
           ${tags ? `<div class="log-item-tags">${tags}</div>` : ''}
           ${l.memo ? `<div class="log-item-memo">${esc(l.memo)}</div>` : ''}
@@ -818,6 +831,9 @@ async function saveEntry() {
     synced: false,
     createdAt: new Date(Date.now() + 9*3600000).toISOString()
   };
+
+  // 날씨 자동 첨부
+  try{const w=await fetchWeather();if(w)entry.weather=w;}catch(e){}
 
   logs.push(entry);
   saveQuickLogs(logs);
@@ -975,6 +991,17 @@ function renderOutcomeTab() {
         +'<option value="">⏱ 변경</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option><option value="180">3시간</option>'
         +'</select>'
         +'</div>';
+    } else if(!l.outcome&&!l.outcomeNotifyAt){
+      // 알림 미예약 미평가 기록 → 수동 예약 가능
+      html+='<div style="margin-top:6px;display:flex;align-items:center;gap:6px;font-size:.68rem">'
+        +'<span style="color:var(--mu2)">⏱ 알림 없음</span>'
+        +'<select onchange="if(this.value)rescheduleOutcome('+l.id+',+this.value)" style="border:1px solid var(--bd);border-radius:4px;padding:2px 4px;font-size:.65rem;background:var(--sf);color:var(--ink)">'
+        +'<option value="">알림 예약</option><option value="30">30분</option><option value="60">1시간</option><option value="120">2시간</option>'
+        +'</select></div>';
+    }
+    // 날씨 표시
+    if(l.weather){
+      html+='<div style="font-size:.58rem;color:var(--mu2);margin-top:4px">'+l.weather.condition+' '+l.weather.temp+'° '+l.weather.pressure+'hPa '+l.weather.humidity+'%</div>';
     }
     html+='</div>';
   });
@@ -1059,10 +1086,11 @@ function renderList() {
     const badge = l.synced
       ? '<span class="log-item-badge synced">반영됨</span>'
       : '<span class="log-item-badge pending">미반영</span>';
+    const wInfo=l.weather?`<span style="font-size:.55rem;color:var(--mu2)">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</span>`:'';
     return `<div class="log-item" style="${l.synced?'opacity:.7':''}" ${l.synced?`onclick="toggleLogDetail(${l.id})"`:''}>
       <div class="log-item-head">
         <span class="log-item-date">${dateStr} ${timeStr}</span>
-        ${nrsHtml} ${badge}
+        ${nrsHtml} ${badge} ${wInfo}
       </div>
       ${tags ? `<div class="log-item-tags">${tags}</div>` : ''}
       ${l.memo ? `<div class="log-item-memo">${esc(l.memo)}</div>` : ''}

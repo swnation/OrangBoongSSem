@@ -4754,7 +4754,38 @@ function getRecentLogSummary() {
     const worse=rated.filter(l=>l.outcome.rating==='worse'||l.outcome.rating==='none').length;
     outcomeSummary=`\n경과평가: ${rated.length}건 중 호전${better} 비슷${same} 악화${worse}`;
   }
-  return `[최근 7일 기록]\n${lines}\n평균NRS: ${avg}${outcomeSummary}`;
+  // 날씨 정보 포함
+  const wLines=week.filter(l=>l.weather&&l.nrs>=0).map(l=>`${l.datetime.slice(5,10)} NRS${l.nrs} ${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa ${l.weather.humidity}%`);
+  const weatherCtx=wLines.length?`\n[날씨-두통 데이터]\n${wLines.join('\n')}`:'';
+  // 트리거 상관분석
+  const triggerCtx=getTriggerCorrelation(week);
+  return `[최근 7일 기록]\n${lines}\n평균NRS: ${avg}${outcomeSummary}${weatherCtx}${triggerCtx}`;
+}
+
+function getTriggerCorrelation(logs) {
+  const withNrs=logs.filter(l=>l.nrs>=0);
+  if(withNrs.length<3) return '';
+  const triggerStats={};
+  const avgAll=withNrs.reduce((s,l)=>s+l.nrs,0)/withNrs.length;
+  withNrs.forEach(l=>{
+    (l.triggers||[]).forEach(t=>{
+      if(!triggerStats[t]) triggerStats[t]={count:0,nrsSum:0};
+      triggerStats[t].count++;
+      triggerStats[t].nrsSum+=l.nrs;
+    });
+    // 날씨 트리거 (기압 1010 이하 = 저기압)
+    if(l.weather?.pressure&&l.weather.pressure<1010){
+      const k='저기압(<1010hPa)';
+      if(!triggerStats[k]) triggerStats[k]={count:0,nrsSum:0};
+      triggerStats[k].count++;
+      triggerStats[k].nrsSum+=l.nrs;
+    }
+  });
+  const lines=Object.entries(triggerStats)
+    .filter(([,v])=>v.count>=2)
+    .map(([t,v])=>{const avg=(v.nrsSum/v.count).toFixed(1);const pct=Math.round(v.count/withNrs.length*100);return `${t}: ${v.count}회(${pct}%) 평균NRS${avg} (전체평균${avgAll.toFixed(1)})`;})
+    .sort((a,b)=>b.split('회')[0]-a.split('회')[0]);
+  return lines.length?`\n[트리거 상관분석]\n${lines.join('\n')}`:'';
 }
 
 // ═══════════════════════════════════════════════════════════════
