@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>두통 경과 기록</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fafaf5;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:#fff;border-radius:16px;box-shadow:0 2px 20px rgba(0,0,0,.08);padding:28px 24px;max-width:360px;width:90vw;text-align:center}
+.icon{font-size:2.5rem;margin-bottom:12px}
+h1{font-size:1.1rem;color:#1a1a2e;margin-bottom:4px}
+.sub{font-size:.78rem;color:#888;margin-bottom:20px}
+.entry-info{background:#f8f8f0;border-radius:10px;padding:12px;margin-bottom:20px;font-size:.82rem;color:#555}
+.entry-info b{color:#1a1a2e}
+.buttons{display:flex;flex-direction:column;gap:10px}
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;padding:16px;border:2px solid;border-radius:12px;font-size:1rem;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit}
+.btn:active{transform:scale(.97)}
+.btn-better{background:#f0fdf4;border-color:#86efac;color:#15803d}
+.btn-better:hover{background:#dcfce7}
+.btn-same{background:#fffbeb;border-color:#fde68a;color:#92400e}
+.btn-same:hover{background:#fef3c7}
+.btn-worse{background:#fef2f2;border-color:#fca5a5;color:#b91c1c}
+.btn-worse:hover{background:#fee2e2}
+.done{padding:24px}
+.done .check{font-size:3rem;margin-bottom:12px}
+.done h2{font-size:1.1rem;color:#15803d;margin-bottom:6px}
+.done p{font-size:.82rem;color:#888}
+.done .link{display:inline-block;margin-top:16px;font-size:.78rem;color:#4f6d7a;text-decoration:underline}
+.error{color:#b91c1c;font-size:.85rem;padding:20px}
+@media(prefers-color-scheme:dark){
+  body{background:#0d1117}
+  .card{background:#161b22;box-shadow:0 2px 20px rgba(0,0,0,.3)}
+  h1{color:#e6edf3}
+  .sub{color:#8b949e}
+  .entry-info{background:#1c2128;color:#8b949e}
+  .entry-info b{color:#e6edf3}
+  .btn-better{background:#0d2a1a;border-color:#2d8a5a;color:#4ade80}
+  .btn-same{background:#2a1a0a;border-color:#92400e;color:#fbbf24}
+  .btn-worse{background:#2a0d0d;border-color:#b91c1c;color:#f87171}
+  .done h2{color:#4ade80}
+  .done p{color:#8b949e}
+  .done .link{color:#58a6ff}
+  .error{color:#f87171}
+}
+</style>
+</head>
+<body>
+<div class="card" id="main">
+  <div class="icon">🤕</div>
+  <h1>두통 경과 기록</h1>
+  <div class="sub">지금 어떠세요?</div>
+  <div id="entry-info" class="entry-info" style="display:none"></div>
+  <div class="buttons" id="buttons">
+    <button class="btn btn-better" onclick="rate('better')">😊 호전됐어요</button>
+    <button class="btn btn-same" onclick="rate('same')">😐 비슷해요</button>
+    <button class="btn btn-worse" onclick="rate('worse')">😣 악화됐어요</button>
+  </div>
+  <div id="done" class="done" style="display:none">
+    <div class="check">✅</div>
+    <h2 id="done-text">경과 저장 완료!</h2>
+    <p id="done-sub"></p>
+    <a class="link" href="./index.html">빠른 기록 앱 열기 →</a>
+  </div>
+  <div id="error" class="error" style="display:none"></div>
+</div>
+
+<script>
+const LS_KEY='om_quick_logs';
+const labels={better:'😊 호전',same:'😐 비슷',worse:'😣 악화'};
+
+function getLogs(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'[]');}catch{return [];}}
+function saveLogs(logs){localStorage.setItem(LS_KEY,JSON.stringify(logs));}
+
+// URL 해시에서 rating과 entry ID 파싱
+function parseHash(){
+  const h=location.hash;
+  const m=h.match(/^#rate-(better|same|worse)-(\d+)$/);
+  if(m) return {rating:m[1],id:m[2]};
+  const m2=h.match(/^#(\d+)$/);
+  if(m2) return {rating:null,id:m2[1]};
+  return {rating:null,id:null};
+}
+
+function showEntry(id){
+  const logs=getLogs();
+  const entry=logs.find(l=>String(l.id)===String(id));
+  if(!entry) return;
+  const el=document.getElementById('entry-info');
+  const dt=entry.datetime||'';
+  const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
+  const sites=(entry.sites||[]).join(', ');
+  const meds=(entry.meds||[]).join(', ');
+  el.innerHTML=`<b>${dt.slice(0,10)} ${dt.slice(11,16)}</b> ${nrs} ${sites}${meds?' · 💊'+meds:''}`;
+  el.style.display='';
+}
+
+function rate(rating){
+  const {id}=parseHash();
+  const logs=getLogs();
+  let idx=-1;
+
+  if(id){
+    idx=logs.findIndex(l=>String(l.id)===String(id));
+  }
+  // ID 없으면 가장 최근 미평가 기록
+  if(idx<0){
+    for(let i=logs.length-1;i>=0;i--){
+      if(logs[i]._type==='config') continue;
+      if(!logs[i].outcome){idx=i;break;}
+    }
+  }
+  if(idx<0){
+    document.getElementById('error').textContent='⚠️ 평가할 기록을 찾을 수 없습니다';
+    document.getElementById('error').style.display='';
+    return;
+  }
+
+  const now=new Date(Date.now()+9*3600000).toISOString();
+  logs[idx].outcome={rating:rating,ratedAt:now};
+  saveLogs(logs);
+
+  // 클라우드에도 동기화
+  syncToCloud(logs[idx]);
+
+  // 완료 UI
+  document.getElementById('buttons').style.display='none';
+  document.getElementById('done').style.display='';
+  document.getElementById('done-text').textContent=labels[rating]+' 저장 완료!';
+  const dt=logs[idx].datetime||'';
+  document.getElementById('done-sub').textContent=dt.slice(0,10)+' '+dt.slice(11,16)+' 기록의 경과';
+}
+
+async function syncToCloud(entry){
+  try{
+    const url=localStorage.getItem('om_quick_sync_url');
+    if(!url) return;
+    await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'save',entries:[entry]}),redirect:'follow'});
+  }catch(e){}
+}
+
+// 초기화
+const {rating,id}=parseHash();
+if(id) showEntry(id);
+if(rating&&id){
+  // URL에 rating이 있으면 바로 저장 (알림 버튼에서 직접 온 경우)
+  rate(rating);
+}
+</script>
+</body>
+</html>

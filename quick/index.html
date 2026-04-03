@@ -822,14 +822,15 @@ async function sendQuickNtfy(entry) {
   const orangiTopic=localStorage.getItem('om_ntfy_orangi');
   if(orangiTopic){
     const eid=entry.id;
-    const baseUrl=location.href.split('#')[0].split('?')[0];
+    const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
+    const rateUrl=baseUrl+'rate.html';
     const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''}\n아래 버튼으로 바로 기록하세요!`;
     const actions=[
-      `view, 😊 호전, ${baseUrl}#rate-better-${eid}, clear=true`,
-      `view, 😐 비슷, ${baseUrl}#rate-same-${eid}, clear=true`,
-      `view, 😣 악화, ${baseUrl}#rate-worse-${eid}, clear=true`
+      `view, 😊 호전, ${rateUrl}#rate-better-${eid}, clear=true`,
+      `view, 😐 비슷, ${rateUrl}#rate-same-${eid}, clear=true`,
+      `view, 😣 악화, ${rateUrl}#rate-worse-${eid}, clear=true`
     ].join('; ');
-    try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'At':'1h','Click':baseUrl+'#outcome','Actions':actions},body:fBody.trim()});}catch(e){}
+    try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'At':'1h','Click':rateUrl+'#'+eid,'Actions':actions},body:fBody.trim()});}catch(e){}
   }
 }
 
