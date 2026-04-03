@@ -246,6 +246,37 @@ function getQuickLogs() {
   localStorage.setItem('om_site_migrated','1');
 })();
 
+// 커스텀 항목 자동 복구: 기록에 쓰인 항목 중 기본 목록에 없는 것을 커스텀에 추가
+// (기기 변경, 캐시 삭제, iOS 7일 정책 등으로 커스텀 목록 유실 시 자동 복원)
+(function recoverCustomsFromLogs(){
+  const logs=getQuickLogs();
+  if(!logs.length) return;
+  const sets={med:new Set(MEDS),sym:new Set(SYMPTOMS),tx:new Set(TREATMENTS),pain:new Set(PAIN_TYPES)};
+  const siteL=new Set(SITES.left||[]),siteR=new Set(SITES.right||[]);
+  const found={med:new Set(),sym:new Set(),tx:new Set(),pain:new Set(),'site-left':new Set(),'site-right':new Set()};
+  logs.forEach(l=>{
+    (l.meds||[]).forEach(v=>{if(!sets.med.has(v))found.med.add(v);});
+    (l.symptoms||[]).forEach(v=>{if(!sets.sym.has(v))found.sym.add(v);});
+    (l.treatments||[]).forEach(v=>{if(!sets.tx.has(v))found.tx.add(v);});
+    (l.painType||[]).forEach(v=>{if(!sets.pain.has(v))found.pain.add(v);});
+    (l.sites||[]).forEach(s=>{
+      const m=s.match(/^(왼쪽|오른쪽)\s+(.+)$/);
+      if(!m) return;
+      const side=m[1]==='왼쪽'?'left':'right';
+      const name=m[2];
+      if(side==='left'&&!siteL.has(name)) found['site-left'].add(name);
+      if(side==='right'&&!siteR.has(name)) found['site-right'].add(name);
+    });
+  });
+  Object.entries(found).forEach(([key,vals])=>{
+    if(!vals.size) return;
+    const customs=getCustom(key);
+    let changed=false;
+    vals.forEach(v=>{if(!customs.includes(v)){customs.push(v);changed=true;}});
+    if(changed) saveCustom(key,customs);
+  });
+})();
+
 function saveQuickLogs(logs) {
   localStorage.setItem(LS_KEY, JSON.stringify(logs));
   updatePendingCount();
