@@ -91,6 +91,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .log-tag-sym{background:#faf5ff;color:#7c3aed}
 .log-tag-med{background:#fffbeb;color:#b45309}
 .log-tag-tx{background:#f0fdf4;color:#15803d}
+.log-tag-pain{background:#fce7f3;color:#9d174d}
 .log-item-memo{font-size:.8rem;color:var(--mu);line-height:1.5;margin-top:4px}
 .log-item-actions{display:flex;gap:8px;margin-top:8px;justify-content:flex-end}
 .btn-sm{background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer;color:var(--mu);font-family:var(--font)}
@@ -110,6 +111,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
   .log-tag-sym{background:#1a0d2a;color:#a78bfa}
   .log-tag-med{background:#2a1a0a;color:#fbbf24}
   .log-tag-tx{background:#0d2a1a;color:#4ade80}
+  .log-tag-pain{background:#2a0d1a;color:#f9a8d4}
 }
 /* Settings panel */
 .settings-panel{display:none;padding:16px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:10px;margin:16px}
@@ -712,7 +714,7 @@ function renderRecentQuickLogs() {
           : '<span class="log-item-badge pending">미반영</span>';
         const tags = [
           ...(l.sites||[]).map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
-          ...(l.painType||[]).map(p => `<span class="log-tag" style="background:#fce7f3;color:#9d174d">${esc(p)}</span>`),
+          ...(l.painType||[]).map(p => `<span class="log-tag log-tag-pain">${esc(p)}</span>`),
           ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
           ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
           ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
@@ -930,7 +932,7 @@ function renderList() {
     const timeStr = dt[1] === '시간미상' ? '시간미상' : dt[1];
     const tags = [
       ...(l.sites||[]).map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
-      ...(l.painType||[]).map(p => `<span class="log-tag" style="background:#fce7f3;color:#9d174d">${esc(p)}</span>`),
+      ...(l.painType||[]).map(p => `<span class="log-tag log-tag-pain">${esc(p)}</span>`),
       ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
       ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
       ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
@@ -1120,7 +1122,8 @@ updatePendingCount();
 // URL 해시로 탭 자동 전환 (#outcome → 경과 탭)
 const _handleHash=()=>{
   if(location.hash==='#outcome') switchTab('outcome');
-  if(location.hash==='#list') switchTab('list');
+  else if(location.hash==='#list') switchTab('list');
+  else switchTab('form');
 };
 window.addEventListener('hashchange',_handleHash);
 _handleHash();
