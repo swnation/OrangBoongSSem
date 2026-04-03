@@ -53,6 +53,8 @@ h1{font-size:1.1rem;color:#1a1a2e;margin-bottom:4px}
   .done .link,.already .link{color:#58a6ff}
   .already h2{color:#8b949e}
   .error{color:#f87171}
+  #confirm-bar p{color:#e6edf3}
+  #confirm-bar button:last-child{border-color:#444;color:#8b949e}
 }
 </style>
 </head>
@@ -66,10 +68,17 @@ h1{font-size:1.1rem;color:#1a1a2e;margin-bottom:4px}
     <div class="entry-detail" id="entry-detail"></div>
   </div>
   <div id="elapsed" class="elapsed" style="display:none"></div>
-  <div class="buttons" id="buttons">
-    <button class="btn btn-better" onclick="rate('better')">😊 호전됐어요</button>
-    <button class="btn btn-same" onclick="rate('same')">😐 비슷해요</button>
-    <button class="btn btn-worse" onclick="rate('worse')">😣 악화됐어요</button>
+  <div id="buttons" class="buttons">
+    <button class="btn btn-better" id="sel-better" onclick="selectRating('better')">😊 호전됐어요</button>
+    <button class="btn btn-same" id="sel-same" onclick="selectRating('same')">😐 비슷해요</button>
+    <button class="btn btn-worse" id="sel-worse" onclick="selectRating('worse')">😣 악화됐어요</button>
+  </div>
+  <div id="confirm-bar" style="display:none;margin-top:12px;text-align:center">
+    <p id="confirm-text" style="font-size:.85rem;font-weight:600;margin-bottom:10px"></p>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button onclick="confirmRate()" style="padding:12px 28px;border-radius:10px;border:none;background:#15803d;color:#fff;font-size:.92rem;font-weight:700;cursor:pointer;font-family:inherit">✅ 저장</button>
+      <button onclick="cancelSelect()" style="padding:12px 20px;border-radius:10px;border:1.5px solid #ccc;background:none;color:#888;font-size:.85rem;cursor:pointer;font-family:inherit">취소</button>
+    </div>
   </div>
   <div id="done" class="done" style="display:none">
     <div class="check">✅</div>
@@ -81,6 +90,7 @@ h1{font-size:1.1rem;color:#1a1a2e;margin-bottom:4px}
     <div class="icon2">✅</div>
     <h2 id="already-text"></h2>
     <p id="already-sub"></p>
+    <button onclick="showChangeUI()" style="display:block;margin:12px auto 0;padding:8px 20px;border-radius:8px;border:1.5px solid #4f6d7a;background:none;color:#4f6d7a;font-size:.78rem;cursor:pointer;font-family:inherit">🔄 경과 변경하기</button>
     <a class="link" href="./index.html">빠른 기록 앱 열기 →</a>
   </div>
   <div id="error" class="error" style="display:none"></div>
@@ -158,7 +168,36 @@ function showAlreadyRated(entry){
   document.getElementById('already-sub').textContent=(labels[rating]||rating)+' · 추가 기록은 빠른 기록 앱에서';
 }
 
-async function rate(rating){
+let _selectedRating=null;
+
+function selectRating(rating){
+  _selectedRating=rating;
+  // 선택된 버튼 강조, 나머지 흐리게
+  ['better','same','worse'].forEach(r=>{
+    const btn=document.getElementById('sel-'+r);
+    if(!btn) return;
+    btn.style.opacity=r===rating?'1':'0.35';
+    btn.style.transform=r===rating?'scale(1.03)':'scale(0.97)';
+  });
+  document.getElementById('confirm-text').textContent=labels[rating]+' 선택됨';
+  document.getElementById('confirm-bar').style.display='';
+}
+
+function cancelSelect(){
+  _selectedRating=null;
+  ['better','same','worse'].forEach(r=>{
+    const btn=document.getElementById('sel-'+r);
+    if(btn){btn.style.opacity='1';btn.style.transform='';}
+  });
+  document.getElementById('confirm-bar').style.display='none';
+}
+
+async function confirmRate(){
+  if(!_selectedRating) return;
+  await saveRating(_selectedRating);
+}
+
+async function saveRating(rating){
   const {id}=parseHash();
   const logs=getLogs();
   let idx=-1;
@@ -166,11 +205,16 @@ async function rate(rating){
   if(idx<0){
     for(let i=logs.length-1;i>=0;i--){
       if(logs[i]._type==='config') continue;
-      if(!logs[i].outcome){idx=i;break;}
+      if(!logs[i].outcome||(logs[i].outcome&&_isChanging)){idx=i;break;}
     }
+  }
+  // 변경 모드: 이미 outcome 있는 기록도 허용
+  if(idx<0&&id){
+    idx=logs.findIndex(l=>String(l.id)===String(id));
   }
   if(idx<0){
     document.getElementById('buttons').style.display='none';
+    document.getElementById('confirm-bar').style.display='none';
     document.getElementById('error').textContent='⚠️ 평가할 기록을 찾을 수 없습니다';
     document.getElementById('error').style.display='';
     return;
@@ -182,11 +226,22 @@ async function rate(rating){
   await syncToCloud(logs[idx]);
 
   document.getElementById('buttons').style.display='none';
+  document.getElementById('confirm-bar').style.display='none';
   document.getElementById('sub-text').style.display='none';
+  document.getElementById('already').style.display='none';
   document.getElementById('done').style.display='';
   document.getElementById('done-text').textContent=labels[rating]+' 저장 완료!';
   const dt=logs[idx].datetime||'';
   document.getElementById('done-sub').textContent=dt.slice(0,10)+' '+dt.slice(11,16)+' 두통의 경과';
+}
+
+let _isChanging=false;
+function showChangeUI(){
+  _isChanging=true;
+  document.getElementById('already').style.display='none';
+  document.getElementById('buttons').style.display='';
+  document.getElementById('sub-text').textContent='경과를 변경할까요?';
+  document.getElementById('sub-text').style.display='';
 }
 
 async function syncToCloud(entry){
@@ -204,11 +259,10 @@ const entry=findEntry(id);
 if(entry){
   showEntryInfo(entry);
   if(entry.outcome){
-    // 이미 경과 기록됨 → 알림보다 먼저 기록한 경우
     showAlreadyRated(entry);
   } else if(rating){
-    // URL에 rating 포함 → 알림 버튼에서 직접 온 경우 → 바로 저장
-    rate(rating);
+    // URL에 rating 포함 → 알림 버튼에서 직접 온 경우 → 선택 상태로 표시 (확인 필요)
+    selectRating(rating);
   }
 } else {
   document.getElementById('buttons').style.display='none';
