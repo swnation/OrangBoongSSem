@@ -134,7 +134,6 @@ async function rate(rating){
 async function syncToCloud(entry){
   try{
     const url=localStorage.getItem('om_quick_sync_url')||'https://script.google.com/macros/s/AKfycbzYF46qeLJRGIQsqfXbic6ITRGKr1eA9chrVJ8Fu5_gM7TDSYUFlpaWQGmSR9RdAACjzw/exec';
-    if(!url) return;
     await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'save',entries:[entry]}),redirect:'follow'});
   }catch(e){}
