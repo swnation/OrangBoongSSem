@@ -1466,6 +1466,7 @@ function buildUserPrompt(aiId, roundNum) {
 // ═══════════════════════════════════════════════════════════════
 function startNewSession(prefillQuestion, mode) {
   _sessionFiles = [];
+  _selectedTemplates=new Set();
   S.session = {
     id:Date.now(), date:kstToday(),
     question:prefillQuestion||'', rounds:[], currentRound:0, summary:null,
@@ -2229,8 +2230,8 @@ function renderSession() {
 
   const templates=DM()?.templates||[];
   const tmplHtml=templates.length&&curRound===0?`
-    <div style="margin-bottom:6px"><div class="q-label" style="margin-bottom:6px">📌 템플릿</div>
-    <div class="tmpl-list">${templates.map((t,i)=>`<div class="tmpl-chip" onclick="loadTemplate(${i})">${esc(t.substring(0,40))}</div>`).join('')}</div></div>`:'';
+    <div style="margin-bottom:6px"><div class="q-label" style="margin-bottom:6px">📌 템플릿 <span style="font-size:.6rem;color:var(--mu)">(여러 개 선택 가능)</span></div>
+    <div class="tmpl-list">${templates.map((t,i)=>`<div class="tmpl-chip" data-tidx="${i}" onclick="toggleTemplateSelect(this,${i})">${esc(t.substring(0,40)+(t.length>40?'…':''))}</div>`).join('')}</div></div>`:'';
 
   return `
     ${modeSelector}
@@ -2519,6 +2520,16 @@ async function cleanupAccumulated() {
 }
 
 // TEMPLATES
+let _selectedTemplates=new Set();
+function toggleTemplateSelect(el,idx) {
+  if(_selectedTemplates.has(idx)) { _selectedTemplates.delete(idx); el.classList.remove('sel'); el.style.background=''; el.style.color=''; }
+  else { _selectedTemplates.add(idx); el.classList.add('sel'); el.style.background='var(--ac)'; el.style.color='#fff'; }
+  // 선택된 템플릿들을 질문창에 합침
+  const templates=DM()?.templates||[];
+  const selected=[..._selectedTemplates].sort().map(i=>templates[i]).filter(Boolean);
+  const el2=document.getElementById('q-input');
+  if(el2) el2.value=selected.length===1?selected[0]:selected.map((t,i)=>(i+1)+'. '+t).join('\n');
+}
 function loadTemplate(idx) { const t=DM()?.templates?.[idx]; if(t){const el=document.getElementById('q-input');if(el)el.value=t;} }
 async function saveAsTemplate() {
   const q=(document.getElementById('q-input')?.value||'').trim();
@@ -2529,18 +2540,42 @@ async function saveAsTemplate() {
 }
 function renderTemplates() {
   const templates=DM()?.templates||[];
+  const dc=DC();
+  const defaultTmpls=dc.templates||[];
+  // AI 추천 템플릿 (도메인 기본 중 사용자가 아직 추가하지 않은 것)
+  const suggestions=defaultTmpls.filter(t=>!templates.includes(t));
   const list=templates.length
-    ? templates.map((t,i)=>`<div style="background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:.87rem;flex:1">${esc(t)}</span>
-        <button class="btn-accum-add" style="background:var(--ac)" onclick="useTemplateInSession(${i})">사용</button>
+    ? templates.map((t,i)=>`<div style="background:var(--sf);border:1.5px solid var(--bd);border-radius:10px;padding:10px 14px;margin-bottom:6px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:.85rem;flex:1;cursor:text" id="tmpl-text-${i}" onclick="editTemplate(${i})">${esc(t)}</span>
+        <button class="btn-accum-add" style="background:var(--ac);padding:4px 10px;font-size:.72rem" onclick="useTemplateInSession(${i})">사용</button>
+        <button class="accum-del" onclick="editTemplate(${i})" title="수정">✏️</button>
         <button class="accum-del" onclick="deleteTemplate(${i})">🗑</button>
       </div>`).join('')
     : '<div class="hint">저장된 템플릿이 없어요.</div>';
+  const suggestHtml=suggestions.length?`<div style="margin-top:16px;padding:12px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:10px">
+    <div style="font-size:.75rem;font-weight:600;color:var(--mu);margin-bottom:8px">💡 추천 템플릿 (${dc.label})</div>
+    ${suggestions.map((t,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;${i<suggestions.length-1?'border-bottom:1px solid var(--bd)':''}">
+      <span style="font-size:.8rem;flex:1;color:var(--mu)">${esc(t)}</span>
+      <button class="btn-accum-add" style="font-size:.68rem;padding:3px 10px" onclick="addSuggestedTemplate(${i})">+ 추가</button>
+    </div>`).join('')}
+  </div>`:'';
   return `<div class="card"><div class="card-title">📌 질문 템플릿</div>${list}
     <div class="accum-add-row" style="margin-top:12px"><input class="accum-add-input" id="new-tmpl-input" placeholder="새 템플릿...">
-    <button class="btn-accum-add" onclick="addTemplateDirectly()">+ 추가</button></div></div>`;
+    <button class="btn-accum-add" onclick="addTemplateDirectly()">+ 추가</button></div>${suggestHtml}</div>`;
 }
 async function deleteTemplate(idx) { DM().templates.splice(idx,1); await saveMaster(); renderView('templates'); }
+function editTemplate(idx) {
+  const t=DM()?.templates?.[idx]; if(!t) return;
+  const newVal=prompt('템플릿 수정:',t);
+  if(newVal!==null&&newVal.trim()) { DM().templates[idx]=newVal.trim(); saveMaster(); renderView('templates'); showToast('✏️ 수정됨'); }
+}
+async function addSuggestedTemplate(idx) {
+  const dc=DC(); const templates=DM()?.templates||[];
+  const suggestions=(dc.templates||[]).filter(t=>!templates.includes(t));
+  if(!suggestions[idx]) return;
+  if(!DM().templates) DM().templates=[];
+  DM().templates.push(suggestions[idx]); await saveMaster(); renderView('templates'); showToast('📌 추가됨');
+}
 async function addTemplateDirectly() {
   const el=document.getElementById('new-tmpl-input');const val=(el?.value||'').trim();if(!val)return;
   if(!DM().templates) DM().templates=[];
