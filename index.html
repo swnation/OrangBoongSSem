@@ -3144,7 +3144,7 @@ function renderUsageView() {
     const aiDetail=cost>0?Object.entries(AI_DEFS).filter(([id])=>(byAI[id]||0)>0).map(([id,def])=>`<div style="font-size:.55rem;color:${def.color}">${def.name}: $${(byAI[id]||0).toFixed(4)}</div>`).join(''):'';
     const detailId='dcost-'+date.replace(/-/g,'');
     return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0;${cost>0?'cursor:pointer':''}" title="${date}: $${cost.toFixed(4)}" ${cost>0?`onclick="const d=document.getElementById('${detailId}');if(d)d.style.display=d.style.display==='none'?'block':'none'"`:''}>
-      <div style="font-size:.55rem;color:var(--mu2)">${cost>0?'$'+cost.toFixed(3):''}</div>
+      <div style="font-size:.55rem;color:var(--mu2)">${cost>0?'$'+cost.toFixed(4):''}</div>
       <div style="width:100%;max-width:20px;display:flex;flex-direction:column;justify-content:flex-end;height:60px">${cost>0?segments:`<div style="height:2px;background:var(--bd);border-radius:1px"></div>`}</div>
       <div style="font-size:.58rem;color:${isToday?'var(--ac)':'var(--mu2)'};font-weight:${isToday?'700':'400'}">${label}</div>
       <div style="font-size:.5rem;color:var(--mu2)">${dayName}</div>
