@@ -1141,7 +1141,7 @@ const _handleHash=()=>{
   if(rateMatch){
     const [,rating,id]=rateMatch;
     rateQuickOutcomeById(id,rating);
-    location.hash=''; // 해시 제거
+    history.replaceState(null,null,location.pathname+location.search); // 해시 제거 (hashchange 이벤트 방지)
     switchTab('outcome');
     return;
   }
