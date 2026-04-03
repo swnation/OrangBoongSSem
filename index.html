@@ -1872,6 +1872,13 @@ function stopAllAI() {
   showToast('⏹ 전체 AI 중단됨');
 }
 
+function resetAndNewSession() {
+  stopAllAI();
+  S.generating=false;
+  S._dirty=false;
+  startNewSession();
+}
+
 function updateStopBtn(aiId, running) {
   const el=document.getElementById('stop-'+aiId);
   if(!el) return;
@@ -2414,8 +2421,9 @@ function renderSession() {
     </div>`:''}
     <div id="autosave-bar" class="autosave-bar"></div>
     <div id="action-bar">${renderActionBar(curRound)}</div>
-    <div id="stop-all-bar" style="display:none;text-align:center;margin-bottom:8px">
+    <div id="stop-all-bar" style="display:none;text-align:center;margin-bottom:8px;display:flex;justify-content:center;gap:8px">
       <button onclick="stopAllAI()" style="padding:8px 28px;font-size:.82rem;font-weight:700;border:2px solid #ef4444;border-radius:8px;background:#ef444415;color:#ef4444;cursor:pointer">⏹ 전체 중단</button>
+      <button onclick="resetAndNewSession()" style="padding:8px 20px;font-size:.82rem;font-weight:600;border:2px solid var(--bd);border-radius:8px;background:var(--sf2);color:var(--ink);cursor:pointer">🔄 새 질문</button>
     </div>
     <div class="ai-grid${mode==='quick'||mode==='multi-grok'||mode==='light'?' single-card':''}">${aiCards}</div>
     <div id="summary-area">${sess.summary?renderSummaryResult(sess.summary):''}</div>`;
@@ -2463,6 +2471,7 @@ function renderActionBar(curRound) {
     return `<div class="round-action-bar">
       <button class="btn-run-round green" id="final-btn" onclick="runFinalSummary()"><div class="spin" id="final-sp"></div>✅ 세션 종료 & 저장</button>
       ${hasErr?`<button class="btn-run-round" onclick="runRound(3,true)" style="background:#5a5a7a">🔁 R3 오류만 재실행</button>`:''}
+      <button class="btn-run-round" onclick="resetAndNewSession()" style="background:var(--sf2);color:var(--ink);border:1.5px solid var(--bd)">🔄 새 질문</button>
       <span class="run-note">각 AI 카드에서 개별 재생성도 가능합니다</span>
     </div>`;
   }
@@ -2480,6 +2489,7 @@ function renderActionBar(curRound) {
       <button class="btn-run-round green" onclick="runFinalSummary()" style="font-size:.78rem;padding:8px 14px">✅ 여기서 요약 & 종료</button>
       ${hasErr?`<button class="btn-run-round" onclick="runRound(${curRound},true)" style="background:#5a5a7a">🔁 R${curRound} 오류만 재실행</button>`:''}
       <button class="btn-undo" onclick="undoSession()" ${_sessionHistory.length?'':'disabled'} title="이전 라운드로 되돌리기">↩ Undo</button>
+      <button class="btn-run-round" onclick="resetAndNewSession()" style="background:var(--sf2);color:var(--ink);border:1.5px solid var(--bd)">🔄 새 질문</button>
       <span class="run-note">${conflictHint||( mode==='debate'?'또는 심판 판정으로 종료':'AI들이 서로의 답변을 분석합니다')}</span>
     </div>`;
   }
@@ -2493,6 +2503,7 @@ function renderActionBar(curRound) {
         <button class="btn-run-round green" onclick="runFinalSummary()" style="font-size:.78rem;padding:8px 14px">✅ 요약 & 종료</button>
         <button class="btn-run-round" onclick="S.session.mode='normal';runRound(${curRound+1})">⚡ 심층 모드로 전환</button>
         <button class="btn-undo" onclick="undoSession()" ${_sessionHistory.length?'':'disabled'}>↩ Undo</button>
+        <button class="btn-run-round" onclick="resetAndNewSession()" style="background:var(--sf2);color:var(--ink);border:1.5px solid var(--bd)">🔄 새 질문</button>
       </div>`;
     }
     return `<div class="round-action-bar"><button class="btn-run-round" id="run-btn" onclick="runBasicMode()">🌱 기본 협진 시작 — GPT+Perplexity→Claude</button><span class="run-note">데이터분석+근거검색 → 최종판단</span></div>`;
