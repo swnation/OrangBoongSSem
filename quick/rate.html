@@ -25,6 +25,8 @@ h1{font-size:1.1rem;color:#1a1a2e;margin-bottom:4px}
 .btn-same:hover{background:#fef3c7}
 .btn-worse{background:#fef2f2;border-color:#fca5a5;color:#b91c1c}
 .btn-worse:hover{background:#fee2e2}
+.btn-unknown{background:#f5f5f5;border-color:#d1d5db;color:#6b7280}
+.btn-unknown:hover{background:#e5e7eb}
 .done{padding:24px}
 .done .check{font-size:3rem;margin-bottom:12px}
 .done h2{font-size:1.1rem;color:#15803d;margin-bottom:6px}
@@ -66,6 +68,7 @@ h1{font-size:1.1rem;color:#1a1a2e;margin-bottom:4px}
   .btn-better{background:#0d2a1a;border-color:#2d8a5a;color:#4ade80}
   .btn-same{background:#2a1a0a;border-color:#92400e;color:#fbbf24}
   .btn-worse{background:#2a0d0d;border-color:#b91c1c;color:#f87171}
+  .btn-unknown{background:#1c1c1c;border-color:#444;color:#9ca3af}
   .done h2{color:#4ade80}
   .done p,.already p{color:#8b949e}
   .done .link,.already .link{color:#58a6ff}
@@ -90,6 +93,7 @@ h1{font-size:1.1rem;color:#1a1a2e;margin-bottom:4px}
     <button class="btn btn-better" id="sel-better" onclick="selectRating('better')">😊 호전됐어요</button>
     <button class="btn btn-same" id="sel-same" onclick="selectRating('same')">😐 비슷해요</button>
     <button class="btn btn-worse" id="sel-worse" onclick="selectRating('worse')">😣 악화됐어요</button>
+    <button class="btn btn-unknown" id="sel-unknown" onclick="selectRating('unknown')">🤷 기억 안 나요</button>
   </div>
   <div id="confirm-bar" style="display:none;margin-top:12px;text-align:center">
     <p id="confirm-text" style="font-size:.85rem;font-weight:600;margin-bottom:10px"></p>
@@ -124,7 +128,7 @@ function saveLogs(logs){localStorage.setItem(LS_KEY,JSON.stringify(logs));}
 
 function parseHash(){
   const h=location.hash;
-  const m=h.match(/^#rate-(better|same|worse)-(\d+)$/);
+  const m=h.match(/^#rate-(better|same|worse|unknown)-(\d+)$/);
   if(m) return {rating:m[1],id:m[2]};
   const m2=h.match(/^#(\d+)$/);
   if(m2) return {rating:null,id:m2[1]};
@@ -173,7 +177,7 @@ function renderTimeline(entries,currentId){
     var nrsColor=nrs<=3?'#16a34a':nrs<=6?'#f59e0b':'#dc2626';
     var outLabel='';
     if(e.outcome){
-      var ol={better:'😊',same:'😐',worse:'😣'};
+      var ol={better:'😊',same:'😐',worse:'😣',unknown:'🤷'};
       outLabel='<span class="tl-outcome">'+(ol[e.outcome.rating]||'')+'</span>';
     } else if(isCurrent){
       outLabel='<span class="tl-outcome" style="color:#2563eb;font-weight:600">← 경과 확인 중</span>';
@@ -235,7 +239,7 @@ let _selectedRating=null;
 function selectRating(rating){
   _selectedRating=rating;
   // 선택된 버튼 강조, 나머지 흐리게
-  ['better','same','worse'].forEach(r=>{
+  ['better','same','worse','unknown'].forEach(r=>{
     const btn=document.getElementById('sel-'+r);
     if(!btn) return;
     btn.style.opacity=r===rating?'1':'0.35';
