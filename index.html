@@ -5805,6 +5805,7 @@ const _DEFAULT_MILESTONES = [
 ];
 
 let _brkDashTab = 'cycle'; // cycle | daily | lab | milestone | safety
+let _brkDailyCat = 'suppl'; // suppl | exercise | treatment | memo
 
 function getBrkMaster() {
   var ds = S.domainState['bungruki'];
@@ -5853,7 +5854,7 @@ function isFertileWindow(dateStr, ovDate) {
   return diff >= -3 && diff <= 3;
 }
 
-function buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDays) {
+function buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDays, dailyChecks) {
   var year = parseInt(calMonth.slice(0,4));
   var month = parseInt(calMonth.slice(5,7));
   var firstDay = new Date(year, month-1, 1).getDay();
@@ -5877,7 +5878,21 @@ function buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDay
     else if (isFertile === true) { bg = '#ede9fe'; color = '#8b5cf6'; }
     else if (isFertile === 'predicted') { bg = '#f5f3ff'; color = '#a78bfa'; }
     if (isToday) border = '2px solid var(--ac)';
-    cells += '<div onclick="brkTogglePeriodDay(\''+ds+'\')" style="text-align:center;padding:4px 0;font-size:.78rem;border-radius:6px;cursor:pointer;background:'+bg+';color:'+color+';border:'+border+';font-weight:'+(isToday?'700':'400')+'">'+day+(isOv?'<div style=\\"font-size:.5rem\\">🟣</div>':'')+'</div>';
+    // 일일 기록 아이콘
+    var dayIcons = '';
+    var dc = dailyChecks && dailyChecks[ds];
+    if (dc) {
+      var ic = [];
+      var allKeys = ['folicAcid','iron','vitaminD','arginine','coq10','silymarin','multivitamin','febuxostat'];
+      var hasSuppl = allKeys.some(function(k){return (dc.orangi && dc.orangi[k]) || (dc.bung && dc.bung[k]);});
+      if (hasSuppl) ic.push('💊');
+      if ((dc.orangi && dc.orangi.exercise) || (dc.bung && dc.bung.exercise)) ic.push('🏃');
+      if ((dc.orangi && dc.orangi.treatment) || (dc.bung && dc.bung.treatment)) ic.push('🏥');
+      if ((dc.orangi && dc.orangi.memo) || (dc.bung && dc.bung.memo)) ic.push('📝');
+      if (ic.length) dayIcons = '<div style="font-size:.4rem;line-height:1;margin-top:1px">'+ic.join('')+'</div>';
+    }
+    var ovIcon = isOv ? '<div style="font-size:.5rem">🟣</div>' : '';
+    cells += '<div onclick="brkTogglePeriodDay(\''+ds+'\')" style="text-align:center;padding:2px 0;font-size:.78rem;border-radius:6px;cursor:pointer;background:'+bg+';color:'+color+';border:'+border+';font-weight:'+(isToday?'700':'400')+'">'+day+ovIcon+dayIcons+'</div>';
   }
   return cells;
 }
@@ -5938,7 +5953,7 @@ function renderCycleTracker() {
     for (var fi = -3; fi <= 3; fi++) { var fdd = new Date(nextOv+'T00:00:00'); fdd.setDate(fdd.getDate()+fi); var fstr = fdd.toISOString().slice(0,10); if (!fertileDays[fstr]) fertileDays[fstr] = 'predicted'; }
   }
 
-  var calCells = buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDays);
+  var calCells = buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDays, m.dailyChecks);
   var nextInfo = renderNextCycleInfo(today, lastCycle, avgLen);
   var recentHtml = renderRecentCycles(cycles, avgLen);
 
@@ -5951,6 +5966,8 @@ function renderCycleTracker() {
     + '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">'+calCells+'</div>'
     + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;font-size:.65rem;color:var(--mu)">'
     + '<span>🔴 생리일</span><span>🟣 배란 추정</span><span>🟪 가임기</span><span style="border:1px dashed #ccc;padding:0 4px;border-radius:4px">점선=예측</span>'
+    + '</div><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;font-size:.65rem;color:var(--mu)">'
+    + '<span>💊 영양제</span><span>🏃 운동</span><span>🏥 치료</span><span>📝 메모</span>'
     + '</div>'
     + nextInfo
     + '<div style="margin-top:12px">'
@@ -6119,6 +6136,58 @@ function renderDailyChecks() {
   var isOrangi = _brkCheckWho === 'orangi';
   var whoData = isOrangi ? (dayData.orangi || {}) : (dayData.bung || {});
 
+  // 카테고리 서브탭
+  var cats = [
+    {id:'suppl',label:'💊 영양제',color:'#16a34a'},
+    {id:'exercise',label:'🏃 운동',color:'#2563eb'},
+    {id:'treatment',label:'🏥 치료',color:'#dc2626'},
+    {id:'memo',label:'📝 메모',color:'#7c3aed'},
+  ];
+  var catTabHtml = cats.map(function(c){
+    var active = _brkDailyCat === c.id;
+    return '<button onclick="_brkDailyCat=\''+c.id+'\';renderView(\'meds\')" style="flex:1;padding:6px 2px;font-size:.68rem;font-weight:'+(active?'700':'400')+';background:'+(active?c.color+'18':'transparent')+';color:'+(active?c.color:'var(--mu)')+';border:none;border-bottom:2px solid '+(active?c.color:'transparent')+';cursor:pointer;font-family:var(--font)">'+c.label+'</button>';
+  }).join('');
+
+  // 카테고리별 콘텐츠
+  var contentHtml = '';
+  if (_brkDailyCat === 'suppl') contentHtml = _brkRenderSuppl(isOrangi, whoData, m, today);
+  else if (_brkDailyCat === 'exercise') contentHtml = _brkRenderExercise(isOrangi, whoData);
+  else if (_brkDailyCat === 'treatment') contentHtml = _brkRenderTreatment(whoData);
+  else if (_brkDailyCat === 'memo') contentHtml = _brkRenderMemo(whoData);
+
+  // 오늘 기록 요약 아이콘
+  var todayIcons = _brkDayIcons(dayData, isOrangi);
+
+  return '<div>'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+    + '<input type="date" value="'+selDate+'" onchange="_brkCheckDate=this.value;renderView(\'meds\')" class="dx-form-input" style="width:140px;font-size:.78rem">'
+    + (selDate===today?'<span class="log-tag" style="background:#dbeafe;color:#1d4ed8">오늘</span>':'<button class="btn-export" onclick="_brkCheckDate=null;renderView(\'meds\')" style="font-size:.72rem">오늘로</button>')
+    + (todayIcons?'<span style="font-size:.75rem;margin-left:4px">'+todayIcons+'</span>':'')
+    + '<span style="margin-left:auto;font-size:.65rem;color:#16a34a">☁️ 자동 저장</span>'
+    + '</div>'
+    + '<div style="display:flex;gap:4px;margin-bottom:8px">'
+    + '<button onclick="_brkCheckWho=\'orangi\';renderView(\'meds\')" class="btn-export" style="flex:1;padding:6px;font-size:.82rem;'+(isOrangi?'background:#ec4899;color:white;border-color:#ec4899':'')+'">🧡 오랑이</button>'
+    + '<button onclick="_brkCheckWho=\'bung\';renderView(\'meds\')" class="btn-export" style="flex:1;padding:6px;font-size:.82rem;'+(!isOrangi?'background:#06b6d4;color:white;border-color:#06b6d4':'')+'">🩵 붕쌤</button>'
+    + '</div>'
+    + '<div style="display:flex;border-bottom:1px solid var(--bd);margin-bottom:10px">'+catTabHtml+'</div>'
+    + contentHtml
+    + '</div>';
+}
+
+function _brkDayIcons(dayData, isOrangi) {
+  var icons = [];
+  var who = isOrangi ? (dayData.orangi || {}) : (dayData.bung || {});
+  var orangiSuppl = ['folicAcid','iron','vitaminD'];
+  var bungSuppl = ['arginine','coq10','silymarin','multivitamin','febuxostat'];
+  var supplKeys = isOrangi ? orangiSuppl : bungSuppl;
+  if (supplKeys.some(function(k){return who[k];})) icons.push('💊');
+  if (who.exercise) icons.push('🏃');
+  if (who.treatment) icons.push('🏥');
+  if (who.memo) icons.push('📝');
+  return icons.join('');
+}
+
+function _brkRenderSuppl(isOrangi, whoData, m, today) {
   var orangiItems = [
     { key: 'folicAcid', label: '엽산', icon: '💊' },
     { key: 'iron', label: '철분', icon: '🩸' },
@@ -6141,47 +6210,13 @@ function renderDailyChecks() {
       + '</div>';
   }).join('');
 
-  // Extra fields
-  var extraHtml = '';
-  if (isOrangi) {
-    var meals = whoData.meals || 0;
-    var weight = whoData.weight || '';
-    extraHtml = '<div style="display:flex;gap:10px;margin-top:8px">'
-      + '<div style="flex:1"><div class="dx-form-label">식사 횟수</div>'
-      + '<div style="display:flex;gap:4px">'
-      + [0,1,2,3].map(function(n){return '<button onclick="brkSetMeals('+n+')" class="btn-export" style="flex:1;padding:6px;font-size:.82rem;'+(meals===n?'background:var(--ac);color:white;border-color:var(--ac)':'')+'">'+n+'</button>';}).join('')
-      + '</div></div>'
-      + '<div style="flex:1"><div class="dx-form-label">체중 (kg)</div>'
-      + '<input type="number" step="0.1" id="brk-weight" value="'+(weight||'')+'" class="dx-form-input" placeholder="예: 40.2" onchange="brkSetWeight(this.value)" style="width:100%"></div>'
-      + '</div>';
-  } else {
-    var exercise = whoData.exercise || null;
-    var alcohol = whoData.alcohol || false;
-    var exOpts = [
-      {v:null,l:'안함',c:''},
-      {v:'cardio',l:'유산소',c:'🏃'},
-      {v:'strength',l:'근력',c:'🏋️'},
-      {v:'stretch',l:'스트레칭',c:'🧘'}
-    ];
-    extraHtml = '<div style="display:flex;gap:10px;margin-top:8px">'
-      + '<div style="flex:1"><div class="dx-form-label">운동</div>'
-      + '<div style="display:flex;gap:4px">'
-      + exOpts.map(function(o){return '<button onclick="brkSetExercise('+(o.v?'\''+o.v+'\'':'null')+')" class="btn-export" style="flex:1;padding:5px 2px;font-size:.72rem;'+(exercise===o.v?'background:var(--ac);color:white;border-color:var(--ac)':'')+'">'+(o.c?o.c+' ':'')+o.l+'</button>';}).join('')
-      + '</div></div>'
-      + '<div onclick="brkToggleAlcohol()" style="flex:0 0 80px;display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;background:'+(alcohol?'#fef2f2':'var(--sf2)')+';border:1.5px solid '+(alcohol?'#fca5a5':'var(--bd)')+';border-radius:8px;cursor:pointer;margin-top:16px">'
-      + '<span style="font-size:1rem">'+(alcohol?'🍺':'🚫')+'</span>'
-      + '<span style="font-size:.75rem;color:'+(alcohol?'#dc2626':'#16a34a')+'">'+(alcohol?'음주':'금주')+'</span>'
-      + '</div></div>';
-  }
-
-  // Weekly summary
+  // 주간 요약
   var weekDays = [];
   for (var i = 6; i >= 0; i--) {
     var d = new Date(new Date(today+'T00:00:00').getTime() - i*86400000);
     weekDays.push(d.toISOString().slice(0,10));
   }
-  var summaryItems = isOrangi ? orangiItems : bungItems;
-  var weekSummary = summaryItems.map(function(it) {
+  var weekSummary = items.map(function(it) {
     var count = 0;
     weekDays.forEach(function(wd) {
       var dd = m.dailyChecks[wd];
@@ -6196,22 +6231,69 @@ function renderDailyChecks() {
       + '</div>';
   }).join('');
 
-  return '<div>'
-    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
-    + '<input type="date" value="'+selDate+'" onchange="_brkCheckDate=this.value;renderView(\'meds\')" class="dx-form-input" style="width:140px;font-size:.78rem">'
-    + (selDate===today?'<span class="log-tag" style="background:#dbeafe;color:#1d4ed8">오늘</span>':'<button class="btn-export" onclick="_brkCheckDate=null;renderView(\'meds\')" style="font-size:.72rem">오늘로</button>')
-    + '<span style="margin-left:auto;font-size:.65rem;color:#16a34a">☁️ 자동 저장</span>'
-    + '</div>'
-    + '<div style="display:flex;gap:4px;margin-bottom:12px">'
-    + '<button onclick="_brkCheckWho=\'orangi\';renderView(\'meds\')" class="btn-export" style="flex:1;padding:6px;font-size:.82rem;'+(isOrangi?'background:#ec4899;color:white;border-color:#ec4899':'')+'">🧡 오랑이</button>'
-    + '<button onclick="_brkCheckWho=\'bung\';renderView(\'meds\')" class="btn-export" style="flex:1;padding:6px;font-size:.82rem;'+(!isOrangi?'background:#06b6d4;color:white;border-color:#06b6d4':'')+'">🩵 붕쌤</button>'
-    + '</div>'
-    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px">'+checkHtml+'</div>'
-    + extraHtml
-    + '<div style="margin-top:16px;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">'
-    + '<div style="font-size:.75rem;font-weight:600;color:var(--mu);margin-bottom:6px">📊 주간 요약 (최근 7일) — '+(isOrangi?'오랑이':'붕쌤')+'</div>'
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px">'+checkHtml+'</div>'
+    + '<div style="margin-top:14px;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">'
+    + '<div style="font-size:.75rem;font-weight:600;color:var(--mu);margin-bottom:6px">📊 주간 요약 (최근 7일)</div>'
     + '<div style="display:flex;flex-direction:column;gap:4px">'+weekSummary+'</div>'
+    + '</div>';
+}
+
+function _brkRenderExercise(isOrangi, whoData) {
+  var exercise = whoData.exercise || null;
+  var exOpts = [
+    {v:null,l:'안함',c:''},
+    {v:'cardio',l:'유산소',c:'🏃'},
+    {v:'strength',l:'근력',c:'🏋️'},
+    {v:'stretch',l:'스트레칭',c:'🧘'}
+  ];
+  var html = '<div style="margin-bottom:10px"><div class="dx-form-label">운동 종류</div>'
+    + '<div style="display:flex;gap:4px">'
+    + exOpts.map(function(o){return '<button onclick="brkSetExercise('+(o.v?'\''+o.v+'\'':'null')+')" class="btn-export" style="flex:1;padding:8px 2px;font-size:.78rem;'+(exercise===o.v?'background:var(--ac);color:white;border-color:var(--ac)':'')+'">'+(o.c?o.c+' ':'')+o.l+'</button>';}).join('')
     + '</div></div>';
+
+  if (isOrangi) {
+    var meals = whoData.meals || 0;
+    var weight = whoData.weight || '';
+    html += '<div style="display:flex;gap:10px;margin-top:10px">'
+      + '<div style="flex:1"><div class="dx-form-label">식사 횟수</div>'
+      + '<div style="display:flex;gap:4px">'
+      + [0,1,2,3].map(function(n){return '<button onclick="brkSetMeals('+n+')" class="btn-export" style="flex:1;padding:6px;font-size:.82rem;'+(meals===n?'background:var(--ac);color:white;border-color:var(--ac)':'')+'">'+n+'</button>';}).join('')
+      + '</div></div>'
+      + '<div style="flex:1"><div class="dx-form-label">체중 (kg)</div>'
+      + '<input type="number" step="0.1" id="brk-weight" value="'+(weight||'')+'" class="dx-form-input" placeholder="예: 40.2" onchange="brkSetWeight(this.value)" style="width:100%"></div>'
+      + '</div>';
+  } else {
+    var alcohol = whoData.alcohol || false;
+    html += '<div style="margin-top:10px"><div class="dx-form-label">음주 여부</div>'
+      + '<div onclick="brkToggleAlcohol()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:'+(alcohol?'#fef2f2':'#f0fdf4')+';border:1.5px solid '+(alcohol?'#fca5a5':'#86efac')+';border-radius:8px;cursor:pointer">'
+      + '<span style="font-size:1.2rem">'+(alcohol?'🍺':'🚫')+'</span>'
+      + '<span style="font-size:.82rem;font-weight:600;color:'+(alcohol?'#dc2626':'#16a34a')+'">'+(alcohol?'음주':'금주')+'</span>'
+      + '</div></div>';
+  }
+  return html;
+}
+
+function _brkRenderTreatment(whoData) {
+  var treatment = whoData.treatment || '';
+  var treatType = whoData.treatmentType || null;
+  var typeOpts = [
+    {v:null,l:'없음'},
+    {v:'hospital',l:'🏥 병원'},
+    {v:'procedure',l:'💉 시술'},
+    {v:'counseling',l:'💬 상담'},
+  ];
+  return '<div style="margin-bottom:10px"><div class="dx-form-label">치료/진료 종류</div>'
+    + '<div style="display:flex;gap:4px">'
+    + typeOpts.map(function(o){return '<button onclick="brkSetTreatmentType('+(o.v?'\''+o.v+'\'':'null')+')" class="btn-export" style="flex:1;padding:8px 2px;font-size:.75rem;'+(treatType===o.v?'background:var(--ac);color:white;border-color:var(--ac)':'')+'">'+o.l+'</button>';}).join('')
+    + '</div></div>'
+    + '<div><div class="dx-form-label">치료 내용</div>'
+    + '<textarea id="brk-treatment" class="dx-form-input" rows="3" placeholder="진료 내용, 처방, 검사 결과 등" onchange="brkSetTreatment(this.value)" style="width:100%;resize:vertical">'+esc(treatment)+'</textarea></div>';
+}
+
+function _brkRenderMemo(whoData) {
+  var memo = whoData.memo || '';
+  return '<div><div class="dx-form-label">오늘의 메모</div>'
+    + '<textarea id="brk-memo" class="dx-form-input" rows="4" placeholder="컨디션, 증상, 특이사항 등 자유롭게 기록" onchange="brkSetMemo(this.value)" style="width:100%;resize:vertical">'+esc(memo)+'</textarea></div>';
 }
 
 async function brkToggleCheck(key) {
@@ -6249,8 +6331,9 @@ async function brkSetExercise(val) {
   var m = getBrkMaster(); if (!m) return;
   var selDate = _brkCheckDate || kstToday();
   if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
-  if (!m.dailyChecks[selDate].bung) m.dailyChecks[selDate].bung = {};
-  m.dailyChecks[selDate].bung.exercise = val;
+  var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
+  if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
+  m.dailyChecks[selDate][who].exercise = val;
   await saveBrkMaster();
   renderView('meds');
 }
@@ -6263,6 +6346,37 @@ async function brkToggleAlcohol() {
   m.dailyChecks[selDate].bung.alcohol = !m.dailyChecks[selDate].bung.alcohol;
   await saveBrkMaster();
   renderView('meds');
+}
+
+async function brkSetTreatmentType(val) {
+  var m = getBrkMaster(); if (!m) return;
+  var selDate = _brkCheckDate || kstToday();
+  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
+  var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
+  if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
+  m.dailyChecks[selDate][who].treatmentType = val;
+  await saveBrkMaster();
+  renderView('meds');
+}
+
+async function brkSetTreatment(val) {
+  var m = getBrkMaster(); if (!m) return;
+  var selDate = _brkCheckDate || kstToday();
+  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
+  var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
+  if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
+  m.dailyChecks[selDate][who].treatment = val || null;
+  await saveBrkMaster();
+}
+
+async function brkSetMemo(val) {
+  var m = getBrkMaster(); if (!m) return;
+  var selDate = _brkCheckDate || kstToday();
+  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
+  var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
+  if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
+  m.dailyChecks[selDate][who].memo = val || null;
+  await saveBrkMaster();
 }
 
 // ── 7-3: 검사 결과 관리 ──
