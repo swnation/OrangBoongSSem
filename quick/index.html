@@ -1323,7 +1323,16 @@ _handleHash();
 fetchCloudStatus();
 // 포그라운드 복귀 시 재동기화
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { fetchCloudStatus(); checkPendingOutcome(); }
+  if (!document.hidden) {
+    fetchCloudStatus(); checkPendingOutcome();
+    // 탭 복귀 시 현재 탭 데이터 갱신 (rate.html에서 경과 저장 후 돌아왔을 때)
+    var activeTab=document.querySelector('.tab.active');
+    if(activeTab){
+      var idx=[].indexOf.call(document.querySelectorAll('.tab'),activeTab);
+      if(idx===2) renderList();
+      else if(idx===1) renderOutcomeTab();
+    }
+  }
 });
 
 // Register service worker
