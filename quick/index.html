@@ -848,15 +848,17 @@ async function saveEntry() {
 
 // ── ntfy 알림 (빠른 기록 → 붕쌤 즉시 알림) ──
 async function sendQuickNtfy(entry) {
+  // 붕쌤 즉시 알림 (토픽 독립 — 붕쌤 토픽 없어도 경과 알림은 별도 예약)
   const topic=localStorage.getItem('om_ntfy_bung');
-  if(!topic) return;
-  const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
-  const sites=(entry.sites||[]).join(', ');
-  const meds=(entry.meds||[]).join(', ');
-  const tx=(entry.treatments||[]).join(', ');
-  const trg=(entry.triggers||[]).join(', ');
-  const body=['🤕 오랑이 두통 기록 (빠른기록)',((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim(),meds?'💊 '+meds:'',tx?'🩺 '+tx:'',trg?'⚡ '+trg:''].filter(Boolean).join('\n');
-  try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
+  if(topic){
+    const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
+    const sites=(entry.sites||[]).join(', ');
+    const meds=(entry.meds||[]).join(', ');
+    const tx=(entry.treatments||[]).join(', ');
+    const trg=(entry.triggers||[]).join(', ');
+    const body=['🤕 오랑이 두통 기록 (빠른기록)',((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim(),meds?'💊 '+meds:'',tx?'🩺 '+tx:'',trg?'⚡ '+trg:''].filter(Boolean).join('\n');
+    try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
+  }
   // 경과 알림 예약 (클라이언트 타이머 — 새 기록 시 이전 예약 자동 취소)
   const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||'0');
   if(outcomeDelay>0) scheduleOutcomeNtfy(entry,outcomeDelay);
@@ -892,7 +894,9 @@ function rescheduleOutcome(entryId,delayMin){
 async function sendOutcomeNtfy(entryId){
   const logs=getQuickEntries();
   const entry=logs.find(l=>String(l.id)===String(entryId));
-  if(!entry||entry.outcome) return;
+  if(!entry||entry.outcome||entry.outcomeNotifySent) return;
+  // 멀티탭 레이스 컨디션 방지: outcomeNotifyAt이 없거나 이미 과거가 아니면 스킵
+  if(!entry.outcomeNotifyAt) return;
   // 발송 완료 표시
   const allLogs=getQuickLogs();
   const idx=allLogs.findIndex(l=>String(l.id)===String(entryId));
