@@ -907,13 +907,8 @@ async function sendOutcomeNtfy(entryId){
   const meds=(entry.meds||[]).join(', ');
   const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   const rateUrl=baseUrl+'rate.html';
-  const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''}\n아래 버튼으로 바로 기록하세요!`;
-  const actions=[
-    `view, 😊 호전, ${rateUrl}#rate-better-${entryId}, clear=true`,
-    `view, 😐 비슷, ${rateUrl}#rate-same-${entryId}, clear=true`,
-    `view, 😣 악화, ${rateUrl}#rate-worse-${entryId}, clear=true`
-  ].join('; ');
-  try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',headers:{'Click':rateUrl+'#'+entryId,'Actions':actions},body:fBody.trim()});}catch(e){}
+  const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''}\n\n😊 호전: ${rateUrl}#rate-better-${entryId}\n😐 비슷: ${rateUrl}#rate-same-${entryId}\n😣 악화: ${rateUrl}#rate-worse-${entryId}`;
+  try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',body:fBody.trim()});}catch(e){}
 }
 
 function checkPendingOutcome(){
@@ -1047,15 +1042,9 @@ async function testFollowupNtfy() {
   if(!topic){showToast('⚠️ 오랑이 경과 알림 토픽이 설정되지 않았습니다');return;}
   var baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   var rateUrl=baseUrl+'rate.html';
-  var actions=[
-    'view, 😊 호전, '+rateUrl+'#rate-better-0, clear=true',
-    'view, 😐 비슷, '+rateUrl+'#rate-same-0, clear=true',
-    'view, 😣 악화, '+rateUrl+'#rate-worse-0, clear=true'
-  ].join('; ');
+  var body='🔔 경과 알림 테스트\n이 알림이 보이면 정상 작동합니다!\n\n😊 호전: '+rateUrl+'#rate-better-0\n😐 비슷: '+rateUrl+'#rate-same-0\n😣 악화: '+rateUrl+'#rate-worse-0';
   try{
-    var r=await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',
-      headers:{'Click':rateUrl,'Actions':actions},
-      body:'🔔 경과 알림 테스트\n이 알림이 보이면 정상 작동합니다!\n아래 버튼으로 경과 기록 테스트'});
+    var r=await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body});
     if(r.ok) showToast('✅ 경과 테스트 알림 전송됨!');
     else showToast('❌ 실패: HTTP '+r.status,4000);
   }catch(e){showToast('❌ 네트워크 오류: '+e.message,4000);}
