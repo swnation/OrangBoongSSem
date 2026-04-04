@@ -293,7 +293,7 @@ function syncNtfyConfig(){
   const nb=localStorage.getItem('om_ntfy_bung')||'';
   const no=localStorage.getItem('om_ntfy_orangi')||'';
   const nw=localStorage.getItem('om_ntfy_worker')||'';
-  if(!nb&&!no) return;
+  if(!nb&&!no&&!nw) return;
   const entry=saveQuickConfig({ntfy_bung:nb,ntfy_orangi:no,ntfy_worker:nw});
   // 클라우드에도 즉시 전송
   cloudSave([entry]);
@@ -920,10 +920,10 @@ async function sendOutcomeNtfy(entryId){
   const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
   const workerUrl=localStorage.getItem('om_ntfy_worker');
   if(workerUrl){
-    try{await fetch(workerUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:orangiTopic,message:'🤕 두통 경과 확인\n'+info+' → 지금 어때요?',actions:[{action:'view',label:'😊 호전',url:rateUrl+'#rate-better-'+entryId},{action:'view',label:'😐 비슷',url:rateUrl+'#rate-same-'+entryId},{action:'view',label:'😣 악화',url:rateUrl+'#rate-worse-'+entryId}]})});}catch(e){}
+    try{await fetch(workerUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:orangiTopic,message:'🤕 두통 경과 확인\n'+info+' → 지금 어때요?',actions:[{action:'view',label:'😊 호전',url:rateUrl+'#rate-better-'+entryId},{action:'view',label:'😐 비슷',url:rateUrl+'#rate-same-'+entryId},{action:'view',label:'😣 악화',url:rateUrl+'#rate-worse-'+entryId}]})});}catch(e){console.warn('ntfy worker fetch failed:',e);}
   } else {
     const fBody='🤕 두통 경과 확인\n'+info+' → 지금 어때요?\n'+rateUrl+'#'+entryId;
-    try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',body:fBody});}catch(e){}
+    try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',body:fBody});}catch(e){console.warn('ntfy direct fetch failed:',e);}
   }
 }
 
