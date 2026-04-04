@@ -920,7 +920,7 @@ async function sendOutcomeNtfy(entryId){
   const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
   const workerUrl=localStorage.getItem('om_ntfy_worker');
   if(workerUrl){
-    try{await fetch(workerUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:orangiTopic,message:'🤕 두통 경과 확인\n'+info+' → 지금 어때요?',actions:[{action:'view',label:'😊 호전',url:rateUrl+'#rate-better-'+entryId},{action:'view',label:'😐 비슷',url:rateUrl+'#rate-same-'+entryId},{action:'view',label:'😣 악화',url:rateUrl+'#rate-worse-'+entryId}]})});}catch(e){console.warn('ntfy worker fetch failed:',e);}
+    try{await fetch(workerUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:orangiTopic,title:'🤕 두통 경과 확인',message:info+' → 지금 어때요?',actions:[{action:'view',label:'😊 호전',url:rateUrl+'#rate-better-'+entryId,clear:true},{action:'view',label:'😐 비슷',url:rateUrl+'#rate-same-'+entryId,clear:true},{action:'view',label:'😣 악화',url:rateUrl+'#rate-worse-'+entryId,clear:true}]})});}catch(e){console.warn('ntfy worker fetch failed:',e);}
   } else {
     const fBody='🤕 두통 경과 확인\n'+info+' → 지금 어때요?\n'+rateUrl+'#'+entryId;
     try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',body:fBody});}catch(e){console.warn('ntfy direct fetch failed:',e);}
@@ -1062,7 +1062,7 @@ async function testFollowupNtfy() {
   try{
     var r;
     if(workerUrl){
-      r=await fetch(workerUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:topic,message:'🔔 경과 알림 테스트\n이 알림이 보이면 정상 작동합니다!',actions:[{action:'view',label:'😊 호전',url:rateUrl+'#rate-better-0'},{action:'view',label:'😐 비슷',url:rateUrl+'#rate-same-0'},{action:'view',label:'😣 악화',url:rateUrl+'#rate-worse-0'}]})});
+      r=await fetch(workerUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:topic,title:'🔔 경과 알림 테스트',message:'이 알림이 보이면 정상 작동합니다!',actions:[{action:'view',label:'😊 호전',url:rateUrl+'#rate-better-0',clear:true},{action:'view',label:'😐 비슷',url:rateUrl+'#rate-same-0',clear:true},{action:'view',label:'😣 악화',url:rateUrl+'#rate-worse-0',clear:true}]})});
     } else {
       r=await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:'🔔 경과 알림 테스트\n이 알림이 보이면 정상 작동합니다!\n\n'+rateUrl+'#0'});
     }

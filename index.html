@@ -6364,6 +6364,7 @@ async function brkSetExercise(val) {
 }
 
 async function brkToggleAlcohol() {
+  // 음주는 항상 붕쌤 전용 (orangi 무관)
   var r = _getBrkWhoData(); if (!r) return;
   if (!r.m.dailyChecks[r.selDate].bung) r.m.dailyChecks[r.selDate].bung = {};
   r.m.dailyChecks[r.selDate].bung.alcohol = !r.m.dailyChecks[r.selDate].bung.alcohol;
