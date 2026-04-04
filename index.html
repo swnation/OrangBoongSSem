@@ -6209,7 +6209,7 @@ function _getBrkWhoData(m) {
   if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
   var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
   if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
-  return {m: m, whoData: m.dailyChecks[selDate][who]};
+  return {m: m, whoData: m.dailyChecks[selDate][who], selDate: selDate};
 }
 
 function _brkDayIcons(dayData, isOrangi) {
@@ -6342,18 +6342,16 @@ async function brkToggleCheck(key) {
 async function brkSetMeals(n) {
   var r = _getBrkWhoData(); if (!r) return;
   // meals는 항상 orangi
-  var m = r.m, selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate].orangi) m.dailyChecks[selDate].orangi = {};
-  m.dailyChecks[selDate].orangi.meals = n;
+  if (!r.m.dailyChecks[r.selDate].orangi) r.m.dailyChecks[r.selDate].orangi = {};
+  r.m.dailyChecks[r.selDate].orangi.meals = n;
   await saveBrkMaster();
   renderView('meds');
 }
 
 async function brkSetWeight(val) {
   var r = _getBrkWhoData(); if (!r) return;
-  var m = r.m, selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate].orangi) m.dailyChecks[selDate].orangi = {};
-  m.dailyChecks[selDate].orangi.weight = parseFloat(val) || null;
+  if (!r.m.dailyChecks[r.selDate].orangi) r.m.dailyChecks[r.selDate].orangi = {};
+  r.m.dailyChecks[r.selDate].orangi.weight = parseFloat(val) || null;
   await saveBrkMaster();
   renderView('meds');
 }
@@ -6367,9 +6365,8 @@ async function brkSetExercise(val) {
 
 async function brkToggleAlcohol() {
   var r = _getBrkWhoData(); if (!r) return;
-  var m = r.m, selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate].bung) m.dailyChecks[selDate].bung = {};
-  m.dailyChecks[selDate].bung.alcohol = !m.dailyChecks[selDate].bung.alcohol;
+  if (!r.m.dailyChecks[r.selDate].bung) r.m.dailyChecks[r.selDate].bung = {};
+  r.m.dailyChecks[r.selDate].bung.alcohol = !r.m.dailyChecks[r.selDate].bung.alcohol;
   await saveBrkMaster();
   renderView('meds');
 }
