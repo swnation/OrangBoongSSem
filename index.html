@@ -5909,7 +5909,7 @@ function buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDay
     var dc = dailyChecks && dailyChecks[ds];
     if (dc) {
       var ic = [];
-      var allKeys = ['folicAcid','iron','vitaminD','arginine','coq10','silymarin','multivitamin','febuxostat'];
+      var allKeys = BRK_SUPPL_ORANGI.concat(BRK_SUPPL_BUNG);
       var hasSuppl = allKeys.some(function(k){return (dc.orangi && dc.orangi[k]) || (dc.bung && dc.bung[k]);});
       if (hasSuppl) ic.push('💊');
       if ((dc.orangi && dc.orangi.exercise) || (dc.bung && dc.bung.exercise)) ic.push('🏃');
@@ -6200,12 +6200,22 @@ function renderDailyChecks() {
     + '</div>';
 }
 
+var BRK_SUPPL_ORANGI = ['folicAcid','iron','vitaminD'];
+var BRK_SUPPL_BUNG = ['arginine','coq10','silymarin','multivitamin','febuxostat'];
+
+function _getBrkWhoData(m) {
+  if (!m) m = getBrkMaster(); if (!m) return null;
+  var selDate = _brkCheckDate || kstToday();
+  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
+  var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
+  if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
+  return {m: m, whoData: m.dailyChecks[selDate][who]};
+}
+
 function _brkDayIcons(dayData, isOrangi) {
   var icons = [];
   var who = isOrangi ? (dayData.orangi || {}) : (dayData.bung || {});
-  var orangiSuppl = ['folicAcid','iron','vitaminD'];
-  var bungSuppl = ['arginine','coq10','silymarin','multivitamin','febuxostat'];
-  var supplKeys = isOrangi ? orangiSuppl : bungSuppl;
+  var supplKeys = isOrangi ? BRK_SUPPL_ORANGI : BRK_SUPPL_BUNG;
   if (supplKeys.some(function(k){return who[k];})) icons.push('💊');
   if (who.exercise) icons.push('🏃');
   if (who.treatment) icons.push('🏥');
@@ -6323,20 +6333,16 @@ function _brkRenderMemo(whoData) {
 }
 
 async function brkToggleCheck(key) {
-  var m = getBrkMaster(); if (!m) return;
-  var selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
-  var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
-  if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
-  m.dailyChecks[selDate][who][key] = !m.dailyChecks[selDate][who][key];
+  var r = _getBrkWhoData(); if (!r) return;
+  r.whoData[key] = !r.whoData[key];
   await saveBrkMaster();
   renderView('meds');
 }
 
 async function brkSetMeals(n) {
-  var m = getBrkMaster(); if (!m) return;
-  var selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
+  var r = _getBrkWhoData(); if (!r) return;
+  // meals는 항상 orangi
+  var m = r.m, selDate = _brkCheckDate || kstToday();
   if (!m.dailyChecks[selDate].orangi) m.dailyChecks[selDate].orangi = {};
   m.dailyChecks[selDate].orangi.meals = n;
   await saveBrkMaster();
@@ -6344,9 +6350,8 @@ async function brkSetMeals(n) {
 }
 
 async function brkSetWeight(val) {
-  var m = getBrkMaster(); if (!m) return;
-  var selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
+  var r = _getBrkWhoData(); if (!r) return;
+  var m = r.m, selDate = _brkCheckDate || kstToday();
   if (!m.dailyChecks[selDate].orangi) m.dailyChecks[selDate].orangi = {};
   m.dailyChecks[selDate].orangi.weight = parseFloat(val) || null;
   await saveBrkMaster();
@@ -6354,20 +6359,15 @@ async function brkSetWeight(val) {
 }
 
 async function brkSetExercise(val) {
-  var m = getBrkMaster(); if (!m) return;
-  var selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
-  var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
-  if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
-  m.dailyChecks[selDate][who].exercise = val;
+  var r = _getBrkWhoData(); if (!r) return;
+  r.whoData.exercise = val;
   await saveBrkMaster();
   renderView('meds');
 }
 
 async function brkToggleAlcohol() {
-  var m = getBrkMaster(); if (!m) return;
-  var selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
+  var r = _getBrkWhoData(); if (!r) return;
+  var m = r.m, selDate = _brkCheckDate || kstToday();
   if (!m.dailyChecks[selDate].bung) m.dailyChecks[selDate].bung = {};
   m.dailyChecks[selDate].bung.alcohol = !m.dailyChecks[selDate].bung.alcohol;
   await saveBrkMaster();
@@ -6375,33 +6375,21 @@ async function brkToggleAlcohol() {
 }
 
 async function brkSetTreatmentType(val) {
-  var m = getBrkMaster(); if (!m) return;
-  var selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
-  var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
-  if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
-  m.dailyChecks[selDate][who].treatmentType = val;
+  var r = _getBrkWhoData(); if (!r) return;
+  r.whoData.treatmentType = val;
   await saveBrkMaster();
   renderView('meds');
 }
 
 async function brkSetTreatment(val) {
-  var m = getBrkMaster(); if (!m) return;
-  var selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
-  var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
-  if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
-  m.dailyChecks[selDate][who].treatment = val || null;
+  var r = _getBrkWhoData(); if (!r) return;
+  r.whoData.treatment = val || null;
   await saveBrkMaster();
 }
 
 async function brkSetMemo(val) {
-  var m = getBrkMaster(); if (!m) return;
-  var selDate = _brkCheckDate || kstToday();
-  if (!m.dailyChecks[selDate]) m.dailyChecks[selDate] = {};
-  var who = _brkCheckWho === 'orangi' ? 'orangi' : 'bung';
-  if (!m.dailyChecks[selDate][who]) m.dailyChecks[selDate][who] = {};
-  m.dailyChecks[selDate][who].memo = val || null;
+  var r = _getBrkWhoData(); if (!r) return;
+  r.whoData.memo = val || null;
   await saveBrkMaster();
 }
 

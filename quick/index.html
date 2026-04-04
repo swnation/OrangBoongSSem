@@ -907,7 +907,8 @@ async function sendOutcomeNtfy(entryId){
   const meds=(entry.meds||[]).join(', ');
   const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   const rateUrl=baseUrl+'rate.html';
-  const fBody=`🤕 두통 경과 확인\n${(entry.datetime||'').slice(11,16)} ${nrs} ${meds||''} → 지금 어때요?\n${rateUrl}#${entryId}`;
+  const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
+  const fBody=`🤕 두통 경과 확인\n${info} → 지금 어때요?\n${rateUrl}#${entryId}`;
   try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',body:fBody.trim()});}catch(e){}
 }
 
@@ -1042,7 +1043,7 @@ async function testFollowupNtfy() {
   if(!topic){showToast('⚠️ 오랑이 경과 알림 토픽이 설정되지 않았습니다');return;}
   var baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   var rateUrl=baseUrl+'rate.html';
-  var body='🔔 경과 알림 테스트\n이 알림이 보이면 정상 작동합니다!\n'+rateUrl+'#0';
+  var body='🔔 경과 알림 테스트\n이 알림이 보이면 정상 작동합니다!\n\n'+rateUrl+'#0';
   try{
     var r=await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body});
     if(r.ok) showToast('✅ 경과 테스트 알림 전송됨!');
