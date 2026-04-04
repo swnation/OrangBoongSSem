@@ -36,6 +36,24 @@ h1{font-size:1.1rem;color:#1a1a2e;margin-bottom:4px}
 .already p{font-size:.78rem;color:#888}
 .already .link{display:inline-block;margin-top:14px;font-size:.78rem;color:#4f6d7a;text-decoration:underline}
 .error{color:#b91c1c;font-size:.85rem;padding:20px}
+.timeline{margin-top:18px;padding:14px;background:#f8f8f0;border-radius:10px;text-align:left}
+.timeline-title{font-size:.72rem;font-weight:600;color:#888;margin-bottom:8px}
+.tl-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:.75rem;border-bottom:1px solid #eee}
+.tl-row:last-child{border-bottom:none}
+.tl-row.current{background:#eff6ff;border-radius:6px;padding:5px 8px;border:1.5px solid #93c5fd;border-bottom:1.5px solid #93c5fd}
+.tl-time{font-weight:600;color:#1a1a2e;min-width:44px}
+.tl-nrs{display:inline-block;width:22px;height:22px;border-radius:50%;text-align:center;line-height:22px;font-size:.68rem;font-weight:700;color:#fff}
+.tl-bar{flex:1;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden}
+.tl-fill{height:100%;border-radius:3px}
+.tl-label{font-size:.68rem;color:#888;min-width:24px;text-align:right}
+.tl-outcome{font-size:.65rem;margin-left:4px}
+@media(prefers-color-scheme:dark){
+  .timeline{background:#1c2128}
+  .timeline-title{color:#8b949e}
+  .tl-row{border-bottom-color:#30363d}
+  .tl-time{color:#e6edf3}
+  .tl-row.current{background:#1a2332;border-color:#58a6ff}
+}
 @media(prefers-color-scheme:dark){
   body{background:#0d1117}
   .card{background:#161b22;box-shadow:0 2px 20px rgba(0,0,0,.3)}
@@ -91,6 +109,10 @@ h1{font-size:1.1rem;color:#1a1a2e;margin-bottom:4px}
     <a class="link" href="./index.html">빠른 기록 앱 열기 →</a>
   </div>
   <div id="error" class="error" style="display:none"></div>
+  <div id="timeline" class="timeline" style="display:none">
+    <div class="timeline-title">📊 최근 24시간 기록</div>
+    <div id="tl-rows"></div>
+  </div>
 </div>
 
 <script>
@@ -115,12 +137,55 @@ function findEntry(id){
     const entry=logs.find(l=>String(l.id)===String(id));
     if(entry) return entry;
   }
-  // ID 없거나 못 찾으면 가장 최근 미평가 기록
+  // ID 없거나 못 찾으면 24시간 이내 가장 최근 미평가 기록
+  const cutoff=Date.now()-24*3600000;
   for(let i=logs.length-1;i>=0;i--){
     if(logs[i]._type==='config') continue;
-    if(!logs[i].outcome) return logs[i];
+    if(!logs[i].outcome){
+      const t=new Date(logs[i].datetime).getTime();
+      if(t>=cutoff) return logs[i];
+    }
   }
   return null;
+}
+
+function getRecent24hEntries(){
+  const logs=getLogs();
+  const cutoff=Date.now()-24*3600000;
+  return logs.filter(function(l){
+    if(l._type==='config') return false;
+    var t=new Date(l.datetime).getTime();
+    return !isNaN(t) && t>=cutoff;
+  }).sort(function(a,b){return new Date(b.datetime)-new Date(a.datetime);});
+}
+
+function renderTimeline(entries,currentId){
+  if(!entries.length) return;
+  var el=document.getElementById('timeline');
+  var rows=document.getElementById('tl-rows');
+  el.style.display='';
+  rows.innerHTML=entries.map(function(e){
+    var isCurrent=currentId&&String(e.id)===String(currentId);
+    var dt=e.datetime||'';
+    var time=dt.slice(11,16);
+    var nrs=e.nrs>=0?e.nrs:-1;
+    var nrsPct=nrs>=0?nrs*10:0;
+    var nrsColor=nrs<=3?'#16a34a':nrs<=6?'#f59e0b':'#dc2626';
+    var outLabel='';
+    if(e.outcome){
+      var ol={better:'😊',same:'😐',worse:'😣'};
+      outLabel='<span class="tl-outcome">'+(ol[e.outcome.rating]||'')+'</span>';
+    } else if(isCurrent){
+      outLabel='<span class="tl-outcome" style="color:#2563eb;font-weight:600">← 경과 확인 중</span>';
+    }
+    return '<div class="tl-row'+(isCurrent?' current':'')+'">'
+      +'<span class="tl-time">'+(time==='시간미상'?'--:--':time)+'</span>'
+      +(nrs>=0?'<span class="tl-nrs" style="background:'+nrsColor+'">'+nrs+'</span>':'<span class="tl-nrs" style="background:#ccc">-</span>')
+      +'<span class="tl-bar"><span class="tl-fill" style="width:'+nrsPct+'%;background:'+nrsColor+'"></span></span>'
+      +'<span class="tl-label">'+(nrs>=0?nrs+'/10':'')+'</span>'
+      +outLabel
+      +'</div>';
+  }).join('');
 }
 
 function showEntryInfo(entry){
@@ -251,14 +316,18 @@ if(entry){
   if(entry.outcome){
     showAlreadyRated(entry);
   } else if(rating){
-    // URL에 rating 포함 → 알림 버튼에서 직접 온 경우 → 선택 상태로 표시 (확인 필요)
     selectRating(rating);
   }
 } else {
   document.getElementById('buttons').style.display='none';
-  document.getElementById('error').textContent='평가할 두통 기록이 없습니다';
+  document.getElementById('sub-text').textContent='24시간 이내 평가할 기록이 없어요';
+  document.getElementById('error').textContent='최근 기록이 없거나 모두 평가 완료되었습니다';
   document.getElementById('error').style.display='';
 }
+
+// 24시간 타임라인 표시
+var recent=getRecent24hEntries();
+renderTimeline(recent, entry?entry.id:null);
 </script>
 </body>
 </html>
