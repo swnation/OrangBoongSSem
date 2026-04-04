@@ -1,87 +1,67 @@
-# HANDOFF — v9.2 세션 이어받기 가이드
+# HANDOFF — v9.3 세션 이어받기 가이드
 
-## 현재 상태: v9.2 (전체 기능 완료 + UX 대규모 개선)
+## 현재 상태: v9.3 (기본 모드 + 약물 3중 검증 + 대규모 UX 개선)
 
-### 이번 세션 완료 작업 (PR #73~#83 + main 직접 커밋)
+### 이번 세션 완료 작업 (PR #84~#121)
 
-#### 붕룩이 대시보드 (기능 7) — PR #73~#74
-- [x] 생리주기 트래커 (캘린더, 배란 추정, 가임기, 예측)
-- [x] 일일 체크리스트 (오랑이/붕쌤 탭, 영양제·운동·체중, 주간 요약)
-- [x] 검사 결과 관리 (정액/혈액/호르몬/초음파, 추세 차트)
-- [x] 프리컨셉션 마일스톤 (14개 기본, 진행률 바, 추가/삭제)
-- [x] 약물 안전 등급 (교차 도메인, FDA A~X 뱃지)
-- [x] meds 뷰 분기 + 생리주기→편두통 교차 태그
+#### 기본 모드 (Basic Consult)
+- [x] 경량 모드를 기본 모드로 대체, 기본값으로 설정
+- [x] GPT(데이터분석) || Perplexity(근거검색) 병렬 → Claude(최종판단) 순차
+- [x] 모드: 🌱 기본 협진 / ⚡ 심층 협진 / ⚔️ 디베이트 / 🤖 Grok / 💬 빠른질문
 
-#### 몽치치 머리 이미지 — PR #75~#82
-- [x] SVG 손그림 → 실제 3D 몽치치 이미지로 교체
-- [x] 정면/후면 600x500 동일 크기
-- [x] 투명 SVG 오버레이로 인터랙티브 클릭 영역 유지
-- [x] quick.html도 동일 이미지 적용
+#### 약물 안전성 3계층 교차검증
+- [x] 내장 DB 80개 약물 (FDA/PLLR/식약처 3소스)
+- [x] 식약처 DUR API + Perplexity fallback + localStorage 캐싱
 
-#### ntfy 알림 수정
-- [x] CORS 문제 해결 — 단순 POST (커스텀 헤더/JSON 없이)
-- [x] quick.html에서만 ntfy 발송 (메인앱은 본인 기록이라 불필요)
-- [x] 경과 알림: setTimeout → ntfy 예약 발송 (At: 2h) — 앱 꺼도 작동
-- [x] SW에서 ntfy.sh 도메인 제외
-- [x] API 키 설정에 테스트 알림 버튼 추가
+#### 투약 변경 이력 (medHistory)
+- [x] 약물 변경 자동 감지, 카드형 타임라인, 수동 이력 추가
 
-#### 붕룩이 UX 개선
-- [x] 사이드바 탭명: 🍼 임신 준비 대시보드 / 📝 일지 기록 / 📈 임신 준비 통계
-- [x] 일일체크 "☁️ 자동 저장" 인디케이터
-- [x] 생리주기 양/강도 "기록 안함" 옵션
-- [x] 📷 사진에서 읽기 — AI Vision으로 생리주기 날짜 추출
-- [x] 증상기록→대시보드 바로가기 안내
+#### 비용 추적
+- [x] 전체 모델 26개 가격표 완성, Grok 비용 0원 수정
+- [x] 도메인별/일별 AI별 상세, 모바일 가독성
 
-#### 경과 시스템 강화
-- [x] quick.html에 🩺 경과 탭 추가 (기록/경과/목록 3탭)
-- [x] 호전/비슷/악화 + 🤷 기억 안남 옵션
-- [x] 경과 삭제/수정 가능
-- [x] 메인앱 로그 목록에 "+ 경과" 태그 (미평가 기록)
-- [x] 경과 알림 테스트 버튼 (quick.html)
-- [x] 표시 기간 3일로 제한
+#### 디베이트 심판
+- [x] Phase1(4AI 병렬) → Phase2(Claude 심판 순차)
 
-#### Grok 수정
-- [x] Multi-Agent: grok-4.20-multi-agent 모델 + /v1/responses API
-- [x] 스트리밍 비용 추적: stream_options.include_usage 추가
+#### ntfy 경과 알림 시스템
+- [x] quick/rate.html 경과 전용 페이지 (3버튼 + 2단계 확인)
+- [x] 클라이언트 타이머 (중복 방지), 기본/커스텀 알림 시간
+- [x] ntfy 토픽 클라우드 동기화 (quickLogs config 항목)
+
+#### quick.html 개선
+- [x] 추정 트리거 16개, 날씨 자동 수집, painType 표시
+- [x] 커스텀 칩 클라우드 동기화 + 기록 기반 복구
+
+#### 날씨 + 트리거 상관분석
+- [x] AI 컨텍스트에 [날씨-두통 데이터] + [트리거 상관분석] 포함
+- [x] 저기압(<1010hPa) 자동 트리거 분석
 
 #### 기타
-- [x] +고정 항목 Drive 영속화 (_syncCustomItemsToMaster + saveMaster)
-- [x] triggers를 _CUSTOM_KEYS에 추가
-- [x] API 키 백업에 ntfy/날씨/동기화URL 포함
-- [x] 질문 템플릿: 수정 기능 + 도메인별 추천 템플릿
-- [x] 세션에서 템플릿 다중 선택 → 복합 질문
-- [x] Gemini 리뷰 반영 (PR #73~#82 전부)
+- [x] Grok 4 + 4.1 Fast 모델 추가
+- [x] 세션 진행 중 "🔄 새 질문" 버튼, 알림 on/off 토글
+- [x] 생리주기 사진/파일 업로드 (카메라+갤러리+파일)
+- [x] 코드 감사 완료 (SW xAI 제외, light→basic, PRECACHE 보강)
 
 ### 주요 아키텍처
-- **AI 5개**: GPT, Claude, Gemini, Grok(xAI), Perplexity
-- **세션 모드 5가지**: 일반 협진 / 디베이트 / Grok Multi-Agent / 빠른 질문 / 경량 모드
-- **Grok Multi-Agent**: grok-4.20-multi-agent 모델, /v1/responses 엔드포인트
-- **비용 최적화**: R1에서 Grok 제외, R2+에서 Perplexity 제외 (디베이트 모드 예외)
-- **경과 체계**: better/same/worse/unknown (기존 good/partial/none 하위 호환)
-- **ntfy 알림**: quick.html → 붕쌤 즉시 + 오랑이 2시간 예약발송(At: 2h)
-- **컨텍스트**: `getFullContext(question)` 공통 헬퍼
-- **SSOT 백업**: Drive "Orangi SSOT Backups" 폴더, 최근 5개
-- **붕룩이 대시보드**: 생리주기/일일체크/검사결과/마일스톤/약물안전 5개 탭
-- **머리 이미지**: icons/head-front.png, head-back.png (600x500) + SVG 오버레이
-- **커스텀 항목**: localStorage + Drive 동기화 (_syncCustomItemsToMaster)
+- **세션 모드**: 기본(3AI) / 심층(5AI) / 디베이트 / Grok Multi-Agent / 빠른질문
+- **경과**: rate.html + 클라이언트 타이머 + outcomeNotifyAt 기록 저장
+- **날씨/트리거**: getRecentLogSummary → getTriggerCorrelation → AI 자동 수신
+- **약물 안전**: 내장DB(80) → 식약처DUR → Perplexity → localStorage 캐싱
+- **커스텀 칩**: localStorage + 클라우드 + 기록 기반 복구 (3중 백업)
 
-### 백업 브랜치 (최근 5개 유지)
-- `backup/v9.2` ← v9.2 전체 기능
-- `backup/v9.1` ← Gemini 리뷰 반영
-- `backup/v9.0` ← 20개 신기능
-- `backup/v8.4` ← 디베이트/빠른질문
-- `backup/v8.3` ← KST/한영매핑/PDF
-> GitHub Actions가 5개 초과 시 자동 삭제
+### 백업 브랜치
+- `backup/v9.3` ← 현재
+- `backup/v9.2` / `backup/v9.1` / `backup/v9.0` / `backup/v8.4`
 
-### 남은 작업
-- quick.html에 트리거 칩 미적용 (메인 앱만 구현)
-- startRandomDebate() 랜덤 팀 디베이트 — 미구현
-- 머리 이미지 클릭 영역 미세 조정 필요할 수 있음
+### 다음 세션 작업
+- **붕룩이 기록 포맷 개선** (핵심):
+  질환관리 폼 → 카테고리별 전용 빠른 입력 (💊영양제/🏃운동/🔬검사/🏥치료)
+  + 생리주기 캘린더에 모든 기록 아이콘 통합 표시
+- startRandomDebate() 랜덤 팀 디베이트
 
 ### PR 워크플로우
-1. PR 생성 → 바로 머지 (대기 없음)
+1. PR 생성 → Gemini 리뷰 확인 → 반영 → 머지
 2. 다음 작업 시 이전 PR의 Gemini 리뷰 확인
-3. 반영할 것 있으면 다음 커밋에 포함
 
 ## 새 채팅 시작 시
 ```
