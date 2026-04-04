@@ -908,7 +908,7 @@ async function sendOutcomeNtfy(entryId){
   const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   const rateUrl=baseUrl+'rate.html';
   const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
-  const actions='view,😊 호전,'+rateUrl+'#rate-better-'+entryId+',clear=true;view,😐 비슷,'+rateUrl+'#rate-same-'+entryId+',clear=true;view,😣 악화,'+rateUrl+'#rate-worse-'+entryId+',clear=true';
+  const actions='view,😊 호전,'+rateUrl+'#rate-better-'+entryId+';view,😐 비슷,'+rateUrl+'#rate-same-'+entryId+';view,😣 악화,'+rateUrl+'#rate-worse-'+entryId+'';
   const ntfyUrl='https://ntfy.sh/'+encodeURIComponent(orangiTopic)+'?title='+encodeURIComponent('🤕 두통 경과 확인')+'&actions='+encodeURIComponent(actions);
   try{await fetch(ntfyUrl,{method:'POST',body:info+' → 지금 어때요?'});}catch(e){console.warn('ntfy outcome failed:',e);}
 }
@@ -1044,7 +1044,7 @@ async function testFollowupNtfy() {
   if(!topic){showToast('⚠️ 오랑이 경과 알림 토픽이 설정되지 않았습니다');return;}
   var baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   var rateUrl=baseUrl+'rate.html';
-  var actions='view,😊 호전,'+rateUrl+'#rate-better-0,clear=true;view,😐 비슷,'+rateUrl+'#rate-same-0,clear=true;view,😣 악화,'+rateUrl+'#rate-worse-0,clear=true';
+  var actions='view,😊 호전,'+rateUrl+'#rate-better-0;view,😐 비슷,'+rateUrl+'#rate-same-0;view,😣 악화,'+rateUrl+'#rate-worse-0';
   var ntfyUrl='https://ntfy.sh/'+encodeURIComponent(topic)+'?title='+encodeURIComponent('🔔 경과 알림 테스트')+'&actions='+encodeURIComponent(actions);
   try{
     var r=await fetch(ntfyUrl,{method:'POST',body:'이 알림이 보이면 정상 작동합니다!'});
@@ -1326,12 +1326,9 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     fetchCloudStatus(); checkPendingOutcome();
     // 탭 복귀 시 현재 탭 데이터 갱신 (rate.html에서 경과 저장 후 돌아왔을 때)
-    var activeTab=document.querySelector('.tab.active');
-    if(activeTab){
-      var idx=[].indexOf.call(document.querySelectorAll('.tab'),activeTab);
-      if(idx===2) renderList();
-      else if(idx===1) renderOutcomeTab();
-    }
+    const tabs=document.querySelectorAll('.tab');
+    if(tabs[2].classList.contains('active')) renderList();
+    else if(tabs[1].classList.contains('active')) renderOutcomeTab();
   }
 });
 
