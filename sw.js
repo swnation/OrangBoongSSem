@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orangi-health-v9p';
+const CACHE_NAME = 'orangi-health-v9q';
 const PRECACHE = [
   './index.html',
   './style.css',
@@ -33,6 +33,7 @@ self.addEventListener('fetch', e => {
       url.hostname.includes('googleapis') ||
       url.hostname.includes('anthropic') ||
       url.hostname.includes('openai') ||
+      url.hostname.includes('x.ai') ||
       url.hostname.includes('perplexity') ||
       url.hostname.includes('ntfy')) {
     return;

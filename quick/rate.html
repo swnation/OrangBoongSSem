@@ -180,14 +180,7 @@ function selectRating(rating){
   document.getElementById('confirm-bar').style.display='';
 }
 
-function cancelSelect(){
-  _selectedRating=null;
-  ['better','same','worse'].forEach(r=>{
-    const btn=document.getElementById('sel-'+r);
-    if(btn){btn.style.opacity='1';btn.style.transform='';}
-  });
-  document.getElementById('confirm-bar').style.display='none';
-}
+
 
 async function confirmRate(){
   if(!_selectedRating) return;

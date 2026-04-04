@@ -2462,7 +2462,7 @@ function renderSession() {
       <button onclick="stopAllAI()" style="padding:8px 28px;font-size:.82rem;font-weight:700;border:2px solid #ef4444;border-radius:8px;background:#ef444415;color:#ef4444;cursor:pointer">⏹ 전체 중단</button>
       <button onclick="resetAndNewSession()" style="padding:8px 20px;font-size:.82rem;font-weight:600;border:2px solid var(--bd);border-radius:8px;background:var(--sf2);color:var(--ink);cursor:pointer">🔄 새 질문</button>
     </div>
-    <div class="ai-grid${mode==='quick'||mode==='multi-grok'||mode==='light'?' single-card':''}">${aiCards}</div>
+    <div class="ai-grid${mode==='quick'||mode==='multi-grok'?' single-card':''}">${aiCards}</div>
     <div id="summary-area">${sess.summary?renderSummaryResult(sess.summary):''}</div>`;
 }
 

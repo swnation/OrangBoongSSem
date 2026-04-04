@@ -1,8 +1,11 @@
-const CACHE_NAME = 'orangi-quick-v15';
+const CACHE_NAME = 'orangi-quick-v16';
 const PRECACHE = [
   './',
+  './index.html',
   './rate.html',
   '../style.css',
+  '../icons/head-front.png',
+  '../icons/head-back.png',
   'https://cdn.jsdelivr.net/npm/marked@15/marked.min.js',
   'https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js',
 ];
@@ -28,7 +31,8 @@ self.addEventListener('fetch', e => {
   if (url.hostname.includes('google') || url.hostname.includes('gstatic') ||
       url.hostname.includes('googleapis') || url.hostname.includes('script') ||
       url.hostname.includes('anthropic') || url.hostname.includes('openai') ||
-      url.hostname.includes('perplexity') || url.hostname.includes('ntfy')) {
+      url.hostname.includes('x.ai') || url.hostname.includes('perplexity') ||
+      url.hostname.includes('ntfy')) {
     return;
   }
   if (e.request.destination === 'document' || url.pathname.endsWith('.css') || url.pathname.endsWith('.html')) {
