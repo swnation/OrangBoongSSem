@@ -1304,15 +1304,16 @@ function getRoleSystem(aiId) {
   }
 
   if(mode==='debate') {
-    const rev=S.session?.debateReversed;
-    const debateRoles={
-      gpt: rev?'반대 측 — "아니다" 근거 수집·반박':'찬성 측 — "맞다" 근거 수집·주장',
-      gemini: rev?'찬성 측 — "맞다" 근거 수집·주장':'반대 측 — "아니다" 근거 수집·반박',
-      grok: '중도 측 — 양측 장단점 균형 평가, 제3의 시각·조건부 합의점 도출',
-      claude: '심판 — 논거 강도 평가, 과단정 체크, 잠정 결론, SSOT 위반 여부',
-      perp: '팩트체크 — 인용 수치/문헌/가이드라인 검증, 출처 명시',
+    const teams=S.session?.debateTeams||{};
+    const roleDescs={
+      pro: '찬성 측 — "맞다" 근거 수집·주장',
+      con: '반대 측 — "아니다" 근거 수집·반박',
+      neutral: '중도 측 — 양측 장단점 균형 평가, 제3의 시각·조건부 합의점 도출',
+      judge: '심판 — 논거 강도 평가, 과단정 체크, 잠정 결론, SSOT 위반 여부',
+      fact: '정보수집 — 인용 수치/문헌/가이드라인 검증, 출처 명시',
     };
-    return `${dc.user} ${dc.label} 디베이트 — ${AI_DEFS[aiId].name} 역할: ${debateRoles[aiId]||'분석'}.
+    const role=teams[aiId]||'neutral';
+    return `${dc.user} ${dc.label} 디베이트 — ${AI_DEFS[aiId].name} 역할: ${roleDescs[role]||'분석'}.
 ${_CONCISE} 자신의 역할에 충실. 근거 기반. 감정적 주장 금지.`;
   }
 
@@ -1508,10 +1509,11 @@ function buildUserPrompt(aiId, roundNum) {
 
   if (roundNum === 1) {
     const mode=sess.mode||'normal';
-    // 디베이트 R1 심판(Claude): 다른 AI 답변을 포함하여 판정
-    if(mode==='debate'&&aiId==='claude'&&sess.rounds[0]?.answers) {
+    // 디베이트 R1 심판: 다른 AI 답변을 포함하여 판정 (심판 AI 동적 결정)
+    const judgeId=getDebateJudgeId();
+    if(mode==='debate'&&aiId===judgeId&&sess.rounds[0]?.answers) {
       const others=Object.entries(AI_DEFS)
-        .filter(([id])=>id!=='claude'&&sess.rounds[0].answers[id])
+        .filter(([id])=>id!==judgeId&&sess.rounds[0].answers[id])
         .map(([id,def])=>`▶ [${def.name} — ${getDebateRole(id,sess.debateReversed)}]\n${sess.rounds[0].answers[id]}`).join('\n\n---\n\n');
       return `${contextFull}\n\n[오늘 세션 질문]\n${question}\n\n[각 측 주장]\n${others}\n\n위 주장들을 심판으로서 평가하세요. 논거 강도, 근거 타당성, 과단정 여부를 체크하고 잠정 결론을 내려주세요.`;
     }
@@ -1538,6 +1540,7 @@ function startNewSession(prefillQuestion, mode) {
     new_consensus:[], new_discarded:[], updated_issues:[],
     mode: mode||'basic', // 'basic','normal','debate','quick','multi-grok'
     debateReversed: false,
+    debateTeams: {gpt:'pro',gemini:'con',grok:'neutral',claude:'judge',perp:'fact'},
     grokAgentLevel: 4,
   };
   S._dirty = false;
@@ -1826,14 +1829,14 @@ async function runRound(roundNum, errorsOnly) {
 
   const mode=S.session?.mode||'normal';
   if(mode==='debate'&&roundNum===1) {
-    // 디베이트 R1: Phase1(찬반+중도+팩트 병렬) → Phase2(심판 Claude 순차)
-    const phase1=enabledAIs.filter(id=>id!=='claude');
-    const phase2=enabledAIs.filter(id=>id==='claude');
+    // 디베이트 R1: Phase1(찬반+중도+팩트 병렬) → Phase2(심판 순차)
+    const jId=getDebateJudgeId();
+    const phase1=enabledAIs.filter(id=>id!==jId);
+    const phase2=enabledAIs.filter(id=>id===jId);
     if(phase1.length) {
       phase2.forEach(id=>setCardStatus(id,'waiting'));
       await Promise.all(phase1.map(_runOneAI));
     }
-    // Phase2: Claude 심판 — 다른 AI 답변을 context로 포함하여 실행
     if(phase2.length) await Promise.all(phase2.map(_runOneAI));
   } else {
     await Promise.all(enabledAIs.map(_runOneAI));
@@ -2327,10 +2330,20 @@ function renderHome() {
 
 // SESSION VIEW
 function getDebateRole(aiId,reversed) {
+  const teams=S.session?.debateTeams;
+  if(teams){
+    const labels={pro:'찬성 측',con:'반대 측',neutral:'중도',judge:'심판',fact:'정보수집'};
+    return labels[teams[aiId]]||'';
+  }
   const roles=reversed
     ?{gpt:'반대 측',gemini:'찬성 측',grok:'중도',claude:'심판',perp:'팩트체크'}
     :{gpt:'찬성 측',gemini:'반대 측',grok:'중도',claude:'심판',perp:'팩트체크'};
   return roles[aiId]||'';
+}
+function getDebateJudgeId(){
+  const teams=S.session?.debateTeams;
+  if(!teams) return 'claude';
+  return Object.keys(teams).find(k=>teams[k]==='judge')||'claude';
 }
 function getDebateRoleColor(aiId) {
   const colors={gpt:'#10a37f',gemini:'#4285f4',grok:'#1DA1F2',claude:'#c96442',perp:'#20808d'};
@@ -2361,16 +2374,29 @@ function renderSession() {
     <span style="font-size:.65rem;color:#16a34a;margin-left:auto">3개 AI · 비용↓ · 일상 진료 최적</span>
   </div>` : '';
 
-  // Debate reverse toggle
-  const debateToggle = mode==='debate'&&curRound===0 ? `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px;padding:8px 12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
-    <span style="font-size:.68rem;color:var(--mu)">5역할:</span>
-    <span style="font-size:.7rem;font-weight:600;color:#10a37f">GPT=${sess.debateReversed?'반대':'찬성'}</span>
-    <span style="font-size:.7rem;font-weight:600;color:#4285f4">Gemini=${sess.debateReversed?'찬성':'반대'}</span>
-    <span style="font-size:.7rem;font-weight:600;color:#1DA1F2">Grok=중도</span>
-    <span style="font-size:.7rem;font-weight:600;color:#c96442">Claude=심판</span>
-    <span style="font-size:.7rem;font-weight:600;color:#20808d">Perp=팩트</span>
-    <button class="btn-cancel" onclick="S.session.debateReversed=!S.session.debateReversed;renderView('session')" style="font-size:.65rem;padding:3px 8px;margin-left:auto">↔ 찬반전환</button>
-  </div>` : '';
+  // Debate team assignment UI
+  const debateToggle = mode==='debate'&&curRound===0 ? (function(){
+    const t=sess.debateTeams||{gpt:'pro',gemini:'con',grok:'neutral',claude:'judge',perp:'fact'};
+    const roleLabels={pro:'찬성',con:'반대',neutral:'중도',judge:'심판',fact:'정보수집'};
+    const roleColors={pro:'#16a34a',con:'#dc2626',neutral:'#1DA1F2',judge:'#c96442',fact:'#20808d'};
+    const assignable=['gpt','gemini','grok','claude']; // perp는 정보수집 고정
+    const roles=['pro','con','neutral','judge'];
+    var rows=assignable.map(function(aiId){
+      var btns=roles.map(function(r){
+        var sel=t[aiId]===r;
+        return `<button onclick="S.session.debateTeams.${aiId}='${r}';renderView('session')" style="flex:1;padding:4px 2px;font-size:.65rem;border:1.5px solid ${sel?roleColors[r]:'var(--bd)'};background:${sel?roleColors[r]+'20':'transparent'};color:${sel?roleColors[r]:'var(--mu)'};border-radius:5px;cursor:pointer;font-weight:${sel?'700':'400'};font-family:var(--font)">${roleLabels[r]}</button>`;
+      }).join('');
+      return `<div style="display:flex;align-items:center;gap:4px"><span style="font-size:.7rem;font-weight:600;color:${AI_DEFS[aiId].color};min-width:52px">${AI_DEFS[aiId].name}</span><div style="display:flex;gap:3px;flex:1">${btns}</div></div>`;
+    }).join('');
+    return `<div style="margin-bottom:10px;padding:10px 12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="font-size:.72rem;font-weight:600;color:var(--tx)">⚔️ 역할 배정</span>
+        <span style="font-size:.62rem;color:var(--mu);margin-left:auto">Perplexity = 정보수집 (고정)</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px">${rows}</div>
+      <button class="btn-cancel" onclick="S.session.debateTeams={gpt:'pro',gemini:'con',grok:'neutral',claude:'judge',perp:'fact'};renderView('session')" style="font-size:.62rem;padding:3px 8px;margin-top:8px">↩ 기본 배정 복원</button>
+    </div>`;
+  })() : '';
 
   const aiCards=Object.entries(AI_DEFS).map(([id,def])=>{
     // Basic mode: GPT, Perplexity, Claude만 표시
