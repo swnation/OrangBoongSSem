@@ -1073,6 +1073,9 @@ function renderList() {
       ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
       ...(l.triggers||[]).map(t => `<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`),
     ].join('');
+    const outcomeTag = l.outcome
+      ? `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:${l.outcome.rating==='better'?'#dcfce7':l.outcome.rating==='same'?'#fef3c7':'#fee2e2'};color:${l.outcome.rating==='better'?'#15803d':l.outcome.rating==='same'?'#92400e':'#b91c1c'}">${l.outcome.rating==='better'?'🟢호전':l.outcome.rating==='same'?'🟡비슷':'🔴악화'}</span>`
+      : `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`;
     const nrsHtml = l.nrs >= 0
       ? `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`
       : '';
@@ -1085,7 +1088,7 @@ function renderList() {
         <span class="log-item-date">${dateStr} ${timeStr}</span>
         ${nrsHtml} ${badge} ${wInfo}
       </div>
-      ${tags ? `<div class="log-item-tags">${tags}</div>` : ''}
+      ${tags||outcomeTag ? `<div class="log-item-tags">${tags}${outcomeTag}</div>` : ''}
       ${l.memo ? `<div class="log-item-memo">${esc(l.memo)}</div>` : ''}
       ${l.synced?`<div id="log-detail-${l.id}" class="log-detail" style="display:none">
         <div style="font-size:.72rem;color:var(--mu);border-top:1px solid var(--bd);padding-top:8px;margin-top:6px">
@@ -1120,6 +1123,44 @@ function editEntry(id) {
   if (!entry) return;
   switchTab('form');
   setTimeout(() => renderForm(entry), 50);
+}
+
+function quickEditOutcome(id) {
+  const logs=getQuickLogs();
+  const entry=logs.find(l=>l.id===id);
+  if(!entry) return;
+  const dt=entry.datetime||'';
+  const time=dt.slice(11,16);
+  const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
+  const current=entry.outcome?.rating;
+  const labels={better:'😊 호전',same:'😐 비슷',worse:'😣 악화'};
+
+  var html=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">
+    <div style="background:var(--sf);border-radius:14px;padding:20px;max-width:320px;width:85vw;box-shadow:0 4px 20px rgba(0,0,0,.2)">
+      <div style="font-size:.82rem;font-weight:600;margin-bottom:4px">📋 경과 기록</div>
+      <div style="font-size:.72rem;color:var(--mu);margin-bottom:14px">${dt.slice(0,10)} ${time} ${nrs}</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${['better','same','worse'].map(r=>`<button onclick="saveQuickOutcome(${id},'${r}')" style="padding:12px;border:2px solid ${r==='better'?'#86efac':r==='same'?'#fde68a':'#fca5a5'};background:${current===r?(r==='better'?'#dcfce7':r==='same'?'#fef3c7':'#fee2e2'):'var(--sf)'};border-radius:10px;font-size:.92rem;font-weight:${current===r?'700':'400'};cursor:pointer;font-family:inherit">${labels[r]}</button>`).join('')}
+      </div>
+      ${current?`<button onclick="saveQuickOutcome(${id},null)" style="display:block;margin:12px auto 0;font-size:.72rem;color:var(--mu);background:none;border:none;cursor:pointer;text-decoration:underline">경과 삭제</button>`:''}
+    </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+
+async function saveQuickOutcome(id,rating) {
+  const logs=getQuickLogs();
+  const idx=logs.findIndex(l=>l.id===id);
+  if(idx<0) return;
+  if(rating){
+    logs[idx].outcome={rating:rating,ratedAt:new Date(Date.now()+9*3600000).toISOString()};
+  } else {
+    delete logs[idx].outcome;
+  }
+  saveQuickLogs(logs);
+  await cloudSave([logs[idx]]);
+  document.querySelector('[onclick*="this.remove"]')?.closest('div[style*="position:fixed"]')?.remove();
+  showToast(rating?'📝 경과 저장됨':'🗑 경과 삭제됨');
+  renderList();
 }
 
 async function deleteEntry(id) {
