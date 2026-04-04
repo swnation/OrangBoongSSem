@@ -160,6 +160,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
             onchange="localStorage.setItem('om_ntfy_orangi',this.value.trim());syncNtfyConfig()">
         </div>
       </div>
+      <div style="margin-top:6px">
+        <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">Worker URL (액션 버튼용, 선택)</div>
+        <input class="settings-input" id="ntfy-worker-input" placeholder="https://xxx.workers.dev"
+          onchange="localStorage.setItem('om_ntfy_worker',this.value.trim());syncNtfyConfig()">
+      </div>
       <div class="settings-note">기록 저장 시 붕쌤에게 즉시 알림, 오랑이에게 경과 확인 알림을 보냅니다.</div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
         <span style="font-size:.72rem;color:var(--mu)">기본 경과 알림:</span>
@@ -230,6 +235,7 @@ function getAllCustoms() {
   // ntfy 토픽도 포함 (기기간 공유)
   const nb=localStorage.getItem('om_ntfy_bung');if(nb) result._ntfy_bung=nb;
   const no=localStorage.getItem('om_ntfy_orangi');if(no) result._ntfy_orangi=no;
+  const nw=localStorage.getItem('om_ntfy_worker');if(nw) result._ntfy_worker=nw;
   return result;
 }
 function setAllCustoms(obj) {
@@ -237,6 +243,7 @@ function setAllCustoms(obj) {
   // ntfy 토픽 복원
   if(obj._ntfy_bung&&!localStorage.getItem('om_ntfy_bung')) localStorage.setItem('om_ntfy_bung',obj._ntfy_bung);
   if(obj._ntfy_orangi&&!localStorage.getItem('om_ntfy_orangi')) localStorage.setItem('om_ntfy_orangi',obj._ntfy_orangi);
+  if(obj._ntfy_worker&&!localStorage.getItem('om_ntfy_worker')) localStorage.setItem('om_ntfy_worker',obj._ntfy_worker);
   // 커스텀 칩 복원
   Object.entries(obj).forEach(([k,arr])=>{
     if(k.startsWith('_')) return; // skip settings keys
@@ -276,15 +283,18 @@ function applyQuickConfig(){
   const cfg=getQuickConfig();
   if(cfg.ntfy_bung&&!localStorage.getItem('om_ntfy_bung')) localStorage.setItem('om_ntfy_bung',cfg.ntfy_bung);
   if(cfg.ntfy_orangi&&!localStorage.getItem('om_ntfy_orangi')) localStorage.setItem('om_ntfy_orangi',cfg.ntfy_orangi);
+  if(cfg.ntfy_worker&&!localStorage.getItem('om_ntfy_worker')) localStorage.setItem('om_ntfy_worker',cfg.ntfy_worker);
   // 항상 최신으로 덮어쓰기 (클라우드에서 온 값이 더 최신)
   if(cfg.ntfy_bung) localStorage.setItem('om_ntfy_bung',cfg.ntfy_bung);
   if(cfg.ntfy_orangi) localStorage.setItem('om_ntfy_orangi',cfg.ntfy_orangi);
+  if(cfg.ntfy_worker) localStorage.setItem('om_ntfy_worker',cfg.ntfy_worker);
 }
 function syncNtfyConfig(){
   const nb=localStorage.getItem('om_ntfy_bung')||'';
   const no=localStorage.getItem('om_ntfy_orangi')||'';
+  const nw=localStorage.getItem('om_ntfy_worker')||'';
   if(!nb&&!no) return;
-  const entry=saveQuickConfig({ntfy_bung:nb,ntfy_orangi:no});
+  const entry=saveQuickConfig({ntfy_bung:nb,ntfy_orangi:no,ntfy_worker:nw});
   // 클라우드에도 즉시 전송
   cloudSave([entry]);
 }
@@ -908,8 +918,13 @@ async function sendOutcomeNtfy(entryId){
   const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   const rateUrl=baseUrl+'rate.html';
   const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
-  const fBody=`🤕 두통 경과 확인\n${info} → 지금 어때요?\n${rateUrl}#${entryId}`;
-  try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',body:fBody.trim()});}catch(e){}
+  const workerUrl=localStorage.getItem('om_ntfy_worker');
+  if(workerUrl){
+    try{await fetch(workerUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:orangiTopic,message:'🤕 두통 경과 확인\n'+info+' → 지금 어때요?',actions:[{action:'view',label:'😊 호전',url:rateUrl+'#rate-better-'+entryId},{action:'view',label:'😐 비슷',url:rateUrl+'#rate-same-'+entryId},{action:'view',label:'😣 악화',url:rateUrl+'#rate-worse-'+entryId}]})});}catch(e){}
+  } else {
+    const fBody='🤕 두통 경과 확인\n'+info+' → 지금 어때요?\n'+rateUrl+'#'+entryId;
+    try{await fetch('https://ntfy.sh/'+encodeURIComponent(orangiTopic),{method:'POST',body:fBody});}catch(e){}
+  }
 }
 
 function checkPendingOutcome(){
@@ -1043,9 +1058,14 @@ async function testFollowupNtfy() {
   if(!topic){showToast('⚠️ 오랑이 경과 알림 토픽이 설정되지 않았습니다');return;}
   var baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   var rateUrl=baseUrl+'rate.html';
-  var body='🔔 경과 알림 테스트\n이 알림이 보이면 정상 작동합니다!\n\n'+rateUrl+'#0';
+  var workerUrl=localStorage.getItem('om_ntfy_worker');
   try{
-    var r=await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body});
+    var r;
+    if(workerUrl){
+      r=await fetch(workerUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic:topic,message:'🔔 경과 알림 테스트\n이 알림이 보이면 정상 작동합니다!',actions:[{action:'view',label:'😊 호전',url:rateUrl+'#rate-better-0'},{action:'view',label:'😐 비슷',url:rateUrl+'#rate-same-0'},{action:'view',label:'😣 악화',url:rateUrl+'#rate-worse-0'}]})});
+    } else {
+      r=await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:'🔔 경과 알림 테스트\n이 알림이 보이면 정상 작동합니다!\n\n'+rateUrl+'#0'});
+    }
     if(r.ok) showToast('✅ 경과 테스트 알림 전송됨!');
     else showToast('❌ 실패: HTTP '+r.status,4000);
   }catch(e){showToast('❌ 네트워크 오류: '+e.message,4000);}
@@ -1206,6 +1226,7 @@ function toggleSettings() {
       ? '<span style="color:#2d6a4f">☁️ 동기화 활성</span>' : '<span style="color:#c03030">동기화 꺼짐</span>';
     document.getElementById('ntfy-bung-input').value = localStorage.getItem('om_ntfy_bung')||'';
     document.getElementById('ntfy-orangi-input').value = localStorage.getItem('om_ntfy_orangi')||'';
+    document.getElementById('ntfy-worker-input').value = localStorage.getItem('om_ntfy_worker')||'';
     document.getElementById('ntfy-delay-input').value = localStorage.getItem('om_outcome_delay')||'60';
   }
 }
