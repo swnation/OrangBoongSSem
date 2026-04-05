@@ -2,9 +2,10 @@
 
 // 누적지식 업데이트 헬퍼 (중복 방지)
 function _updateAccumFromParsed(accum, parsed) {
-  if(Array.isArray(parsed.new_consensus)) parsed.new_consensus.forEach(x=>{if(x&&!accum.established_consensus.includes(x))accum.established_consensus.push(x);});
-  if(Array.isArray(parsed.new_discarded)) parsed.new_discarded.forEach(x=>{if(x&&!accum.discarded_hypotheses.includes(x))accum.discarded_hypotheses.push(x);});
-  if(Array.isArray(parsed.updated_issues)) parsed.updated_issues.forEach(x=>{if(x&&!accum.unresolved_issues.includes(x))accum.unresolved_issues.push(x);});
+  const map = {new_consensus:'established_consensus', new_discarded:'discarded_hypotheses', updated_issues:'unresolved_issues', new_protocols:'clinical_protocols'};
+  Object.entries(map).forEach(([pKey,aKey])=>{
+    if(Array.isArray(parsed[pKey])) parsed[pKey].forEach(x=>{if(x&&!accum[aKey].includes(x))accum[aKey].push(x);});
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
