@@ -875,6 +875,7 @@ function renderStatsView() {
   ${renderTrendChart(logs, 90)}
   ${renderCorrelationAnalysis(logs)}
   ${renderMedEffectAnalysis(logs)}
+  ${renderMedSummaryReport(logs)}
   ${renderOutcomeStats(last30)}
   ${renderTriggerNrsChart(last30)}
   ${renderPressureChart(last30)}
@@ -2199,6 +2200,98 @@ function renderMedEffectAnalysis(logs) {
     <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">약물 복용일과 다음날의 평균 NRS 변화를 비교합니다.</div>
     ${rows}
     <div style="font-size:.6rem;color:var(--mu);margin-top:8px">※ 최소 3회 이상 복용 데이터 기준. 다른 요인이 영향을 줄 수 있습니다.</div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 약물 종합 효과 리포트 — NRS 변화 + 경과 평가 + 사용빈도 통합
+// ═══════════════════════════════════════════════════════════════
+function renderMedSummaryReport(logs) {
+  const lc=DC().logConfig;
+  if(lc.moodMode||lc.customFields) return '';
+  const nrsLogs=logs.filter(l=>l.nrs>=0).sort((a,b)=>a.datetime.localeCompare(b.datetime));
+  if(nrsLogs.length<7) return '';
+
+  // 약물/치료별 통계 수집
+  const stats={};
+  const byDate={};
+  nrsLogs.forEach(l=>{const d=l.datetime.slice(0,10);if(!byDate[d])byDate[d]=[];byDate[d].push(l);});
+  const dates=Object.keys(byDate).sort();
+  const allNrsAvg=nrsLogs.reduce((s,l)=>s+l.nrs,0)/nrsLogs.length;
+
+  // 날짜별 약물 사용 + NRS 수집
+  dates.forEach((d,di)=>{
+    const dayLogs=byDate[d];
+    const items=new Set(dayLogs.flatMap(l=>[...(l.meds||[]),...(l.treatments||[])]));
+    const dayNrs=dayLogs.filter(l=>l.nrs>=0).map(l=>l.nrs);
+    const dayAvg=dayNrs.length?dayNrs.reduce((a,b)=>a+b,0)/dayNrs.length:null;
+    const nextDate=dates[di+1];
+    const nextLogs=nextDate?byDate[nextDate]:[];
+    const nextNrs=nextLogs.filter(l=>l.nrs>=0).map(l=>l.nrs);
+    const nextAvg=nextNrs.length?nextNrs.reduce((a,b)=>a+b,0)/nextNrs.length:null;
+
+    items.forEach(item=>{
+      if(!stats[item]) stats[item]={days:0,dayNrs:[],nextNrs:[],better:0,same:0,worse:0,rated:0};
+      stats[item].days++;
+      if(dayAvg!==null) stats[item].dayNrs.push(dayAvg);
+      if(nextAvg!==null) stats[item].nextNrs.push(nextAvg);
+    });
+
+    // 경과 평가 반영
+    dayLogs.forEach(l=>{
+      if(!l.outcome?.rating) return;
+      const r={good:'better',partial:'same',none:'worse'}[l.outcome.rating]||l.outcome.rating;
+      [...(l.meds||[]),...(l.treatments||[])].forEach(item=>{
+        if(!stats[item]) return;
+        stats[item][r]++;stats[item].rated++;
+      });
+    });
+  });
+
+  // 비사용일 평균 NRS
+  const noMedDates=dates.filter(d=>!byDate[d].some(l=>(l.meds?.length||l.treatments?.length)));
+  const noMedNrs=noMedDates.flatMap(d=>byDate[d].filter(l=>l.nrs>=0).map(l=>l.nrs));
+  const noMedAvg=noMedNrs.length?noMedNrs.reduce((a,b)=>a+b,0)/noMedNrs.length:null;
+
+  // 랭킹: 효과 점수 = (호전율×0.5 + NRS감소점수×0.5) — 최소 3일 데이터
+  const ranked=Object.entries(stats)
+    .filter(([,s])=>s.days>=3)
+    .map(([item,s])=>{
+      const dayAvg=s.dayNrs.length?s.dayNrs.reduce((a,b)=>a+b,0)/s.dayNrs.length:null;
+      const nxtAvg=s.nextNrs.length?s.nextNrs.reduce((a,b)=>a+b,0)/s.nextNrs.length:null;
+      const nrsChange=nxtAvg!==null&&dayAvg!==null?nxtAvg-dayAvg:null;
+      const betterPct=s.rated?Math.round(s.better/s.rated*100):null;
+      // Score: lower is better (NRS change weight + inverted betterPct)
+      const nrsScore=nrsChange!==null?nrsChange:0;
+      const outcomeScore=betterPct!==null?(100-betterPct)/50:0;
+      const score=nrsScore+outcomeScore;
+      return {item,days:s.days,dayAvg,nxtAvg,nrsChange,betterPct,rated:s.rated,score};
+    })
+    .sort((a,b)=>a.score-b.score)
+    .slice(0,8);
+
+  if(!ranked.length) return '';
+
+  const medal=['🥇','🥈','🥉'];
+  const rows=ranked.map((r,i)=>{
+    const nrsStr=r.nrsChange!==null?`<span style="color:${r.nrsChange<0?'#10b981':'#ef4444'};font-weight:600">${r.nrsChange<0?'↓':'↑'}${Math.abs(r.nrsChange).toFixed(1)}</span>`:'<span style="color:var(--mu2)">—</span>';
+    const outcomeStr=r.betterPct!==null?`<span style="color:${r.betterPct>=50?'#10b981':'#f59e0b'}">${r.betterPct}%</span>`:'<span style="color:var(--mu2)">—</span>';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;${i<ranked.length-1?'border-bottom:1px solid var(--bd)':''}">
+      <span style="font-size:.85rem;width:22px;text-align:center">${medal[i]||''}</span>
+      <span style="font-size:.8rem;font-weight:600;min-width:80px;flex:1">${esc(r.item)}</span>
+      <div style="text-align:center;min-width:55px"><div style="font-size:.72rem">${nrsStr}</div><div style="font-size:.55rem;color:var(--mu2)">NRS변화</div></div>
+      <div style="text-align:center;min-width:45px"><div style="font-size:.72rem">${outcomeStr}</div><div style="font-size:.55rem;color:var(--mu2)">호전율</div></div>
+      <div style="text-align:center;min-width:35px"><div style="font-size:.72rem;font-family:var(--mono)">${r.days}</div><div style="font-size:.55rem;color:var(--mu2)">일</div></div>
+    </div>`;
+  }).join('');
+
+  const baseline=noMedAvg!==null?`<div style="font-size:.68rem;color:var(--mu);margin-top:8px;padding:6px 8px;background:var(--sf2);border-radius:6px">📊 비교 기준: 약/시술 없는 날 평균 NRS <b>${noMedAvg.toFixed(1)}</b> | 전체 평균 <b>${allNrsAvg.toFixed(1)}</b></div>`:'';
+
+  return `<div class="card">
+    <div class="card-title">📋 약물 종합 효과 리포트 <span class="badge badge-green">NRS + 경과 통합</span></div>
+    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">NRS 변화와 경과 평가를 종합하여 효과 순으로 정렬합니다.</div>
+    ${rows}${baseline}
+    <div style="font-size:.58rem;color:var(--mu2);margin-top:6px">※ 최소 3일 이상 사용 기준. 다른 요인(날씨·수면·트리거)이 영향을 줄 수 있습니다.</div>
   </div>`;
 }
 
