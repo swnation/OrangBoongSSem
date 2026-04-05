@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orangi-health-v9t';
+const CACHE_NAME = 'orangi-health-v9u';
 const PRECACHE = [
   './index.html',
   './style.css',
@@ -8,6 +8,8 @@ const PRECACHE = [
   './js/crypto.js',
   './js/drive.js',
   './js/cost.js',
+  './js/ai-api.js',
+  './js/session.js',
   './icons/head-front.png',
   './icons/head-back.png',
   'https://cdn.jsdelivr.net/npm/marked@15/marked.min.js',
