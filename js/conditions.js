@@ -179,6 +179,8 @@ function renderMedsViewLegacy() {
                   ${h.added?.length?`<div style="font-size:.68rem;margin-bottom:2px"><span style="color:#16a34a">+</span> ${h.added.map(m=>`<span style="display:inline-block;padding:1px 5px;margin:1px;border-radius:3px;background:#dcfce7;color:#15803d;font-size:.65rem">${esc(m)}</span>`).join('')}</div>`:''}
                   ${h.removed?.length?`<div style="font-size:.68rem;margin-bottom:2px"><span style="color:#dc2626">−</span> ${h.removed.map(m=>`<span style="display:inline-block;padding:1px 5px;margin:1px;border-radius:3px;background:#fef2f2;color:#b91c1c;font-size:.65rem;text-decoration:line-through">${esc(m)}</span>`).join('')}</div>`:''}
                   ${h.detail?`<div style="font-size:.68rem;color:var(--ink)">${esc(h.detail)}</div>`:''}
+                  ${h.prevDrugResponse?`<div style="font-size:.65rem;color:var(--mu);margin-top:3px">💊 당시 약물 반응: ${esc(h.prevDrugResponse)}</div>`:''}
+                  ${h.prevNotes?`<div style="font-size:.65rem;color:var(--mu);margin-top:2px">📝 당시 메모: ${esc(h.prevNotes)}</div>`:''}
                 </div>`;
               }).join('')}
             </div>
@@ -208,6 +210,8 @@ function renderMedsViewLegacy() {
                     <div style="display:flex;flex-wrap:wrap;gap:3px">${h.meds.map(m=>`<span style="display:inline-block;padding:1px 6px;border-radius:4px;background:${isFirst?'#dbeafe':'#f3f4f6'};color:${isFirst?'#1e40af':'#374151'};font-size:.67rem">${esc(m)}</span>`).join('')}</div>
                   </div>`:''}
                   ${h.reason?`<div style="font-size:.68rem;color:var(--mu2);margin-top:4px">💬 ${esc(h.reason)}</div>`:''}
+                  ${h.prevDrugResponse?`<div style="font-size:.65rem;color:var(--mu);margin-top:3px;padding:3px 6px;background:var(--sf2);border-radius:4px">💊 당시 반응: ${esc(h.prevDrugResponse)}</div>`:''}
+                  ${h.prevNotes?`<div style="font-size:.65rem;color:var(--mu);margin-top:2px;padding:3px 6px;background:var(--sf2);border-radius:4px">📝 당시 메모: ${esc(h.prevNotes)}</div>`:''}
                 </div>`;
               }).join('')}
             </div>
@@ -582,7 +586,11 @@ async function saveCondition() {
     if(added.length||removed.length) {
       const reason=document.getElementById('dx-hist-reason')?.value?.trim()||'';
       const histType=oldMeds.length===0?'start':newMeds.length===0?'stop':'change';
-      data.medHistory.push({date:kstToday(),type:histType,added,removed,meds:[...newMeds],reason});
+      const histEntry={date:kstToday(),type:histType,added,removed,meds:[...newMeds],reason};
+      // 이전 약물 반응/메모를 이력에 보존
+      if(prev.drugResponse) histEntry.prevDrugResponse=prev.drugResponse;
+      if(prev.notes) histEntry.prevNotes=prev.notes;
+      data.medHistory.push(histEntry);
       data.drugChangeDate=kstToday();
     }
     // Merge manual history entries (with optional meds snapshot)
@@ -708,7 +716,11 @@ async function saveQuickMedChange() {
   // Append to medHistory
   if(!c.medHistory) c.medHistory=[];
   const histType=oldMeds.length===0?'start':newMeds.length===0?'stop':'change';
-  c.medHistory.push({date:changeDate,type:histType,added,removed,meds:[...newMeds],reason});
+  const histEntry={date:changeDate,type:histType,added,removed,meds:[...newMeds],reason};
+  // 이전 약물 반응/메모를 이력에 보존
+  if(c.drugResponse) histEntry.prevDrugResponse=c.drugResponse;
+  if(c.notes) histEntry.prevNotes=c.notes;
+  c.medHistory.push(histEntry);
   c.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
   c.drugChangeDate=changeDate;
   // Save
