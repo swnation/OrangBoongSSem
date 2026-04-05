@@ -553,9 +553,11 @@ function syncHeadDiagram() {
     else if(side==='left') active=activeL.has(site);
     else active=activeR.has(site);
 
-    const color=side==='right'?'239,68,68':side==='left'?'59,130,246':'168,85,247';
-    el.setAttribute('fill',active?`rgba(${color},.45)`:`rgba(${color},.10)`);
+    const c=_SIDE_COLORS[side];
+    el.setAttribute('fill',active?`rgba(${c.rgb},.45)`:`rgba(${c.rgb},.10)`);
+    el.setAttribute('stroke',c.hex);
     el.setAttribute('stroke-width',active?'3.5':'2.5');
+    el.style.filter=active?`drop-shadow(0 0 6px ${c.hex})`:'none';
   });
 }
 
