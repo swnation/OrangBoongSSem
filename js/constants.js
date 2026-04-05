@@ -355,6 +355,7 @@ const MODEL_OPTIONS = {
   ],
   gemini: [
     {value:'gemini-3.1-pro-preview',label:'Gemini 3.1 Pro (최신)'},
+    {value:'gemini-3.1-flash-lite-preview',label:'Gemini 3.1 Flash-Lite (저비용·1M)'},
     {value:'gemini-3-flash-preview',label:'Gemini 3 Flash (빠름)'},
     {value:'gemini-2.5-pro',label:'Gemini 2.5 Pro (안정·무료)'},
     {value:'gemini-2.5-flash',label:'Gemini 2.5 Flash (무료)'},
@@ -397,6 +398,7 @@ const DEFAULT_PRICE_TABLE = {
   'claude-opus-4-6':{in:5.00,out:25.00},
   'claude-haiku-4-5-20251001':{in:1.00,out:5.00},
   'gemini-3.1-pro-preview':{in:2.00,out:12.00},
+  'gemini-3.1-flash-lite-preview':{in:0.25,out:1.50},
   'gemini-3-flash-preview':{in:0.50,out:3.00},
   'gemini-2.5-pro':{in:1.25,out:10.00},
   'gemini-2.5-flash':{in:0.15,out:0.60},
