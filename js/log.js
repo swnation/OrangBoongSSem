@@ -652,7 +652,11 @@ function renderLog() {
     <div class="log-section-title">메모</div>
     <textarea class="log-memo" id="log-memo" rows="2" placeholder="특이사항..."></textarea>
     <input type="hidden" id="log-edit-idx" value="-1">
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;align-items:center">
+      <div style="flex:1;display:flex;gap:4px">
+        <button style="background:none;border:1.5px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:.68rem;cursor:pointer;color:var(--mu)" onclick="saveLogPreset()">⭐ 프리셋 저장</button>
+        <button style="background:none;border:1.5px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:.68rem;cursor:pointer;color:var(--mu)" onclick="showPresetList()">📋 불러오기</button>
+      </div>
       <button class="btn-cancel" id="log-cancel-edit" style="display:none;font-size:.78rem" onclick="cancelLogEdit()">편집 취소</button>
       <button class="btn-log-save" id="log-save-btn" onclick="saveLogEntry()"><div class="spin" id="log-sp"></div> 💾 <span id="log-save-label">기록 저장</span></button>
     </div>
@@ -1605,4 +1609,61 @@ function exportLogCSV() {
   }
   downloadFile(`${DC().logPrefix}_${ds.logMonth}.csv`,'\uFEFF'+csv,'text/csv;charset=utf-8');
   showToast('📊 CSV 내보내기 완료');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// LOG PRESET (프리셋 — 자주 쓰는 칩 조합 원탭 입력)
+// ═══════════════════════════════════════════════════════════════
+function _getPresetKey() { return `om_presets_${S.currentDomain}`; }
+function _loadPresets() { try { return JSON.parse(localStorage.getItem(_getPresetKey())||'[]'); } catch(e) { return []; } }
+function _savePresets(list) { localStorage.setItem(_getPresetKey(), JSON.stringify(list)); }
+
+function saveLogPreset() {
+  const chips=[];
+  document.querySelectorAll('.log-chip.sel').forEach(c=>{
+    chips.push({side:c.dataset.side||'',group:c.dataset.group||'',val:c.dataset.val||''});
+  });
+  if(!chips.length){showToast('선택된 항목이 없어요');return;}
+  const label=chips.map(c=>c.val).join(' · ');
+  const name=prompt('프리셋 이름:',label);
+  if(!name) return;
+  const presets=_loadPresets();
+  presets.push({name:name.trim(),chips,createdAt:kstToday()});
+  _savePresets(presets);
+  showToast('⭐ 프리셋 저장됨');
+}
+
+function showPresetList() {
+  const presets=_loadPresets();
+  if(!presets.length){showToast('저장된 프리셋이 없어요');return;}
+  const body=presets.map((p,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;${i<presets.length-1?'border-bottom:1px solid var(--bd)':''}">
+    <span style="flex:1;font-size:.82rem;cursor:pointer" onclick="applyPreset(${i});closeConfirmModal()">${esc(p.name)}</span>
+    <span style="font-size:.65rem;color:var(--mu2)">${p.chips.length}개</span>
+    <button style="background:none;border:none;cursor:pointer;font-size:.75rem" onclick="deletePreset(${i})">🗑</button>
+  </div>`).join('');
+  showConfirmModal('⭐ 프리셋 불러오기',body,[]);
+}
+
+function applyPreset(idx) {
+  const presets=_loadPresets();
+  const p=presets[idx]; if(!p) return;
+  // 기존 선택 해제
+  document.querySelectorAll('.log-chip.sel').forEach(c=>{c.classList.remove('sel');c.classList.remove('sel-med','sel-sym','sel-tx','sel-site','sel-pain','sel-trigger');});
+  // 프리셋 칩 선택
+  p.chips.forEach(chip=>{
+    const selector=chip.side
+      ? `.log-chip[data-side="${chip.side}"][data-val="${chip.val}"]`
+      : `.log-chip[data-group="${chip.group}"][data-val="${chip.val}"]`;
+    const el=document.querySelector(selector);
+    if(el) { el.click(); }
+  });
+  showToast('⭐ 프리셋 적용');
+}
+
+function deletePreset(idx) {
+  const presets=_loadPresets();
+  presets.splice(idx,1);
+  _savePresets(presets);
+  showPresetList();
+  showToast('🗑 프리셋 삭제');
 }
