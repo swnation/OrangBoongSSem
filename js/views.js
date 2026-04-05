@@ -689,35 +689,53 @@ async function addAccum(field,inputId) {
 // ACCUMULATED KNOWLEDGE CLEANUP (AI)
 async function cleanupAccumulated() {
   const m=DM(); const accum=m.accumulated;
-  const total=(accum.established_consensus?.length||0)+(accum.discarded_hypotheses?.length||0)+(accum.unresolved_issues?.length||0);
+  const total=(accum.established_consensus?.length||0)+(accum.discarded_hypotheses?.length||0)+(accum.unresolved_issues?.length||0)+(accum.clinical_protocols?.length||0);
   if(total<3){showToast('정리할 항목이 충분하지 않습니다.');return;}
-  // 사용할 AI 선택 (첫 번째 키 있는 AI)
   const aiId=['claude','gpt','gemini','grok','perp'].find(id=>S.keys[id]);
   if(!aiId){showToast('❌ API 키가 없습니다.');return;}
   if(!confirm(`누적 지식 ${total}건을 ${AI_DEFS[aiId].name}로 정리합니다.\n중복 제거, 병합, 해결된 쟁점 이동 등을 수행합니다.`)) return;
   if(S.generating){showToast('다른 AI 작업이 진행 중입니다.');return;}
   S.generating=true;
-  showToast('🤖 누적 지식 정리 중...',5000);
+  showToast('🤖 누적 지식 정리 중...',8000);
   const ac=new AbortController();if(!S._abortControllers)S._abortControllers={};S._abortControllers[aiId]=ac;
   try {
-    const system=`당신은 의료 데이터 정리 전문가입니다. 아래 누적 지식을 정리해주세요:
-1. 중복/유사 항목 병합 (의미가 같으면 하나로)
-2. 해결된 쟁점은 합의로 이동
-3. 모순되는 합의는 쟁점으로 이동
-4. 오래되어 무관한 항목 폐기로 이동
-반드시 아래 JSON만 출력:
-{"established_consensus":["항목"],"discarded_hypotheses":["항목"],"unresolved_issues":["항목"]}`;
-    const user=`[확립된 합의]\n${(accum.established_consensus||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[폐기된 가설]\n${(accum.discarded_hypotheses||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[미해결 쟁점]\n${(accum.unresolved_issues||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}`;
+    const system=`의료 데이터 정리 전문가. 누적 지식을 정리:
+1. 중복/유사 항목 병합 (의미 같으면 하나로)
+2. 해결된 쟁점→합의 이동
+3. 모순되는 합의→쟁점 이동
+4. 오래되어 무관한 항목→폐기 이동
+5. 각 항목은 1문장으로 축약
+반드시 JSON만 출력 (다른 텍스트 금지):
+{"established_consensus":["항목"],"discarded_hypotheses":["항목"],"unresolved_issues":["항목"],"clinical_protocols":["항목"]}`;
+    const user=`[확립된 합의] ${(accum.established_consensus||[]).length}건\n${(accum.established_consensus||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[폐기된 가설] ${(accum.discarded_hypotheses||[]).length}건\n${(accum.discarded_hypotheses||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[미해결 쟁점] ${(accum.unresolved_issues||[]).length}건\n${(accum.unresolved_issues||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[임상 프로토콜] ${(accum.clinical_protocols||[]).length}건\n${(accum.clinical_protocols||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}`;
     const raw=await callAIStream(aiId,system,user,()=>{},ac.signal);
     let clean=raw.replace(/```json|```/g,'').trim();
     const jsonMatch=clean.match(/\{[\s\S]*\}/);
     if(jsonMatch) clean=jsonMatch[0];
-    const parsed=JSON.parse(clean);
-    const newTotal=(parsed.established_consensus?.length||0)+(parsed.discarded_hypotheses?.length||0)+(parsed.unresolved_issues?.length||0);
-    if(!confirm(`정리 결과: ${total}건 → ${newTotal}건\n합의 ${parsed.established_consensus?.length||0} / 폐기 ${parsed.discarded_hypotheses?.length||0} / 쟁점 ${parsed.unresolved_issues?.length||0}\n\n적용하시겠습니까?`)) return;
+    let parsed;
+    try { parsed=JSON.parse(clean); }
+    catch(jsonErr) {
+      // JSON 잘림 복구: 마지막 완전한 배열까지 파싱 시도
+      let fixed=clean;
+      // 잘린 문자열 닫기 시도
+      const lastQuote=fixed.lastIndexOf('"');
+      if(lastQuote>0) {
+        fixed=fixed.substring(0,lastQuote+1);
+        // 열린 배열/객체 닫기
+        const opens=(fixed.match(/\[/g)||[]).length-(fixed.match(/\]/g)||[]).length;
+        const braces=(fixed.match(/\{/g)||[]).length-(fixed.match(/\}/g)||[]).length;
+        for(let i=0;i<opens;i++) fixed+=']';
+        for(let i=0;i<braces;i++) fixed+='}';
+      }
+      try { parsed=JSON.parse(fixed); showToast('⚠️ AI 응답이 잘려서 부분 복구됨',3000); }
+      catch(e2) { throw jsonErr; }
+    }
+    const newTotal=(parsed.established_consensus?.length||0)+(parsed.discarded_hypotheses?.length||0)+(parsed.unresolved_issues?.length||0)+(parsed.clinical_protocols?.length||0);
+    if(!confirm(`정리 결과: ${total}건 → ${newTotal}건\n합의 ${parsed.established_consensus?.length||0} / 폐기 ${parsed.discarded_hypotheses?.length||0} / 쟁점 ${parsed.unresolved_issues?.length||0} / 프로토콜 ${parsed.clinical_protocols?.length||0}\n\n적용하시겠습니까?`)) return;
     accum.established_consensus=parsed.established_consensus||[];
     accum.discarded_hypotheses=parsed.discarded_hypotheses||[];
     accum.unresolved_issues=parsed.unresolved_issues||[];
+    if(parsed.clinical_protocols) accum.clinical_protocols=parsed.clinical_protocols;
     await saveMaster(); renderView('home');
     showToast(`✅ 누적 지식 정리 완료: ${total}건 → ${newTotal}건`);
   } catch(e){
