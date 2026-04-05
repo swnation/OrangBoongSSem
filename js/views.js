@@ -700,11 +700,11 @@ async function cleanupAccumulated() {
   const ac=new AbortController();if(!S._abortControllers)S._abortControllers={};S._abortControllers[aiId]=ac;
   try {
     const system=`의료 데이터 정리 전문가. 누적 지식을 정리:
-1. 중복/유사 항목 병합 (의미 같으면 하나로)
+1. 중복/유사 항목 병합 (의미 같으면 하나로 통합하되 핵심 정보 보존)
 2. 해결된 쟁점→합의 이동
 3. 모순되는 합의→쟁점 이동
 4. 오래되어 무관한 항목→폐기 이동
-5. 각 항목은 1문장으로 축약
+⚠️ 병합 시 약물명·용량·날짜·조건·근거 등 임상적으로 중요한 세부사항은 반드시 보존. 의미가 달라지는 축약 금지.
 반드시 JSON만 출력 (다른 텍스트 금지):
 {"established_consensus":["항목"],"discarded_hypotheses":["항목"],"unresolved_issues":["항목"],"clinical_protocols":["항목"]}`;
     const user=`[확립된 합의] ${(accum.established_consensus||[]).length}건\n${(accum.established_consensus||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[폐기된 가설] ${(accum.discarded_hypotheses||[]).length}건\n${(accum.discarded_hypotheses||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[미해결 쟁점] ${(accum.unresolved_issues||[]).length}건\n${(accum.unresolved_issues||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[임상 프로토콜] ${(accum.clinical_protocols||[]).length}건\n${(accum.clinical_protocols||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}`;
