@@ -5,8 +5,24 @@
 
 ## 파일 구조
 ```
-index.html      — HTML + JS 메인 앱 (~7500줄)
+index.html      — HTML + 최소 부트스트랩 JS (~230줄)
 style.css       — CSS (325줄)
+js/             — 모듈화된 JS (15개 파일)
+  constants.js  — 상수 정의
+  state.js      — 전역 상태 S 객체
+  utils.js      — 유틸리티 함수
+  crypto.js     — API 키 암호화
+  drive.js      — Google Drive + OAuth
+  cost.js       — 비용 추적
+  ai-api.js     — AI API 호출
+  session.js    — 세션 관리
+  head-diagram.js — 머리 다이어그램
+  log.js        — 증상 기록
+  conditions.js — 질환 관리
+  bungruki.js   — 임신 준비 대시보드
+  settings.js   — 설정 + 컨텍스트
+  pwa.js        — PWA + 오프라인
+  views.js      — 뷰 렌더링
 manifest.json   — PWA 매니페스트
 sw.js           — Service Worker (network-first HTML, cache-first 정적자산)
 quick/          — 두통 빠른 기록 별도 앱
@@ -16,7 +32,7 @@ CLAUDE.md       — 이 파일
 ```
 
 ## 기술 스택
-- **프론트엔드**: Vanilla JS (프레임워크 없음), 단일 `<script>` 태그
+- **프론트엔드**: Vanilla JS (프레임워크 없음), 15개 모듈 파일 (`js/` 디렉토리)
 - **스타일**: 외부 CSS (`style.css`) + CSS 변수 (다크모드 지원)
 - **저장**: Google Drive API (OAuth2) + localStorage 오프라인 캐시
 - **AI API**: 5개 프로바이더 SSE 스트리밍 (Claude/GPT/Gemini/Grok/Perplexity)
