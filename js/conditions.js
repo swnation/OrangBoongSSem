@@ -208,18 +208,24 @@ function renderMedsViewLegacy() {
             </select>
           </div>
         </div>
-        <div id="dx-suggest" style="display:none;margin:-8px 0 12px;max-height:120px;overflow-y:auto;border:1.5px solid var(--bd);border-radius:6px;background:var(--sf)"></div>
+        <div id="dx-suggest" style="display:none;margin:-8px 0 12px;max-height:120px;overflow-y:auto;border:1.5px solid var(--bd);border-radius:6px;background:var(--sf)"${isBungruki?' data-brk-hide="1"':''}></div>
         <div style="display:flex;gap:10px">
           <div class="dx-form-group" style="flex:1">
             <div class="dx-form-label">${isBungruki?'시작 시기':'진단 시기'}</div>
             <input class="dx-form-input" id="dx-date" placeholder="${isBungruki?'예: 2026-03':'예: 2023년, 2025-06'}">
           </div>
           <div class="dx-form-group" style="flex:1">
-            <div class="dx-form-label">질환 유형</div>
+            <div class="dx-form-label">${isBungruki?'관리 유형':'질환 유형'}</div>
             <select class="dx-form-input" id="dx-type" style="cursor:pointer">
+              ${isBungruki?`
+              <option value="preventive">예방/관리</option>
+              <option value="chronic">꾸준히 관리</option>
+              <option value="acute">일시적/검사</option>
+              `:`
               <option value="chronic">만성 (꾸준히 관리)</option>
               <option value="acute">급성 (일시적)</option>
               <option value="preventive">예방/관리</option>
+              `}
             </select>
           </div>
           <div class="dx-form-group" style="flex:1">
@@ -234,7 +240,7 @@ function renderMedsViewLegacy() {
           <div class="dx-form-label">${isBungruki?'복용/보충제':'투약'} <span style="font-size:.6rem;color:var(--mu2)">(${isBungruki?'보충제/약품명':'약품명'} 입력 후 +추가)</span></div>
           <div id="dx-med-chips" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
           <div id="dx-med-suggest" style="display:none;margin-bottom:6px;padding:4px;border:1px solid var(--bd);border-radius:6px;background:var(--sf)">
-            <div style="font-size:.62rem;color:var(--mu);margin-bottom:4px">💊 이 질환에 주로 사용되는 약</div>
+            <div style="font-size:.62rem;color:var(--mu);margin-bottom:4px">${isBungruki?'💊 관련 보충제/약품':'💊 이 질환에 주로 사용되는 약'}</div>
             <div id="dx-med-suggest-list" style="display:flex;flex-wrap:wrap;gap:4px"></div>
           </div>
           <div id="dx-med-ai-area" style="display:none;margin-bottom:6px">
@@ -247,8 +253,8 @@ function renderMedsViewLegacy() {
           </div>
         </div>
         <div class="dx-form-group">
-          <div class="dx-form-label">💊 투약 변경 사유 <span style="font-size:.6rem;color:var(--mu2)">(약 변경 시 자동 기록됨)</span></div>
-          <input class="dx-form-input" id="dx-hist-reason" placeholder="예: 부작용으로 교체, 용량 증량, 효과 부족">
+          <div class="dx-form-label">${isBungruki?'💊 변경 사유':'💊 투약 변경 사유'} <span style="font-size:.6rem;color:var(--mu2)">(${isBungruki?'보충제 변경 시 기록':'약 변경 시 자동 기록됨'})</span></div>
+          <input class="dx-form-input" id="dx-hist-reason" placeholder="${isBungruki?'예: 제품 교체, 용량 변경':'예: 부작용으로 교체, 용량 증량, 효과 부족'}">
         </div>
         <div class="dx-form-group">
           <div class="dx-form-label">📜 과거 이력 수동 추가 <span style="font-size:.6rem;color:var(--mu2)">(이전 변경 기록)</span></div>
@@ -283,7 +289,7 @@ function renderMedsViewLegacy() {
           <button class="btn-cancel" onclick="closeConditionForm()" style="font-size:.78rem">취소</button>
         </div>
       </div>
-      ${allConditions.length?sections:'<div class="hint" style="padding:14px">등록된 질환이 없습니다.<br>"+ 질환 추가"를 눌러 첫 질환을 등록하세요.</div>'}
+      ${allConditions.length?sections:`<div class="hint" style="padding:14px">${isBungruki?'등록된 관리 항목이 없습니다.<br>"+ 관리 항목 추가"를 눌러 첫 항목을 등록하세요.':'등록된 질환이 없습니다.<br>"+ 질환 추가"를 눌러 첫 질환을 등록하세요.'}</div>`}
     </div>`;
 }
 
@@ -325,6 +331,8 @@ function renderManualHistList(){
 function onDxNameInput(val) {
   const suggest=document.getElementById('dx-suggest');
   if(!suggest||val.length<1){if(suggest)suggest.style.display='none';return;}
+  // 붕룩이 도메인은 ICD-10 자동완성 비활성화
+  if(suggest.dataset.brkHide==='1') return;
   const q=val.toLowerCase();
   const matches=_AC_DISEASES.filter(d=>d.toLowerCase().includes(q)).slice(0,8);
   if(!matches.length){suggest.style.display='none';return;}
