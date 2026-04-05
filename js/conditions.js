@@ -129,7 +129,7 @@ function renderMedsViewLegacy() {
       <div class="dx-body">
         ${c.diagnosisDate?`<strong>${isBungruki?'시작':'진단'}:</strong> ${esc(c.diagnosisDate)}<br>`:''}
         ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'■ 현재 투약'}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">${c.medsList.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`).join('')}</div></div>`:''}
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${c.medsList.map(m=>`<span class="log-tag" style="background:${m.includes('(PRN)')?'#fef3c7':'#fff7ed'};color:${m.includes('(PRN)')?'#92400e':'#c2410c'};${m.includes('(PRN)')?'border:1px dashed #f59e0b':''}">${esc(m)}</span>`).join('')}</div></div>`:''}
         ${c.medications&&!c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'현재 투약'}</div>${esc(c.medications)}</div>`:''}
         ${c.medHistory?.length?`<div class="dx-section">
           <div class="dx-section-title" style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="const t=this.parentElement.querySelector('.mh-timeline');t.style.display=t.style.display==='none'?'block':'none';this.querySelector('.mh-arr').textContent=t.style.display==='none'?'▸':'▾'">
@@ -247,8 +247,9 @@ function renderMedsViewLegacy() {
             <button class="btn-export" id="dx-ai-search-btn" onclick="aiSearchMeds()" style="font-size:.72rem">🔍 AI로 최신 약물 검색</button>
             <div id="dx-ai-result" style="display:none;margin-top:6px;padding:6px;border:1px solid var(--bd);border-radius:6px;background:var(--sf);font-size:.75rem"></div>
           </div>
-          <div style="display:flex;gap:6px">
+          <div style="display:flex;gap:6px;align-items:center">
             <input class="dx-form-input" id="dx-med-input" placeholder="약품명 검색..." style="flex:1">
+            <label style="display:flex;align-items:center;gap:3px;font-size:.65rem;color:var(--mu);white-space:nowrap;cursor:pointer"><input type="checkbox" id="dx-med-prn"> PRN</label>
             <button class="btn-accum-add" onclick="addDxMed()" style="padding:6px 12px;font-size:.75rem">+추가</button>
           </div>
         </div>
@@ -430,10 +431,13 @@ function addDxMedFromSuggest(med) {
 
 function addDxMed() {
   const input=document.getElementById('dx-med-input');
-  const val=(input?.value||'').trim();
+  let val=(input?.value||'').trim();
   if(!val) return;
+  const isPrn=document.getElementById('dx-med-prn')?.checked;
+  if(isPrn&&!val.includes('(PRN)')) val+=' (PRN)';
   if(!_dxMedsList.includes(val)){_dxMedsList.push(val);}
   input.value='';
+  if(isPrn) document.getElementById('dx-med-prn').checked=false;
   renderDxMedChips();
 }
 
@@ -445,7 +449,10 @@ function removeDxMed(idx) {
 function renderDxMedChips() {
   const el=document.getElementById('dx-med-chips');
   if(!el) return;
-  el.innerHTML=_dxMedsList.map((m,i)=>`<span class="file-chip">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span></span>`).join('');
+  el.innerHTML=_dxMedsList.map((m,i)=>{
+    const isPrn=m.includes('(PRN)');
+    return `<span class="file-chip" style="${isPrn?'border:1.5px dashed #f59e0b;background:#fff7ed':''}">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span></span>`;
+  }).join('');
 }
 
 function openConditionForm(domainId, idx) {
