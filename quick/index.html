@@ -442,8 +442,8 @@ function addOtherChip(inputId, containerId, group, cls) {
 
 // ── Interactive Head Diagram ──
 // SVG 영역 좌표 상수 (Gemini PR#136: 하드코딩 좌표 → 상수 추출)
-var _SIDE_COLORS = {left:{rgb:'59,130,246',hex:'#3b82f6'},right:{rgb:'239,68,68',hex:'#ef4444'},both:{rgb:'168,85,247',hex:'#a855f7'}};
-var _FRONT_REGIONS = [
+const _SIDE_COLORS = {left:{rgb:'59,130,246',hex:'#3b82f6'},right:{rgb:'239,68,68',hex:'#ef4444'},both:{rgb:'168,85,247',hex:'#a855f7'}};
+const _FRONT_REGIONS = [
   {id:'l-forehead', shape:'ellipse', cx:200,cy:190,rx:75,ry:45, side:'left', site:'이마', op:'.15', labels:[{x:200,y:196,fs:24,fw:700,t:'이마'}]},
   {id:'r-forehead', shape:'ellipse', cx:400,cy:190,rx:75,ry:45, side:'right', site:'이마', op:'.15', labels:[{x:400,y:196,fs:24,fw:700,t:'이마'}]},
   {id:'l-brow', shape:'ellipse', cx:220,cy:255,rx:48,ry:20, side:'left', site:'눈썹부위', op:'.15', sw:2, dash:true, labels:[{x:220,y:261,fs:19,fw:700,t:'눈썹'}]},
@@ -452,16 +452,18 @@ var _FRONT_REGIONS = [
   {id:'l-temple', shape:'rect', x:55,y:220,w:60,h:140,rx:14, side:'left', site:'관자놀이', op:'.15', labels:[{x:85,y:284,fs:19,fw:700,t:'관자'},{x:85,y:305,fs:19,fw:700,t:'놀이'}]},
   {id:'r-temple', shape:'rect', x:485,y:220,w:60,h:140,rx:14, side:'right', site:'관자놀이', op:'.15', labels:[{x:515,y:284,fs:19,fw:700,t:'관자'},{x:515,y:305,fs:19,fw:700,t:'놀이'}]},
 ];
-var _BACK_REGIONS = [
+const _BACK_REGIONS = [
   {id:'l-occipital', shape:'ellipse', cx:195,cy:330,rx:100,ry:95, side:'left', site:'후두부', op:'.10', labels:[{x:195,y:336,fs:24,fw:700,t:'후두부'}]},
   {id:'r-occipital', shape:'ellipse', cx:405,cy:330,rx:100,ry:95, side:'right', site:'후두부', op:'.10', labels:[{x:405,y:336,fs:24,fw:700,t:'후두부'}]},
 ];
-var _SIDE_LABELS = {
+const _SIDE_LABELS = {
   front:[{x:150,y:490,side:'left',t:'← 왼쪽'},{x:450,y:490,side:'right',t:'오른쪽 →'}],
   back:[{x:195,y:490,side:'left',t:'← 왼쪽'},{x:405,y:490,side:'right',t:'오른쪽 →'}],
 };
 
 function _buildRegionSVG(regions, sideLabels, prefix, toggleFn) {
+  var isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var labelStroke = isDark ? 'rgba(255,255,255,.4)' : 'rgba(0,0,0,.25)';
   var parts = regions.map(function(r) {
     var c = _SIDE_COLORS[r.side];
     var sw = r.sw || 2.5;
@@ -473,7 +475,7 @@ function _buildRegionSVG(regions, sideLabels, prefix, toggleFn) {
       shape = '<rect id="'+prefix+r.id+'" x="'+r.x+'" y="'+r.y+'" width="'+r.w+'" height="'+r.h+'" rx="'+r.rx+'" fill="rgba('+c.rgb+','+r.op+')" stroke="'+c.hex+'" stroke-width="'+sw+'"'+dash+' style="cursor:pointer" onclick="'+toggleFn+"('"+r.side+"','"+r.site+"')\""+'/>';
     }
     var labels = r.labels.map(function(l) {
-      return '<text x="'+l.x+'" y="'+l.y+'" text-anchor="middle" font-size="'+l.fs+'" font-weight="'+l.fw+'" fill="'+c.hex+'" stroke="rgba(0,0,0,.25)" stroke-width="3" paint-order="stroke" style="pointer-events:none">'+l.t+'</text>';
+      return '<text x="'+l.x+'" y="'+l.y+'" text-anchor="middle" font-size="'+l.fs+'" font-weight="'+l.fw+'" fill="'+c.hex+'" stroke="'+labelStroke+'" stroke-width="3" paint-order="stroke" style="pointer-events:none">'+l.t+'</text>';
     }).join('\n          ');
     return '          '+shape+'\n          '+labels;
   });
