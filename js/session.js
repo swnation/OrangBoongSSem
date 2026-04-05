@@ -1,4 +1,12 @@
 // js/session.js — 세션 관리 (Phase 3 모듈화)
+
+// 누적지식 업데이트 헬퍼 (중복 방지)
+function _updateAccumFromParsed(accum, parsed) {
+  if(Array.isArray(parsed.new_consensus)) parsed.new_consensus.forEach(x=>{if(x&&!accum.established_consensus.includes(x))accum.established_consensus.push(x);});
+  if(Array.isArray(parsed.new_discarded)) parsed.new_discarded.forEach(x=>{if(x&&!accum.discarded_hypotheses.includes(x))accum.discarded_hypotheses.push(x);});
+  if(Array.isArray(parsed.updated_issues)) parsed.updated_issues.forEach(x=>{if(x&&!accum.unresolved_issues.includes(x))accum.unresolved_issues.push(x);});
+}
+
 // ═══════════════════════════════════════════════════════════════
 // SESSION MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
@@ -546,9 +554,7 @@ SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요.
     S.session.currentRound=4;
     S.session.rounds=[{round:1,answers:{grok:raw},errors:{}}];
     const m=DM(); const accum=m.accumulated;
-    if(Array.isArray(parsed.new_consensus)) accum.established_consensus.push(...parsed.new_consensus);
-    if(Array.isArray(parsed.new_discarded)) accum.discarded_hypotheses.push(...parsed.new_discarded);
-    if(Array.isArray(parsed.updated_issues)) accum.unresolved_issues.push(...parsed.updated_issues.filter(x=>!accum.unresolved_issues.includes(x)));
+    _updateAccumFromParsed(accum, parsed);
     S.session.new_consensus=parsed.new_consensus||[];
     S.session.new_discarded=parsed.new_discarded||[];
     S.session.updated_issues=parsed.updated_issues||[];
@@ -608,9 +614,7 @@ JSON 형식 (각 문자열 100자 이내):
 
     S.session.summary=parsed;
     const m=DM(); const accum=m.accumulated;
-    if(Array.isArray(parsed.new_consensus)) accum.established_consensus.push(...parsed.new_consensus);
-    if(Array.isArray(parsed.new_discarded)) accum.discarded_hypotheses.push(...parsed.new_discarded);
-    if(Array.isArray(parsed.updated_issues)) accum.unresolved_issues.push(...parsed.updated_issues.filter(x=>!accum.unresolved_issues.includes(x)));
+    _updateAccumFromParsed(accum, parsed);
 
     S.session.new_consensus=parsed.new_consensus||[];
     S.session.new_discarded=parsed.new_discarded||[];
