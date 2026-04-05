@@ -7,8 +7,8 @@
 // {id, name, diagnosisDate, status:'active'|'remission'|'resolved'|'self-stopped',
 //  medications:'텍스트', drugResponse:'텍스트', course:'텍스트', notes:'텍스트'}
 
-function renderConditionMedSelector() {
-  const condMeds=getConditionMeds();
+function renderConditionMedSelector(date) {
+  const condMeds=getConditionMeds(date);
   if(!condMeds.length) return '';
   return `<div class="log-section-title">질환별 투약</div>
     <div style="margin-bottom:8px">
@@ -22,8 +22,8 @@ function renderConditionMedSelector() {
     </div>`;
 }
 
-function renderDailyMedCheck() {
-  const condMeds=getConditionMeds();
+function renderDailyMedCheck(date) {
+  const condMeds=getConditionMeds(date);
   if(!condMeds.length) return '';
   return `<div class="log-section-title">💊 오늘 복용 체크</div>
     <div style="margin-bottom:8px">
@@ -102,16 +102,36 @@ async function loadAllUserDomains() {
 }
 
 // Get meds from all user conditions (for log form)
-function getConditionMeds() {
+// date 파라미터가 있으면 해당 날짜에 활성이었던 약물 세트 반환
+function getConditionMeds(date) {
   const all=getAllUserConditions().filter(c=>c.status==='active'||c.status==='remission');
   const result=[];
   all.forEach(c=>{
-    if(!c.medsList?.length) return;
-    // 현재 도메인의 질환만 표시
     if(c._domainId !== S.currentDomain) return;
+    // 날짜가 지정되고 medHistory가 있으면 해당 날짜의 약물 세트 찾기
+    if(date && c.medHistory?.length) {
+      const medsAtDate=getMedsAtDate(c, date);
+      if(medsAtDate?.length) { result.push({condition:c.name,domain:c._domainLabel,icon:c._domainIcon,meds:medsAtDate}); return; }
+    }
+    if(!c.medsList?.length) return;
     result.push({condition:c.name,domain:c._domainLabel,icon:c._domainIcon,meds:c.medsList});
   });
   return result;
+}
+
+// medHistory에서 특정 날짜에 활성이었던 약물 세트 찾기
+function getMedsAtDate(condition, date) {
+  const hist=condition.medHistory;
+  if(!hist?.length) return condition.medsList||[];
+  // 날짜 순 정렬 후 해당 날짜 이전의 마지막 이력 찾기
+  const sorted=[...hist].sort((a,b)=>a.date.localeCompare(b.date));
+  let medsAtDate=null;
+  for(const h of sorted) {
+    if(h.date>date) break;
+    if(h.meds?.length) medsAtDate=h.meds;
+  }
+  // 이력에서 못 찾으면 현재 약물
+  return medsAtDate||condition.medsList||[];
 }
 
 function renderMedsView() {
@@ -163,6 +183,7 @@ function renderMedsViewLegacy() {
           if(!c.medHistory?.length) return '';
           // 이전 약물 세트: medHistory에서 현재와 다른 약물 조합을 추출
           const prevSets=c.medHistory.filter(h=>h.meds?.length&&h.type!=='start').slice().reverse();
+          const domId=c._domainId,cIdx=c._idx;
           const prevHtml=prevSets.length?`<div class="dx-section">
             <div class="dx-section-title" style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="const t=this.parentElement.querySelector('.prev-meds');t.style.display=t.style.display==='none'?'block':'none';this.querySelector('.pm-arr').textContent=t.style.display==='none'?'▸':'▾'">
               <span class="pm-arr">▾</span> 📋 이전 투약 기록 <span style="font-size:.6rem;color:var(--mu2);font-weight:400">${prevSets.length}건</span>
@@ -170,9 +191,10 @@ function renderMedsViewLegacy() {
             <div class="prev-meds" style="margin-top:6px">
               ${prevSets.map(h=>{
                 const typeLabel={change:'변경',stop:'중단',dose:'용량 조절'}[h.type]||h.type;
+                const hIdx=c.medHistory.indexOf(h);
                 return `<div style="padding:6px 8px;margin-bottom:4px;border-radius:6px;background:var(--sf);border-left:3px solid var(--bd)">
                   <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-                    <span style="font-size:.72rem;font-weight:600;color:var(--mu)">${esc(h.date)}</span>
+                    <span style="font-size:.72rem;font-weight:600;color:var(--ac);cursor:pointer;text-decoration:underline dotted" onclick="editMedHistDate('${esc(domId)}',${cIdx},${hIdx})" title="날짜 수정">${esc(h.date)}</span>
                     <span style="font-size:.6rem;padding:1px 6px;border-radius:8px;background:#f3f4f6;color:#6b7280">${typeLabel}</span>
                     ${h.reason?`<span style="font-size:.6rem;color:var(--mu2)">— ${esc(h.reason)}</span>`:''}
                   </div>
@@ -728,6 +750,70 @@ async function saveQuickMedChange() {
   closeConfirmModal();
   renderView('meds');
   showToast(`✅ 약물 변경 저장 — +${added.length} -${removed.length}`);
+}
+
+// 투약 이력 날짜 수정
+function editMedHistDate(domainId, condIdx, histIdx) {
+  const ds=S.domainState[domainId];
+  const c=ds?.master?.conditions?.[condIdx];
+  const h=c?.medHistory?.[histIdx];
+  if(!h) return;
+  document.getElementById('confirm-title').textContent='📅 투약 이력 날짜 수정';
+  document.getElementById('confirm-body').innerHTML=`
+    <div style="font-size:.78rem;color:var(--ink);margin-bottom:8px">
+      <span style="font-weight:600">${esc(c.name)}</span> —
+      ${h.added?.length?'<span style="color:#16a34a">+'+h.added.map(m=>esc(m)).join(', ')+'</span> ':''}
+      ${h.removed?.length?'<span style="color:#dc2626">−'+h.removed.map(m=>esc(m)).join(', ')+'</span>':''}
+      ${h.detail?esc(h.detail):''}
+    </div>
+    <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">변경 일자:</div>
+    <input class="dx-form-input" id="mh-edit-date" type="date" value="${h.date}">
+    <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px;margin-top:8px">사유 (수정 가능):</div>
+    <input class="dx-form-input" id="mh-edit-reason" value="${esc(h.reason||'')}">`;
+  document.getElementById('confirm-foot').innerHTML=
+    '<button class="btn-cancel" onclick="closeConfirmModal()" style="font-size:.78rem">취소</button>'+
+    `<button class="btn-accum-add" onclick="saveMedHistEdit('${esc(domainId)}',${condIdx},${histIdx})">💾 수정</button>`;
+  openModal('confirm-modal');
+}
+
+async function saveMedHistEdit(domainId, condIdx, histIdx) {
+  const ds=S.domainState[domainId];
+  const c=ds?.master?.conditions?.[condIdx];
+  const h=c?.medHistory?.[histIdx];
+  if(!h) return;
+  const newDate=document.getElementById('mh-edit-date')?.value;
+  const newReason=document.getElementById('mh-edit-reason')?.value?.trim()||'';
+  if(!newDate){showToast('날짜를 선택하세요.');return;}
+  const oldDate=h.date;
+  h.date=newDate;
+  h.reason=newReason;
+  c.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
+  // drugChangeDate 갱신 (마지막 변경 이력 기준)
+  const lastChange=c.medHistory.filter(x=>x.type!=='start').slice(-1)[0];
+  if(lastChange) c.drugChangeDate=lastChange.date;
+  // 증상 기록(logData)에서 해당 날짜 범위의 medCheck 업데이트
+  const logData=ds.logData||[];
+  if(logData.length && oldDate!==newDate) {
+    const affectedDates=new Set([oldDate,newDate]);
+    logData.forEach(l=>{
+      const logDate=l.datetime?.slice(0,10);
+      if(!logDate||!l.medCheck) return;
+      // 영향 범위: oldDate~newDate 또는 newDate~oldDate
+      const minD=oldDate<newDate?oldDate:newDate;
+      const maxD=oldDate<newDate?newDate:oldDate;
+      if(logDate>=minD&&logDate<=maxD) {
+        // 이 날짜에 활성이었던 약물 세트로 medCheck 키 업데이트
+        const activeMeds=getMedsAtDate(c, logDate);
+        const newMc={};
+        activeMeds.forEach(m=>{newMc[m]=l.medCheck[m]??true;});
+        l.medCheck=Object.keys(newMc).length?newMc:undefined;
+      }
+    });
+  }
+  if(ds.masterFileId){try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){}}
+  closeConfirmModal();
+  renderView('meds');
+  showToast(`✅ 이력 날짜 수정: ${oldDate} → ${newDate}`);
 }
 
 // Build conditions context for AI prompts

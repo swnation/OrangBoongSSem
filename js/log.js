@@ -624,7 +624,7 @@ function renderLog() {
     ${renderOutcomeCards()}
     <div style="display:flex;gap:12px;margin-bottom:2px">
       <div style="flex:1"><div class="log-section-title" style="margin-top:0">날짜</div>
-        <input type="date" id="log-date" value="${dateStr}" class="dx-form-input"></div>
+        <input type="date" id="log-date" value="${dateStr}" class="dx-form-input" onchange="refreshMedCheckForDate(this.value)"></div>
       <div style="flex:1"><div class="log-section-title" style="margin-top:0">시간</div>
         <input type="time" id="log-time" value="${timeStr}" class="dx-form-input">
         <label style="display:flex;align-items:center;gap:5px;margin-top:4px;cursor:pointer;font-size:.73rem;color:var(--mu)">
@@ -650,7 +650,7 @@ function renderLog() {
         <button onclick="addCustomChip('syms')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
       </div>
     </div>`:''}
-    ${lc.moodMode?renderDailyMedCheck():renderConditionMedSelector()}
+    <div id="med-check-container">${lc.moodMode?renderDailyMedCheck(dateStr):renderConditionMedSelector(dateStr)}</div>
     ${lc.meds?.length||customMeds.length?`<div class="log-section-title">투약 (일반) <button onclick="openChipManager('meds')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div><div class="log-chips">${allMeds.map(s=>`<div class="log-chip" data-group="med" data-val="${s}" onclick="toggleChip(this,'sel-med')">${s}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="med-other" placeholder="직접 입력" style="width:100px">
@@ -1197,6 +1197,14 @@ function editLogEntry(idx) {
 function cancelLogEdit() {
   S.logEditMode=false;
   renderView('log');
+}
+
+// ── 날짜 변경 시 medCheck 새로고침 ──
+function refreshMedCheckForDate(date) {
+  const lc=DC().logConfig;
+  const container=document.getElementById('med-check-container');
+  if(!container) return;
+  container.innerHTML=lc.moodMode?renderDailyMedCheck(date):renderConditionMedSelector(date);
 }
 
 // ── Mood selector (마음관리용) ──
