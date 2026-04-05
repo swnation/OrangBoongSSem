@@ -156,37 +156,64 @@ function renderMedsViewLegacy() {
       </div>
       <div class="dx-body">
         ${c.diagnosisDate?`<strong>${isBungruki?'시작':'진단'}:</strong> ${esc(c.diagnosisDate)}<br>`:''}
-        ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'■ 현재 투약'}</div>
+        ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'■ 현재 투약'}${c.drugChangeDate?` <span style="font-size:.6rem;color:var(--mu2);font-weight:400">(${esc(c.drugChangeDate)}~)</span>`:''}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">${c.medsList.map(m=>`<span class="log-tag" style="background:${m.includes('(PRN)')?'#fef3c7':'#fff7ed'};color:${m.includes('(PRN)')?'#92400e':'#c2410c'};${m.includes('(PRN)')?'border:1px dashed #f59e0b':''}">${esc(m)}</span>`).join('')}</div></div>`:''}
         ${c.medications&&!c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'현재 투약'}</div>${esc(c.medications)}</div>`:''}
-        ${c.medHistory?.length?`<div class="dx-section">
-          <div class="dx-section-title" style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="const t=this.parentElement.querySelector('.mh-timeline');t.style.display=t.style.display==='none'?'block':'none';this.querySelector('.mh-arr').textContent=t.style.display==='none'?'▸':'▾'">
-            <span class="mh-arr">▸</span> 💊 투약 변경 이력 <span style="font-size:.6rem;color:var(--mu2);font-weight:400">${c.medHistory.length}건</span>
-          </div>
-          <div class="mh-timeline" style="display:none;margin-top:8px">
-            ${c.medHistory.slice().reverse().map((h,i,arr)=>{
-              const typeLabel={change:'변경',start:'최초 처방',stop:'중단',dose:'용량 조절'}[h.type]||h.type;
-              const dotColor=h.type==='start'?'#22c55e':h.type==='stop'?'#ef4444':'var(--ac)';
-              const isFirst=i===arr.length-1;
-              const borderColor=isFirst?'#22c55e':h.type==='stop'?'#ef4444':'var(--ac)';
-              return `<div style="border-left:3px solid ${borderColor};margin-bottom:8px;padding:8px 10px;border-radius:0 8px 8px 0;background:var(--sf)">
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-                  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
-                  <span style="font-size:.78rem;font-weight:600;color:var(--ink)">${esc(h.date)}</span>
-                  <span style="font-size:.65rem;padding:1px 8px;border-radius:10px;background:color-mix(in srgb, ${dotColor}, transparent 90%);color:${dotColor};font-weight:600">${typeLabel}</span>
-                </div>
-                ${h.detail?`<div style="font-size:.75rem;color:var(--ink);margin-bottom:4px">${esc(h.detail)}</div>`:''}
-                ${h.added?.length?`<div style="font-size:.72rem;margin-bottom:2px"><span style="color:#16a34a;font-weight:600">+ 추가:</span> ${h.added.map(m=>`<span style="display:inline-block;padding:1px 6px;margin:1px;border-radius:4px;background:#dcfce7;color:#15803d;font-size:.68rem">${esc(m)}</span>`).join('')}</div>`:''}
-                ${h.removed?.length?`<div style="font-size:.72rem;margin-bottom:2px"><span style="color:#dc2626;font-weight:600">− 제거:</span> ${h.removed.map(m=>`<span style="display:inline-block;padding:1px 6px;margin:1px;border-radius:4px;background:#fef2f2;color:#b91c1c;font-size:.68rem;text-decoration:line-through">${esc(m)}</span>`).join('')}</div>`:''}
-                ${h.meds?.length?`<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd)">
-                  <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">${isFirst?'처방 약물':'변경 후 약물'} (${h.meds.length}개)</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:3px">${h.meds.map(m=>`<span style="display:inline-block;padding:1px 6px;border-radius:4px;background:${isFirst?'#dbeafe':'#f3f4f6'};color:${isFirst?'#1e40af':'#374151'};font-size:.67rem">${esc(m)}</span>`).join('')}</div>
-                </div>`:''}
-                ${h.reason?`<div style="font-size:.68rem;color:var(--mu2);margin-top:4px">💬 ${esc(h.reason)}</div>`:''}
-              </div>`;
-            }).join('')}
-          </div>
-        </div>`:''}
+        ${(()=>{
+          if(!c.medHistory?.length) return '';
+          // 이전 약물 세트: medHistory에서 현재와 다른 약물 조합을 추출
+          const prevSets=c.medHistory.filter(h=>h.meds?.length&&h.type!=='start').slice().reverse();
+          const prevHtml=prevSets.length?`<div class="dx-section">
+            <div class="dx-section-title" style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="const t=this.parentElement.querySelector('.prev-meds');t.style.display=t.style.display==='none'?'block':'none';this.querySelector('.pm-arr').textContent=t.style.display==='none'?'▸':'▾'">
+              <span class="pm-arr">▾</span> 📋 이전 투약 기록 <span style="font-size:.6rem;color:var(--mu2);font-weight:400">${prevSets.length}건</span>
+            </div>
+            <div class="prev-meds" style="margin-top:6px">
+              ${prevSets.map(h=>{
+                const typeLabel={change:'변경',stop:'중단',dose:'용량 조절'}[h.type]||h.type;
+                return `<div style="padding:6px 8px;margin-bottom:4px;border-radius:6px;background:var(--sf);border-left:3px solid var(--bd)">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                    <span style="font-size:.72rem;font-weight:600;color:var(--mu)">${esc(h.date)}</span>
+                    <span style="font-size:.6rem;padding:1px 6px;border-radius:8px;background:#f3f4f6;color:#6b7280">${typeLabel}</span>
+                    ${h.reason?`<span style="font-size:.6rem;color:var(--mu2)">— ${esc(h.reason)}</span>`:''}
+                  </div>
+                  ${h.added?.length?`<div style="font-size:.68rem;margin-bottom:2px"><span style="color:#16a34a">+</span> ${h.added.map(m=>`<span style="display:inline-block;padding:1px 5px;margin:1px;border-radius:3px;background:#dcfce7;color:#15803d;font-size:.65rem">${esc(m)}</span>`).join('')}</div>`:''}
+                  ${h.removed?.length?`<div style="font-size:.68rem;margin-bottom:2px"><span style="color:#dc2626">−</span> ${h.removed.map(m=>`<span style="display:inline-block;padding:1px 5px;margin:1px;border-radius:3px;background:#fef2f2;color:#b91c1c;font-size:.65rem;text-decoration:line-through">${esc(m)}</span>`).join('')}</div>`:''}
+                  ${h.detail?`<div style="font-size:.68rem;color:var(--ink)">${esc(h.detail)}</div>`:''}
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`:'';
+          // 전체 타임라인 (접힘)
+          const timelineHtml=`<div class="dx-section">
+            <div class="dx-section-title" style="cursor:pointer;display:flex;align-items:center;gap:4px" onclick="const t=this.parentElement.querySelector('.mh-timeline');t.style.display=t.style.display==='none'?'block':'none';this.querySelector('.mh-arr').textContent=t.style.display==='none'?'▸':'▾'">
+              <span class="mh-arr">▸</span> 📜 전체 투약 이력 <span style="font-size:.6rem;color:var(--mu2);font-weight:400">${c.medHistory.length}건</span>
+            </div>
+            <div class="mh-timeline" style="display:none;margin-top:8px">
+              ${c.medHistory.slice().reverse().map((h,i,arr)=>{
+                const typeLabel={change:'변경',start:'최초 처방',stop:'중단',dose:'용량 조절'}[h.type]||h.type;
+                const dotColor=h.type==='start'?'#22c55e':h.type==='stop'?'#ef4444':'var(--ac)';
+                const isFirst=i===arr.length-1;
+                const borderColor=isFirst?'#22c55e':h.type==='stop'?'#ef4444':'var(--ac)';
+                return `<div style="border-left:3px solid ${borderColor};margin-bottom:8px;padding:8px 10px;border-radius:0 8px 8px 0;background:var(--sf)">
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0"></span>
+                    <span style="font-size:.78rem;font-weight:600;color:var(--ink)">${esc(h.date)}</span>
+                    <span style="font-size:.65rem;padding:1px 8px;border-radius:10px;background:color-mix(in srgb, ${dotColor}, transparent 90%);color:${dotColor};font-weight:600">${typeLabel}</span>
+                  </div>
+                  ${h.detail?`<div style="font-size:.75rem;color:var(--ink);margin-bottom:4px">${esc(h.detail)}</div>`:''}
+                  ${h.added?.length?`<div style="font-size:.72rem;margin-bottom:2px"><span style="color:#16a34a;font-weight:600">+ 추가:</span> ${h.added.map(m=>`<span style="display:inline-block;padding:1px 6px;margin:1px;border-radius:4px;background:#dcfce7;color:#15803d;font-size:.68rem">${esc(m)}</span>`).join('')}</div>`:''}
+                  ${h.removed?.length?`<div style="font-size:.72rem;margin-bottom:2px"><span style="color:#dc2626;font-weight:600">− 제거:</span> ${h.removed.map(m=>`<span style="display:inline-block;padding:1px 6px;margin:1px;border-radius:4px;background:#fef2f2;color:#b91c1c;font-size:.68rem;text-decoration:line-through">${esc(m)}</span>`).join('')}</div>`:''}
+                  ${h.meds?.length?`<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd)">
+                    <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">${isFirst?'처방 약물':'변경 후 약물'} (${h.meds.length}개)</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:3px">${h.meds.map(m=>`<span style="display:inline-block;padding:1px 6px;border-radius:4px;background:${isFirst?'#dbeafe':'#f3f4f6'};color:${isFirst?'#1e40af':'#374151'};font-size:.67rem">${esc(m)}</span>`).join('')}</div>
+                  </div>`:''}
+                  ${h.reason?`<div style="font-size:.68rem;color:var(--mu2);margin-top:4px">💬 ${esc(h.reason)}</div>`:''}
+                </div>`;
+              }).join('')}
+            </div>
+          </div>`;
+          return prevHtml + timelineHtml;
+        })()}
         ${c.drugResponse?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'효과/반응':'약물 반응'}</div>${esc(c.drugResponse)}</div>`:''}
         ${c.course?`<div class="dx-section"><div class="dx-section-title">경과</div>${esc(c.course)}</div>`:''}
         ${c.notes?`<div class="dx-section"><div class="dx-section-title">메모</div>${esc(c.notes)}</div>`:''}
@@ -633,9 +660,14 @@ function openQuickMedChange(domainId, idx) {
   if(!c) return;
   _qmcDomain=domainId;_qmcIdx=idx;
   const oldMeds=c.medsList||[];
+  const lastChange=c.drugChangeDate||c.medHistory?.slice(-1)[0]?.date||'';
   document.getElementById('confirm-title').textContent='💊 '+c.name+' — 약물 변경';
   document.getElementById('confirm-body').innerHTML=`
-    <div style="font-size:.72rem;color:var(--mu);margin-bottom:6px">현재 약물 (✕로 제거):</div>
+    <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px 10px;margin-bottom:10px">
+      <div style="font-size:.68rem;color:#92400e;font-weight:600;margin-bottom:4px">📋 변경 전 약물${lastChange?' ('+esc(lastChange)+'~)':''} → 이전 기록으로 저장됩니다</div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px">${oldMeds.map(m=>`<span style="display:inline-block;padding:2px 6px;border-radius:4px;background:#fff7ed;color:#c2410c;font-size:.7rem;${m.includes('(PRN)')?'border:1px dashed #f59e0b':''}">${esc(m)}</span>`).join('')}</div>
+    </div>
+    <div style="font-size:.72rem;color:var(--ink);font-weight:600;margin-bottom:6px">새 약물 구성 (편집):</div>
     <div id="qmc-chips" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
       ${oldMeds.map(m=>`<span class="file-chip" style="${m.includes('(PRN)')?'border:1.5px dashed #f59e0b;background:#fff7ed':''}">${esc(m)} <span class="file-remove" onclick="this.parentElement.remove()">✕</span></span>`).join('')}
     </div>
@@ -645,7 +677,9 @@ function openQuickMedChange(domainId, idx) {
       <button class="btn-accum-add" onclick="_qmcAddMed()" style="padding:6px 12px">+</button>
     </div>
     <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">변경 사유:</div>
-    <input class="dx-form-input" id="qmc-reason" placeholder="예: 부작용으로 교체, 용량 증량">`;
+    <input class="dx-form-input" id="qmc-reason" placeholder="예: 부작용으로 교체, 용량 증량">
+    <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px;margin-top:8px">변경 일자:</div>
+    <input class="dx-form-input" id="qmc-date" type="date" value="${kstToday()}">`;
   document.getElementById('confirm-foot').innerHTML=
     '<button class="btn-cancel" onclick="closeConfirmModal()" style="font-size:.78rem">취소</button>'+
     '<button class="btn-accum-add" onclick="saveQuickMedChange()">💾 변경 저장</button>';
@@ -667,15 +701,16 @@ async function saveQuickMedChange() {
   const added=newMeds.filter(m=>!oldMeds.includes(m));
   const removed=oldMeds.filter(m=>!newMeds.includes(m));
   if(!added.length&&!removed.length){showToast('변경사항이 없습니다.');return;}
+  const changeDate=document.getElementById('qmc-date')?.value||kstToday();
   // Update medsList
   c.medsList=[...newMeds];
   c.medications=newMeds.join(', ');
   // Append to medHistory
   if(!c.medHistory) c.medHistory=[];
   const histType=oldMeds.length===0?'start':newMeds.length===0?'stop':'change';
-  c.medHistory.push({date:kstToday(),type:histType,added,removed,meds:[...newMeds],reason});
+  c.medHistory.push({date:changeDate,type:histType,added,removed,meds:[...newMeds],reason});
   c.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
-  c.drugChangeDate=kstToday();
+  c.drugChangeDate=changeDate;
   // Save
   if(ds.masterFileId){try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){}}
   closeConfirmModal();
