@@ -2352,9 +2352,9 @@ function renderMedSummaryReport(logs) {
       const nxtAvg=s.nextNrs.length?s.nextNrs.reduce((a,b)=>a+b,0)/s.nextNrs.length:null;
       const nrsChange=nxtAvg!==null&&dayAvg!==null?nxtAvg-dayAvg:null;
       const betterPct=s.rated?Math.round(s.better/s.rated*100):null;
-      // Score: lower is better (NRS change weight + inverted betterPct)
-      const nrsScore=nrsChange!==null?nrsChange:0;
-      const outcomeScore=betterPct!==null?(100-betterPct)/50:0;
+      // Score: lower is better — 정규화하여 NRS(-1~1)와 호전율(-1~1) 균등 반영
+      const nrsScore=nrsChange!==null?nrsChange/10:0;
+      const outcomeScore=betterPct!==null?(50-betterPct)/50:0;
       const score=nrsScore+outcomeScore;
       return {item,days:s.days,dayAvg,nxtAvg,nrsChange,betterPct,rated:s.rated,score};
     })

@@ -1267,6 +1267,7 @@ function migrateConditions() {
     });
   });
   if(migrated) showToast(`📦 ${migrated}건 약물 데이터 마이그레이션 완료`);
+}
 
 // ═══════════════════════════════════════════════════════════════
 // DRUG CHANGE BEFORE/AFTER COMPARISON

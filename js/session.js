@@ -546,9 +546,9 @@ SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요.
     S.session.currentRound=4;
     S.session.rounds=[{round:1,answers:{grok:raw},errors:{}}];
     const m=DM(); const accum=m.accumulated;
-    if(parsed.new_consensus?.length) accum.established_consensus.push(...parsed.new_consensus);
-    if(parsed.new_discarded?.length) accum.discarded_hypotheses.push(...parsed.new_discarded);
-    if(parsed.updated_issues?.length) accum.unresolved_issues.push(...parsed.updated_issues.filter(x=>!accum.unresolved_issues.includes(x)));
+    if(Array.isArray(parsed.new_consensus)) accum.established_consensus.push(...parsed.new_consensus);
+    if(Array.isArray(parsed.new_discarded)) accum.discarded_hypotheses.push(...parsed.new_discarded);
+    if(Array.isArray(parsed.updated_issues)) accum.unresolved_issues.push(...parsed.updated_issues.filter(x=>!accum.unresolved_issues.includes(x)));
     S.session.new_consensus=parsed.new_consensus||[];
     S.session.new_discarded=parsed.new_discarded||[];
     S.session.updated_issues=parsed.updated_issues||[];
@@ -608,9 +608,9 @@ JSON 형식 (각 문자열 100자 이내):
 
     S.session.summary=parsed;
     const m=DM(); const accum=m.accumulated;
-    if(parsed.new_consensus?.length) accum.established_consensus.push(...parsed.new_consensus);
-    if(parsed.new_discarded?.length) accum.discarded_hypotheses.push(...parsed.new_discarded);
-    if(parsed.updated_issues?.length) accum.unresolved_issues.push(...parsed.updated_issues.filter(x=>!accum.unresolved_issues.includes(x)));
+    if(Array.isArray(parsed.new_consensus)) accum.established_consensus.push(...parsed.new_consensus);
+    if(Array.isArray(parsed.new_discarded)) accum.discarded_hypotheses.push(...parsed.new_discarded);
+    if(Array.isArray(parsed.updated_issues)) accum.unresolved_issues.push(...parsed.updated_issues.filter(x=>!accum.unresolved_issues.includes(x)));
 
     S.session.new_consensus=parsed.new_consensus||[];
     S.session.new_discarded=parsed.new_discarded||[];

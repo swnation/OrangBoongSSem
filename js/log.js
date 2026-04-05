@@ -1626,7 +1626,7 @@ function saveLogPreset() {
   if(!chips.length){showToast('선택된 항목이 없어요');return;}
   const label=chips.map(c=>c.val).join(' · ');
   const name=prompt('프리셋 이름:',label);
-  if(!name) return;
+  if(!name||!name.trim()) return;
   const presets=_loadPresets();
   presets.push({name:name.trim(),chips,createdAt:kstToday()});
   _savePresets(presets);
@@ -1648,7 +1648,7 @@ function applyPreset(idx) {
   const presets=_loadPresets();
   const p=presets[idx]; if(!p) return;
   // 기존 선택 해제
-  document.querySelectorAll('.log-chip.sel').forEach(c=>{c.classList.remove('sel');c.classList.remove('sel-med','sel-sym','sel-tx','sel-site','sel-pain','sel-trigger');});
+  document.querySelectorAll('.log-chip.sel').forEach(c=>{c.classList.remove(...Array.from(c.classList).filter(cls=>cls.startsWith('sel')));});
   // 프리셋 칩 선택
   p.chips.forEach(chip=>{
     const selector=chip.side
