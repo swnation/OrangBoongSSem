@@ -1111,7 +1111,7 @@ function renderUsageView() {
     Object.entries(ds.master.usage_data).forEach(([date,aiMap])=>{
       Object.entries(aiMap).forEach(([aiId,data])=>{
         if(!dByAI[aiId]) dByAI[aiId]={today:0,month:0,all:0};
-        const cost=data.cost||0;
+        const cost=recalcCost(data);
         if(date===todayStr) dByAI[aiId].today+=cost;
         if(date.startsWith(monthStr)) dByAI[aiId].month+=cost;
         dByAI[aiId].all+=cost;

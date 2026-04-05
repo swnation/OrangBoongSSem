@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orangi-health-v95a';
+const CACHE_NAME = 'orangi-health-v95b';
 const PRECACHE = [
   './index.html',
   './style.css',
@@ -55,8 +55,8 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Network-first for HTML/CSS (get latest, fallback to cache)
-  if (e.request.destination === 'document' || url.pathname.endsWith('.css') || url.pathname.endsWith('.html')) {
+  // Network-first for HTML/CSS/JS (get latest, fallback to cache)
+  if (e.request.destination === 'document' || url.pathname.endsWith('.css') || url.pathname.endsWith('.html') || url.pathname.endsWith('.js')) {
     e.respondWith(
       fetch(e.request).then(response => {
         if (response.ok) {
