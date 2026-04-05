@@ -687,60 +687,104 @@ async function addAccum(field,inputId) {
 }
 
 // ACCUMULATED KNOWLEDGE CLEANUP (AI)
+// 진행률 바 헬퍼
+function _showProgress(step,totalSteps,label) {
+  let bar=document.getElementById('cleanup-progress');
+  if(!bar) {
+    bar=document.createElement('div');
+    bar.id='cleanup-progress';
+    bar.style.cssText='position:fixed;bottom:0;left:0;right:0;background:var(--sf);border-top:2px solid var(--ac);padding:10px 16px;z-index:9999;font-size:.78rem;font-family:inherit';
+    document.body.appendChild(bar);
+    bar._startTime=Date.now();
+  }
+  const pct=Math.round(step/totalSteps*100);
+  const elapsed=Math.round((Date.now()-bar._startTime)/1000);
+  const estTotal=step>0?Math.round(elapsed/step*totalSteps):0;
+  const remaining=Math.max(0,estTotal-elapsed);
+  bar.innerHTML=`<div style="display:flex;align-items:center;gap:10px">
+    <span style="font-weight:600;color:var(--ac)">🤖 ${label}</span>
+    <div style="flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden">
+      <div style="width:${pct}%;height:100%;background:var(--ac);border-radius:4px;transition:width .3s"></div>
+    </div>
+    <span style="min-width:45px;text-align:right;color:var(--mu)">${pct}%</span>
+    <span style="font-size:.65rem;color:var(--mu2)">${elapsed}초${remaining>0?' / ~'+remaining+'초 남음':''}</span>
+  </div>`;
+}
+function _hideProgress() {
+  const bar=document.getElementById('cleanup-progress');
+  if(bar) bar.remove();
+}
+
 async function cleanupAccumulated() {
   const m=DM(); const accum=m.accumulated;
-  const total=(accum.established_consensus?.length||0)+(accum.discarded_hypotheses?.length||0)+(accum.unresolved_issues?.length||0)+(accum.clinical_protocols?.length||0);
+  const categories=[
+    {key:'established_consensus',label:'확립된 합의'},
+    {key:'discarded_hypotheses',label:'폐기된 가설'},
+    {key:'unresolved_issues',label:'미해결 쟁점'},
+    {key:'clinical_protocols',label:'임상 프로토콜'},
+  ];
+  const total=categories.reduce((s,c)=>(s+(accum[c.key]?.length||0)),0);
   if(total<3){showToast('정리할 항목이 충분하지 않습니다.');return;}
   const aiId=['claude','gpt','gemini','grok','perp'].find(id=>S.keys[id]);
   if(!aiId){showToast('❌ API 키가 없습니다.');return;}
-  if(!confirm(`누적 지식 ${total}건을 ${AI_DEFS[aiId].name}로 정리합니다.\n중복 제거, 병합, 해결된 쟁점 이동 등을 수행합니다.`)) return;
+  // 비어있지 않은 카테고리만 처리
+  const batches=categories.filter(c=>(accum[c.key]?.length||0)>0);
+  if(!confirm(`누적 지식 ${total}건을 ${AI_DEFS[aiId].name}로 정리합니다.\n${batches.length}단계로 카테고리별 처리합니다.\n중복 제거, 병합 등을 수행합니다.`)) return;
   if(S.generating){showToast('다른 AI 작업이 진행 중입니다.');return;}
   S.generating=true;
-  showToast('🤖 누적 지식 정리 중...',8000);
   const ac=new AbortController();if(!S._abortControllers)S._abortControllers={};S._abortControllers[aiId]=ac;
+  const result={established_consensus:[],discarded_hypotheses:[],unresolved_issues:[],clinical_protocols:[]};
   try {
-    const system=`의료 데이터 정리 전문가. 누적 지식을 정리:
-1. 중복/유사 항목 병합 (의미 같으면 하나로 통합하되 핵심 정보 보존)
-2. 해결된 쟁점→합의 이동
-3. 모순되는 합의→쟁점 이동
-4. 오래되어 무관한 항목→폐기 이동
-⚠️ 병합 시 약물명·용량·날짜·조건·근거 등 임상적으로 중요한 세부사항은 반드시 보존. 의미가 달라지는 축약 금지.
-반드시 JSON만 출력 (다른 텍스트 금지):
-{"established_consensus":["항목"],"discarded_hypotheses":["항목"],"unresolved_issues":["항목"],"clinical_protocols":["항목"]}`;
-    const user=`[확립된 합의] ${(accum.established_consensus||[]).length}건\n${(accum.established_consensus||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[폐기된 가설] ${(accum.discarded_hypotheses||[]).length}건\n${(accum.discarded_hypotheses||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[미해결 쟁점] ${(accum.unresolved_issues||[]).length}건\n${(accum.unresolved_issues||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}\n\n[임상 프로토콜] ${(accum.clinical_protocols||[]).length}건\n${(accum.clinical_protocols||[]).map((x,i)=>(i+1)+'. '+x).join('\n')}`;
-    const raw=await callAIStream(aiId,system,user,()=>{},ac.signal);
-    let clean=raw.replace(/```json|```/g,'').trim();
-    const jsonMatch=clean.match(/\{[\s\S]*\}/);
-    if(jsonMatch) clean=jsonMatch[0];
-    let parsed;
-    try { parsed=JSON.parse(clean); }
-    catch(jsonErr) {
-      // JSON 잘림 복구: 마지막 완전한 배열까지 파싱 시도
-      let fixed=clean;
-      // 잘린 문자열 닫기 시도
-      const lastQuote=fixed.lastIndexOf('"');
-      if(lastQuote>0) {
-        fixed=fixed.substring(0,lastQuote+1);
-        // 열린 배열/객체 닫기
-        const opens=(fixed.match(/\[/g)||[]).length-(fixed.match(/\]/g)||[]).length;
-        const braces=(fixed.match(/\{/g)||[]).length-(fixed.match(/\}/g)||[]).length;
-        for(let i=0;i<opens;i++) fixed+=']';
-        for(let i=0;i<braces;i++) fixed+='}';
+    for(let i=0;i<batches.length;i++) {
+      const cat=batches[i];
+      const items=accum[cat.key]||[];
+      _showProgress(i,batches.length,`${cat.label} 정리 중 (${items.length}건)...`);
+      const system=`의료 데이터 정리 전문가. 아래 "${cat.label}" 항목들을 정리:
+1. 중복/유사 항목 병합 (핵심 정보 보존)
+2. 해결된 쟁점은 "합의"로, 모순 합의는 "쟁점"으로, 무관한 것은 "폐기"로 재분류
+⚠️ 약물명·용량·날짜·조건·근거 등 임상 세부사항 반드시 보존. 의미 변경 축약 금지.
+반드시 JSON만 출력:
+{"consensus":["합의 항목"],"discarded":["폐기 항목"],"issues":["쟁점 항목"],"protocols":["프로토콜 항목"]}`;
+      const user=`[${cat.label}] ${items.length}건:\n${items.map((x,j)=>(j+1)+'. '+x).join('\n')}`;
+      const raw=await callAIStream(aiId,system,user,()=>{},ac.signal);
+      let clean=raw.replace(/```json|```/g,'').trim();
+      const jsonMatch=clean.match(/\{[\s\S]*\}/);
+      if(jsonMatch) clean=jsonMatch[0];
+      let parsed;
+      try { parsed=JSON.parse(clean); }
+      catch(jsonErr) {
+        let fixed=clean;
+        const lastQuote=fixed.lastIndexOf('"');
+        if(lastQuote>0) {
+          fixed=fixed.substring(0,lastQuote+1);
+          const opens=(fixed.match(/\[/g)||[]).length-(fixed.match(/\]/g)||[]).length;
+          const braces=(fixed.match(/\{/g)||[]).length-(fixed.match(/\}/g)||[]).length;
+          for(let k=0;k<opens;k++) fixed+=']';
+          for(let k=0;k<braces;k++) fixed+='}';
+        }
+        try { parsed=JSON.parse(fixed); }
+        catch(e2) { throw new Error(`${cat.label} 정리 실패: JSON 파싱 오류`); }
       }
-      try { parsed=JSON.parse(fixed); showToast('⚠️ AI 응답이 잘려서 부분 복구됨',3000); }
-      catch(e2) { throw jsonErr; }
+      // 결과 합산
+      (parsed.consensus||[]).forEach(x=>{if(x)result.established_consensus.push(x);});
+      (parsed.discarded||[]).forEach(x=>{if(x)result.discarded_hypotheses.push(x);});
+      (parsed.issues||[]).forEach(x=>{if(x)result.unresolved_issues.push(x);});
+      (parsed.protocols||[]).forEach(x=>{if(x)result.clinical_protocols.push(x);});
     }
-    const newTotal=(parsed.established_consensus?.length||0)+(parsed.discarded_hypotheses?.length||0)+(parsed.unresolved_issues?.length||0)+(parsed.clinical_protocols?.length||0);
-    if(!confirm(`정리 결과: ${total}건 → ${newTotal}건\n합의 ${parsed.established_consensus?.length||0} / 폐기 ${parsed.discarded_hypotheses?.length||0} / 쟁점 ${parsed.unresolved_issues?.length||0} / 프로토콜 ${parsed.clinical_protocols?.length||0}\n\n적용하시겠습니까?`)) return;
-    accum.established_consensus=parsed.established_consensus||[];
-    accum.discarded_hypotheses=parsed.discarded_hypotheses||[];
-    accum.unresolved_issues=parsed.unresolved_issues||[];
-    if(parsed.clinical_protocols) accum.clinical_protocols=parsed.clinical_protocols;
+    _showProgress(batches.length,batches.length,'완료!');
+    const newTotal=result.established_consensus.length+result.discarded_hypotheses.length+result.unresolved_issues.length+result.clinical_protocols.length;
+    _hideProgress();
+    if(!confirm(`정리 결과: ${total}건 → ${newTotal}건\n합의 ${result.established_consensus.length} / 폐기 ${result.discarded_hypotheses.length} / 쟁점 ${result.unresolved_issues.length} / 프로토콜 ${result.clinical_protocols.length}\n\n적용하시겠습니까?`)) return;
+    accum.established_consensus=result.established_consensus;
+    accum.discarded_hypotheses=result.discarded_hypotheses;
+    accum.unresolved_issues=result.unresolved_issues;
+    accum.clinical_protocols=result.clinical_protocols;
     await saveMaster(); renderView('home');
     showToast(`✅ 누적 지식 정리 완료: ${total}건 → ${newTotal}건`);
   } catch(e){
+    _hideProgress();
     if(e.name==='AbortError') showToast('⏹ 정리 중단됨');
-    else showToast('❌ 정리 실패: '+e.message,4000);
+    else showToast('❌ '+e.message,4000);
   } finally {
     delete S._abortControllers?.[aiId];
     S.generating=false;
