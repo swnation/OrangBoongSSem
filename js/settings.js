@@ -26,7 +26,11 @@ function openKeys() {
   document.getElementById('keys-body').innerHTML=Object.entries(KEY_INFO).map(([id,info])=>{
     const def=AI_DEFS[id];const hasKey=!!S.keys[id];
     const curModel=S.models[id]||DEFAULT_MODELS[id];
-    const modelOpts=(MODEL_OPTIONS[id]||[]).map(m=>`<option value="${m.value}" ${curModel===m.value?'selected':''}>${m.label}</option>`).join('');
+    const modelOpts=(MODEL_OPTIONS[id]||[]).map(m=>{
+      const p=DEFAULT_PRICE_TABLE[m.value];
+      const priceTag=p?` [$${p.in}/${p.out}]`:'';
+      return `<option value="${m.value}" ${curModel===m.value?'selected':''}>${m.label}${priceTag}</option>`;
+    }).join('');
     return `<div class="key-group">
       <div class="key-row">
         <div class="key-label"><div class="ai-dot" style="background:${def?.color}"></div>${info.label}
