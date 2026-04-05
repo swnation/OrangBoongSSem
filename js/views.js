@@ -143,6 +143,96 @@ function renderError(msg) {
 }
 
 // HOME VIEW
+// ═══════════════════════════════════════════════════════════════
+// 편두통 일기예보 — 과거 패턴 기반 오늘 위험도 예측
+// ═══════════════════════════════════════════════════════════════
+function renderMigraineForecast() {
+  if(S.currentDomain!=='orangi-migraine') return '';
+  const ds=D(); const logs=ds.logData||[];
+  const nrsLogs=logs.filter(l=>l.nrs>=0&&l.datetime);
+  if(nrsLogs.length<14) return ''; // 최소 2주 데이터
+
+  const today=kstToday();
+  const dow=kstNow().getUTCDay(); // 요일 (0=일)
+  const factors=[];
+  let riskScore=0; // 0~100
+
+  // 1) 요일 패턴 — 같은 요일의 평균 NRS
+  const sameDow=nrsLogs.filter(l=>{const d=new Date(l.datetime.slice(0,10)+'T00:00:00Z');return d.getUTCDay()===dow;});
+  if(sameDow.length>=3) {
+    const avg=sameDow.reduce((s,l)=>s+l.nrs,0)/sameDow.length;
+    const allAvg=nrsLogs.reduce((s,l)=>s+l.nrs,0)/nrsLogs.length;
+    if(avg>allAvg+1) { riskScore+=20; factors.push(`📅 ${['일','월','화','수','목','금','토'][dow]}요일 평균 NRS ${avg.toFixed(1)} (전체 ${allAvg.toFixed(1)})`); }
+    else if(avg>allAvg) { riskScore+=8; }
+  }
+
+  // 2) 최근 3일 패턴 — 연속 고통 후 반동 또는 지속
+  const recent3=nrsLogs.filter(l=>{
+    const d=l.datetime.slice(0,10);const diff=Math.round((new Date(today+'T00:00:00')-new Date(d+'T00:00:00'))/86400000);
+    return diff>=0&&diff<=3;
+  });
+  if(recent3.length) {
+    const avg3=recent3.reduce((s,l)=>s+l.nrs,0)/recent3.length;
+    if(avg3>=6) { riskScore+=25; factors.push(`🔥 최근 3일 평균 NRS ${avg3.toFixed(1)} — 고통 지속 중`); }
+    else if(avg3>=4) { riskScore+=12; factors.push(`⚠️ 최근 3일 평균 NRS ${avg3.toFixed(1)}`); }
+  }
+
+  // 3) 최근 기록의 트리거 활성 여부
+  const recent7=nrsLogs.filter(l=>{
+    const d=l.datetime.slice(0,10);const diff=Math.round((new Date(today+'T00:00:00')-new Date(d+'T00:00:00'))/86400000);
+    return diff>=0&&diff<=7;
+  });
+  const activeTriggers=new Set(recent7.flatMap(l=>l.triggers||[]));
+  const highRiskTriggers=['수면부족','수면분절','스트레스','생리전후','피로'];
+  const activeHigh=highRiskTriggers.filter(t=>activeTriggers.has(t));
+  if(activeHigh.length>=2) { riskScore+=20; factors.push(`⚡ 고위험 트리거 활성: ${activeHigh.join(', ')}`); }
+  else if(activeHigh.length===1) { riskScore+=10; factors.push(`⚡ 트리거 활성: ${activeHigh[0]}`); }
+
+  // 4) 날씨 (저기압) — 최신 기록의 날씨 데이터 참조
+  const withWeather=[...nrsLogs].reverse().find(l=>l.weather?.pressure);
+  if(withWeather?.weather) {
+    const p=withWeather.weather.pressure;
+    if(p<1005) { riskScore+=20; factors.push(`🌧 저기압 ${p}hPa (기압 민감)`); }
+    else if(p<1010) { riskScore+=10; factors.push(`☁️ 기압 ${p}hPa (약간 낮음)`); }
+  }
+
+  // 5) 생리주기 트리거 (getMenstrualTag 활용)
+  if(typeof getMenstrualTag==='function') {
+    const tag=getMenstrualTag(today);
+    if(tag&&(tag.includes('생리')||tag.includes('D-'))) {
+      riskScore+=15; factors.push(`🩸 ${tag} — 호르몬 변동기`);
+    }
+  }
+
+  // 점수 정규화 (0~100)
+  riskScore=Math.min(100,riskScore);
+
+  // 위험도 레벨
+  let level,emoji,color,bg;
+  if(riskScore>=60) { level='높음'; emoji='🌩️'; color='#ef4444'; bg='linear-gradient(135deg,#fef2f2,#fee2e2)'; }
+  else if(riskScore>=35) { level='보통'; emoji='⛅'; color='#f59e0b'; bg='linear-gradient(135deg,#fffbeb,#fef3c7)'; }
+  else { level='낮음'; emoji='☀️'; color='#10b981'; bg='linear-gradient(135deg,#f0fdf4,#dcfce7)'; }
+
+  const factorHtml=factors.length?factors.map(f=>`<div style="font-size:.7rem;color:var(--mu);padding:2px 0">• ${f}</div>`).join(''):'<div style="font-size:.7rem;color:var(--mu2)">특별한 위험 요인 없음</div>';
+
+  // 게이지 바
+  const gauge=`<div style="position:relative;height:8px;background:var(--bd);border-radius:4px;overflow:hidden;margin:8px 0">
+    <div style="width:${riskScore}%;height:100%;background:${color};border-radius:4px;transition:width .5s"></div>
+  </div>`;
+
+  return `<div class="card" style="background:${bg};border:1.5px solid ${color}30">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <span style="font-size:1.8rem">${emoji}</span>
+      <div>
+        <div style="font-size:.82rem;font-weight:700;color:${color}">오늘의 편두통 일기예보</div>
+        <div style="font-size:.68rem;color:var(--mu)">위험도 <b>${riskScore}점</b> · ${level}</div>
+      </div>
+    </div>
+    ${gauge}
+    ${factorHtml}
+  </div>`;
+}
+
 function renderHome() {
   const m=DM(); if(!m) return '<div class="hint">데이터 로딩 중...</div>';
   const accum=m.accumulated; const sessions=m.sessions||[];
@@ -163,6 +253,7 @@ function renderHome() {
       <span style="font-size:1.2rem">⚡</span>
       <div style="text-align:left"><div style="font-weight:600;color:var(--ink)">빠른 체크</div><div style="font-size:.68rem;color:var(--mu)">AI 1개 · 최근 기록 기반 빠른 요약</div></div>
     </button>
+    ${renderMigraineForecast()}
     ${renderPatternWarnings()}
     ${renderDrugInteractionWarning()}
     ${(()=>{_aiSuggestions=generateAIQuestionSuggestions();return renderAIQuestionSuggestions();})()}
