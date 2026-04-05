@@ -5,7 +5,7 @@
 
 ## 파일 구조
 ```
-index.html      — HTML + 최소 부트스트랩 JS (~230줄)
+index.html      — HTML + 최소 부트스트랩 JS (~233줄)
 style.css       — CSS (325줄)
 js/             — 모듈화된 JS (15개 파일)
   constants.js  — 상수 정의
@@ -132,7 +132,7 @@ UTC+9 오프셋을 수동 적용하는 방식.
 - 증상 기록 시 질환별 투약 선택 UI (`renderConditionMedSelector`)
 
 ### 버전 관리
-`APP_VERSION` 배열 (index.html 상단):
+`APP_VERSION` 배열 (`js/constants.js`):
 - 새 버전 추가 시 맨 위에 한 줄 추가
 - `.slice(0,5)`로 최신 5개만 유지
 - 로그인 화면 CHANGELOG + 사이드바 버전 번호 자동 렌더링
