@@ -130,7 +130,7 @@ function renderView(view) {
   else if(view==='stats') area.innerHTML=renderStatsView();
   else if(view==='timeline') { try{area.innerHTML=renderTimelineView();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 타임라인 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;} loadAllUserDomains().then(()=>{if(S.currentView==='timeline'){try{area.innerHTML=renderTimelineView();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 타임라인 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;}};}); }
   else if(view==='crosslog') { area.innerHTML=renderCrossLogView(); loadAllUserDomains().then(()=>{if(S.currentView==='crosslog')area.innerHTML=renderCrossLogView();}); }
-  else if(view==='usage') area.innerHTML=renderUsageView();
+  else if(view==='usage') { area.innerHTML=renderUsageView(); loadAllUserDomains().then(()=>{if(S.currentView==='usage')area.innerHTML=renderUsageView();}); }
   else area.innerHTML='<div class="hint">뷰를 선택하세요.</div>';
 }
 

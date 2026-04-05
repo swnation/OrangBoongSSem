@@ -340,11 +340,12 @@ const MODEL_OPTIONS = {
   gpt: [
     {value:'gpt-5.4',label:'GPT-5.4 (최신·추천)'},
     {value:'gpt-5.4-mini',label:'GPT-5.4 Mini (저비용)'},
+    {value:'gpt-5.4-nano',label:'GPT-5.4 Nano (최저비용)'},
     {value:'gpt-5.3-chat-latest',label:'GPT-5.3'},
     {value:'gpt-4.1',label:'GPT-4.1 (안정)'},
     {value:'gpt-4.1-mini',label:'GPT-4.1 Mini'},
-    {value:'gpt-4o',label:'GPT-4o (안정)'},
     {value:'o3',label:'o3 (추론)'},
+    {value:'o3-mini',label:'o3 Mini (빠른 추론)'},
     {value:'o4-mini',label:'o4-mini (빠른 추론)'},
   ],
   claude: [
@@ -383,13 +384,14 @@ const KEY_INFO = {
 
 const DEFAULT_PRICE_TABLE = {
   'gpt-5.4':{in:2.50,out:15.00},
-  'gpt-5.4-mini':{in:0.40,out:1.60},
+  'gpt-5.4-mini':{in:0.75,out:4.50},
+  'gpt-5.4-nano':{in:0.20,out:1.25},
   'gpt-5.3-chat-latest':{in:2.50,out:10.00},
   'gpt-4.1':{in:2.00,out:8.00},
   'gpt-4.1-mini':{in:0.40,out:1.60},
-  'gpt-4o':{in:2.50,out:10.00},
-  'o3':{in:10.00,out:40.00},
-  'o4-mini':{in:1.10,out:4.40},
+  'o3':{in:2.00,out:8.00},
+  'o3-mini':{in:1.10,out:4.40},
+  'o4-mini':{in:0.55,out:2.20},
   'claude-sonnet-4-6':{in:3.00,out:15.00},
   'claude-opus-4-6':{in:5.00,out:25.00},
   'claude-haiku-4-5-20251001':{in:1.00,out:5.00},

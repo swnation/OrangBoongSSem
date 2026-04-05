@@ -22,9 +22,18 @@ function recalcCost(data) {
 }
 function getSidebarCostToday() {
   const today=kstToday();
-  const usage=DM()?.usage_data?.[today];
-  if(!usage) return 0;
-  return Object.values(usage).reduce((s,v)=>s+recalcCost(v),0);
+  let total=0;
+  // 모든 로드된 도메인의 비용 합산
+  Object.values(S.domainState).forEach(ds=>{
+    const usage=ds.master?.usage_data?.[today];
+    if(usage) total+=Object.values(usage).reduce((s,v)=>s+recalcCost(v),0);
+  });
+  // 현재 도메인만 로드된 경우 fallback
+  if(total===0) {
+    const usage=DM()?.usage_data?.[today];
+    if(usage) total=Object.values(usage).reduce((s,v)=>s+recalcCost(v),0);
+  }
+  return total;
 }
 function updateSidebarCost() {
   const cost=getSidebarCostToday();
