@@ -656,7 +656,7 @@ function offerContextMerge(parsed) {
   showConfirmModal('📋 컨텍스트 자동 반영',
     `<p style="font-size:.82rem;margin-bottom:10px">이번 세션 결과를 환자 컨텍스트에 추가할까요?</p>
     <div style="background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;padding:10px;font-family:var(--mono);font-size:.72rem;line-height:1.6;max-height:200px;overflow-y:auto;white-space:pre-wrap;color:var(--gr)">${esc(_pendingContextMerge)}</div>`,
-    [{label:'컨텍스트에 추가',action:'applyContextMerge()',primary:true}]
+    [{label:'컨텍스트에 추가',action:applyContextMerge,primary:true}]
   );
 }
 
