@@ -752,68 +752,119 @@ async function saveQuickMedChange() {
   showToast(`✅ 약물 변경 저장 — +${added.length} -${removed.length}`);
 }
 
-// 투약 이력 날짜 수정
+// 투약 이력 편집 (날짜/약물/사유/메모 수정 + 삭제)
+let _mheDom='',_mheCond=-1,_mheHist=-1;
+function _mheAddMed() {
+  const i=document.getElementById('mhe-new-med');
+  let v=(i?.value||'').trim();if(!v)return;
+  if(document.getElementById('mhe-prn')?.checked&&!v.includes('(PRN)'))v+=' (PRN)';
+  const s=document.createElement('span');s.className='file-chip';
+  if(v.includes('(PRN)'))s.style.cssText='border:1.5px dashed #f59e0b;background:#fff7ed';
+  s.innerHTML=esc(v)+' <span class="file-remove" onclick="this.parentElement.remove()">✕</span>';
+  document.getElementById('mhe-chips').appendChild(s);
+  i.value='';const prn=document.getElementById('mhe-prn');if(prn)prn.checked=false;
+}
+
 function editMedHistDate(domainId, condIdx, histIdx) {
   const ds=S.domainState[domainId];
   const c=ds?.master?.conditions?.[condIdx];
   const h=c?.medHistory?.[histIdx];
   if(!h) return;
-  document.getElementById('confirm-title').textContent='📅 투약 이력 날짜 수정';
+  _mheDom=domainId;_mheCond=condIdx;_mheHist=histIdx;
+  const typeLabels={change:'변경',start:'최초 처방',stop:'중단',dose:'용량 조절'};
+  document.getElementById('confirm-title').textContent='✏️ '+c.name+' — 이력 수정';
   document.getElementById('confirm-body').innerHTML=`
-    <div style="font-size:.78rem;color:var(--ink);margin-bottom:8px">
-      <span style="font-weight:600">${esc(c.name)}</span> —
-      ${h.added?.length?'<span style="color:#16a34a">+'+h.added.map(m=>esc(m)).join(', ')+'</span> ':''}
-      ${h.removed?.length?'<span style="color:#dc2626">−'+h.removed.map(m=>esc(m)).join(', ')+'</span>':''}
-      ${h.detail?esc(h.detail):''}
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <div style="flex:1"><div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">변경 일자</div>
+        <input class="dx-form-input" id="mhe-date" type="date" value="${h.date}"></div>
+      <div style="flex:1"><div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">유형</div>
+        <select class="dx-form-input" id="mhe-type" style="cursor:pointer">
+          ${['change','start','stop','dose'].map(t=>`<option value="${t}" ${h.type===t?'selected':''}>${typeLabels[t]}</option>`).join('')}
+        </select></div>
     </div>
-    <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">변경 일자:</div>
-    <input class="dx-form-input" id="mh-edit-date" type="date" value="${h.date}">
-    <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px;margin-top:8px">사유 (수정 가능):</div>
-    <input class="dx-form-input" id="mh-edit-reason" value="${esc(h.reason||'')}">`;
+    <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">당시 약물 세트 (편집):</div>
+    <div id="mhe-chips" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+      ${(h.meds||[]).map(m=>`<span class="file-chip" style="${m.includes('(PRN)')?'border:1.5px dashed #f59e0b;background:#fff7ed':''}">${esc(m)} <span class="file-remove" onclick="this.parentElement.remove()">✕</span></span>`).join('')}
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <input class="dx-form-input" id="mhe-new-med" placeholder="약물 추가..." style="flex:1">
+      <label style="display:flex;align-items:center;gap:3px;font-size:.65rem;color:var(--mu);cursor:pointer"><input type="checkbox" id="mhe-prn"> PRN</label>
+      <button class="btn-accum-add" onclick="_mheAddMed()" style="padding:6px 10px">+</button>
+    </div>
+    <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">변경 사유:</div>
+    <input class="dx-form-input" id="mhe-reason" value="${esc(h.reason||'')}" style="margin-bottom:6px">
+    <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">당시 약물 반응:</div>
+    <textarea class="dx-form-input" id="mhe-response" rows="2" style="margin-bottom:6px;resize:vertical">${esc(h.prevDrugResponse||'')}</textarea>
+    <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">당시 메모:</div>
+    <textarea class="dx-form-input" id="mhe-notes" rows="2" style="resize:vertical">${esc(h.prevNotes||'')}</textarea>`;
   document.getElementById('confirm-foot').innerHTML=
+    `<button class="btn-cancel" onclick="deleteMedHist()" style="font-size:.78rem;color:#dc2626;border-color:#dc2626">🗑 삭제</button>`+
     '<button class="btn-cancel" onclick="closeConfirmModal()" style="font-size:.78rem">취소</button>'+
-    `<button class="btn-accum-add" onclick="saveMedHistEdit('${esc(domainId)}',${condIdx},${histIdx})">💾 수정</button>`;
+    `<button class="btn-accum-add" onclick="saveMedHistEdit()">💾 저장</button>`;
   openModal('confirm-modal');
+  setTimeout(()=>setupAutocomplete('mhe-new-med',_AC_MEDS,true),50);
 }
 
-async function saveMedHistEdit(domainId, condIdx, histIdx) {
-  const ds=S.domainState[domainId];
-  const c=ds?.master?.conditions?.[condIdx];
-  const h=c?.medHistory?.[histIdx];
+async function saveMedHistEdit() {
+  const ds=S.domainState[_mheDom];
+  const c=ds?.master?.conditions?.[_mheCond];
+  const h=c?.medHistory?.[_mheHist];
   if(!h) return;
-  const newDate=document.getElementById('mh-edit-date')?.value;
-  const newReason=document.getElementById('mh-edit-reason')?.value?.trim()||'';
+  const newDate=document.getElementById('mhe-date')?.value;
   if(!newDate){showToast('날짜를 선택하세요.');return;}
   const oldDate=h.date;
+  // 약물 세트 수집
+  const newMeds=[];
+  document.querySelectorAll('#mhe-chips .file-chip').forEach(el=>{
+    const text=el.childNodes[0]?.textContent?.trim();
+    if(text) newMeds.push(text);
+  });
+  // 이력 업데이트
   h.date=newDate;
-  h.reason=newReason;
+  h.type=document.getElementById('mhe-type')?.value||h.type;
+  h.reason=document.getElementById('mhe-reason')?.value?.trim()||'';
+  if(newMeds.length) h.meds=[...newMeds];
+  const resp=document.getElementById('mhe-response')?.value?.trim()||'';
+  const notes=document.getElementById('mhe-notes')?.value?.trim()||'';
+  if(resp) h.prevDrugResponse=resp; else delete h.prevDrugResponse;
+  if(notes) h.prevNotes=notes; else delete h.prevNotes;
   c.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
-  // drugChangeDate 갱신 (마지막 변경 이력 기준)
+  // drugChangeDate 갱신
   const lastChange=c.medHistory.filter(x=>x.type!=='start').slice(-1)[0];
   if(lastChange) c.drugChangeDate=lastChange.date;
-  // 증상 기록(logData)에서 해당 날짜 범위의 medCheck 업데이트
-  const logData=ds.logData||[];
-  if(logData.length && oldDate!==newDate) {
-    const affectedDates=new Set([oldDate,newDate]);
+  // 증상 기록 medCheck 업데이트 (날짜 변경 시)
+  if(oldDate!==newDate) {
+    const logData=ds.logData||[];
+    const minD=oldDate<newDate?oldDate:newDate;
+    const maxD=oldDate<newDate?newDate:oldDate;
     logData.forEach(l=>{
       const logDate=l.datetime?.slice(0,10);
-      if(!logDate||!l.medCheck) return;
-      // 영향 범위: oldDate~newDate 또는 newDate~oldDate
-      const minD=oldDate<newDate?oldDate:newDate;
-      const maxD=oldDate<newDate?newDate:oldDate;
-      if(logDate>=minD&&logDate<=maxD) {
-        // 이 날짜에 활성이었던 약물 세트로 medCheck 키 업데이트
-        const activeMeds=getMedsAtDate(c, logDate);
-        const newMc={};
-        activeMeds.forEach(m=>{newMc[m]=l.medCheck[m]??true;});
-        l.medCheck=Object.keys(newMc).length?newMc:undefined;
-      }
+      if(!logDate||!l.medCheck||logDate<minD||logDate>maxD) return;
+      const activeMeds=getMedsAtDate(c, logDate);
+      const newMc={};
+      activeMeds.forEach(m=>{newMc[m]=l.medCheck[m]??true;});
+      l.medCheck=Object.keys(newMc).length?newMc:undefined;
     });
   }
   if(ds.masterFileId){try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){}}
   closeConfirmModal();
   renderView('meds');
-  showToast(`✅ 이력 날짜 수정: ${oldDate} → ${newDate}`);
+  showToast('✅ 이력 수정 완료');
+}
+
+async function deleteMedHist() {
+  if(!confirm('이 투약 이력을 삭제하시겠습니까?')) return;
+  const ds=S.domainState[_mheDom];
+  const c=ds?.master?.conditions?.[_mheCond];
+  if(!c?.medHistory) return;
+  c.medHistory.splice(_mheHist,1);
+  // drugChangeDate 갱신
+  const lastChange=c.medHistory.filter(x=>x.type!=='start').slice(-1)[0];
+  c.drugChangeDate=lastChange?.date||'';
+  if(ds.masterFileId){try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){}}
+  closeConfirmModal();
+  renderView('meds');
+  showToast('🗑 이력 삭제됨');
 }
 
 // Build conditions context for AI prompts
