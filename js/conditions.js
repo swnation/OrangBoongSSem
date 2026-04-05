@@ -127,7 +127,7 @@ function getMedsAtDate(condition, date) {
   const sorted=[...hist].sort((a,b)=>a.date.localeCompare(b.date));
   let medsAtDate=null;
   for(const h of sorted) {
-    if(h.date>date) break;
+    if(h.date.localeCompare(date)>0) break;
     if(h.meds?.length) medsAtDate=h.meds;
   }
   // 이력에서 못 찾으면 현재 약물
@@ -828,7 +828,7 @@ async function saveMedHistEdit() {
   const notes=document.getElementById('mhe-notes')?.value?.trim()||'';
   if(resp) h.prevDrugResponse=resp; else delete h.prevDrugResponse;
   if(notes) h.prevNotes=notes; else delete h.prevNotes;
-  c.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
+  if(c.medHistory?.length) c.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
   // drugChangeDate 갱신
   const lastChange=c.medHistory.filter(x=>x.type!=='start').slice(-1)[0];
   if(lastChange) c.drugChangeDate=lastChange.date;
