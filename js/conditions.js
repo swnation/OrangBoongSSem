@@ -22,6 +22,33 @@ function renderConditionMedSelector() {
     </div>`;
 }
 
+function renderDailyMedCheck() {
+  const condMeds=getConditionMeds();
+  if(!condMeds.length) return '';
+  return `<div class="log-section-title">💊 오늘 복용 체크</div>
+    <div style="margin-bottom:8px">
+    ${condMeds.map(cm=>{
+      const daily=cm.meds.filter(m=>!m.includes('(PRN)'));
+      const prn=cm.meds.filter(m=>m.includes('(PRN)'));
+      return `<div style="margin-bottom:6px;border:1px solid var(--bd);border-radius:8px;padding:8px 10px;background:var(--sf)">
+        <div style="font-size:.72rem;font-weight:600;color:var(--ink);margin-bottom:6px">${cm.icon} ${esc(cm.condition)}</div>
+        ${daily.map(m=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+          <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" checked style="width:16px;height:16px;accent-color:var(--ac)">
+          <span style="font-size:.78rem;color:var(--ink)">${esc(m)}</span>
+          <span style="font-size:.6rem;color:var(--mu2)">매일</span>
+        </label>`).join('')}
+        ${prn.length?`<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd)">
+          ${prn.map(m=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+            <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" style="width:16px;height:16px;accent-color:#f59e0b">
+            <span style="font-size:.78rem;color:var(--ink)">${esc(m)}</span>
+            <span style="font-size:.6rem;color:#f59e0b">PRN</span>
+          </label>`).join('')}
+        </div>`:''}
+      </div>`;
+    }).join('')}
+    </div>`;
+}
+
 function getConditions() { return DM()?.conditions || []; }
 
 // Get ALL conditions for current user across all domains

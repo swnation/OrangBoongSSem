@@ -650,7 +650,7 @@ function renderLog() {
         <button onclick="addCustomChip('syms')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
       </div>
     </div>`:''}
-    ${renderConditionMedSelector()}
+    ${lc.moodMode?renderDailyMedCheck():renderConditionMedSelector()}
     ${lc.meds?.length||customMeds.length?`<div class="log-section-title">투약 (일반) <button onclick="openChipManager('meds')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div><div class="log-chips">${allMeds.map(s=>`<div class="log-chip" data-group="med" data-val="${s}" onclick="toggleChip(this,'sel-med')">${s}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="med-other" placeholder="직접 입력" style="width:100px">
@@ -691,6 +691,7 @@ function renderRecentLogs() {
           ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
           ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
           ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:#f0f9ff;color:#0369a1;font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
+          ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'#f0fdf4':'#fef2f2'};color:${v?'#15803d':'#dc2626'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
         </div>
         ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
       </div>
@@ -774,6 +775,7 @@ function renderLogList() {
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
             ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:#f0f9ff;color:#0369a1;font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
+            ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'#f0fdf4':'#fef2f2'};color:${v?'#15803d':'#dc2626'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
             ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
@@ -1065,8 +1067,13 @@ async function saveLogEntry() {
       if(sel) dailyChecks[item]=parseInt(sel.dataset.val);
     });
   }
+  // Daily med check (moodMode)
+  const medCheck={};
+  document.querySelectorAll('.med-check-cb').forEach(cb=>{
+    medCheck[cb.dataset.med]=cb.checked;
+  });
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
-  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo,dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined};
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo,dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined,medCheck:Object.keys(medCheck).length?medCheck:undefined};
   // 날씨 자동 첨부 (편두통 도메인, 2초 타임아웃)
   if(S.currentDomain==='orangi-migraine'&&editIdx<0){
     try{const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),2000))]);if(w)entry.weather=w;}catch(e){console.warn('Weather attachment failed:',e);}
@@ -1175,6 +1182,13 @@ function editLogEntry(idx) {
     // Memo
     const memoEl=document.getElementById('log-memo');
     if(memoEl) memoEl.value=entry.memo||'';
+    // MedCheck restore
+    if(entry.medCheck){
+      document.querySelectorAll('.med-check-cb').forEach(cb=>{
+        const med=cb.dataset.med;
+        if(med in entry.medCheck) cb.checked=entry.medCheck[med];
+      });
+    }
     // Scroll to form
     document.querySelector('.log-form')?.scrollIntoView({behavior:'smooth'});
   },50);
@@ -1252,6 +1266,11 @@ function _saveLogFormState() {
     const group=c.dataset.group;
     if(group?.startsWith('dc-')) state.dailyChecks[group.slice(3)]=c.dataset.val;
   });
+  // MedCheck
+  state.medCheck={};
+  document.querySelectorAll('.med-check-cb').forEach(cb=>{
+    state.medCheck[cb.dataset.med]=cb.checked;
+  });
   return state;
 }
 
@@ -1286,6 +1305,13 @@ function _restoreLogFormState(state) {
       Object.entries(state.dailyChecks).forEach(([item, val])=>{
         const chip=document.querySelector(`#dc-${item} .log-chip[data-val="${val}"]`);
         if(chip){chip.classList.add('sel','sel-sym');}
+      });
+    }
+    // Restore medCheck
+    if(state.medCheck){
+      document.querySelectorAll('.med-check-cb').forEach(cb=>{
+        const med=cb.dataset.med;
+        if(med in state.medCheck) cb.checked=state.medCheck[med];
       });
     }
   },10);

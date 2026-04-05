@@ -1,7 +1,7 @@
 // js/constants.js — 상수 정의 (Phase 1 모듈화)
 
 const APP_VERSION = [
-  {v:'v9.5', date:'2026-04-05', note:'코드모듈화(15파일) · 편두통일기예보 · 약물효과리포트 · 로그프리셋 · 자동로그인 · 로그자동저장 · SW업데이트알림 · Gemini리뷰반영'},
+  {v:'v9.5', date:'2026-04-05', note:'코드모듈화(15파일) · 편두통일기예보 · 약물효과리포트 · 로그프리셋 · 자동로그인 · 로그자동저장 · SW업데이트알림 · 매일복용약체크 · 오랑이dailyChecks · Gemini리뷰반영'},
   {v:'v9.4', date:'2026-04-05', note:'ntfy액션버튼 · 경과URL안정화 · 기억안남버튼 · 클라우드outcome동기화 · Gemini리뷰6회반영 · 붕룩이헬퍼리팩토링'},
   {v:'v9.3', date:'2026-04-03', note:'기본모드(GPT+Perp→Claude) · 약물안전3중검증(FDA/PLLR/식약처) · 투약변경이력 · 도메인별비용 · Gemini리뷰반영'},
   {v:'v9.2', date:'2026-04-02', note:'처치효과회고 · 트리거칩 · 날씨자동수집 · 통계차트강화 · 경량모드 · ntfy경과알림 · 붕룩이대시보드'},
@@ -125,6 +125,7 @@ const DOMAINS = {
     logConfig: {
       sites: null,
       moodMode: true,
+      dailyChecks: ['수면', '에너지', '식욕', '불안', '강박'],
       symptoms: ['불안','우울감','무기력','과민','강박사고','공황','불면','과수면','식욕변화','집중력저하'],
       meds: ['Venlafaxine','Bupropion','Escitalopram','Hydroxyzine','기타'],
       treatments: null,
