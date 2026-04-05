@@ -205,6 +205,8 @@ renderView = function(view) {
       // 편두통 도메인: 머리 그림 삽입
       const hdEl=document.getElementById('main-head-diagram');
       if(hdEl&&DC().logConfig?.sites) { hdEl.innerHTML=getMainHeadSVG(); setTimeout(syncMainHeadDiagram,50); }
+      // 자동저장 복원
+      if(typeof _tryRestoreLogForm==='function') setTimeout(_tryRestoreLogForm,100);
     }, 50);
   }
   if (view === 'meds') {

@@ -48,11 +48,26 @@ async function ensureValidToken() {
   });
 }
 
+function _tryAutoLogin() {
+  if(S.token||!window.google?.accounts?.oauth2) return;
+  if(localStorage.getItem('om_auto_login')!=='true') return;
+  try {
+    if(!tokenClient) {
+      tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID, scope: SCOPES, callback: handleToken,
+      });
+    }
+    tokenClient.requestAccessToken({prompt:''});
+  } catch(e){ console.warn('Auto-login failed:', e); }
+}
+
 function checkGSI(attempts) {
   if(!attempts) attempts=0;
   if (window.google?.accounts?.oauth2) {
     const el = document.getElementById('gsi-status');
     if (el) { el.textContent = '✓ 준비됨 — 위 버튼을 눌러 로그인하세요'; el.style.color = '#2d6a4f'; }
+    // 자동 로그인 시도
+    _tryAutoLogin();
   } else if(attempts<20) {
     setTimeout(()=>checkGSI(attempts+1), 500);
   } else if(attempts===20) {
@@ -79,6 +94,7 @@ function handleToken(resp) {
   }
   const isRefresh = !!S.token; // already had a token = this is a refresh
   S.token = resp.access_token;
+  localStorage.setItem('om_auto_login','true'); // 다음 방문 시 자동 로그인
   scheduleTokenRefresh(resp.expires_in || 3600);
   if (_tokenRefreshResolve) { _tokenRefreshResolve(true); _tokenRefreshResolve = null; return; }
   if (isRefresh) return; // silent refresh from timer — no UI reload needed
