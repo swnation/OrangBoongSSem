@@ -975,7 +975,7 @@ function renderStatsView() {
   </div>
   ${topSyms.length?`<div class="card"><div class="card-title">증상 빈도 (30일)</div>${symHtml}</div>`:''}
   ${topMeds.length?`<div class="card"><div class="card-title">투약 빈도 (30일)</div>${medHtml}</div>`:''}
-  ${lc.moodMode?'':renderCalendarHeatmap(logs,lc)}
+  ${lc.moodMode?renderMedComplianceStats(last30)+renderDailyCheckTrend(last30,lc):renderCalendarHeatmap(logs,lc)}
   ${renderTrendChart(logs, 90)}
   ${renderCorrelationAnalysis(logs)}
   ${renderMedEffectAnalysis(logs)}
@@ -988,6 +988,66 @@ function renderStatsView() {
     <button class="btn-export" onclick="exportPDF()">📑 기본 리포트</button>
     <button class="btn-export" onclick="exportMonthlyPDF()" style="background:#2c5f8a">📋 월간 리포트 (병원용)</button>
   </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💊 MED COMPLIANCE & DAILY CHECK STATS (moodMode)
+// ═══════════════════════════════════════════════════════════════
+function renderMedComplianceStats(logs) {
+  const withMc=logs.filter(l=>l.medCheck&&Object.keys(l.medCheck).length);
+  if(!withMc.length) return '';
+  // Per-med compliance
+  const medStats={};
+  withMc.forEach(l=>{
+    Object.entries(l.medCheck).forEach(([med,taken])=>{
+      if(!medStats[med]) medStats[med]={taken:0,total:0};
+      medStats[med].total++;
+      if(taken) medStats[med].taken++;
+    });
+  });
+  const rows=Object.entries(medStats).sort((a,b)=>b[1].total-a[1].total).map(([med,s])=>{
+    const pct=Math.round(s.taken/s.total*100);
+    const color=pct>=90?'#10b981':pct>=70?'#f59e0b':'#ef4444';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+      <span style="font-size:.78rem;min-width:120px;text-align:right">${esc(med)}</span>
+      <div style="flex:1;height:10px;background:var(--bd);border-radius:5px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${color};border-radius:5px"></div>
+      </div>
+      <span style="font-size:.72rem;font-weight:600;color:${color};min-width:40px">${pct}%</span>
+      <span style="font-size:.6rem;color:var(--mu)">${s.taken}/${s.total}</span>
+    </div>`;
+  }).join('');
+  return `<div class="card"><div class="card-title">💊 복용 순응률 (30일)</div>${rows}</div>`;
+}
+
+function renderDailyCheckTrend(logs, lc) {
+  if(!lc.dailyChecks?.length) return '';
+  const withDc=logs.filter(l=>l.dailyChecks&&Object.keys(l.dailyChecks).length);
+  if(!withDc.length) return '';
+  // Average per check item
+  const itemStats={};
+  lc.dailyChecks.forEach(item=>{itemStats[item]={sum:0,count:0};});
+  withDc.forEach(l=>{
+    Object.entries(l.dailyChecks).forEach(([k,v])=>{
+      if(itemStats[k]){itemStats[k].sum+=v;itemStats[k].count++;}
+    });
+  });
+  const rows=lc.dailyChecks.map(item=>{
+    const s=itemStats[item];
+    const avg=s.count?(s.sum/s.count).toFixed(1):'-';
+    const pct=s.count?Math.round(s.sum/s.count/5*100):0;
+    const color=avg>=4?'#10b981':avg>=3?'#3b82f6':avg>=2?'#f59e0b':'#ef4444';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
+      <span style="font-size:.78rem;min-width:60px;text-align:right">${esc(item)}</span>
+      <div style="flex:1;height:10px;background:var(--bd);border-radius:5px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${color};border-radius:5px"></div>
+      </div>
+      <span style="font-size:.72rem;font-weight:600;color:${color};min-width:30px">${avg}</span>
+      <span style="font-size:.6rem;color:var(--mu)">/5</span>
+    </div>`;
+  }).join('');
+  return `<div class="card"><div class="card-title">📊 컨디션 평균 (30일)</div>${rows}
+    <div style="font-size:.6rem;color:var(--mu2);margin-top:6px;text-align:center">${withDc.length}일 기록 기준</div></div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════

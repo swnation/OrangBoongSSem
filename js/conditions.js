@@ -149,6 +149,7 @@ function renderMedsViewLegacy() {
         <span class="dx-name">${esc(c.name)}</span>
         <span class="badge" style="background:${typeColors[dt]}15;color:${typeColors[dt]};font-size:.58rem;padding:1px 6px">${typeLabels[dt]||'만성'}</span>
         <span class="dx-status ${statusClass[c.status]||'active'}">${statusLabels[c.status]||c.status}</span>
+        ${c.medsList?.length?`<button class="accum-del" onclick="openQuickMedChange('${esc(c._domainId)}',${c._idx})" title="약물 변경" style="color:#f59e0b">💊</button>`:''}
         ${c.drugChangeDate?`<button class="accum-del" onclick="compareDrugChange(${c._idx},'${esc(c._domainId)}')" title="변경 전후 비교" style="color:var(--ac)">📊</button>`:''}
         <button class="accum-del" onclick="editConditionUnified('${esc(c._domainId)}',${c._idx})" title="편집">✏️</button>
         <button class="accum-del" onclick="deleteConditionUnified('${esc(c._domainId)}',${c._idx})" title="삭제">🗑</button>
@@ -612,6 +613,74 @@ async function deleteConditionUnified(domainId,idx) {
   if(ds.masterFileId){try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){}}
   renderView('meds');
   showToast('🗑 삭제됨');
+}
+
+// Quick medication change modal — 전체 폼 없이 약물만 빠르게 변경
+let _qmcDomain='',_qmcIdx=-1;
+function _qmcAddMed() {
+  const i=document.getElementById('qmc-new-med');
+  let v=(i?.value||'').trim();if(!v)return;
+  if(document.getElementById('qmc-prn')?.checked&&!v.includes('(PRN)'))v+=' (PRN)';
+  const s=document.createElement('span');s.className='file-chip';
+  if(v.includes('(PRN)'))s.style.cssText='border:1.5px dashed #f59e0b;background:#fff7ed';
+  s.innerHTML=esc(v)+' <span class="file-remove" onclick="this.parentElement.remove()">✕</span>';
+  document.getElementById('qmc-chips').appendChild(s);
+  i.value='';const prn=document.getElementById('qmc-prn');if(prn)prn.checked=false;
+}
+function openQuickMedChange(domainId, idx) {
+  const ds=S.domainState[domainId];
+  const c=ds?.master?.conditions?.[idx];
+  if(!c) return;
+  _qmcDomain=domainId;_qmcIdx=idx;
+  const oldMeds=c.medsList||[];
+  document.getElementById('confirm-title').textContent='💊 '+c.name+' — 약물 변경';
+  document.getElementById('confirm-body').innerHTML=`
+    <div style="font-size:.72rem;color:var(--mu);margin-bottom:6px">현재 약물 (✕로 제거):</div>
+    <div id="qmc-chips" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
+      ${oldMeds.map(m=>`<span class="file-chip" style="${m.includes('(PRN)')?'border:1.5px dashed #f59e0b;background:#fff7ed':''}">${esc(m)} <span class="file-remove" onclick="this.parentElement.remove()">✕</span></span>`).join('')}
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <input class="dx-form-input" id="qmc-new-med" placeholder="새 약물 추가..." style="flex:1">
+      <label style="display:flex;align-items:center;gap:3px;font-size:.65rem;color:var(--mu);cursor:pointer"><input type="checkbox" id="qmc-prn"> PRN</label>
+      <button class="btn-accum-add" onclick="_qmcAddMed()" style="padding:6px 12px">+</button>
+    </div>
+    <div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">변경 사유:</div>
+    <input class="dx-form-input" id="qmc-reason" placeholder="예: 부작용으로 교체, 용량 증량">`;
+  document.getElementById('confirm-foot').innerHTML=
+    '<button class="btn-cancel" onclick="closeConfirmModal()" style="font-size:.78rem">취소</button>'+
+    '<button class="btn-accum-add" onclick="saveQuickMedChange()">💾 변경 저장</button>';
+  openModal('confirm-modal');
+  setTimeout(()=>setupAutocomplete('qmc-new-med',_AC_MEDS,true),50);
+}
+
+async function saveQuickMedChange() {
+  const ds=S.domainState[_qmcDomain];
+  const c=ds?.master?.conditions?.[_qmcIdx];
+  if(!c) return;
+  const oldMeds=c.medsList||[];
+  const newMeds=[];
+  document.querySelectorAll('#qmc-chips .file-chip').forEach(el=>{
+    const text=el.childNodes[0]?.textContent?.trim();
+    if(text) newMeds.push(text);
+  });
+  const reason=(document.getElementById('qmc-reason')?.value||'').trim();
+  const added=newMeds.filter(m=>!oldMeds.includes(m));
+  const removed=oldMeds.filter(m=>!newMeds.includes(m));
+  if(!added.length&&!removed.length){showToast('변경사항이 없습니다.');return;}
+  // Update medsList
+  c.medsList=[...newMeds];
+  c.medications=newMeds.join(', ');
+  // Append to medHistory
+  if(!c.medHistory) c.medHistory=[];
+  const histType=oldMeds.length===0?'start':newMeds.length===0?'stop':'change';
+  c.medHistory.push({date:kstToday(),type:histType,added,removed,meds:[...newMeds],reason});
+  c.medHistory.sort((a,b)=>a.date.localeCompare(b.date));
+  c.drugChangeDate=kstToday();
+  // Save
+  if(ds.masterFileId){try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){}}
+  closeConfirmModal();
+  renderView('meds');
+  showToast(`✅ 약물 변경 저장 — +${added.length} -${removed.length}`);
 }
 
 // Build conditions context for AI prompts

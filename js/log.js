@@ -1525,6 +1525,18 @@ function getCrossDomainContext() {
       });
     }
 
+    // Include recent medCheck compliance from sibling domains
+    const sibLogs = ds.logData || [];
+    const recentMc = sibLogs.filter(l=>l.medCheck&&Object.keys(l.medCheck).length).slice(-7);
+    if (recentMc.length) {
+      const mcStats={};
+      recentMc.forEach(l=>Object.entries(l.medCheck).forEach(([k,v])=>{
+        if(!mcStats[k])mcStats[k]={t:0,y:0};mcStats[k].t++;if(v)mcStats[k].y++;
+      }));
+      const mcLine=Object.entries(mcStats).map(([k,v])=>`${k}:${Math.round(v.y/v.t*100)}%`).join(', ');
+      lines.push(`  복용순응(최근${recentMc.length}건): ${mcLine}`);
+    }
+
     // Include brief SSOT excerpt (first 3 lines of context)
     const ctx = ds.master.patient_context || '';
     const firstLines = ctx.split('\n').filter(l=>l.trim().startsWith('-')).slice(0,3);
@@ -1561,7 +1573,9 @@ function getRecentLogSummary() {
       const syms=(l.symptoms||[]).join(',');
       const meds=(l.meds||[]).length?'💊'+(l.meds||[]).join('+'):'';
       const tx=(l.treatments||[]).length?'🩺'+(l.treatments||[]).join('+'):'';
-      return `${l.datetime.slice(5,16)} ${mood} ${syms} ${meds} ${tx}`.trim();
+      const dc=l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>k+':'+v).join(','):'';
+      const mc=l.medCheck?Object.entries(l.medCheck).map(([k,v])=>(v?'✓':'✗')+k).join(','):'';
+      return `${l.datetime.slice(5,16)} ${mood} ${syms} ${meds} ${tx}${dc?' [컨디션:'+dc+']':''}${mc?' [복용:'+mc+']':''}`.trim();
     }).join('\n');
     return `[최근 7일 기분/증상 기록]\n${lines}`;
   }
@@ -1655,9 +1669,11 @@ function exportLogCSV() {
       csv+=`${l.datetime.slice(0,10)},"${l.who||''}","${(l.categories||[]).join(';')}","${(l.memo||'').replace(/"/g,'""')}"\n`;
     });
   } else if(lc.moodMode) {
-    csv='날짜,시간,기분,증상,투약,치료,메모\n';
+    csv='날짜,시간,기분,증상,투약,치료,컨디션체크,복용체크,메모\n';
     ds.logData.forEach(l=>{
-      csv+=`${l.datetime.slice(0,10)},${l.datetime.slice(11,16)},"${l.mood||''}","${(l.symptoms||[]).join(';')}","${(l.meds||[]).join(';')}","${(l.treatments||[]).join(';')}","${(l.memo||'').replace(/"/g,'""')}"\n`;
+      const dc=l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>k+':'+v).join(';'):'';
+      const mc=l.medCheck?Object.entries(l.medCheck).map(([k,v])=>k+':'+(v?'O':'X')).join(';'):'';
+      csv+=`${l.datetime.slice(0,10)},${l.datetime.slice(11,16)},"${l.mood||''}","${(l.symptoms||[]).join(';')}","${(l.meds||[]).join(';')}","${(l.treatments||[]).join(';')}","${dc}","${mc}","${(l.memo||'').replace(/"/g,'""')}"\n`;
     });
   } else {
     csv='날짜,시간,NRS,부위,트리거,증상,투약,치료,효과,메모\n';
