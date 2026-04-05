@@ -126,7 +126,10 @@ const labels={better:'😊 호전',same:'😐 비슷',worse:'😣 악화',unknow
 function getLogs(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'[]');}catch{return [];}}
 function saveLogs(logs){localStorage.setItem(LS_KEY,JSON.stringify(logs));}
 
-function parseHash(){
+function parseParams(){
+  // ?r=better&id=123 (새 방식) 또는 #rate-better-123 (기존 호환)
+  const p=new URLSearchParams(location.search);
+  if(p.get('r')) return {rating:p.get('r'),id:p.get('id')};
   const h=location.hash;
   const m=h.match(/^#rate-(better|same|worse|unknown)-(\d+)$/);
   if(m) return {rating:m[1],id:m[2]};
@@ -257,7 +260,7 @@ async function confirmRate(){
 }
 
 async function saveRating(rating){
-  const {id}=parseHash();
+  const {id}=parseParams();
   const logs=getLogs();
   let idx=-1;
   if(id) idx=logs.findIndex(l=>String(l.id)===String(id));
@@ -312,7 +315,7 @@ async function syncToCloud(entry){
 }
 
 // 초기화
-const {rating,id}=parseHash();
+const {rating,id}=parseParams();
 const entry=findEntry(id);
 
 if(entry){

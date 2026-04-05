@@ -908,7 +908,7 @@ async function sendOutcomeNtfy(entryId){
   const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   const rateUrl=baseUrl+'rate.html';
   const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
-  const actions='view,😊 호전,'+rateUrl+'#rate-better-'+entryId+';view,😐 비슷,'+rateUrl+'#rate-same-'+entryId+';view,😣 악화,'+rateUrl+'#rate-worse-'+entryId+'';
+  const actions='view,😊 호전,'+rateUrl+'?r=better&id='+entryId+';view,😐 비슷,'+rateUrl+'?r=same&id='+entryId+';view,😣 악화,'+rateUrl+'?r=worse&id='+entryId;
   const ntfyUrl='https://ntfy.sh/'+encodeURIComponent(orangiTopic)+'?title='+encodeURIComponent('🤕 두통 경과 확인')+'&actions='+encodeURIComponent(actions);
   try{await fetch(ntfyUrl,{method:'POST',body:info+' → 지금 어때요?'});}catch(e){console.warn('ntfy outcome failed:',e);}
 }
@@ -1044,7 +1044,7 @@ async function testFollowupNtfy() {
   if(!topic){showToast('⚠️ 오랑이 경과 알림 토픽이 설정되지 않았습니다');return;}
   var baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   var rateUrl=baseUrl+'rate.html';
-  var actions='view,😊 호전,'+rateUrl+'#rate-better-0;view,😐 비슷,'+rateUrl+'#rate-same-0;view,😣 악화,'+rateUrl+'#rate-worse-0';
+  var actions='view,😊 호전,'+rateUrl+'?r=better&id=0;view,😐 비슷,'+rateUrl+'?r=same&id=0;view,😣 악화,'+rateUrl+'?r=worse&id=0';
   var ntfyUrl='https://ntfy.sh/'+encodeURIComponent(topic)+'?title='+encodeURIComponent('🔔 경과 알림 테스트')+'&actions='+encodeURIComponent(actions);
   try{
     var r=await fetch(ntfyUrl,{method:'POST',body:'이 알림이 보이면 정상 작동합니다!'});
@@ -1276,9 +1276,20 @@ async function fetchCloudStatus() {
     // 클라우드에서 커스텀 항목 복원
     if(data.customs) { setAllCustoms(data.customs); }
 
-    // 로컬에만 있는 미전송 항목 보존
-    const cloudIds = new Set(cloudEntries.map(e => String(e.id)));
+    // 클라우드 데이터를 기반으로 로컬 머지 (outcome 등 업데이트 포함)
+    const cloudIds = new Map(cloudEntries.map(e => [String(e.id), e]));
+    const localIds = new Set(local.map(l => String(l.id)));
     const localOnly = local.filter(l => !cloudIds.has(String(l.id)) && !l.synced);
+
+    // 클라우드 항목의 outcome을 로컬에 반영
+    let outcomeUpdated = false;
+    for (let i = 0; i < local.length; i++) {
+      const ce = cloudIds.get(String(local[i].id));
+      if (ce && ce.outcome && !local[i].outcome) {
+        local[i].outcome = ce.outcome;
+        outcomeUpdated = true;
+      }
+    }
 
     // 클라우드 데이터 + 로컬 미전송 = 최종 목록
     const merged = [...cloudEntries, ...localOnly];
@@ -1286,7 +1297,7 @@ async function fetchCloudStatus() {
 
     const oldJSON = JSON.stringify(local.map(l=>l.id).sort());
     const newJSON = JSON.stringify(merged.map(l=>l.id).sort());
-    if (oldJSON !== newJSON || local.length !== merged.length) {
+    if (oldJSON !== newJSON || local.length !== merged.length || outcomeUpdated) {
       saveQuickLogs(merged);
       renderRecentQuickLogs();
       updatePendingCount();
