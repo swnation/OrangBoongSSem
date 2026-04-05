@@ -9919,7 +9919,7 @@ function _buildRegionSVG(regions, sideLabels, prefix, toggleFn) {
       shape = `<rect id="${prefix}${r.id}" x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="${r.rx}" fill="rgba(${c.rgb},${r.op})" stroke="${c.hex}" stroke-width="${sw}"${dash} style="cursor:pointer" onclick="${toggleFn}('${r.side}','${r.site}')"/>`;
     }
     const labels = r.labels.map(l =>
-      `<text x="${l.x}" y="${l.y}" text-anchor="middle" font-size="${l.fs}" font-weight="${l.fw}" fill="${c.hex}" stroke="#fff" stroke-width="3" paint-order="stroke" style="pointer-events:none">${l.t}</text>`
+      `<text x="${l.x}" y="${l.y}" text-anchor="middle" font-size="${l.fs}" font-weight="${l.fw}" fill="${c.hex}" stroke="rgba(0,0,0,.25)" stroke-width="3" paint-order="stroke" style="pointer-events:none">${l.t}</text>`
     ).join('\n          ');
     return `          ${shape}\n          ${labels}`;
   });
