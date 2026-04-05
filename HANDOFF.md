@@ -1,63 +1,71 @@
-# HANDOFF — v9.3 세션 이어받기 가이드
+# HANDOFF — v9.4 세션 이어받기 가이드
 
-## 현재 상태: v9.3 (기본 모드 + 약물 3중 검증 + 대규모 UX 개선)
+## 현재 상태: v9.4 (ntfy 액션버튼 + 경과동기화 + 머리다이어그램 개선)
 
-### 이번 세션 완료 작업 (PR #84~#121)
+### 이번 세션 완료 작업 (PR #123~#136)
 
-#### 기본 모드 (Basic Consult)
-- [x] 경량 모드를 기본 모드로 대체, 기본값으로 설정
-- [x] GPT(데이터분석) || Perplexity(근거검색) 병렬 → Claude(최종판단) 순차
-- [x] 모드: 🌱 기본 협진 / ⚡ 심층 협진 / ⚔️ 디베이트 / 🤖 Grok / 💬 빠른질문
+#### ntfy 경과 알림 개선
+- [x] 경과 알림 URL 3개 나열 → 쿼리 파라미터 액션 버튼 1회 전송
+- [x] Cloudflare Worker 시도 → 429 rate limit으로 제거
+- [x] ntfy 쿼리 파라미터(?title=&actions=)로 버튼 직접 전송 (Worker 불필요)
+- [x] URL #hash → ?query 방식으로 변경 (encodeURIComponent 안정성)
+- [x] rate.html parseParams()가 ?query(신) + #hash(구) 모두 지원
 
-#### 약물 안전성 3계층 교차검증
-- [x] 내장 DB 80개 약물 (FDA/PLLR/식약처 3소스)
-- [x] 식약처 DUR API + Perplexity fallback + localStorage 캐싱
+#### 경과(Outcome) 동기화
+- [x] rate.html → quick앱: visibilitychange에서 현재 탭 리렌더
+- [x] quick앱 fetchCloudStatus: 클라우드 outcome을 로컬에 반영
+- [x] 메인앱 pollCloudQuickLogs: outcome 변경 감지 + 반영
+- [x] WebView(ntfy 내장 브라우저) localStorage 격리 문제 해결
 
-#### 투약 변경 이력 (medHistory)
-- [x] 약물 변경 자동 감지, 카드형 타임라인, 수동 이력 추가
+#### rate.html 기능 추가
+- [x] 🤷 기억 안 나요 버튼 추가 (4번째 선택지)
+- [x] hash regex + 타임라인에 unknown 지원
 
-#### 비용 추적
-- [x] 전체 모델 26개 가격표 완성, Grok 비용 0원 수정
-- [x] 도메인별/일별 AI별 상세, 모바일 가독성
+#### 머리 다이어그램 대폭 개선
+- [x] 정면/후면 가로 배치(각 44vw) → 탭 전환(80vw) — 이미지 2배 확대
+- [x] 기본 정면 표시, 후두부 칩 선택 시 자동 후면 전환
+- [x] SVG 좌표 얼굴 위치에 맞게 전면 재조정
+- [x] 관자놀이: ellipse → rect, 얼굴 옆면 밀착
+- [x] 눈썹: 점선 테두리로 이마와 시각적 구분
+- [x] 배경 투명도 0.10→0.15 (영역 가시성 개선)
 
-#### 디베이트 심판
-- [x] Phase1(4AI 병렬) → Phase2(Claude 심판 순차)
+#### 붕룩이 리팩토링 (Gemini 리뷰 반영)
+- [x] BRK_SUPPL_ORANGI/BUNG 전역 상수 추출
+- [x] _getBrkWhoData() 헬퍼 (selDate 포함 반환)
+- [x] brk 함수 보일러플레이트 제거 (8개 함수)
+- [x] brkToggleAlcohol 붕쌤 전용 주석 명확화
 
-#### ntfy 경과 알림 시스템
-- [x] quick/rate.html 경과 전용 페이지 (3버튼 + 2단계 확인)
-- [x] 클라이언트 타이머 (중복 방지), 기본/커스텀 알림 시간
-- [x] ntfy 토픽 클라우드 동기화 (quickLogs config 항목)
+#### Gemini PR 리뷰 반영 (6회분)
+- [x] PR#123: 영양제키 상수화 + brk 헬퍼 추출
+- [x] PR#124: fBody 빈문자열 처리 + 테스트 알림 줄바꿈
+- [x] PR#125: selDate 반환 + syncNtfy 조건 + console.warn
+- [x] PR#128: actions 중복 지적 (헬퍼 추출은 보류)
+- [x] PR#129: visibilitychange 탭 감지 간결화
+- [x] PR#134: SVG 중복 지적 (별도 앱이라 의도적 유지)
 
-#### quick.html 개선
-- [x] 추정 트리거 16개, 날씨 자동 수집, painType 표시
-- [x] 커스텀 칩 클라우드 동기화 + 기록 기반 복구
+#### 버전업
+- [x] APP_VERSION v9.4 추가
+- [x] backup/v9.4 브랜치 생성
+- [x] CLAUDE.md 백업 브랜치 목록 갱신
 
-#### 날씨 + 트리거 상관분석
-- [x] AI 컨텍스트에 [날씨-두통 데이터] + [트리거 상관분석] 포함
-- [x] 저기압(<1010hPa) 자동 트리거 분석
-
-#### 기타
-- [x] Grok 4 + 4.1 Fast 모델 추가
-- [x] 세션 진행 중 "🔄 새 질문" 버튼, 알림 on/off 토글
-- [x] 생리주기 사진/파일 업로드 (카메라+갤러리+파일)
-- [x] 코드 감사 완료 (SW xAI 제외, light→basic, PRECACHE 보강)
-
-### 주요 아키텍처
-- **세션 모드**: 기본(3AI) / 심층(5AI) / 디베이트 / Grok Multi-Agent / 빠른질문
-- **경과**: rate.html + 클라이언트 타이머 + outcomeNotifyAt 기록 저장
-- **날씨/트리거**: getRecentLogSummary → getTriggerCorrelation → AI 자동 수신
-- **약물 안전**: 내장DB(80) → 식약처DUR → Perplexity → localStorage 캐싱
-- **커스텀 칩**: localStorage + 클라우드 + 기록 기반 복구 (3중 백업)
+### 주요 아키텍처 변경점
+- **ntfy 액션 버튼**: 쿼리 파라미터 방식 (`?title=&actions=view,라벨,URL;...`)
+- **rate.html URL**: `?r=better&id=123` (기존 `#rate-better-123`도 하위 호환)
+- **outcome 동기화**: rate.html → cloud → quick앱/메인앱 (3중 경로)
+- **머리 다이어그램**: `_headView` / `_mainHeadView` 상태 변수로 탭 전환
+- **관자놀이 SVG**: ellipse → rect (syncHeadDiagram에서 fill 설정 동일하게 동작)
 
 ### 백업 브랜치
-- `backup/v9.3` ← 현재
+- `backup/v9.4` ← 현재
 - `backup/v9.2` / `backup/v9.1` / `backup/v9.0` / `backup/v8.4`
+- ⚠️ `backup/v8.4` 삭제 필요 (5개 유지 규칙)
 
-### 다음 세션 작업
-- **붕룩이 기록 포맷 개선** (핵심):
-  질환관리 폼 → 카테고리별 전용 빠른 입력 (💊영양제/🏃운동/🔬검사/🏥치료)
-  + 생리주기 캘린더에 모든 기록 아이콘 통합 표시
-- startRandomDebate() 랜덤 팀 디베이트
+### 미완료/다음 세션 작업
+- [ ] ntfy 액션 버튼 실제 테스트 확인 (쿼리 파라미터 방식 버튼 표시 여부)
+- [ ] PR#136 Gemini 리뷰 확인 및 반영
+- [ ] Cloudflare Worker 삭제 (raspy-voice-8a1b, 더 이상 미사용)
+- [ ] backup/v8.4 브랜치 삭제 (GitHub에서 수동 또는 API)
+- [ ] 머리 다이어그램 좌표 추가 미세 조정 가능 (사용자 피드백 따라)
 
 ### PR 워크플로우
 1. PR 생성 → Gemini 리뷰 확인 → 반영 → 머지
