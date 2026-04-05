@@ -135,11 +135,11 @@ saveMaster = async function() { await _origSaveMasterFn(); cacheToLocal(...); };
 ## 백업 브랜치
 **규칙: 최근 5개 버전은 항상 백업 브랜치를 유지한다. 새 버전 백업 시 가장 오래된 것을 삭제.**
 ```
+backup/v9.4  ← ntfy액션버튼 · 경과URL안정화 · 클라우드outcome동기화 · Gemini리뷰반영
 backup/v9.2  ← 처치효과회고 · 트리거칩 · 날씨자동수집 · 통계차트강화 · 경량모드
 backup/v9.1  ← Gemini 리뷰 반영 · 누적지식 점수 · 디베이트 비용최적화
 backup/v9.0  ← 20개 신기능 · 약물상호작용 · 푸시알림 · 인터랙티브 머리그림
 backup/v8.4  ← 디베이트/빠른질문/인사이트/세션이어하기
-backup/v8.3  ← KST/한영매핑/PDF/캘린더/시술추적
 ```
 
 ### 버전업 시 백업 자동화 절차 (필수)

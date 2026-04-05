@@ -181,11 +181,11 @@
 // VERSION — 새 버전 추가 시 여기 맨 위에 한 줄 추가, 6번째부터는 자동 제거
 // ═══════════════════════════════════════════════════════════════
 const APP_VERSION = [
+  {v:'v9.4', date:'2026-04-05', note:'ntfy액션버튼 · 경과URL안정화 · 기억안남버튼 · 클라우드outcome동기화 · Gemini리뷰6회반영 · 붕룩이헬퍼리팩토링'},
   {v:'v9.3', date:'2026-04-03', note:'기본모드(GPT+Perp→Claude) · 약물안전3중검증(FDA/PLLR/식약처) · 투약변경이력 · 도메인별비용 · Gemini리뷰반영'},
   {v:'v9.2', date:'2026-04-02', note:'처치효과회고 · 트리거칩 · 날씨자동수집 · 통계차트강화 · 경량모드 · ntfy경과알림 · 붕룩이대시보드'},
   {v:'v9.0', date:'2026-03-29', note:'20개 신기능 · 약물상호작용 · Undo/Redo · AI평가 · AI선택 · 타임라인 · 암호화 · 충돌해결 · PWA설치 · 오프라인편집 · 통계강화 · 주간요약 · 템플릿추천 · 세션공유 · 키갱신알림 · 첨부UX · 버그수정'},
   {v:'v8.5', date:'2026-03-29', note:'두통 빠른 기록 (quick.html) · 인증 없는 독립 기록 · 메인 앱 연동/검토/반영'},
-  {v:'v8.4', date:'2026-03-29', note:'디베이트 · 빠른질문 · 조기요약 · 기록필터 · 인사이트 · 붕룩이타임라인'},
 ].slice(0,5);
 
 // Auto-render changelog + update sidebar version
@@ -3383,11 +3383,12 @@ async function markSyncedOnCloud(ids) {
 function mergeQuickLogs(local, cloud) {
   if (!cloud) return local;
   // 클라우드가 진실: 클라우드 기반으로 병합
-  const cloudIds = new Set(cloud.map(c=>String(c.id)));
+  const cloudMap = new Map(cloud.map(c=>[String(c.id), c]));
   const merged = [...cloud];
   // 로컬에만 있는 미전송 항목만 추가
   local.forEach(l => {
-    if (!cloudIds.has(String(l.id)) && !l.synced) merged.push(l);
+    const ce = cloudMap.get(String(l.id));
+    if (!ce && !l.synced) merged.push(l);
   });
   return merged.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
 }
@@ -3455,7 +3456,12 @@ async function pollCloudQuickLogs() {
   const merged = mergeQuickLogs(local, cloud);
   const localIds = new Set(local.map(l=>String(l.id)));
   const newFromCloud = merged.filter(l=>!localIds.has(String(l.id)));
-  if (merged.length !== local.length || newFromCloud.length > 0) {
+  // outcome 변경 감지 (rate.html에서 경과 기록 시)
+  const outcomeChanged = cloud.some(ce => {
+    const le = local.find(l=>String(l.id)===String(ce.id));
+    return le && ce.outcome && (!le.outcome || le.outcome.rating !== ce.outcome.rating);
+  });
+  if (merged.length !== local.length || newFromCloud.length > 0 || outcomeChanged) {
     _quickLogCache = null; // 캐시 초기화
     localStorage.setItem('om_quick_logs', JSON.stringify(merged));
     updateQuickLogBadge();
