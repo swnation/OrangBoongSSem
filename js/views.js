@@ -1096,7 +1096,7 @@ function renderUsageView() {
     Object.entries(ds.master.usage_data).forEach(([date,aiMap])=>{
       let dayCost=0;
       Object.entries(aiMap).forEach(([aiId,data])=>{
-        const cost=data.cost||calcCost(data.model||aiId,data.in||0,data.out||0);
+        const cost=recalcCost(data);
         dayCost+=cost;
         if(!allUsageByDate[date]) allUsageByDate[date]={cost:0,byAI:{}};
         allUsageByDate[date].cost+=cost;
@@ -1198,7 +1198,7 @@ function renderUsageView() {
       if(!date.startsWith(monthStr)) return;
       Object.entries(aiMap).forEach(([aiId,data])=>{
         if(!allByAI[aiId]) allByAI[aiId]={cost:0,inT:0,outT:0};
-        const cost=data.cost||calcCost(data.model||aiId,data.in||0,data.out||0);
+        const cost=recalcCost(data);
         allByAI[aiId].cost+=cost;
         allByAI[aiId].inT+=(data.in||0);
         allByAI[aiId].outT+=(data.out||0);

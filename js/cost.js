@@ -3,8 +3,8 @@
 // ═══════════════════════════════════════════════════════════════
 // COST TRACKING
 // ═══════════════════════════════════════════════════════════════
-function getPriceTable() { return DM()?.price_table || DEFAULT_PRICE_TABLE; }
-function calcCost(model,inT,outT) { const p=(getPriceTable())[model]||{in:0,out:0}; return (inT/1e6)*p.in+(outT/1e6)*p.out; }
+function getPriceTable() { return {...DEFAULT_PRICE_TABLE, ...(DM()?.price_table||{})}; }
+function calcCost(model,inT,outT) { const p=DEFAULT_PRICE_TABLE[model]||getPriceTable()[model]||{in:0,out:0}; return (inT/1e6)*p.in+(outT/1e6)*p.out; }
 function recordUsage(aiId,model,inT,outT) {
   const m=DM(); if(!m?.usage_data) return;
   const today=kstToday();
@@ -14,11 +14,17 @@ function recordUsage(aiId,model,inT,outT) {
   m.usage_data[today][aiId].cost+=calcCost(model,inT,outT); m.usage_data[today][aiId].model=model;
   try { localStorage.setItem('om_usage_'+S.currentDomain, JSON.stringify(m.usage_data)); } catch(e) {}
 }
+// 저장된 cost가 0이지만 토큰이 있으면 재계산
+function recalcCost(data) {
+  if(data.cost>0) return data.cost;
+  if((data.in||0)>0||(data.out||0)>0) return calcCost(data.model||'',data.in||0,data.out||0);
+  return 0;
+}
 function getSidebarCostToday() {
   const today=kstToday();
   const usage=DM()?.usage_data?.[today];
   if(!usage) return 0;
-  return Object.values(usage).reduce((s,v)=>s+(v.cost||0),0);
+  return Object.values(usage).reduce((s,v)=>s+recalcCost(v),0);
 }
 function updateSidebarCost() {
   const cost=getSidebarCostToday();
