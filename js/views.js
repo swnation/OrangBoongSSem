@@ -188,12 +188,23 @@ function renderMigraineForecast() {
   if(activeHigh.length>=2) { riskScore+=20; factors.push(`⚡ 고위험 트리거 활성: ${activeHigh.join(', ')}`); }
   else if(activeHigh.length===1) { riskScore+=10; factors.push(`⚡ 트리거 활성: ${activeHigh[0]}`); }
 
-  // 4) 날씨 (저기압) — 최신 기록의 날씨 데이터 참조
+  // 4) 날씨 (저기압) — 캐시 + 실시간 비동기 업데이트
   const withWeather=[...nrsLogs].reverse().find(l=>l.weather?.pressure);
-  if(withWeather?.weather) {
-    const p=withWeather.weather.pressure;
-    if(p<1005) { riskScore+=20; factors.push(`🌧 저기압 ${p}hPa (기압 민감)`); }
-    else if(p<1010) { riskScore+=10; factors.push(`☁️ 기압 ${p}hPa (약간 낮음)`); }
+  const cachedP=withWeather?.weather?.pressure;
+  if(cachedP) {
+    if(cachedP<1005) { riskScore+=20; factors.push(`🌧 저기압 ${cachedP}hPa (기압 민감)`); }
+    else if(cachedP<1010) { riskScore+=10; factors.push(`☁️ 기압 ${cachedP}hPa (약간 낮음)`); }
+  }
+  // 실시간 날씨 비동기 업데이트 (forecast 카드 렌더 후 갱신)
+  if(typeof fetchWeather==='function') {
+    setTimeout(async()=>{
+      try {
+        const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),3000))]);
+        if(!w?.pressure) return;
+        const el=document.getElementById('forecast-weather');
+        if(el) el.innerHTML=`🌡 현재 ${w.temp}° ${w.condition} ${w.pressure}hPa ${w.humidity}%`;
+      } catch(e){}
+    },100);
   }
 
   // 5) 생리주기 트리거 (getMenstrualTag 활용)
@@ -230,6 +241,7 @@ function renderMigraineForecast() {
     </div>
     ${gauge}
     ${factorHtml}
+    <div id="forecast-weather" style="font-size:.65rem;color:var(--mu2);margin-top:6px"></div>
   </div>`;
 }
 

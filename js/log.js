@@ -1068,7 +1068,7 @@ async function saveLogEntry() {
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   } else {
     ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-    try{await saveLogData();_markQuickSynced();sendLogNotification(entry);showToast('✅ 기록 저장됨');renderView('log');}
+    try{await saveLogData();_markQuickSynced();sendLogNotification(entry);showToast('✅ 기록 저장됨');_clearLogAutoSave();renderView('log');}
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   }
   if(btn)btn.disabled=false;if(sp)sp.style.display='none';
@@ -1389,7 +1389,7 @@ async function saveJournalLog() {
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   } else {
     ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-    try{await saveLogData();showToast('✅ 기록 저장됨');renderView('log');}
+    try{await saveLogData();showToast('✅ 기록 저장됨');_clearLogAutoSave();renderView('log');}
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   }
   if(btn)btn.disabled=false;if(sp)sp.style.display='none';
@@ -1667,3 +1667,34 @@ function deletePreset(idx) {
   showPresetList();
   showToast('🗑 프리셋 삭제');
 }
+
+// ═══════════════════════════════════════════════════════════════
+// LOG FORM AUTO-SAVE — 작성 중 실수로 닫아도 복원
+// ═══════════════════════════════════════════════════════════════
+const _AUTOSAVE_KEY='om_log_autosave';
+function _autoSaveLogForm() {
+  try {
+    const state=_saveLogFormState();
+    if(state) sessionStorage.setItem(_AUTOSAVE_KEY, JSON.stringify({domain:S.currentDomain,state,ts:Date.now()}));
+  } catch(e){}
+}
+function _tryRestoreLogForm() {
+  try {
+    const raw=sessionStorage.getItem(_AUTOSAVE_KEY);
+    if(!raw) return;
+    const {domain,state,ts}=JSON.parse(raw);
+    if(domain!==S.currentDomain) return;
+    if(Date.now()-ts>3600000) { sessionStorage.removeItem(_AUTOSAVE_KEY); return; } // 1시간 초과 폐기
+    if(!state.chips?.length&&!state.memo) return; // 빈 폼이면 무시
+    _restoreLogFormState(state);
+    showToast('📝 이전 작성 내용 복원됨');
+    sessionStorage.removeItem(_AUTOSAVE_KEY);
+  } catch(e){}
+}
+function _clearLogAutoSave() { sessionStorage.removeItem(_AUTOSAVE_KEY); }
+// 500ms 디바운스 자동저장
+let _autoSaveTimer;
+function _scheduleAutoSave() { clearTimeout(_autoSaveTimer); _autoSaveTimer=setTimeout(_autoSaveLogForm,500); }
+// 로그 폼 변경 감지 (이벤트 위임)
+document.addEventListener('click', e => { if(e.target.closest('.log-chip')) _scheduleAutoSave(); });
+document.addEventListener('input', e => { if(e.target.closest('#log-memo,#log-nrs,#log-time,#log-treatment')) _scheduleAutoSave(); });

@@ -1,6 +1,20 @@
 // js/pwa.js — PWA 설치 + 알림 + 오프라인 (Phase 5 모듈화)
 
 // ═══════════════════════════════════════════════════════════════
+// SW UPDATE NOTIFICATION — 새 버전 감지 시 리로드 안내
+// ═══════════════════════════════════════════════════════════════
+if('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if(e.data?.type==='SW_UPDATED') {
+      const bar=document.createElement('div');
+      bar.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#1e40af;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;z-index:9999;font-size:.82rem;font-family:inherit';
+      bar.innerHTML='🔄 새 버전이 있습니다 <button onclick="location.reload()" style="background:#fff;color:#1e40af;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:.78rem">새로고침</button>';
+      document.body.appendChild(bar);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
 // BEFOREUNLOAD WARNING (Bug fix: unsaved session warning)
 // ═══════════════════════════════════════════════════════════════
 window.addEventListener('beforeunload', e => {

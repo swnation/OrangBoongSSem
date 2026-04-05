@@ -739,6 +739,10 @@ function renderForm(entry) {
         <option value="180">3시간 후</option>
       </select>
     </div>
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <button onclick="saveQuickPreset()" style="flex:1;background:none;border:1.5px solid var(--bd);border-radius:8px;padding:8px;font-size:.72rem;cursor:pointer;color:var(--mu);font-family:var(--font)">⭐ 프리셋 저장</button>
+      <button onclick="showQuickPresetList()" style="flex:1;background:none;border:1.5px solid var(--bd);border-radius:8px;padding:8px;font-size:.72rem;cursor:pointer;color:var(--mu);font-family:var(--font)">📋 불러오기</button>
+    </div>
     <button class="btn-save" id="q-save-btn" onclick="this.disabled=true;this.textContent='저장 중...';saveEntry().finally(()=>{const b=document.getElementById('q-save-btn');if(b){b.disabled=false;b.textContent='💾 기록 저장';}})">${isEdit ? '✏️ 수정 완료' : '💾 기록 저장'}</button>
     <div id="recent-quick-logs"></div>
   `;
@@ -1370,6 +1374,46 @@ document.addEventListener('visibilitychange', () => {
 // Register service worker
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ── Quick 프리셋 ──
+function _qPresetKey() { return 'om_presets_orangi-migraine'; } // quick은 편두통 전용
+function _loadQPresets() { try{return JSON.parse(localStorage.getItem(_qPresetKey())||'[]');}catch(e){return [];} }
+function _saveQPresets(list) { localStorage.setItem(_qPresetKey(),JSON.stringify(list)); }
+
+function saveQuickPreset() {
+  var chips=[];
+  document.querySelectorAll('.chip.sel').forEach(function(c){
+    chips.push({group:c.dataset.group||'',val:c.dataset.val||''});
+  });
+  if(!chips.length){alert('선택된 항목이 없어요');return;}
+  var label=chips.map(function(c){return c.val;}).join(' · ');
+  var name=prompt('프리셋 이름:',label);
+  if(!name||!name.trim()) return;
+  var presets=_loadQPresets();
+  presets.push({name:name.trim(),chips:chips});
+  _saveQPresets(presets);
+  alert('⭐ 프리셋 저장됨');
+}
+
+function showQuickPresetList() {
+  var presets=_loadQPresets();
+  if(!presets.length){alert('저장된 프리셋이 없어요');return;}
+  var msg=presets.map(function(p,i){return (i+1)+'. '+p.name+' ('+p.chips.length+'개)';}).join('\n');
+  var choice=prompt('번호를 입력하세요:\n'+msg);
+  if(!choice) return;
+  var idx=parseInt(choice)-1;
+  if(idx>=0&&idx<presets.length) applyQuickPreset(idx);
+}
+
+function applyQuickPreset(idx) {
+  var presets=_loadQPresets();
+  var p=presets[idx]; if(!p) return;
+  document.querySelectorAll('.chip.sel').forEach(function(c){c.classList.remove('sel');});
+  p.chips.forEach(function(chip){
+    var el=document.querySelector('.chip[data-group="'+chip.group+'"][data-val="'+chip.val+'"]');
+    if(el) el.click();
+  });
 }
 </script>
 </body>
