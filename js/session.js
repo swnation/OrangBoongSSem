@@ -62,6 +62,7 @@ async function runBasicMode() {
   document.getElementById('session-round-badge').textContent='R1';
   const stopAllBar=document.getElementById('stop-all-bar');if(stopAllBar)stopAllBar.style.display='flex';
   if(!S.session.rounds[0]) S.session.rounds[0]={round:1,answers:{},errors:{}};
+  _showProgress(0,3,'R1: GPT + Perplexity 분석 중...');
 
   // Hide non-basic AI cards
   Object.keys(AI_DEFS).forEach(id=>{
@@ -113,6 +114,7 @@ async function runBasicMode() {
   }));
 
   // ── R2: Claude 순차 (R1 결과를 context로) ──
+  _showProgress(1,3,'R2: Claude 종합 분석 중...');
   S.session.currentRound=2;
   if(!S.session.rounds[1]) S.session.rounds[1]={round:2,answers:{},errors:{}};
   document.getElementById('session-round-badge').textContent='R2';
@@ -151,6 +153,8 @@ async function runBasicMode() {
   delete S._abortControllers?.claude;
   updateStopBtn('claude',false); stopAITimer('claude');
 
+  _showProgress(3,3,'완료!');
+  setTimeout(_hideProgress,1500);
   S.generating=false;
   const stopAllBar2=document.getElementById('stop-all-bar');if(stopAllBar2)stopAllBar2.style.display='none';
   try{await saveMaster();
@@ -269,6 +273,9 @@ async function runRound(roundNum, errorsOnly) {
     });
   }
   const runBtn=document.getElementById('run-btn'); if(runBtn) runBtn.disabled=true;
+  const _totalAIs=enabledAIs.length;
+  let _doneAIs=0;
+  _showProgress(0,_totalAIs,`R${roundNum}: ${_totalAIs}개 AI 분석 중...`);
 
   // AI 1개 실행 헬퍼
   const _runOneAI=async(aiId)=>{
@@ -305,6 +312,8 @@ async function runRound(roundNum, errorsOnly) {
     }
     delete S._abortControllers?.[aiId];
     updateStopBtn(aiId,false); stopAITimer(aiId);
+    _doneAIs++;
+    _showProgress(_doneAIs,_totalAIs,`R${roundNum}: ${_doneAIs}/${_totalAIs} AI 완료`);
   };
 
   const mode=S.session?.mode||'normal';
@@ -322,6 +331,8 @@ async function runRound(roundNum, errorsOnly) {
     await Promise.all(enabledAIs.map(_runOneAI));
   }
 
+  _showProgress(_totalAIs,_totalAIs,'완료!');
+  setTimeout(_hideProgress,1500);
   S.generating=false; if(runBtn) runBtn.disabled=false;
   const stopAllBar2=document.getElementById('stop-all-bar');if(stopAllBar2)stopAllBar2.style.display='none';
   try {
@@ -390,6 +401,7 @@ function stopAI(aiId) {
 function stopAllAI() {
   if(!S._abortControllers) return;
   Object.keys(S._abortControllers).forEach(id=>stopAI(id));
+  _hideProgress();
   showToast('⏹ 전체 AI 중단됨');
 }
 
