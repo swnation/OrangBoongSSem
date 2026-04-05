@@ -1215,7 +1215,17 @@ function renderUsageView() {
     </div>`:'';
   }).filter(Boolean).join('');
 
+  // 가격 업데이트 알림
+  const priceAlerts=DM()?._priceAlerts||[];
+  const alertHtml=priceAlerts.length?`<div class="card" style="background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:1.5px solid #3b82f630">
+    <div style="font-size:.78rem;font-weight:600;margin-bottom:6px">📢 가격/모델 업데이트</div>
+    ${priceAlerts.map(a=>`<div style="font-size:.72rem;color:var(--mu);padding:2px 0">• ${a}</div>`).join('')}
+    <div style="font-size:.6rem;color:var(--mu2);margin-top:4px">마지막 확인: ${DM()?.price_updated?.slice(0,10)||'—'}</div>
+  </div>`:'';
+  const lastCheck=DM()?.price_updated?`<div style="font-size:.6rem;color:var(--mu2);text-align:right;margin-top:-8px;margin-bottom:8px">가격 마지막 확인: ${DM().price_updated.slice(0,10)}</div>`:'';
+
   return `
+  ${alertHtml}
   <div class="card">
     <div class="card-title">💰 비용 요약</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">

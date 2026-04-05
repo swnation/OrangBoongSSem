@@ -609,25 +609,45 @@ async function checkPriceUpdate() {
   const daysSince = m.price_updated ? (Date.now() - new Date(m.price_updated)) / 86400000 : 8;
   if (daysSince < 7) return;
   try {
-    const prompt = `현재 날짜 기준 최신 API 가격 (USD per 1M tokens):
-GPT-5.4, Claude Sonnet 4.6, Claude Opus 4.6, Gemini 2.5 Pro, Perplexity Sonar.
-JSON만: {"model":{"in":X,"out":X}}`;
+    const prompt = `Current date: ${kstToday()}. List ALL current API pricing (USD per 1M tokens, input and output) for these models. Also list any NEW models released in the last 30 days for each provider.
+
+Providers: OpenAI (GPT-5.x, o3, o4), Anthropic (Claude Sonnet/Opus/Haiku 4.x), Google (Gemini 2.5/3.x), xAI (Grok 3/4), Perplexity (Sonar).
+
+Reply in JSON ONLY:
+{"prices":{"model-name":{"in":X,"out":X},...}, "new_models":[{"name":"...","provider":"...","note":"..."}], "price_changes":[{"model":"...","old_in":X,"new_in":X,"old_out":X,"new_out":X}]}`;
     const r = await fetch('https://api.perplexity.ai/chat/completions', {
       method:'POST', headers:{'Content-Type':'application/json',Authorization:'Bearer '+S.keys.perp},
-      body:JSON.stringify({model:'sonar',max_tokens:300,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:'sonar',max_tokens:800,messages:[{role:'user',content:prompt}]})
     });
     const d = await r.json();
     const text = d.choices?.[0]?.message?.content || '';
     const match = text.match(/\{[\s\S]*\}/);
     if (match) {
-      const newP = JSON.parse(match[0]);
-      // Validate: prices should be between 0.01 and 100 (sanity check vs hallucination)
-      const valid = Object.values(newP).every(p => p.in >= 0.01 && p.in <= 100 && p.out >= 0.01 && p.out <= 100);
-      if (valid) {
-        m.price_table = {...DEFAULT_PRICE_TABLE, ...newP};
-        m.price_updated = kstNow().toISOString();
-        await saveMaster();
+      const parsed = JSON.parse(match[0]);
+      // 가격 업데이트
+      if (parsed.prices) {
+        const valid = Object.values(parsed.prices).every(p => p.in >= 0.01 && p.in <= 100 && p.out >= 0.01 && p.out <= 100);
+        if (valid) {
+          m.price_table = {...DEFAULT_PRICE_TABLE, ...parsed.prices};
+        }
       }
+      // 신규 모델/가격 변동 알림
+      const alerts = [];
+      if (parsed.new_models?.length) {
+        alerts.push('🆕 신규 모델: ' + parsed.new_models.map(m => `${m.name} (${m.provider})`).join(', '));
+      }
+      if (parsed.price_changes?.length) {
+        const cheaper = parsed.price_changes.filter(c => c.new_in < c.old_in || c.new_out < c.old_out);
+        if (cheaper.length) {
+          alerts.push('💰 가격 인하: ' + cheaper.map(c => c.model).join(', '));
+        }
+      }
+      if (alerts.length) {
+        showToast(alerts.join(' | '), 6000);
+        m._priceAlerts = alerts;
+      }
+      m.price_updated = kstNow().toISOString();
+      await saveMaster();
     }
   } catch(e) {}
 }
