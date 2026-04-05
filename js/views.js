@@ -197,7 +197,8 @@ function renderMigraineForecast() {
   }
   // 실시간 날씨 비동기 업데이트 (forecast 카드 렌더 후 갱신)
   if(typeof fetchWeather==='function') {
-    setTimeout(async()=>{
+    if(window._forecastWeatherTimer) clearTimeout(window._forecastWeatherTimer);
+    window._forecastWeatherTimer=setTimeout(async()=>{
       try {
         const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),3000))]);
         if(!w?.pressure) return;

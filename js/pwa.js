@@ -8,7 +8,7 @@ if('serviceWorker' in navigator) {
     if(e.data?.type==='SW_UPDATED') {
       const bar=document.createElement('div');
       bar.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#1e40af;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;z-index:9999;font-size:.82rem;font-family:inherit';
-      bar.innerHTML='🔄 새 버전이 있습니다 <button onclick="location.reload()" style="background:#fff;color:#1e40af;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:.78rem">새로고침</button>';
+      bar.innerHTML='🔄 새 버전이 있습니다 <button onclick="location.reload()" style="background:#fff;color:#1e40af;border:none;border-radius:6px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:.78rem">새로고침</button> <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:1rem;margin-left:8px">✕</button>';
       document.body.appendChild(bar);
     }
   });

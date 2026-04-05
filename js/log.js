@@ -1682,14 +1682,16 @@ function _tryRestoreLogForm() {
   try {
     const raw=sessionStorage.getItem(_AUTOSAVE_KEY);
     if(!raw) return;
-    const {domain,state,ts}=JSON.parse(raw);
+    const parsed=JSON.parse(raw);
+    if(!parsed||typeof parsed!=='object'||!parsed.state||!parsed.domain) { sessionStorage.removeItem(_AUTOSAVE_KEY); return; }
+    const {domain,state,ts}=parsed;
     if(domain!==S.currentDomain) return;
-    if(Date.now()-ts>3600000) { sessionStorage.removeItem(_AUTOSAVE_KEY); return; } // 1시간 초과 폐기
-    if(!state.chips?.length&&!state.memo) return; // 빈 폼이면 무시
+    if(Date.now()-ts>3600000) { sessionStorage.removeItem(_AUTOSAVE_KEY); return; }
+    if(!Array.isArray(state.chips)||(!state.chips.length&&!state.memo)) return;
     _restoreLogFormState(state);
     showToast('📝 이전 작성 내용 복원됨');
     sessionStorage.removeItem(_AUTOSAVE_KEY);
-  } catch(e){}
+  } catch(e){ sessionStorage.removeItem(_AUTOSAVE_KEY); }
 }
 function _clearLogAutoSave() { sessionStorage.removeItem(_AUTOSAVE_KEY); }
 // 500ms 디바운스 자동저장
