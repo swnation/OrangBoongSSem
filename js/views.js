@@ -1190,21 +1190,23 @@ function renderUsageView() {
     </div>`;
   }).join('');
 
-  // ── Current domain AI breakdown ──
-  const usage=DM()?.usage_data||{};
-  const curByAI={};
-  Object.entries(usage).forEach(([date,aiMap])=>{
-    if(!date.startsWith(monthStr)) return;
-    Object.entries(aiMap).forEach(([aiId,data])=>{
-      if(!curByAI[aiId]) curByAI[aiId]={cost:0,inT:0,outT:0};
-      const cost=data.cost||calcCost(data.model||aiId,data.in||0,data.out||0);
-      curByAI[aiId].cost+=cost;
-      curByAI[aiId].inT+=(data.in||0);
-      curByAI[aiId].outT+=(data.out||0);
+  // ── 전체 도메인 통합 AI별 이번 달 ──
+  const allByAI={};
+  Object.values(S.domainState).forEach(ds=>{
+    if(!ds.master?.usage_data) return;
+    Object.entries(ds.master.usage_data).forEach(([date,aiMap])=>{
+      if(!date.startsWith(monthStr)) return;
+      Object.entries(aiMap).forEach(([aiId,data])=>{
+        if(!allByAI[aiId]) allByAI[aiId]={cost:0,inT:0,outT:0};
+        const cost=data.cost||calcCost(data.model||aiId,data.in||0,data.out||0);
+        allByAI[aiId].cost+=cost;
+        allByAI[aiId].inT+=(data.in||0);
+        allByAI[aiId].outT+=(data.out||0);
+      });
     });
   });
   const aiRows=Object.entries(AI_DEFS).map(([id,def])=>{
-    const d=curByAI[id];
+    const d=allByAI[id];
     return d?`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bd)">
       <div style="width:8px;height:8px;border-radius:50%;background:${def.color}"></div>
       <span style="font-size:.78rem;min-width:70px">${def.name}</span>
@@ -1251,7 +1253,7 @@ function renderUsageView() {
   </div>`:''}
 
   <div class="card">
-    <div class="card-title">${DC().icon} ${DC().label} — AI별 이번 달</div>
+    <div class="card-title">🤖 AI별 이번 달 (전체 통합)</div>
     ${aiRows||'<div class="hint" style="padding:8px">이번 달 사용 내역 없음</div>'}
   </div>`;
 }

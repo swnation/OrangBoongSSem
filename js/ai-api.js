@@ -112,6 +112,8 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
         }catch(e){}
       }
     }
+    // 남은 버퍼 처리
+    if(buf.trim()){for(const line of buf.split('\n')){if(!line.startsWith('data: ')||line==='data: [DONE]')continue;try{const ev=JSON.parse(line.slice(6));if(ev.usage){inT=ev.usage.prompt_tokens||0;outT=ev.usage.completion_tokens||0;}}catch(e){}}}
     recordUsage(aiId,model,inT,outT);
     return text;
   }
@@ -161,6 +163,8 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
         }catch(e){}
       }
     }
+    // 남은 버퍼 처리
+    if(buf.trim()){for(const line of buf.split('\n')){if(!line.startsWith('data: ')||line==='data: [DONE]')continue;try{const ev=JSON.parse(line.slice(6));if(ev.usage){inT=ev.usage.prompt_tokens||0;outT=ev.usage.completion_tokens||0;}}catch(e){}}}
     recordUsage(aiId,model,inT,outT);
     return text;
   }
@@ -186,8 +190,19 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
         }catch(e){}
       }
     }
+    // 스트림 종료 후 남은 버퍼 처리 (usage가 마지막 청크에 올 수 있음)
+    if(buf.trim()){
+      for(const line of buf.split('\n')){
+        if(!line.startsWith('data: ')||line==='data: [DONE]')continue;
+        try{const ev=JSON.parse(line.slice(6));
+          if(ev.choices?.[0]?.delta?.content){text+=ev.choices[0].delta.content;onChunk(text);}
+          if(ev.usage){inT=ev.usage.prompt_tokens||0;outT=ev.usage.completion_tokens||0;}
+          if(ev.x_groq?.usage){inT=ev.x_groq.usage.prompt_tokens||inT;outT=ev.x_groq.usage.completion_tokens||outT;}
+        }catch(e){}
+      }
+    }
     // Fallback: usage가 0이면 텍스트 길이로 추정 (Grok 4 등 usage 미반환 시)
-    if(!inT&&!outT&&text.length>0){inT=Math.round((system.length+user.length)*1.2);outT=Math.round(text.length*1.2);}
+    if(!inT&&!outT&&text.length>0){inT=Math.round((system.length+user.length)/4);outT=Math.round(text.length/4);}
     recordUsage(aiId,model,inT,outT);
     return text;
   }
