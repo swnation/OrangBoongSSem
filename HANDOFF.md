@@ -56,21 +56,19 @@
 - **관자놀이 SVG**: ellipse → rect (syncHeadDiagram에서 fill 설정 동일하게 동작)
 
 ### 백업 브랜치
-- `backup/v9.4` ← 현재
-- `backup/v9.2` / `backup/v9.1` / `backup/v9.0` / `backup/v8.4`
-- ⚠️ `backup/v8.4` 삭제 필요 (5개 유지 규칙)
+- `backup/v9.4` / `backup/v9.3` / `backup/v9.2` / `backup/v9.1` / `backup/v9.0` (5개 유지)
 
-#### Gemini PR#136 리뷰 반영
+#### Gemini PR#136~#143 리뷰 반영
 - [x] SVG 하드코딩 좌표 → `_FRONT_REGIONS`/`_BACK_REGIONS`/`_SIDE_LABELS` 상수 추출
 - [x] `_buildRegionSVG()` 빌더 함수로 SVG 생성 로직 통합
 - [x] `_SIDE_COLORS` 상수로 좌/우/양측 색상 관리
-- [x] index.html + quick/index.html 양쪽 동일 적용
+- [x] quick/index.html `var`→`const` 4개 상수
+- [x] 다크모드 라벨 stroke 분기 (라이트: 검정 반투명, 다크: 흰색 반투명)
+- [x] sync 함수에서 `_SIDE_COLORS` 상수 사용 + 선택 부위 drop-shadow 발광 효과
 
 ### 미완료/다음 세션 작업
 - [ ] ntfy 액션 버튼 실제 테스트 확인 (쿼리 파라미터 방식 버튼 표시 여부)
-- [ ] Cloudflare Worker 삭제 (raspy-voice-8a1b, 더 이상 미사용)
-- [ ] backup/v8.4 브랜치 삭제 (GitHub에서 수동 또는 API)
-- [ ] 머리 다이어그램 좌표 추가 미세 조정 가능 (사용자 피드백 따라)
+- [ ] Cloudflare Worker 삭제 (raspy-voice-8a1b, 더 이상 미사용 — Cloudflare 대시보드에서 수동 삭제)
 
 ### PR 워크플로우
 1. PR 생성 → Gemini 리뷰 확인 → 반영 → 머지
