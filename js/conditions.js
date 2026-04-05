@@ -1317,7 +1317,7 @@ function compareDrugChange(condIdx, domainId) {
         <div style="padding:8px;background:var(--sf2);border-radius:6px"><div style="font-size:.65rem;color:var(--mu)">${label}</div><div style="font-size:1.1rem;font-weight:700">${a}</div></div>
       `).join('')}
     </div>`,
-    [{label:'닫기',action:'closeConfirmModal()',primary:true}]
+    [{label:'닫기',action:closeConfirmModal,primary:true}]
   );
 }
 

@@ -1325,7 +1325,7 @@ function openChipManager(type) {
     }).join('');
     showConfirmModal('✏️ 기분 항목 관리',
       `<div style="font-size:.78rem;color:var(--mu);margin-bottom:8px">항목을 숨기거나 복원할 수 있어요.</div>`+rows,
-      [{label:'닫기',action:'closeConfirmModal()',primary:true}]
+      [{label:'닫기',action:closeConfirmModal,primary:true}]
     );
     return;
   }
@@ -1355,7 +1355,7 @@ function openChipManager(type) {
     `<div style="font-size:.78rem;color:var(--mu);margin-bottom:8px">기본 항목은 숨기거나 복원할 수 있고, 추가 항목은 삭제할 수 있어요.</div>`
     + (defaultRows||'') + (customRows||'')
     + (!defaultList.length&&!customList.length?'<div style="color:var(--mu);font-size:.82rem;padding:8px 0">항목이 없습니다.</div>':''),
-    [{label:'닫기',action:'closeConfirmModal()',primary:true}]
+    [{label:'닫기',action:closeConfirmModal,primary:true}]
   );
 }
 
