@@ -441,12 +441,17 @@ function addOtherChip(inputId, containerId, group, cls) {
 }
 
 // ── Interactive Head Diagram ──
+var _headView = 'front';
 function getHeadSVG(prefix) {
+  var showFront = _headView === 'front';
   return `
-  <div style="display:flex;justify-content:center;gap:8px;align-items:flex-start;padding:6px 0">
-    <div style="text-align:center">
-      <div style="font-size:.6rem;color:#999;font-weight:600;letter-spacing:.08em;margin-bottom:2px">정면</div>
-      <div style="position:relative;display:inline-block;width:170px;max-width:44vw">
+  <div style="text-align:center;padding:6px 0">
+    <div style="display:flex;justify-content:center;gap:4px;margin-bottom:6px">
+      <button onclick="_headView='front';renderHeadDiagram();syncHeadDiagram()" style="padding:4px 14px;border-radius:6px;border:1.5px solid ${showFront?'var(--ac)':'var(--bd)'};background:${showFront?'var(--ac)':'none'};color:${showFront?'#fff':'var(--mu)'};font-size:.7rem;font-weight:600;cursor:pointer;font-family:inherit">정면</button>
+      <button onclick="_headView='back';renderHeadDiagram();syncHeadDiagram()" style="padding:4px 14px;border-radius:6px;border:1.5px solid ${!showFront?'var(--ac)':'var(--bd)'};background:${!showFront?'var(--ac)':'none'};color:${!showFront?'#fff':'var(--mu)'};font-size:.7rem;font-weight:600;cursor:pointer;font-family:inherit">후면</button>
+    </div>
+    <div style="position:relative;display:inline-block;width:280px;max-width:80vw">
+      ${showFront ? `
         <img src="../icons/head-front.png" alt="정면" style="width:100%;border-radius:10px;pointer-events:none">
         <svg viewBox="0 0 600 500" style="position:absolute;top:0;left:0;width:100%;height:100%">
           <ellipse id="${prefix}l-forehead" cx="185" cy="115" rx="80" ry="50" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2.5" style="cursor:pointer" onclick="toggleHeadSite('left','이마')"/>
@@ -468,11 +473,7 @@ function getHeadSVG(prefix) {
           <text x="150" y="490" text-anchor="middle" font-size="16" fill="#3b82f6" font-weight="600" opacity=".8">← 왼쪽</text>
           <text x="450" y="490" text-anchor="middle" font-size="16" fill="#ef4444" font-weight="600" opacity=".8">오른쪽 →</text>
         </svg>
-      </div>
-    </div>
-    <div style="text-align:center">
-      <div style="font-size:.6rem;color:#999;font-weight:600;letter-spacing:.08em;margin-bottom:2px">후면</div>
-      <div style="position:relative;display:inline-block;width:170px;max-width:44vw">
+      ` : `
         <img src="../icons/head-back.png" alt="후면" style="width:100%;border-radius:10px;pointer-events:none">
         <svg viewBox="0 0 600 500" style="position:absolute;top:0;left:0;width:100%;height:100%">
           <ellipse id="${prefix}l-occipital" cx="195" cy="330" rx="100" ry="95" fill="rgba(59,130,246,0.10)" stroke="#3b82f6" stroke-width="2.5" style="cursor:pointer" onclick="toggleHeadSite('left','후두부')"/>
@@ -482,7 +483,7 @@ function getHeadSVG(prefix) {
           <text x="195" y="490" text-anchor="middle" font-size="16" fill="#3b82f6" font-weight="600" opacity=".8">← 왼쪽</text>
           <text x="405" y="490" text-anchor="middle" font-size="16" fill="#ef4444" font-weight="600" opacity=".8">오른쪽 →</text>
         </svg>
-      </div>
+      `}
     </div>
   </div>`;
 }
@@ -506,7 +507,6 @@ function getHdMap(prefix) {
 
 function toggleHeadSite(side, site) {
   if(side==='both') {
-    // 미간: 양쪽 모두 토글
     ['left','right'].forEach(s=>{
       const chip=document.querySelector(`#site-${s}-chips .chip[data-val="${site}"]`);
       if(chip) { chip.click(); }
@@ -515,6 +515,8 @@ function toggleHeadSite(side, site) {
     const chip=document.querySelector(`#site-${side}-chips .chip[data-val="${site}"]`);
     if(chip) chip.click();
   }
+  // 후두부 칩 선택 시 자동으로 후면 전환
+  if(site==='후두부' && _headView==='front') { _headView='back'; renderHeadDiagram(); }
   syncHeadDiagram();
 }
 
