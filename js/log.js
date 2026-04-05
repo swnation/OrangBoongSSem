@@ -632,6 +632,15 @@ function renderLog() {
         </label></div>
     </div>
     ${moodHtml}
+    ${lc.dailyChecks?`
+    <div class="log-section-title">컨디션 체크</div>
+    ${lc.dailyChecks.map(item=>`
+      <div style="display:flex;align-items:center;gap:6px;padding:4px 0">
+        <span style="font-size:.75rem;min-width:50px;color:var(--mu)">${item}</span>
+        <div class="log-chips" style="flex:1;gap:3px" id="dc-${item}">
+          ${['1','2','3','4','5'].map(v=>`<div class="log-chip" data-group="dc-${item}" data-val="${v}" onclick="toggleChip(this,'sel-sym')" style="min-width:28px;text-align:center;font-size:.72rem;padding:4px 6px">${v}</div>`).join('')}
+        </div>
+      </div>`).join('')}`:''}
     ${sitesHtml}
     ${painTypesHtml}
     ${triggersHtml}
@@ -681,6 +690,7 @@ function renderRecentLogs() {
           ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
           ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
           ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
+          ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:#f0f9ff;color:#0369a1;font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
         </div>
         ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
       </div>
@@ -728,7 +738,7 @@ function filterLogs(logs) {
 const _logCollapsed={};
 
 function renderLogList() {
-  const ds=D(); if(!ds.logData?.length) return '<div class="hint">이번 달 기록 없음</div>';
+  const ds=D(); const lc=DC().logConfig; if(!ds.logData?.length) return '<div class="hint">이번 달 기록 없음</div>';
   const filtered=filterLogs(ds.logData);
   const hasFilter=_logFilter.med||_logFilter.sym||_logFilter.cat;
 
@@ -763,6 +773,7 @@ function renderLogList() {
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
+            ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:#f0f9ff;color:#0369a1;font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
             ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
@@ -779,7 +790,7 @@ function renderLogList() {
         <span style="font-size:.7rem;color:var(--mu)">${collapsed?'▸':'▾'}</span>
         <span style="font-size:.78rem;font-weight:700;color:var(--ink)">${esc(dateLabel)}</span>
         <span style="font-size:.65rem;color:var(--mu)">${logs.length}건</span>
-        ${avgNrs!==null?`<span style="font-size:.65rem;font-weight:600;color:${nc}">평균 ${avgNrs}</span>`:''}
+        ${avgNrs!==null&&!lc.moodMode?`<span style="font-size:.65rem;font-weight:600;color:${nc}">평균 ${avgNrs}</span>`:''}
       </div>
       ${collapsed?'':`<div style="padding:0 4px">${logsHtml}</div>`}
     </div>`;
@@ -798,7 +809,7 @@ function renderLogList() {
 }
 
 function renderLogListInner() {
-  const ds=D(); if(!ds.logData?.length) return '';
+  const ds=D(); const lc=DC().logConfig; if(!ds.logData?.length) return '';
   const filtered=filterLogs(ds.logData);
   const byDate={};
   [...filtered].reverse().forEach(l=>{
@@ -843,7 +854,7 @@ function renderLogListInner() {
         <span style="font-size:.7rem;color:var(--mu)">${collapsed?'▸':'▾'}</span>
         <span style="font-size:.78rem;font-weight:700;color:var(--ink)">${esc(dateLabel)}</span>
         <span style="font-size:.65rem;color:var(--mu)">${logs.length}건</span>
-        ${avgNrs!==null?`<span style="font-size:.65rem;font-weight:600;color:${nc}">평균 ${avgNrs}</span>`:''}
+        ${avgNrs!==null&&!lc.moodMode?`<span style="font-size:.65rem;font-weight:600;color:${nc}">평균 ${avgNrs}</span>`:''}
       </div>
       ${collapsed?'':`<div style="padding:0 4px">${logsHtml}</div>`}
     </div>`;
@@ -1017,7 +1028,7 @@ async function saveLogEntry() {
   } else if(lc.moodMode) {
     const sel=document.querySelector('#mood-chips .log-chip.sel');
     mood=sel?.dataset.val||'';
-    nrs=sel?parseInt(sel.dataset.level)*2.5:-1;
+    nrs=-1;
   } else {
     nrs=parseInt(document.getElementById('log-nrs')?.value??-1);
   }
@@ -1046,8 +1057,16 @@ async function saveLogEntry() {
   if(txInput&&txInput.value.trim()) treatments.push(txInput.value.trim());
   const txOther=document.getElementById('tx-other')?.value.trim();if(txOther)treatments.push(txOther);
   const memo=document.getElementById('log-memo')?.value.trim();
+  // Daily condition checks
+  const dailyChecks={};
+  if(lc.dailyChecks){
+    lc.dailyChecks.forEach(item=>{
+      const sel=document.querySelector(`#dc-${item} .log-chip.sel`);
+      if(sel) dailyChecks[item]=parseInt(sel.dataset.val);
+    });
+  }
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
-  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo};
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo,dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined};
   // 날씨 자동 첨부 (편두통 도메인, 2초 타임아웃)
   if(S.currentDomain==='orangi-migraine'&&editIdx<0){
     try{const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),2000))]);if(w)entry.weather=w;}catch(e){console.warn('Weather attachment failed:',e);}
@@ -1227,6 +1246,12 @@ function _saveLogFormState() {
   // Mood
   const moodSel=document.querySelector('#mood-chips .log-chip.sel');
   state.mood=moodSel?{val:moodSel.dataset.val,level:moodSel.dataset.level}:null;
+  // DailyChecks
+  state.dailyChecks={};
+  document.querySelectorAll('[id^="dc-"] .log-chip.sel').forEach(c=>{
+    const group=c.dataset.group;
+    if(group?.startsWith('dc-')) state.dailyChecks[group.slice(3)]=c.dataset.val;
+  });
   return state;
 }
 
@@ -1254,6 +1279,13 @@ function _restoreLogFormState(state) {
     if(state.mood){
       document.querySelectorAll('#mood-chips .log-chip').forEach(c=>{
         if(c.dataset.val===state.mood.val){c.classList.add('sel','sel-sym');c.dataset.level=state.mood.level;}
+      });
+    }
+    // Restore dailyChecks
+    if(state.dailyChecks){
+      Object.entries(state.dailyChecks).forEach(([item, val])=>{
+        const chip=document.querySelector(`#dc-${item} .log-chip[data-val="${val}"]`);
+        if(chip){chip.classList.add('sel','sel-sym');}
       });
     }
   },10);

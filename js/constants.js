@@ -218,6 +218,7 @@ const DOMAINS = {
     logConfig: {
       sites: null,
       moodMode: true,
+      dailyChecks: ['수면', '집중력', '발화', '기억력', '에너지', '식욕'],
       symptoms: ['불안','우울감','번아웃','불면','무기력','과민','집중력저하','공황','식욕변화'],
       meds: ['Desvenlafaxine','Bupropion','Lithium','Atomoxetine','Concerta','기타'],
       treatments: null,
