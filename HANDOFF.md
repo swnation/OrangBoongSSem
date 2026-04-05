@@ -1,117 +1,85 @@
-# HANDOFF — v9.4 세션 이어받기 가이드
+# HANDOFF — v9.5 세션 이어받기 가이드
 
-## 현재 상태: v9.4 (모듈화 완료 + ntfy 액션버튼 + 경과동기화 + 머리다이어그램 개선)
+## 현재 상태: v9.5 (코드모듈화 · 편두통일기예보 · 약물효과리포트 · 자동로그인 · 로그프리셋)
 
-### 모듈화 완료 (Phase 1~6)
+### 이번 세션 완료 작업 (PR #137~#159 + 직접 커밋)
 
-index.html의 ~7500줄 단일 파일을 15개 JS 모듈로 분리 완료.
-`backup/pre-modular` 브랜치에 모듈화 전 상태 보존됨 (롤백 가능).
+#### 코드 모듈화 (Phase 1~7)
+- [x] index.html 9939줄 → 235줄 (15개 JS 모듈 분리)
+- [x] `backup/pre-modular` 브랜치 보존 (롤백용 — 모듈화 안정화까지 유지)
+- [x] SW: JS 파일 network-first + PRECACHE
 
-**15개 JS 모듈 (js/ 디렉토리):**
+#### 신기능
+- [x] 편두통 일기예보 — 5요인(요일/최근NRS/트리거/기압/생리주기) 기반 위험도 0~100
+- [x] 약물 종합 효과 리포트 — NRS 변화 + 경과 평가 통합 랭킹
+- [x] 로그 프리셋(즐겨찾기) — 칩 조합 원탭 입력 (메인+quick 앱 모두)
+- [x] 자동 로그인 — GSI 사일런트 토큰 (prompt:'')
+- [x] 로그 폼 자동저장 — sessionStorage, 500ms 디바운스, 1시간 만료
+- [x] SW 업데이트 알림 — 하단 바 "새로고침" + ✕ 닫기
+
+#### 마음관리 로그 폼 개선
+- [x] moodMode에서 NRS=-1 고정 (가짜 NRS 제거)
+- [x] dailyChecks 추가: 수면/집중력/발화/기억력/에너지/식욕 (1-5 스케일)
+- [x] 로그 목록에서 moodMode NRS 평균 숨김
+
+#### 질환관리 개선
+- [x] PRN 복용 구분 — 약 추가 시 PRN 체크박스 + 점선 시각 구분
+- [x] 붕룩이 도메인 용어 맞춤 (질환→관리 항목, ICD-10 비활성화)
+- [x] 가격표 병합 수정 (DEFAULT + 커스텀 merge), recalcCost로 0원 데이터 재계산
+- [x] 가격 자동 업데이트 강화 — 신규 모델/가격 변동 알림
+
+#### 머리 다이어그램
+- [x] SVG 좌표 상수 추출 + 빌더 함수
+- [x] 이미지 280px→340px, 라벨 stroke + 폰트 크기 증가
+- [x] sync 함수 색상 상수화 + 선택 부위 drop-shadow
+
+#### Gemini PR 리뷰 반영 (PR #137~#159)
+- [x] var→const, 다크모드 stroke 분기
+- [x] views.js 구문 오류 수정 (} 누락)
+- [x] showConfirmModal action 문자열→함수 참조
+- [x] session.js 누적지식 Array.isArray + 헬퍼 추출 + 중복방지
+- [x] conditions.js migrateConditions 닫는 중괄호
+- [x] 약물 효과 점수 스케일 정규화
+- [x] SSE 버퍼 잔여 처리 (GPT/Perp/Grok)
+
+### 15개 JS 모듈
 | 파일 | 줄 수 | 역할 |
 |------|--------|------|
-| constants.js | 407 | 상수 정의 (DOMAINS, AI_LIST, APP_VERSION 등) |
+| constants.js | 409 | 상수 (DOMAINS, AI, APP_VERSION) |
 | state.js | 34 | 전역 상태 S 객체 |
-| utils.js | 69 | 유틸리티 함수 (esc, kstToday 등) |
+| utils.js | 69 | 유틸리티 (esc, kstToday, 모달, 토스트) |
 | crypto.js | 93 | API 키 AES-256-GCM 암호화 |
-| drive.js | 440 | Google Drive API + OAuth2 |
-| cost.js | 31 | 비용 추적 |
-| ai-api.js | 265 | AI API 호출 (SSE 스트리밍) |
-| session.js | 691 | 세션 관리 (R1/R2/디베이트) |
-| head-diagram.js | 112 | 머리 다이어그램 SVG |
-| log.js | 1608 | 증상 기록 폼 + 자동완성 |
-| conditions.js | 1419 | 질환 관리 + 투약 |
+| drive.js | 456 | Google Drive + OAuth + 자동로그인 |
+| cost.js | 37 | 비용 추적 + recalcCost |
+| ai-api.js | 280 | 5개 AI SSE 스트리밍 |
+| session.js | 696 | 세션/디베이트/요약 |
+| head-diagram.js | 112 | SVG 머리 다이어그램 |
+| log.js | 1734 | 증상 기록 + 프리셋 + 자동저장 + dailyChecks |
+| conditions.js | 1455 | 질환관리 + 약물 + PRN |
 | bungruki.js | 1195 | 임신 준비 대시보드 |
-| settings.js | 625 | 설정 + 컨텍스트 관리 |
-| pwa.js | 307 | PWA + 오프라인 캐시 |
-| views.js | 2520 | 뷰 렌더링 (home/session/stats 등) |
-
-**index.html**: 233줄 (HTML + 최소 부트스트랩 JS)
-**총합**: ~10,133줄 (15개 JS + index.html + sw.js)
-
-**로드 순서**: constants → state → utils → crypto → drive → cost → ai-api → session → head-diagram → log → conditions → bungruki → settings → pwa → views → inline bootstrap
-
-**방식**: 일반 `<script src>` (ES 모듈 아님). 모든 함수/변수는 전역 스코프.
-
-### 이전 세션 완료 작업 (PR #123~#136)
-
-#### ntfy 경과 알림 개선
-- [x] 경과 알림 URL 3개 나열 → 쿼리 파라미터 액션 버튼 1회 전송
-- [x] Cloudflare Worker 시도 → 429 rate limit으로 제거
-- [x] ntfy 쿼리 파라미터(?title=&actions=)로 버튼 직접 전송 (Worker 불필요)
-- [x] URL #hash → ?query 방식으로 변경 (encodeURIComponent 안정성)
-- [x] rate.html parseParams()가 ?query(신) + #hash(구) 모두 지원
-
-#### 경과(Outcome) 동기화
-- [x] rate.html → quick앱: visibilitychange에서 현재 탭 리렌더
-- [x] quick앱 fetchCloudStatus: 클라우드 outcome을 로컬에 반영
-- [x] 메인앱 pollCloudQuickLogs: outcome 변경 감지 + 반영
-- [x] WebView(ntfy 내장 브라우저) localStorage 격리 문제 해결
-
-#### rate.html 기능 추가
-- [x] 🤷 기억 안 나요 버튼 추가 (4번째 선택지)
-- [x] hash regex + 타임라인에 unknown 지원
-
-#### 머리 다이어그램 대폭 개선
-- [x] 정면/후면 가로 배치(각 44vw) → 탭 전환(80vw) — 이미지 2배 확대
-- [x] 기본 정면 표시, 후두부 칩 선택 시 자동 후면 전환
-- [x] SVG 좌표 얼굴 위치에 맞게 전면 재조정
-- [x] 관자놀이: ellipse → rect, 얼굴 옆면 밀착
-- [x] 눈썹: 점선 테두리로 이마와 시각적 구분
-- [x] 배경 투명도 0.10→0.15 (영역 가시성 개선)
-
-#### 붕룩이 리팩토링 (Gemini 리뷰 반영)
-- [x] BRK_SUPPL_ORANGI/BUNG 전역 상수 추출
-- [x] _getBrkWhoData() 헬퍼 (selDate 포함 반환)
-- [x] brk 함수 보일러플레이트 제거 (8개 함수)
-- [x] brkToggleAlcohol 붕쌤 전용 주석 명확화
-
-#### Gemini PR 리뷰 반영 (6회분)
-- [x] PR#123: 영양제키 상수화 + brk 헬퍼 추출
-- [x] PR#124: fBody 빈문자열 처리 + 테스트 알림 줄바꿈
-- [x] PR#125: selDate 반환 + syncNtfy 조건 + console.warn
-- [x] PR#128: actions 중복 지적 (헬퍼 추출은 보류)
-- [x] PR#129: visibilitychange 탭 감지 간결화
-- [x] PR#134: SVG 중복 지적 (별도 앱이라 의도적 유지)
-
-#### 버전업
-- [x] APP_VERSION v9.4 추가
-- [x] backup/v9.4 브랜치 생성
-- [x] CLAUDE.md 백업 브랜치 목록 갱신
-
-### 주요 아키텍처 변경점
-- **ntfy 액션 버튼**: 쿼리 파라미터 방식 (`?title=&actions=view,라벨,URL;...`)
-- **rate.html URL**: `?r=better&id=123` (기존 `#rate-better-123`도 하위 호환)
-- **outcome 동기화**: rate.html → cloud → quick앱/메인앱 (3중 경로)
-- **머리 다이어그램**: `_headView` / `_mainHeadView` 상태 변수로 탭 전환
-- **관자놀이 SVG**: ellipse → rect (syncHeadDiagram에서 fill 설정 동일하게 동작)
+| settings.js | 625 | API 키 + 컨텍스트 편집 |
+| pwa.js | 321 | PWA + 알림 + SW 업데이트 |
+| views.js | 2727 | 뷰 렌더링 + 일기예보 + 약물 리포트 |
 
 ### 백업 브랜치
-- `backup/v9.4` / `backup/v9.3` / `backup/v9.2` / `backup/v9.1` / `backup/v9.0` (5개 유지)
-
-#### Gemini PR#136~#143 리뷰 반영
-- [x] SVG 하드코딩 좌표 → `_FRONT_REGIONS`/`_BACK_REGIONS`/`_SIDE_LABELS` 상수 추출
-- [x] `_buildRegionSVG()` 빌더 함수로 SVG 생성 로직 통합
-- [x] `_SIDE_COLORS` 상수로 좌/우/양측 색상 관리
-- [x] quick/index.html `var`→`const` 4개 상수
-- [x] 다크모드 라벨 stroke 분기 (라이트: 검정 반투명, 다크: 흰색 반투명)
-- [x] sync 함수에서 `_SIDE_COLORS` 상수 사용 + 선택 부위 drop-shadow 발광 효과
+- `backup/v9.5` ← 현재
+- `backup/v9.4` / `backup/v9.3` / `backup/v9.2` / `backup/v9.1`
+- `backup/pre-modular` ← 모듈화 전 스냅샷 (안정화까지 유지)
+- ⚠️ `backup/v9.0` 삭제 필요 (5개 유지 규칙)
 
 ### 미완료/다음 세션 작업
-- [ ] ntfy 액션 버튼 실제 테스트 확인 (쿼리 파라미터 방식 버튼 표시 여부)
-- [ ] Cloudflare Worker 삭제 (raspy-voice-8a1b, 더 이상 미사용 — Cloudflare 대시보드에서 수동 삭제)
-
-### 향후 개선 (선택)
-- [ ] ES 모듈 전환 (`<script type="module">` + import/export) — 현재는 전역 스코프로 동작 중
-- [ ] 편두통 일기예보 기능
-- [ ] 기타 미구현 피처
+- [ ] ntfy 액션 버튼 실제 테스트 확인
+- [ ] Cloudflare Worker 삭제 (raspy-voice-8a1b — 대시보드 수동)
+- [ ] backup/v9.0 브랜치 삭제
+- [ ] ES 모듈 전환 (선택적 — 현재 전역 스코프로 정상 동작)
+- [ ] 마음관리 매일 복용약 체크 UI (질환에 등록된 약 기반)
+- [ ] 오랑이 마음관리도 dailyChecks 적용 검토
 
 ### PR 워크플로우
 1. PR 생성 → Gemini 리뷰 확인 → 반영 → 머지
-2. 다음 작업 시 이전 PR의 Gemini 리뷰 확인
+2. 직접 main 커밋도 가능 (작은 수정)
 
 ## 새 채팅 시작 시
 ```
 CLAUDE.md와 HANDOFF.md 읽고 이어서 작업해줘.
-PR 머지 후 Gemini 봇 리뷰를 확인하고 반영해줘.
 ```
