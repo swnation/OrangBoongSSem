@@ -900,6 +900,42 @@ async function brkSetMemo(val) {
 
 // ── 7-3: 검사 결과 관리 ──
 
+// 정액검사 WHO 정상 범위
+const _SEMEN_NORMS={volume:{min:1.5,unit:'mL',label:'Volume'},count:{min:15,unit:'M/mL',label:'Count'},motility:{min:42,unit:'%',label:'Motility'},morphology:{min:4,unit:'%',label:'Morphology'}};
+
+function _semenGrade(vals) {
+  if(!vals) return {grade:'-',color:'var(--mu)',issues:[]};
+  const issues=[];
+  if(vals.morphology!==undefined&&vals.morphology<4) issues.push('형태↓');
+  if(vals.motility!==undefined&&vals.motility<42) issues.push('운동성↓');
+  if(vals.count!==undefined&&vals.count<15) issues.push('농도↓');
+  if(vals.volume!==undefined&&vals.volume<1.5) issues.push('양↓');
+  if(!issues.length) return {grade:'정상',color:'#10b981',issues:[]};
+  if(issues.length===1) return {grade:'경미',color:'#f59e0b',issues};
+  return {grade:'주의',color:'#dc2626',issues};
+}
+
+// 자연임신 확률 추정 (Hunault 간이 모델 기반)
+function estimateConceptionRate(m) {
+  const cycles=m.menstrualCycles||[];
+  const labs=m.labResults||[];
+  const semenLabs=labs.filter(l=>l.type==='semen'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
+  const latest=semenLabs[0]?.values;
+  let rate=30; // 기저율 30% (건강한 커플 월간)
+  // 정액검사 기반 보정
+  if(latest) {
+    if(latest.morphology!==undefined&&latest.morphology<4) rate*=0.6;
+    if(latest.motility!==undefined&&latest.motility<42) rate*=0.7;
+    if(latest.count!==undefined&&latest.count<15) rate*=0.5;
+  }
+  // 주기 규칙성 보정
+  const sorted=[...cycles].sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const lens=[];
+  for(let i=0;i<sorted.length-1;i++){const d=Math.round((new Date(sorted[i+1].startDate+'T00:00:00')-new Date(sorted[i].startDate+'T00:00:00'))/86400000);if(d>0&&d<60)lens.push(d);}
+  if(lens.length>=3){const avg=lens.reduce((a,b)=>a+b,0)/lens.length;const std=Math.sqrt(lens.reduce((s,v)=>s+Math.pow(v-avg,2),0)/lens.length);if(std>7)rate*=0.7;}
+  return Math.round(Math.min(rate,35));
+}
+
 function renderLabResults() {
   var m = getBrkMaster(); if (!m) return '<div class="hint">로딩 중...</div>';
   var labs = m.labResults.slice().sort(function(a,b){return b.date.localeCompare(a.date);});
@@ -907,54 +943,82 @@ function renderLabResults() {
   var typeLabels = {semen:'정액검사',blood:'혈액검사',hormone:'호르몬검사',ultrasound:'초음파',other:'기타'};
   var typeIcons = {semen:'🔬',blood:'🩸',hormone:'⚗️',ultrasound:'📷',other:'📋'};
 
+  // 임신확률 추정
+  const rate=estimateConceptionRate(m);
+  const rateColor=rate>=25?'#10b981':rate>=15?'#f59e0b':'#dc2626';
+  const rateHtml=`<div style="background:${rateColor}10;border:1.5px solid ${rateColor}40;border-radius:8px;padding:10px 12px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:1.2rem">🍀</span>
+      <div>
+        <div style="font-size:.72rem;color:var(--mu)">추정 월간 자연임신 확률</div>
+        <div style="font-size:1.1rem;font-weight:700;color:${rateColor}">${rate}%</div>
+      </div>
+      <div style="font-size:.6rem;color:var(--mu2);margin-left:auto;max-width:140px;text-align:right">검사결과+주기규칙성 기반 간이 추정 (참고용)</div>
+    </div>
+  </div>`;
+
+  // 검사 목록 — 요약 카드 + 접기
   var listHtml = labs.map(function(l,i){
-    var vals = '';
-    if (l.type === 'semen' && l.values) {
-      vals = ['vol:'+((l.values.volume||'-')+'mL'),'count:'+((l.values.count||'-')+'M'),'motil:'+((l.values.motility||'-')+'%'),'morph:'+((l.values.morphology||'-')+'%')].join(' · ');
-    } else if (l.type === 'hormone' && l.values) {
-      vals = Object.entries(l.values).map(function(e){return e[0]+':'+e[1];}).join(' · ');
-    } else if (l.type === 'blood' && l.values) {
-      vals = Object.entries(l.values).map(function(e){return e[0]+':'+e[1];}).join(' · ');
-    } else if (l.values && typeof l.values === 'object') {
-      vals = Object.entries(l.values).map(function(e){return e[0]+':'+e[1];}).join(' · ');
+    // 요약 한 줄
+    let summary='';
+    if(l.type==='semen'&&l.values) {
+      const g=_semenGrade(l.values);
+      const vals=['Vol '+(l.values.volume||'-'),'Count '+(l.values.count||'-'),'Mot '+(l.values.motility||'-')+'%','Morph '+(l.values.morphology||'-')+'%'].join(' · ');
+      summary=`<span style="font-weight:600;color:${g.color}">${g.grade}</span> ${vals}${g.issues.length?' <span style="color:#dc2626;font-size:.65rem">('+g.issues.join(', ')+')</span>':''}`;
+    } else if(l.values&&typeof l.values==='object') {
+      summary=Object.entries(l.values).slice(0,4).map(([k,v])=>k+':'+v).join(' · ');
     }
-    return '<div style="padding:10px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;margin-bottom:6px">'
-      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
-      + '<span>'+typeIcons[l.type]+'</span>'
-      + '<span style="font-size:.82rem;font-weight:600">'+typeLabels[l.type]+'</span>'
-      + '<span class="log-tag" style="background:#dbeafe;color:#1d4ed8">'+esc(l.who||'')+'</span>'
-      + '<span style="font-size:.72rem;color:var(--mu);margin-left:auto">'+esc(l.date)+'</span>'
-      + '<button class="accum-del" onclick="brkDeleteLab('+i+')" title="삭제">🗑</button>'
-      + '</div>'
-      + (vals ? '<div style="font-size:.75rem;color:var(--tx);word-break:break-all">'+esc(vals)+'</div>' : '')
-      + (l.memo ? '<div style="font-size:.72rem;color:var(--mu);margin-top:4px">'+esc(l.memo)+'</div>' : '')
-      + '</div>';
+
+    return `<div style="padding:8px 10px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;margin-bottom:5px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span>${typeIcons[l.type]}</span>
+        <span style="font-size:.78rem;font-weight:600">${typeLabels[l.type]}</span>
+        <span class="log-tag" style="background:#dbeafe;color:#1d4ed8;font-size:.6rem">${esc(l.who||'')}</span>
+        <span style="font-size:.68rem;color:var(--mu);margin-left:auto">${esc(l.date)}</span>
+        <button class="accum-del" onclick="brkDeleteLab(${i})" title="삭제">🗑</button>
+      </div>
+      <div style="font-size:.72rem;color:var(--tx);margin-top:4px">${summary}</div>
+      ${l.memo?`<div style="margin-top:4px">
+        <div style="font-size:.62rem;color:var(--ac);cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 상세 보기</div>
+        <div style="display:none;font-size:.68rem;color:var(--mu);margin-top:4px;padding:6px;background:var(--sf);border-radius:6px;white-space:pre-wrap">${esc(l.memo)}</div>
+      </div>`:''}
+    </div>`;
   }).join('');
 
-  // Trend chart for semen
+  // 정액검사 추세 차트 (수치별 색상 바)
   var semenLabs = labs.filter(function(l){return l.type==='semen'&&l.values;}).reverse();
   var trendHtml = '';
   if (semenLabs.length >= 2) {
-    var maxMot = Math.max.apply(null, semenLabs.map(function(s){return s.values.motility||0;}));
-    var maxCount = Math.max.apply(null, semenLabs.map(function(s){return s.values.count||0;}));
-    var chartW = 100 / semenLabs.length;
-    trendHtml = '<div style="margin-top:12px;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">'
-      + '<div style="font-size:.75rem;font-weight:600;color:var(--mu);margin-bottom:8px">📈 정액검사 추세</div>'
-      + '<div style="display:flex;align-items:flex-end;gap:4px;height:80px">'
-      + semenLabs.map(function(s){
-        var h = Math.round((s.values.motility||0)/(maxMot||1)*70);
-        return '<div style="flex:1;text-align:center">'
-          + '<div style="font-size:.55rem;color:var(--mu)">'+(s.values.motility||0)+'%</div>'
-          + '<div style="height:'+h+'px;background:linear-gradient(to top,#3b82f6,#93c5fd);border-radius:4px 4px 0 0;margin:2px auto;width:70%"></div>'
-          + '<div style="font-size:.55rem;color:var(--mu)">'+s.date.slice(5)+'</div>'
-          + '</div>';
-      }).join('')
-      + '</div>'
-      + '<div style="font-size:.6rem;color:var(--mu);text-align:center;margin-top:2px">운동성 (%)</div>'
-      + '</div>';
+    const metrics=[
+      {key:'count',label:'농도(M/mL)',norm:15,color:'#3b82f6'},
+      {key:'motility',label:'운동성(%)',norm:42,color:'#10b981'},
+      {key:'morphology',label:'형태(%)',norm:4,color:'#f59e0b'},
+    ];
+    const rows=metrics.map(mt=>{
+      const vals=semenLabs.map(s=>s.values[mt.key]||0);
+      const max=Math.max(...vals,mt.norm)*1.2;
+      return `<div style="margin-bottom:8px">
+        <div style="font-size:.62rem;color:var(--mu);margin-bottom:2px">${mt.label} (정상≥${mt.norm})</div>
+        <div style="display:flex;align-items:flex-end;gap:3px;height:40px">
+          ${semenLabs.map((s,j)=>{
+            const v=s.values[mt.key]||0;
+            const h=Math.max(4,Math.round(v/max*36));
+            const ok=v>=mt.norm;
+            return `<div style="flex:1;text-align:center">
+              <div style="font-size:.5rem;color:${ok?mt.color:'#dc2626'};font-weight:600">${v}</div>
+              <div style="height:${h}px;background:${ok?mt.color:'#fca5a5'};border-radius:3px 3px 0 0;margin:0 auto;width:60%"></div>
+              <div style="font-size:.45rem;color:var(--mu2)">${s.date.slice(5)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('');
+    trendHtml=`<div style="margin-top:10px;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+      <div style="font-size:.75rem;font-weight:600;color:var(--mu);margin-bottom:6px">📈 정액검사 추세</div>${rows}</div>`;
   }
 
   return '<div>'
+    + rateHtml
     + '<div style="display:flex;gap:6px;margin-bottom:10px">'
     + '<button class="btn-accum-add" onclick="brkOpenLabForm()" style="font-size:.75rem">+ 검사 결과 추가</button>'
     + '<button onclick="document.getElementById(\'brk-lab-photo\').click()" style="background:none;border:1.5px solid var(--bd);border-radius:6px;padding:5px 12px;font-size:.72rem;cursor:pointer;color:var(--mu)">📷 검사결과 사진 분석</button>'
