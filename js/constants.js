@@ -332,42 +332,40 @@ const AI_DEFS = {
 };
 
 const DEFAULT_MODELS = {
-  gpt:'gpt-5.4', claude:'claude-sonnet-4-6', gemini:'gemini-2.5-pro', grok:'grok-3', perp:'sonar',
+  gpt:'gpt-5.4', claude:'claude-sonnet-4-6', gemini:'gemini-3.1-pro-preview', grok:'grok-4', perp:'sonar',
 };
 
 const MODEL_OPTIONS = {
   gpt: [
-    {value:'gpt-5.4',label:'GPT-5.4 (최신·추천)'},
+    {value:'gpt-5.4',label:'GPT-5.4 (추천)'},
     {value:'gpt-5.4-mini',label:'GPT-5.4 Mini (저비용)'},
     {value:'gpt-5.4-nano',label:'GPT-5.4 Nano (최저비용)'},
-    {value:'gpt-5.3-chat-latest',label:'GPT-5.3'},
-    {value:'gpt-4.1',label:'GPT-4.1 (안정)'},
-    {value:'gpt-4.1-mini',label:'GPT-4.1 Mini'},
-    {value:'o3',label:'o3 (추론)'},
-    {value:'o3-mini',label:'o3 Mini (빠른 추론)'},
-    {value:'o4-mini',label:'o4-mini (빠른 추론)'},
+    {value:'o3',label:'o3 (추론·추천)'},
+    {value:'o3-mini',label:'o3 Mini (추론·저비용)'},
+    {value:'o4-mini',label:'o4-mini (추론·최저비용)'},
+    {value:'gpt-4.1',label:'GPT-4.1 (구버전)'},
+    {value:'gpt-4.1-mini',label:'GPT-4.1 Mini (구버전)'},
   ],
   claude: [
     {value:'claude-sonnet-4-6',label:'Sonnet 4.6 (추천)'},
-    {value:'claude-opus-4-6',label:'Opus 4.6 (고성능)'},
-    {value:'claude-haiku-4-5-20251001',label:'Haiku 4.5 (빠름)'},
+    {value:'claude-opus-4-6',label:'Opus 4.6 (최고성능)'},
+    {value:'claude-haiku-4-5-20251001',label:'Haiku 4.5 (빠름·저비용)'},
   ],
   gemini: [
-    {value:'gemini-3.1-pro-preview',label:'Gemini 3.1 Pro (최신)'},
+    {value:'gemini-3.1-pro-preview',label:'Gemini 3.1 Pro (추천)'},
     {value:'gemini-3.1-flash-lite-preview',label:'Gemini 3.1 Flash-Lite (저비용·1M)'},
     {value:'gemini-3-flash-preview',label:'Gemini 3 Flash (빠름)'},
-    {value:'gemini-2.5-pro',label:'Gemini 2.5 Pro (안정·무료)'},
-    {value:'gemini-2.5-flash',label:'Gemini 2.5 Flash (무료)'},
-    {value:'gemini-2.5-flash-lite',label:'Gemini 2.5 Flash-Lite (최저비용)'},
+    {value:'gemini-2.5-pro',label:'Gemini 2.5 Pro (무료티어·6월종료)'},
+    {value:'gemini-2.5-flash',label:'Gemini 2.5 Flash (무료티어·6월종료)'},
   ],
   grok: [
-    {value:'grok-4',label:'Grok 4 (최신·추천)'},
-    {value:'grok-4-1-fast',label:'Grok 4.1 Fast (에이전트·2M)'},
-    {value:'grok-3',label:'Grok 3 (안정)'},
-    {value:'grok-3-mini',label:'Grok 3 Mini (빠름)'},
+    {value:'grok-4',label:'Grok 4 (추천)'},
+    {value:'grok-4-1-fast',label:'Grok 4.1 Fast (최저비용·2M)'},
+    {value:'grok-3',label:'Grok 3 (구버전)'},
+    {value:'grok-3-mini',label:'Grok 3 Mini (구버전·빠름)'},
   ],
   perp: [
-    {value:'sonar',label:'Sonar (추천)'},
+    {value:'sonar',label:'Sonar (추천·저비용)'},
     {value:'sonar-pro',label:'Sonar Pro (고성능)'},
     {value:'sonar-deep-research',label:'Sonar Deep Research (심층)'},
     {value:'sonar-reasoning-pro',label:'Sonar Reasoning Pro (추론)'},

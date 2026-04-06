@@ -1048,7 +1048,7 @@ function renderStatsView() {
   ${renderTreatmentTracker()}
   <div style="text-align:center;margin-top:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
     <button class="btn-export" onclick="exportPDF()">📑 기본 리포트</button>
-    <button class="btn-export" onclick="exportMonthlyPDF()" style="background:#2c5f8a">📋 월간 리포트 (병원용)</button>
+    <button class="btn-export" onclick="exportMonthlyPDF()" style="background:#fff;color:#1e40af;border:2px solid #1e40af;font-weight:700">📋 월간 리포트 (병원용)</button>
   </div>`;
 }
 
