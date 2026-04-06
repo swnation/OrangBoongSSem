@@ -1523,17 +1523,7 @@ function getCrossDomainContext() {
     const domDef = DOMAINS[domainId];
     if (!domDef || domDef.user !== currentUser) return;
 
-    // Include conditions from sibling domains
-    const conditions = ds.master.conditions || [];
-    if (conditions.length) {
-      const statusLabels = {active:'치료중',remission:'관해',resolved:'완치','self-stopped':'자의중단'};
-      lines.push(`[${domDef.icon} ${domDef.label} — 등록 질환]`);
-      conditions.forEach(c => {
-        let l = `- ${c.name} (${statusLabels[c.status]||c.status})`;
-        if (c.medications) l += ` | 투약: ${c.medications}`;
-        lines.push(l);
-      });
-    }
+    // 질환은 getConditionsContext()에서 통합 처리 — 여기서는 생략
 
     // Include recent medCheck compliance from sibling domains
     const sibLogs = ds.logData || [];
@@ -1550,7 +1540,7 @@ function getCrossDomainContext() {
     // Include brief SSOT excerpt (first 3 lines of context)
     const ctx = ds.master.patient_context || '';
     const firstLines = ctx.split('\n').filter(l=>l.trim().startsWith('-')).slice(0,3);
-    if (firstLines.length && !conditions.length) {
+    if (firstLines.length && !(ds.master.conditions||[]).length) {
       lines.push(`[${domDef.icon} ${domDef.label} 참조]`);
       firstLines.forEach(l => lines.push(l));
     }
