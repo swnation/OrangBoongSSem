@@ -25,6 +25,34 @@ const APP_VERSION = [
 })();
 
 // ═══════════════════════════════════════════════════════════════
+// SHARED USER PROFILES — 모든 도메인에서 공유
+// ═══════════════════════════════════════════════════════════════
+const USER_PROFILES = {
+  '오랑이': {
+    name: '김나연', nickname: '오랑이', birth: '1997-07-29', sex: '여성',
+    basics: '체중 39~42kg, 저혈압 경향, 약물 민감도 높음, 유당불내증',
+    diagnoses: 'rCM(난치성 만성 편두통), MDD, OCD, 불안장애, vasovagal syncope',
+    note: '저체중·저혈압으로 약물 부작용 민감 — 용량 보수적 접근 필수',
+  },
+  '붕쌤': {
+    name: '유성우', nickname: '붕쌤', birth: '1988-01-27', sex: '남성',
+    basics: '1차 진료 일반의 (고회전 외래), 오랑이의 보호자 겸 주 케어기버',
+    diagnoses: 'MDD(관해~부분관해), Bipolar spectrum 고려, delayed sleep-wake phase',
+    note: '인지/발화 기능 추적 중, 케어기버 번아웃 동시 모니터링',
+  },
+};
+
+function getSharedProfileText() {
+  const today=new Date(kstToday()+'T00:00:00');
+  return Object.values(USER_PROFILES).map(u=>{
+    const b=new Date(u.birth+'T00:00:00');
+    let age=today.getFullYear()-b.getFullYear();
+    if(today.getMonth()<b.getMonth()||(today.getMonth()===b.getMonth()&&today.getDate()<b.getDate())) age--;
+    return `- ${u.name}(${u.nickname}), ${u.sex} ${age}세(${u.birth}) | ${u.basics}\n  진단: ${u.diagnoses}\n  주의: ${u.note}`;
+  }).join('\n');
+}
+
+// ═══════════════════════════════════════════════════════════════
 // DOMAIN DEFINITIONS
 // ═══════════════════════════════════════════════════════════════
 const DOMAINS = {
@@ -35,7 +63,7 @@ const DOMAINS = {
     defaultContext: `[오랑이 rCM 협진 — SSOT 컨텍스트 / 기준: 2026-03-28]
 
 ■ 환자 기본
-- 김나연(오랑이), 여성 28세(1997년생)(1997년생), 체중 39~42kg
+- 김나연(오랑이), 여성 28세(1997년생), 체중 39~42kg
 - 주진단: 난치성 만성 편두통(rCM)
 - 동반: MDD, OCD, 불안장애, vasovagal syncope 병력
 - 특이: 저혈압 경향, 약물 민감도 높음, 유당불내증, 후두신경 감압술(효과 없음)

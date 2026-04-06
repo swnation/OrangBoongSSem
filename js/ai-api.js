@@ -248,10 +248,11 @@ function getFullContext(question) {
   const condContext=getConditionsContext();
   const crossCtx=getCrossDomainContext();
   const fileCtx=getFileContext();
-  // 나이 동적 치환 (생년월일 기반)
+  // 나이 동적 치환 + 공유 프로필 포함
   let patientCtx=m.patient_context||'';
   patientCtx=_replaceDynamicAge(patientCtx);
-  const contextSection=`[컨텍스트 / SSOT]\n${patientCtx}${condContext}${crossCtx}${fileCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`;
+  const sharedProfile=typeof getSharedProfileText==='function'?`\n\n[공유 환자 프로필]\n${getSharedProfileText()}`:'';
+  const contextSection=`[컨텍스트 / SSOT]\n${patientCtx}${sharedProfile}${condContext}${crossCtx}${fileCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`;
   const logSummary=getRecentLogSummary();
   return contextSection+(logSummary?'\n\n'+logSummary:'');
 }
