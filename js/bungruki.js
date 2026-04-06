@@ -524,10 +524,26 @@ function renderDailyChecks() {
     + '</div>'
     + '<div style="display:flex;border-bottom:1px solid var(--bd);margin-bottom:10px">'+catTabHtml+'</div>'
     + contentHtml
+    + renderCrossSyncStatus(selDate, isOrangi?'orangi':'bung')
     + '</div>';
 }
 
-var BRK_SUPPL_ORANGI = ['folicAcid','iron','vitaminD'];
+// 교차 동기화 상태 인라인 카드
+function renderCrossSyncStatus(date, who) {
+  const healthDomain = who==='orangi' ? 'orangi-health' : 'bung-health';
+  const ds = S.domainState[healthDomain];
+  if(!ds?.logData) return '';
+  const syncId = 'brk-sync-'+date;
+  const synced = ds.logData.find(l=>l._syncId===syncId);
+  if(!synced) return '';
+  const dd = DOMAINS[healthDomain];
+  return `<div style="margin-top:10px;padding:8px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:.72rem">
+    <div style="font-weight:600;color:#1d4ed8;margin-bottom:4px">🔗 ${dd.icon} ${dd.label} 연동됨</div>
+    <div style="color:#1e40af">${esc(synced.memo||'')}</div>
+  </div>`;
+}
+
+var BRK_SUPPL_ORANGI = ['folicAcid','iron','vitaminD','multivitamin','magnesium'];
 var BRK_SUPPL_BUNG = ['arginine','coq10','silymarin','multivitamin','febuxostat'];
 
 function _getBrkWhoData(m) {
@@ -555,6 +571,8 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
     { key: 'folicAcid', label: '엽산', icon: '💊' },
     { key: 'iron', label: '철분', icon: '🩸' },
     { key: 'vitaminD', label: '비타민D', icon: '☀️' },
+    { key: 'multivitamin', label: '멀티비타민', icon: '💊' },
+    { key: 'magnesium', label: '마그네슘', icon: '🧲' },
   ];
   var bungItems = [
     { key: 'arginine', label: '아르기닌', icon: '💪' },
@@ -663,7 +681,55 @@ async function brkToggleCheck(key) {
   var r = _getBrkWhoData(); if (!r) return;
   r.whoData[key] = !r.whoData[key];
   await saveBrkMaster();
+  // 교차 동기화: 건강관리 도메인에 영양제/운동 기록 반영
+  syncBrkToHealth(r.selDate, _brkCheckWho);
   renderView('meds');
+}
+
+// 붕룩이 체크 → 건강관리 도메인 로그 동기화
+function syncBrkToHealth(date, who) {
+  const healthDomain = who==='orangi' ? 'orangi-health' : 'bung-health';
+  const ds = S.domainState[healthDomain];
+  if(!ds?.master) return; // 건강관리 도메인 미로드 시 스킵
+  const m = getBrkMaster(); if(!m) return;
+  const dayData = m.dailyChecks?.[date]?.[who];
+  if(!dayData) return;
+  // 영양제 목록 수집
+  const supplKeys = who==='orangi' ? BRK_SUPPL_ORANGI : BRK_SUPPL_BUNG;
+  const supplItems = who==='orangi'
+    ? [{key:'folicAcid',label:'엽산'},{key:'iron',label:'철분'},{key:'vitaminD',label:'비타민D'},{key:'multivitamin',label:'멀티비타민'},{key:'magnesium',label:'마그네슘'}]
+    : [{key:'arginine',label:'아르기닌'},{key:'coq10',label:'CoQ10'},{key:'silymarin',label:'실리마린'},{key:'multivitamin',label:'멀티비타민'},{key:'febuxostat',label:'Febuxostat'}];
+  const takenSuppl = supplItems.filter(it=>dayData[it.key]).map(it=>it.label);
+  const exercise = dayData.exercise || '';
+  const memo = dayData.memo || '';
+  // 건강관리 로그에 동기화 기록 찾기/생성
+  if(!ds.logData) ds.logData=[];
+  const syncId = 'brk-sync-'+date;
+  let existing = ds.logData.find(l=>l._syncId===syncId);
+  const parts = [];
+  if(takenSuppl.length) parts.push('💊 영양제: '+takenSuppl.join(', '));
+  if(exercise) parts.push('🏃 운동: '+exercise);
+  if(memo) parts.push('📝 '+memo);
+  if(!parts.length) {
+    // 모두 해제됨 → 동기화 기록 제거
+    if(existing) { ds.logData=ds.logData.filter(l=>l._syncId!==syncId); }
+    return;
+  }
+  const entry = {
+    _syncId: syncId,
+    datetime: date+'T00:00',
+    categories: takenSuppl.length ? ['투약'] : [],
+    memo: '[🍼 임신준비 연동] '+parts.join(' | '),
+    who: '',
+  };
+  if(exercise) entry.categories.push('운동');
+  if(existing) {
+    Object.assign(existing, entry);
+  } else {
+    entry.id = Date.now();
+    ds.logData.push(entry);
+    ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
+  }
 }
 
 async function brkSetMeals(n) {
