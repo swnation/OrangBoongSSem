@@ -930,9 +930,11 @@ function estimateConceptionRate(m) {
   const cycleStd=lens.length>=3?Math.sqrt(lens.reduce((s,v)=>s+Math.pow(v-lens.reduce((a,b)=>a+b,0)/lens.length,2),0)/lens.length):0;
   const avgCycle=lens.length?lens.reduce((a,b)=>a+b,0)/lens.length:30;
 
-  // === 여성 연령 (SSOT에서 파싱 또는 기본값) ===
-  let femaleAge=28;
-  try{const ctx=DOMAINS['orangi-health']?.defaultContext||DOMAINS['orangi-migraine']?.defaultContext||'';const ageMatch=ctx.match(/(\d{2,3})\s*세/);if(ageMatch)femaleAge=parseInt(ageMatch[1]);}catch(e){}
+  // === 여성/남성 연령 (생년월일 기반 동적 계산) ===
+  const _birthdays={orangi:'1997-07-29',bung:'1988-01-27'};
+  const _calcAge=(bd)=>{const b=new Date(bd+'T00:00:00'),t=new Date(kstToday()+'T00:00:00');let a=t.getFullYear()-b.getFullYear();if(t.getMonth()<b.getMonth()||(t.getMonth()===b.getMonth()&&t.getDate()<b.getDate()))a--;return a;};
+  const femaleAge=_calcAge(_birthdays.orangi);
+  const maleAge=_calcAge(_birthdays.bung);
   // 연령 보정 계수 (PRESTO 2024 + Gnoth 2003)
   let ageMult=1.0;
   if(femaleAge<=30) ageMult=1.0;
@@ -947,6 +949,11 @@ function estimateConceptionRate(m) {
   const factors=[];
   let r1=25*ageMult; // 연령 보정 기저율
   factors.push({name:`여성 ${femaleAge}세`,impact:ageMult<1?Math.round((ageMult-1)*100):0,tip:ageMult>=0.75?'양호한 연령대':'난소 예비력 검사(AMH) 권장'});
+  // 남성 연령 보정
+  let maleMult=1.0;
+  if(maleAge>=45){maleMult=0.8;r1*=0.8;factors.push({name:`남성 ${maleAge}세 (≥45)`,impact:-20,tip:'정자 DNA 분절 증가 가능 — 항산화제 권장'});}
+  else if(maleAge>=40){maleMult=0.9;r1*=0.9;factors.push({name:`남성 ${maleAge}세 (≥40)`,impact:-10,tip:'정자 질 경미 감소 가능'});}
+  else{factors.push({name:`남성 ${maleAge}세`,impact:0,tip:'양호한 연령대'});}
   // 정액검사
   if(sv){
     if(sv.morphology!==undefined&&sv.morphology<4){r1*=0.55;factors.push({name:'형태<4% (기형정자증)',impact:-45,tip:'항산화제(CoQ10 200mg, 비타민E, 아연) 3개월 복용 후 재검'});}
