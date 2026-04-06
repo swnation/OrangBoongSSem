@@ -267,6 +267,7 @@ function renderRecentCycles(cycles, avgLen) {
     const lenDiff=cycleLen?(cycleLen-avg):0;
     const lenColor=cycleLen?(Math.abs(lenDiff)>5?'#dc2626':Math.abs(lenDiff)>3?'#f59e0b':'#10b981'):'var(--mu)';
     return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.78rem">'
+      + '<input type="checkbox" class="brk-cyc-sel" data-id="'+c.id+'" style="width:15px;height:15px;accent-color:var(--ac);flex-shrink:0">'
       + '<span style="color:#dc2626;font-weight:600;min-width:70px">'+esc(c.startDate)+'</span>'
       + (c.endDate?'<span style="color:var(--mu);font-size:.7rem">~'+esc(c.endDate.slice(5))+'</span>':'')
       + (duration?'<span style="font-size:.6rem;color:var(--mu2)">'+duration+'</span>':'')
@@ -274,14 +275,32 @@ function renderRecentCycles(cycles, avgLen) {
       + (c.flow?'<span class="log-tag" style="background:#fce7f3;color:#be185d">'+(c.flow==='heavy'?'많음':c.flow==='light'?'적음':'보통')+'</span>':'')
       + (c.pain>=0?'<span class="log-tag" style="background:#fee2e2;color:#dc2626">통증'+c.pain+'</span>':'')
       + (c.memo?'<span style="font-size:.6rem;color:var(--mu2)" title="'+esc(c.memo)+'">📝</span>':'')
-      + '<button class="accum-del" onclick="brkDeleteCycle('+i+')" style="margin-left:auto" title="삭제">🗑</button>'
       + '</div>';
   }).join('');
+
+  const selectBar=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+    <label style="display:flex;align-items:center;gap:4px;font-size:.68rem;color:var(--mu);cursor:pointer">
+      <input type="checkbox" onchange="document.querySelectorAll('.brk-cyc-sel').forEach(c=>c.checked=this.checked)" style="accent-color:var(--ac)"> 전체선택
+    </label>
+    <button onclick="brkDeleteSelected()" style="background:none;border:1px solid #dc2626;border-radius:5px;padding:3px 10px;font-size:.68rem;cursor:pointer;color:#dc2626;margin-left:auto">🗑 선택 삭제</button>
+  </div>`;
 
   const toggleBtn=cycles.length>5
     ?`<button onclick="toggleShowAllCycles()" style="width:100%;background:none;border:1px solid var(--bd);border-radius:6px;padding:5px;font-size:.72rem;cursor:pointer;color:var(--mu);margin-top:4px">${_brkShowAllCycles?'▲ 접기':'▼ 전체 '+cycles.length+'건 보기'}</button>`:'';
 
-  return statsHtml+rowsHtml+toggleBtn;
+  return statsHtml+selectBar+rowsHtml+toggleBtn;
+}
+
+async function brkDeleteSelected() {
+  const ids=[];
+  document.querySelectorAll('.brk-cyc-sel:checked').forEach(cb=>ids.push(parseInt(cb.dataset.id)));
+  if(!ids.length){showToast('삭제할 기록을 선택하세요.');return;}
+  if(!confirm(ids.length+'건의 생리 기록을 삭제하시겠습니까?')) return;
+  const m=getBrkMaster();if(!m) return;
+  m.menstrualCycles=m.menstrualCycles.filter(c=>!ids.includes(c.id));
+  await saveBrkMaster();
+  renderView('meds');
+  showToast(`🗑 ${ids.length}건 삭제됨`);
 }
 
 function renderCycleTracker() {
