@@ -915,25 +915,139 @@ function _semenGrade(vals) {
   return {grade:'주의',color:'#dc2626',issues};
 }
 
-// 자연임신 확률 추정 (Hunault 간이 모델 기반)
+// 자연임신 확률 다중 모델 추정
 function estimateConceptionRate(m) {
   const cycles=m.menstrualCycles||[];
   const labs=m.labResults||[];
   const semenLabs=labs.filter(l=>l.type==='semen'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
-  const latest=semenLabs[0]?.values;
-  let rate=30; // 기저율 30% (건강한 커플 월간)
-  // 정액검사 기반 보정
-  if(latest) {
-    if(latest.morphology!==undefined&&latest.morphology<4) rate*=0.6;
-    if(latest.motility!==undefined&&latest.motility<42) rate*=0.7;
-    if(latest.count!==undefined&&latest.count<15) rate*=0.5;
-  }
-  // 주기 규칙성 보정
+  const sv=semenLabs[0]?.values;
+  // 주기 분석
   const sorted=[...cycles].sort((a,b)=>a.startDate.localeCompare(b.startDate));
   const lens=[];
   for(let i=0;i<sorted.length-1;i++){const d=Math.round((new Date(sorted[i+1].startDate+'T00:00:00')-new Date(sorted[i].startDate+'T00:00:00'))/86400000);if(d>0&&d<60)lens.push(d);}
-  if(lens.length>=3){const avg=lens.reduce((a,b)=>a+b,0)/lens.length;const std=Math.sqrt(lens.reduce((s,v)=>s+Math.pow(v-avg,2),0)/lens.length);if(std>7)rate*=0.7;}
-  return Math.round(Math.min(rate,35));
+  const cycleStd=lens.length>=3?Math.sqrt(lens.reduce((s,v)=>s+Math.pow(v-lens.reduce((a,b)=>a+b,0)/lens.length,2),0)/lens.length):0;
+  const avgCycle=lens.length?lens.reduce((a,b)=>a+b,0)/lens.length:30;
+
+  // === 모델 1: WHO/Hunault 간이 모델 ===
+  const factors1=[];
+  let r1=25; // 건강한 커플 기저 (Gnoth 2003: 주기당 ~25%)
+  if(sv){
+    if(sv.morphology!==undefined&&sv.morphology<4){r1*=0.55;factors1.push({name:'형태<4%',impact:-45,tip:'항산화제(CoQ10 200mg, 비타민E, 아연) 3개월 복용'});}
+    if(sv.motility!==undefined&&sv.motility<42){r1*=0.65;factors1.push({name:'운동성<42%',impact:-35,tip:'금주·금연, 규칙적 운동, 꽉 끼는 속옷 회피'});}
+    if(sv.count!==undefined&&sv.count<15){r1*=0.45;factors1.push({name:'농도<15M',impact:-55,tip:'비뇨기과 정밀검사 권장'});}
+    if(sv.count!==undefined&&sv.count>=15&&sv.motility!==undefined&&sv.motility>=42&&(sv.morphology===undefined||sv.morphology>=4)){factors1.push({name:'정액검사 정상',impact:0,tip:'양호'});}
+  } else {factors1.push({name:'정액검사 미실시',impact:0,tip:'검사 추가 시 정확도 향상'});}
+  if(cycleStd>7){r1*=0.7;factors1.push({name:'주기 불규칙(±'+cycleStd.toFixed(1)+'일)',impact:-30,tip:'배란일 예측 정확도↓, 배란테스트기(LH strip) 병행 권장'});}
+  else if(lens.length>=3){factors1.push({name:'주기 규칙적(±'+cycleStd.toFixed(1)+'일)',impact:0,tip:'배란 예측 유리'});}
+  r1=Math.round(Math.max(3,Math.min(r1,30)));
+
+  // === 모델 2: TMSC(Total Motile Sperm Count) 기반 ===
+  let r2=null,tmsc=null;
+  if(sv&&sv.count!==undefined&&sv.motility!==undefined&&sv.volume!==undefined){
+    tmsc=Math.round(sv.volume*sv.count*(sv.motility/100));
+    // Ayala 2003 모델: TMSC>20M → ~25%, 5-20M → 10-20%, <5M → <5%
+    if(tmsc>=20) r2=25;
+    else if(tmsc>=10) r2=18;
+    else if(tmsc>=5) r2=10;
+    else r2=4;
+  }
+
+  // === 모델 3: 나이 기반 기저율 (여성 나이 — SSOT에서) ===
+  // 간이: 28세 기준 ~25%, 데이터 없으면 기본값 사용
+  const r3=25; // 28세 여성 기준
+
+  // 일별 확률 (배란일 기준 Wilcox 1995)
+  const dailyRates=[
+    {day:-5,rate:4},{day:-4,rate:8},{day:-3,rate:15},{day:-2,rate:25},{day:-1,rate:28},{day:0,rate:10},{day:1,rate:0}
+  ];
+  // 보정: 정액검사 결과 반영
+  const semenMult=sv?(r1/25):1;
+  const adjDaily=dailyRates.map(d=>({...d,adjRate:Math.round(Math.max(0,d.rate*semenMult))}));
+
+  return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,factors:factors1,dailyRates:adjDaily,cycleStd,avgCycle,hasSemen:!!sv};
+}
+
+function _renderConceptionCard(m) {
+  const r=estimateConceptionRate(m);
+  const rate=r.monthly;
+  const rateColor=rate>=20?'#10b981':rate>=12?'#f59e0b':'#dc2626';
+
+  // 비교 모델 표
+  let modelRows=`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-top:8px;margin-bottom:4px">📊 추정 모델 비교</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px">
+      <div style="background:${rateColor}10;border:1px solid ${rateColor}40;border-radius:6px;padding:6px;text-align:center">
+        <div style="font-size:.55rem;color:var(--mu)">WHO/Hunault</div>
+        <div style="font-size:.88rem;font-weight:700;color:${rateColor}">${rate}%</div>
+      </div>`;
+  if(r.tmscRate!==null){
+    const tc=r.tmscRate>=20?'#10b981':r.tmscRate>=10?'#f59e0b':'#dc2626';
+    modelRows+=`<div style="background:${tc}10;border:1px solid ${tc}40;border-radius:6px;padding:6px;text-align:center">
+      <div style="font-size:.55rem;color:var(--mu)">TMSC(${r.tmsc}M)</div>
+      <div style="font-size:.88rem;font-weight:700;color:${tc}">${r.tmscRate}%</div>
+    </div>`;
+  } else {
+    modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center">
+      <div style="font-size:.55rem;color:var(--mu)">TMSC</div>
+      <div style="font-size:.75rem;color:var(--mu2)">검사 필요</div>
+    </div>`;
+  }
+  modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center">
+    <div style="font-size:.55rem;color:var(--mu)">연령 기저율</div>
+    <div style="font-size:.88rem;font-weight:700">${r.ageRate}%</div>
+  </div></div>`;
+
+  // 영향 요소
+  const factorsHtml=r.factors.length?`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">📋 영향 요소</div>
+    ${r.factors.map(f=>{
+      const ic=f.impact<0?'🔻':'✅';
+      const col=f.impact<0?'#dc2626':'#10b981';
+      return `<div style="display:flex;align-items:start;gap:6px;padding:3px 0;font-size:.68rem">
+        <span>${ic}</span>
+        <div><span style="font-weight:600;color:${col}">${f.name}</span>${f.impact?` (${f.impact}%)`:''}<br>
+        <span style="color:var(--mu)">→ ${f.tip}</span></div>
+      </div>`;
+    }).join('')}`:'';
+
+  // 일별 확률 (배란일 기준)
+  const maxD=Math.max(...r.dailyRates.map(d=>d.adjRate),1);
+  const dailyHtml=`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-top:8px;margin-bottom:4px">📅 배란일 기준 일별 임신 확률 <span style="font-weight:400;font-size:.6rem">(Wilcox 1995)</span></div>
+    <div style="display:flex;align-items:flex-end;gap:3px;height:50px;margin-bottom:2px">
+      ${r.dailyRates.map(d=>{
+        const h=Math.max(3,Math.round(d.adjRate/maxD*44));
+        const col=d.day===-1||d.day===-2?'#ec4899':d.adjRate>0?'#f59e0b':'var(--bd)';
+        return `<div style="flex:1;text-align:center">
+          <div style="font-size:.5rem;color:${col};font-weight:600">${d.adjRate}%</div>
+          <div style="height:${h}px;background:${col};border-radius:3px 3px 0 0;margin:0 auto;width:65%"></div>
+          <div style="font-size:.5rem;color:var(--mu)">${d.day>=0?'D+'+d.day:'D'+d.day}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:.55rem;color:var(--mu2);text-align:center">D-2~D-1이 가장 높음 (배란 전 1~2일)</div>`;
+
+  // 레퍼런스
+  const refHtml=`<div style="margin-top:8px;padding:6px 8px;background:var(--sf);border-radius:6px;font-size:.58rem;color:var(--mu2)">
+    <div style="font-weight:600;margin-bottom:2px">📚 참고 문헌</div>
+    • Gnoth et al. (2003) Hum Reprod — 주기당 자연임신율 ~25%<br>
+    • Wilcox et al. (1995) NEJM — 배란일 기준 일별 임신 확률<br>
+    • Ayala et al. (2003) Fertil Steril — TMSC와 임신율 상관<br>
+    • WHO (2021) — 정액검사 정상 하한치 (5th edition)<br>
+    <span style="color:#dc2626">⚠️ 간이 추정치이며 의학적 진단이 아닙니다. 실제 확률은 개인차가 큽니다.</span>
+  </div>`;
+
+  return `<div style="background:${rateColor}08;border:1.5px solid ${rateColor}30;border-radius:10px;padding:12px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <span style="font-size:1.3rem">🍀</span>
+      <div>
+        <div style="font-size:.7rem;color:var(--mu)">추정 월간 자연임신 확률</div>
+        <div style="font-size:1.2rem;font-weight:700;color:${rateColor}">${rate}%<span style="font-size:.65rem;font-weight:400;color:var(--mu);margin-left:6px">/ 주기</span></div>
+      </div>
+    </div>
+    ${modelRows}
+    ${factorsHtml}
+    ${dailyHtml}
+    <div style="font-size:.6rem;color:var(--ac);cursor:pointer;margin-top:6px" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 계산 근거 및 참고 문헌</div>
+    <div style="display:none">${refHtml}</div>
+  </div>`;
 }
 
 function renderLabResults() {
@@ -943,19 +1057,8 @@ function renderLabResults() {
   var typeLabels = {semen:'정액검사',blood:'혈액검사',hormone:'호르몬검사',ultrasound:'초음파',other:'기타'};
   var typeIcons = {semen:'🔬',blood:'🩸',hormone:'⚗️',ultrasound:'📷',other:'📋'};
 
-  // 임신확률 추정
-  const rate=estimateConceptionRate(m);
-  const rateColor=rate>=25?'#10b981':rate>=15?'#f59e0b':'#dc2626';
-  const rateHtml=`<div style="background:${rateColor}10;border:1.5px solid ${rateColor}40;border-radius:8px;padding:10px 12px;margin-bottom:10px">
-    <div style="display:flex;align-items:center;gap:8px">
-      <span style="font-size:1.2rem">🍀</span>
-      <div>
-        <div style="font-size:.72rem;color:var(--mu)">추정 월간 자연임신 확률</div>
-        <div style="font-size:1.1rem;font-weight:700;color:${rateColor}">${rate}%</div>
-      </div>
-      <div style="font-size:.6rem;color:var(--mu2);margin-left:auto;max-width:140px;text-align:right">검사결과+주기규칙성 기반 간이 추정 (참고용)</div>
-    </div>
-  </div>`;
+  // 임신확률 카드
+  const rateHtml=_renderConceptionCard(m);
 
   // 검사 목록 — 요약 카드 + 접기
   var listHtml = labs.map(function(l,i){
