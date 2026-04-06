@@ -945,20 +945,21 @@ function estimateConceptionRate(m) {
   let r2=null,tmsc=null;
   if(sv&&sv.count!==undefined&&sv.motility!==undefined&&sv.volume!==undefined){
     tmsc=Math.round(sv.volume*sv.count*(sv.motility/100));
-    // Ayala 2003 모델: TMSC>20M → ~25%, 5-20M → 10-20%, <5M → <5%
+    // Ayala 2003 + Hamilton 2015 + van Weert 2021: TMSC 구간별 자연임신율
     if(tmsc>=20) r2=25;
-    else if(tmsc>=10) r2=18;
+    else if(tmsc>=9) r2=18;
     else if(tmsc>=5) r2=10;
-    else r2=4;
+    else if(tmsc>=1) r2=5;
+    else r2=2;
   }
 
   // === 모델 3: 나이 기반 기저율 (여성 나이 — SSOT에서) ===
   // 간이: 28세 기준 ~25%, 데이터 없으면 기본값 사용
   const r3=25; // 28세 여성 기준
 
-  // 일별 확률 (배란일 기준 Wilcox 1995)
+  // 일별 확률 (배란일 기준 Wilcox 1995 + Dunson 2002 + 2019 앱기반 코호트 보정)
   const dailyRates=[
-    {day:-5,rate:4},{day:-4,rate:8},{day:-3,rate:15},{day:-2,rate:25},{day:-1,rate:28},{day:0,rate:10},{day:1,rate:0}
+    {day:-5,rate:4},{day:-4,rate:8},{day:-3,rate:14},{day:-2,rate:27},{day:-1,rate:31},{day:0,rate:12},{day:1,rate:1}
   ];
   // 보정: 정액검사 결과 반영
   const semenMult=sv?(r1/25):1;
@@ -1027,11 +1028,25 @@ function _renderConceptionCard(m) {
   // 레퍼런스
   const refHtml=`<div style="margin-top:8px;padding:6px 8px;background:var(--sf);border-radius:6px;font-size:.58rem;color:var(--mu2)">
     <div style="font-weight:600;margin-bottom:2px">📚 참고 문헌</div>
-    • Gnoth et al. (2003) Hum Reprod — 주기당 자연임신율 ~25%<br>
-    • Wilcox et al. (1995) NEJM — 배란일 기준 일별 임신 확률<br>
-    • Ayala et al. (2003) Fertil Steril — TMSC와 임신율 상관<br>
-    • WHO (2021) — 정액검사 정상 하한치 (5th edition)<br>
-    <span style="color:#dc2626">⚠️ 간이 추정치이며 의학적 진단이 아닙니다. 실제 확률은 개인차가 큽니다.</span>
+    <div style="margin-bottom:4px;font-weight:600">월간 임신율</div>
+    • Gnoth et al. (2003) Hum Reprod 18(9) — 주기당 자연임신율 ~25%<br>
+    • Wesselink et al. (2024) AJOG PRESTO 코호트 — 연령별 fecundability 최신 데이터<br>
+    <div style="margin-top:4px;margin-bottom:4px;font-weight:600">일별 확률 (가임기 윈도우)</div>
+    • Wilcox et al. (1995) NEJM 333(23) — 배란일 기준 일별 확률 원본<br>
+    • Dunson et al. (2002) Hum Reprod — 일별 확률 베이지안 보정<br>
+    • Bull et al. (2019) Fertil Steril 앱 기반 코호트(225,596주기) — 확인 연구<br>
+    • Manders et al. (2023) Cochrane — Timed intercourse 메타분석<br>
+    <div style="margin-top:4px;margin-bottom:4px;font-weight:600">정액검사·TMSC</div>
+    • WHO (2021) 정액검사 정상 하한치 6th edition<br>
+    • Ayala et al. (2003) Fertil Steril — TMSC-임신율 상관<br>
+    • Hamilton et al. (2015) Fertil Steril — TMSC 임계값 정밀화<br>
+    • van Weert et al. (2021) Fertil Steril — TMSC ≥9M 최적, 점진적 감소 확인<br>
+    • Mazzilli et al. (2025) — TMSC와 ICSI 수정률 상관<br>
+    <div style="margin-top:6px;padding:4px 6px;background:#fef2f2;border-radius:4px;color:#dc2626">
+    ⚠️ 간이 추정치이며 의학적 진단을 대체하지 않습니다.<br>
+    실제 확률은 나이, 불임 기간, 기저 질환, 타이밍 등에 따라 크게 달라집니다.<br>
+    정확한 평가는 생식의학과 전문의 상담을 권장합니다.
+    </div>
   </div>`;
 
   return `<div style="background:${rateColor}08;border:1.5px solid ${rateColor}30;border-radius:10px;padding:12px;margin-bottom:10px">
