@@ -1008,9 +1008,6 @@ function estimateConceptionRate(m) {
   return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,femaleAge,ageMult,factors,dailyRates:adjDaily,cumulative,cycleStd,avgCycle,hasSemen:!!sv,hasHormone:!!hv,timeline};
 }
 
-  return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,factors:factors1,dailyRates:adjDaily,cycleStd,avgCycle,hasSemen:!!sv};
-}
-
 function _renderConceptionCard(m) {
   const r=estimateConceptionRate(m);
   const rate=r.monthly;
