@@ -243,52 +243,139 @@ function renderRecentCycles(cycles, avgLen) {
     const diff=Math.round((new Date(sorted[i+1].startDate+'T00:00:00')-new Date(sorted[i].startDate+'T00:00:00'))/86400000);
     if(diff>0&&diff<60) realLengths[sorted[i].startDate]=diff;
   }
-  // 유효한 주기들
   const validLengths=Object.values(realLengths);
-  const avg=validLengths.length?(validLengths.reduce((a,b)=>a+b,0)/validLengths.length).toFixed(1):avgLen;
+  const calcAvg=arr=>arr.length?(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1):'-';
+  const calcStd=arr=>{if(arr.length<2)return'-';const m=arr.reduce((a,b)=>a+b,0)/arr.length;return Math.sqrt(arr.reduce((s,v)=>s+Math.pow(v-m,2),0)/arr.length).toFixed(1);};
+
+  // 전체 통계
+  const avg=calcAvg(validLengths);
   const shortest=validLengths.length?Math.min(...validLengths):'-';
   const longest=validLengths.length?Math.max(...validLengths):'-';
-  const variance=validLengths.length>1?Math.sqrt(validLengths.reduce((s,v)=>s+Math.pow(v-avg,2),0)/validLengths.length).toFixed(1):'-';
+  const variance=calcStd(validLengths);
+
+  // 최근 3주기 / 6주기 추이
+  const recent3=validLengths.slice(-3);
+  const recent6=validLengths.slice(-6);
+  const avg3=calcAvg(recent3);
+  const avg6=calcAvg(recent6);
+  const std3=calcStd(recent3);
+
+  // 규칙성 판정
+  const regularity=variance!=='-'?(parseFloat(variance)<=2?'매우 규칙적':parseFloat(variance)<=4?'규칙적':parseFloat(variance)<=7?'약간 불규칙':'불규칙'):'—';
+  const regColor=variance!=='-'?(parseFloat(variance)<=2?'#10b981':parseFloat(variance)<=4?'#3b82f6':parseFloat(variance)<=7?'#f59e0b':'#dc2626'):'var(--mu)';
+
+  // 최근 주기로부터 오늘까지 D+N
+  const today=kstToday();
+  const lastStart=cycles[0]?.startDate;
+  const dPlus=lastStart?Math.round((new Date(today+'T00:00:00')-new Date(lastStart+'T00:00:00'))/86400000):'';
+
+  // 평균 생리 기간
+  const durations=cycles.filter(c=>c.endDate).map(c=>Math.round((new Date(c.endDate+'T00:00:00')-new Date(c.startDate+'T00:00:00'))/86400000+1)).filter(d=>d>0&&d<15);
+  const avgDuration=calcAvg(durations);
+
   const pains=cycles.filter(c=>c.pain>=0).map(c=>c.pain);
   const avgPain=pains.length?(pains.reduce((a,b)=>a+b,0)/pains.length).toFixed(1):'-';
 
-  const statsHtml='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px">'
-    +[['평균',avg+'일'],['최단',shortest+'일'],['최장',longest+'일'],['변동성','±'+variance+'일']].map(([l,v])=>
+  // 통계 카드 (전체)
+  const statsHtml=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:4px">
+    ${[['전체 평균',avg+'일'],['최단',shortest+'일'],['최장',longest+'일'],['변동성','±'+variance+'일']].map(([l,v])=>
       `<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center">
-        <div style="font-size:.58rem;color:var(--mu)">${l}</div>
+        <div style="font-size:.55rem;color:var(--mu)">${l}</div>
         <div style="font-size:.82rem;font-weight:700">${v}</div>
-      </div>`).join('')
-    +'</div>'
-    +(avgPain!=='-'?`<div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">평균 통증: ${avgPain}/10 · 기록 ${pains.length}회</div>`:'');
+      </div>`).join('')}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:6px">
+    ${[['최근3주기',avg3+'일'],['최근6주기',avg6+'일'],['평균 기간',avgDuration!=='-'?avgDuration+'일':'-'],['규칙성','']].map(([l,v],idx)=>
+      idx===3
+      ?`<div style="background:${regColor}10;border:1px solid ${regColor}40;border-radius:6px;padding:6px;text-align:center">
+          <div style="font-size:.55rem;color:var(--mu)">${l}</div>
+          <div style="font-size:.72rem;font-weight:700;color:${regColor}">${regularity}</div>
+        </div>`
+      :`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center">
+          <div style="font-size:.55rem;color:var(--mu)">${l}</div>
+          <div style="font-size:.82rem;font-weight:700">${v}</div>
+        </div>`).join('')}
+  </div>
+  ${avgPain!=='-'?`<div style="font-size:.65rem;color:var(--mu);margin-bottom:6px">평균 통증: ${avgPain}/10 · 기록 ${pains.length}회${dPlus?` · 현재 D+${dPlus}`:''}</div>`
+    :(dPlus?`<div style="font-size:.65rem;color:var(--mu);margin-bottom:6px">현재 D+${dPlus}</div>`:'')}`;
 
+  // 기록 목록
   const rowsHtml=show.map(function(c,i){
     const cycleLen=realLengths[c.startDate];
     const duration=c.endDate?Math.round((new Date(c.endDate+'T00:00:00')-new Date(c.startDate+'T00:00:00'))/86400000+1)+'일간':'';
     const lenDiff=cycleLen?(cycleLen-avg):0;
     const lenColor=cycleLen?(Math.abs(lenDiff)>5?'#dc2626':Math.abs(lenDiff)>3?'#f59e0b':'#10b981'):'var(--mu)';
-    return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.78rem">'
-      + '<input type="checkbox" class="brk-cyc-sel" data-id="'+c.id+'" style="width:15px;height:15px;accent-color:var(--ac);flex-shrink:0">'
-      + '<span style="color:#dc2626;font-weight:600;min-width:70px">'+esc(c.startDate)+'</span>'
-      + (c.endDate?'<span style="color:var(--mu);font-size:.7rem">~'+esc(c.endDate.slice(5))+'</span>':'')
-      + (duration?'<span style="font-size:.6rem;color:var(--mu2)">'+duration+'</span>':'')
-      + (cycleLen?'<span class="log-tag" style="background:#fef3c7;color:'+lenColor+';font-weight:600">주기 '+cycleLen+'일</span>':'<span class="log-tag" style="background:#f3f4f6;color:var(--mu)">최근</span>')
-      + (c.flow?'<span class="log-tag" style="background:#fce7f3;color:#be185d">'+(c.flow==='heavy'?'많음':c.flow==='light'?'적음':'보통')+'</span>':'')
-      + (c.pain>=0?'<span class="log-tag" style="background:#fee2e2;color:#dc2626">통증'+c.pain+'</span>':'')
-      + (c.memo?'<span style="font-size:.6rem;color:var(--mu2)" title="'+esc(c.memo)+'">📝</span>':'')
+    // 최근(마지막) 기록은 D+N 표시
+    const isLatest=i===0&&!cycleLen;
+    return '<div style="display:flex;align-items:center;gap:5px;padding:5px 0;border-bottom:1px solid var(--bd);font-size:.75rem">'
+      + '<input type="checkbox" class="brk-cyc-sel" data-id="'+c.id+'" style="width:14px;height:14px;accent-color:var(--ac);flex-shrink:0">'
+      + '<span style="color:#dc2626;font-weight:600;min-width:68px;font-size:.72rem">'+esc(c.startDate)+'</span>'
+      + (c.endDate?'<span style="color:var(--mu);font-size:.65rem">~'+esc(c.endDate.slice(5))+'</span>':'')
+      + (duration?'<span style="font-size:.58rem;color:var(--mu2)">'+duration+'</span>':'')
+      + (cycleLen?'<span class="log-tag" style="background:#fef3c7;color:'+lenColor+';font-weight:600;font-size:.65rem">'+cycleLen+'일</span>'
+        :(isLatest&&dPlus?'<span class="log-tag" style="background:#dbeafe;color:#1d4ed8;font-size:.65rem">D+'+dPlus+'</span>':''))
+      + (c.flow?'<span class="log-tag" style="background:#fce7f3;color:#be185d;font-size:.62rem">'+(c.flow==='heavy'?'많음':c.flow==='light'?'적음':'보통')+'</span>':'')
+      + (c.pain>=0?'<span class="log-tag" style="background:#fee2e2;color:#dc2626;font-size:.62rem">통증'+c.pain+'</span>':'')
+      + (c.memo?'<span style="font-size:.55rem;color:var(--mu2)" title="'+esc(c.memo)+'">📝</span>':'')
+      + '<button class="accum-del" onclick="brkEditCycle('+i+')" style="margin-left:auto;font-size:.6rem;color:var(--ac)" title="수정">✏️</button>'
       + '</div>';
   }).join('');
 
-  const selectBar=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-    <label style="display:flex;align-items:center;gap:4px;font-size:.68rem;color:var(--mu);cursor:pointer">
+  const selectBar=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+    <label style="display:flex;align-items:center;gap:4px;font-size:.65rem;color:var(--mu);cursor:pointer">
       <input type="checkbox" onchange="document.querySelectorAll('.brk-cyc-sel').forEach(c=>c.checked=this.checked)" style="accent-color:var(--ac)"> 전체선택
     </label>
-    <button onclick="brkDeleteSelected()" style="background:none;border:1px solid #dc2626;border-radius:5px;padding:3px 10px;font-size:.68rem;cursor:pointer;color:#dc2626;margin-left:auto">🗑 선택 삭제</button>
+    <button onclick="brkDeleteSelected()" style="background:none;border:1px solid #dc2626;border-radius:5px;padding:2px 8px;font-size:.65rem;cursor:pointer;color:#dc2626;margin-left:auto">🗑 선택 삭제</button>
   </div>`;
 
   const toggleBtn=cycles.length>5
     ?`<button onclick="toggleShowAllCycles()" style="width:100%;background:none;border:1px solid var(--bd);border-radius:6px;padding:5px;font-size:.72rem;cursor:pointer;color:var(--mu);margin-top:4px">${_brkShowAllCycles?'▲ 접기':'▼ 전체 '+cycles.length+'건 보기'}</button>`:'';
 
   return statsHtml+selectBar+rowsHtml+toggleBtn;
+}
+
+// 생리주기 기록 수정
+function brkEditCycle(displayIdx) {
+  const m=getBrkMaster();if(!m) return;
+  const sorted=m.menstrualCycles.slice().sort((a,b)=>b.startDate.localeCompare(a.startDate));
+  const show=_brkShowAllCycles?sorted:sorted.slice(0,5);
+  const c=show[displayIdx];if(!c) return;
+  document.getElementById('confirm-title').textContent='✏️ 생리 기록 수정';
+  document.getElementById('confirm-body').innerHTML=`
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <div><div class="dx-form-label">시작일</div><input type="date" id="brk-edit-start" class="dx-form-input" style="width:140px" value="${c.startDate}"></div>
+      <div><div class="dx-form-label">종료일</div><input type="date" id="brk-edit-end" class="dx-form-input" style="width:140px" value="${c.endDate||''}"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <div><div class="dx-form-label">양</div><select id="brk-edit-flow" class="dx-form-input" style="width:100px">
+        <option value="" ${!c.flow?'selected':''}>기록 안함</option>
+        <option value="light" ${c.flow==='light'?'selected':''}>적음</option>
+        <option value="moderate" ${c.flow==='moderate'?'selected':''}>보통</option>
+        <option value="heavy" ${c.flow==='heavy'?'selected':''}>많음</option>
+      </select></div>
+      <div><div class="dx-form-label">통증 (0-10)</div><input type="number" id="brk-edit-pain" class="dx-form-input" style="width:80px" min="-1" max="10" value="${c.pain>=0?c.pain:'-1'}"></div>
+    </div>
+    <div class="dx-form-label">메모</div>
+    <input type="text" id="brk-edit-memo" class="dx-form-input" value="${esc(c.memo||'')}">`;
+  document.getElementById('confirm-foot').innerHTML=
+    `<button class="btn-cancel" onclick="closeConfirmModal()" style="font-size:.78rem">취소</button>`+
+    `<button class="btn-accum-add" onclick="brkSaveEditCycle(${c.id})">💾 저장</button>`;
+  openModal('confirm-modal');
+}
+
+async function brkSaveEditCycle(id) {
+  const m=getBrkMaster();if(!m) return;
+  const c=m.menstrualCycles.find(x=>x.id===id);if(!c) return;
+  c.startDate=document.getElementById('brk-edit-start')?.value||c.startDate;
+  c.endDate=document.getElementById('brk-edit-end')?.value||'';
+  c.flow=document.getElementById('brk-edit-flow')?.value||null;
+  const pain=parseInt(document.getElementById('brk-edit-pain')?.value);
+  c.pain=pain>=0?pain:-1;
+  c.memo=document.getElementById('brk-edit-memo')?.value||'';
+  await saveBrkMaster();
+  closeConfirmModal();
+  renderView('meds');
+  showToast('✅ 수정됨');
 }
 
 async function brkDeleteSelected() {
