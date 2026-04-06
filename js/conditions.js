@@ -335,7 +335,7 @@ function renderMedsViewLegacy() {
           </div>
           <div style="margin-top:6px">
             <button onclick="document.getElementById('dx-rx-photo').click()" style="background:none;border:1.5px solid var(--bd);border-radius:6px;padding:5px 12px;font-size:.72rem;cursor:pointer;color:var(--mu)">📷 처방전/약봉투 사진으로 추가</button>
-            <input type="file" id="dx-rx-photo" accept="image/*" capture="environment" style="display:none" onchange="processRxPhoto(this)">
+            <input type="file" id="dx-rx-photo" accept="image/*" style="display:none" onchange="processRxPhoto(this)">
           </div>
         </div>
         <div class="dx-form-group">

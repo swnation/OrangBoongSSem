@@ -235,15 +235,22 @@ function toggleShowAllCycles(){_brkShowAllCycles=!_brkShowAllCycles;renderView('
 function renderRecentCycles(cycles, avgLen) {
   if(!cycles.length) return '';
   const show=_brkShowAllCycles?cycles:cycles.slice(0,5);
-  // 통계 요약
-  const lengths=cycles.filter(c=>c.length>0).map(c=>c.length);
-  const avg=lengths.length?(lengths.reduce((a,b)=>a+b,0)/lengths.length).toFixed(1):avgLen;
-  const shortest=lengths.length?Math.min(...lengths):'-';
-  const longest=lengths.length?Math.max(...lengths):'-';
+
+  // 실제 주기 계산 (다음 시작일 - 현재 시작일)
+  const sorted=[...cycles].sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  const realLengths={};
+  for(let i=0;i<sorted.length-1;i++){
+    const diff=Math.round((new Date(sorted[i+1].startDate+'T00:00:00')-new Date(sorted[i].startDate+'T00:00:00'))/86400000);
+    if(diff>0&&diff<60) realLengths[sorted[i].startDate]=diff;
+  }
+  // 유효한 주기들
+  const validLengths=Object.values(realLengths);
+  const avg=validLengths.length?(validLengths.reduce((a,b)=>a+b,0)/validLengths.length).toFixed(1):avgLen;
+  const shortest=validLengths.length?Math.min(...validLengths):'-';
+  const longest=validLengths.length?Math.max(...validLengths):'-';
+  const variance=validLengths.length>1?Math.sqrt(validLengths.reduce((s,v)=>s+Math.pow(v-avg,2),0)/validLengths.length).toFixed(1):'-';
   const pains=cycles.filter(c=>c.pain>=0).map(c=>c.pain);
   const avgPain=pains.length?(pains.reduce((a,b)=>a+b,0)/pains.length).toFixed(1):'-';
-  // 주기 변동성 (표준편차)
-  const variance=lengths.length>1?Math.sqrt(lengths.reduce((s,v)=>s+Math.pow(v-avg,2),0)/lengths.length).toFixed(1):'-';
 
   const statsHtml='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px">'
     +[['평균',avg+'일'],['최단',shortest+'일'],['최장',longest+'일'],['변동성','±'+variance+'일']].map(([l,v])=>
@@ -255,14 +262,15 @@ function renderRecentCycles(cycles, avgLen) {
     +(avgPain!=='-'?`<div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">평균 통증: ${avgPain}/10 · 기록 ${pains.length}회</div>`:'');
 
   const rowsHtml=show.map(function(c,i){
+    const cycleLen=realLengths[c.startDate];
     const duration=c.endDate?Math.round((new Date(c.endDate+'T00:00:00')-new Date(c.startDate+'T00:00:00'))/86400000+1)+'일간':'';
-    const lenDiff=c.length?c.length-avg:0;
-    const lenColor=Math.abs(lenDiff)>5?'#dc2626':Math.abs(lenDiff)>3?'#f59e0b':'#10b981';
+    const lenDiff=cycleLen?(cycleLen-avg):0;
+    const lenColor=cycleLen?(Math.abs(lenDiff)>5?'#dc2626':Math.abs(lenDiff)>3?'#f59e0b':'#10b981'):'var(--mu)';
     return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.78rem">'
-      + '<span style="color:#dc2626;font-weight:600;min-width:50px">'+esc(c.startDate.slice(5))+'</span>'
+      + '<span style="color:#dc2626;font-weight:600;min-width:70px">'+esc(c.startDate)+'</span>'
       + (c.endDate?'<span style="color:var(--mu);font-size:.7rem">~'+esc(c.endDate.slice(5))+'</span>':'')
       + (duration?'<span style="font-size:.6rem;color:var(--mu2)">'+duration+'</span>':'')
-      + '<span class="log-tag" style="background:#fef3c7;color:'+lenColor+';font-weight:600">'+(c.length||avgLen)+'일</span>'
+      + (cycleLen?'<span class="log-tag" style="background:#fef3c7;color:'+lenColor+';font-weight:600">주기 '+cycleLen+'일</span>':'<span class="log-tag" style="background:#f3f4f6;color:var(--mu)">최근</span>')
       + (c.flow?'<span class="log-tag" style="background:#fce7f3;color:#be185d">'+(c.flow==='heavy'?'많음':c.flow==='light'?'적음':'보통')+'</span>':'')
       + (c.pain>=0?'<span class="log-tag" style="background:#fee2e2;color:#dc2626">통증'+c.pain+'</span>':'')
       + (c.memo?'<span style="font-size:.6rem;color:var(--mu2)" title="'+esc(c.memo)+'">📝</span>':'')
@@ -844,7 +852,7 @@ function renderLabResults() {
     + '<div style="display:flex;gap:6px;margin-bottom:10px">'
     + '<button class="btn-accum-add" onclick="brkOpenLabForm()" style="font-size:.75rem">+ 검사 결과 추가</button>'
     + '<button onclick="document.getElementById(\'brk-lab-photo\').click()" style="background:none;border:1.5px solid var(--bd);border-radius:6px;padding:5px 12px;font-size:.72rem;cursor:pointer;color:var(--mu)">📷 검사결과 사진 분석</button>'
-    + '<input type="file" id="brk-lab-photo" accept="image/*" capture="environment" style="display:none" onchange="brkProcessLabPhoto(this)">'
+    + '<input type="file" id="brk-lab-photo" accept="image/*" style="display:none" onchange="brkProcessLabPhoto(this)">'
     + '</div>'
     + '<div id="brk-lab-form" style="display:none;margin-bottom:12px;padding:12px;background:var(--sf2);border-radius:8px;border:1.5px solid var(--bd)">'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
