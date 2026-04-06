@@ -104,8 +104,8 @@ function handleToken(resp) {
   const unlocked = document.getElementById('sb-unlocked');
   if(unlocked) { unlocked.style.display='flex'; unlocked.style.flexDirection='column'; }
   loadDomainData(S.currentDomain).then(()=>{
-    // 백그라운드에서 나머지 도메인도 로드 (비용 추적 등)
-    if(typeof loadAllUserDomains==='function') loadAllUserDomains().then(()=>updateSidebarCost());
+    // 백그라운드에서 모든 도메인 로드 (비용 추적 + 교차도메인)
+    loadAllDomainsForCost().then(()=>updateSidebarCost());
   });
 }
 
@@ -174,6 +174,34 @@ async function getOrCreateFolder(name) {
   const cd=await cr.json(); if(cd.error) throw new Error(cd.error.message);
   showToast(`📁 "${name}" 폴더 생성됨`);
   return cd.id;
+}
+
+// 비용 추적용: 모든 도메인(유저 무관) 백그라운드 로드
+let _loadingAllForCost=false;
+async function loadAllDomainsForCost() {
+  if(_loadingAllForCost) return;
+  _loadingAllForCost=true;
+  const unloaded=Object.entries(DOMAINS).filter(([id])=>!S.domainState[id]?.master);
+  for(const [domainId,dc] of unloaded) {
+    try {
+      if(!S.domainState[domainId]) S.domainState[domainId]={};
+      const ds=S.domainState[domainId];
+      const folderId=await getOrCreateFolder(dc.folder);
+      ds.folderId=folderId;
+      const files=await driveSearch(dc.masterFile,folderId);
+      if(files.length>0) {
+        ds.masterFileId=files[0].id;
+        ds.master=await driveRead(ds.masterFileId);
+        const def=getDefaultMaster();
+        for(const k of Object.keys(def)){if(!(k in ds.master))ds.master[k]=def[k];}
+        // localStorage 비용 캐시 동기화
+        if(ds.master.usage_data) {
+          try{localStorage.setItem('om_usage_'+domainId,JSON.stringify(ds.master.usage_data));}catch(e){}
+        }
+      }
+    } catch(e) { /* 조용히 실패 */ }
+  }
+  _loadingAllForCost=false;
 }
 
 // ═══════════════════════════════════════════════════════════════
