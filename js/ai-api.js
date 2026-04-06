@@ -248,9 +248,26 @@ function getFullContext(question) {
   const condContext=getConditionsContext();
   const crossCtx=getCrossDomainContext();
   const fileCtx=getFileContext();
-  const contextSection=`[컨텍스트 / SSOT]\n${m.patient_context}${condContext}${crossCtx}${fileCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`;
+  // 나이 동적 치환 (생년월일 기반)
+  let patientCtx=m.patient_context||'';
+  patientCtx=_replaceDynamicAge(patientCtx);
+  const contextSection=`[컨텍스트 / SSOT]\n${patientCtx}${condContext}${crossCtx}${fileCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`;
   const logSummary=getRecentLogSummary();
   return contextSection+(logSummary?'\n\n'+logSummary:'');
+}
+
+// 생년월일 기반 나이 동적 치환
+const _USER_BIRTHDAYS={'오랑이':'1997-07-29','붕쌤':'1988-01-27'};
+function _replaceDynamicAge(text) {
+  const today=new Date(kstToday()+'T00:00:00');
+  Object.entries(_USER_BIRTHDAYS).forEach(([name,bd])=>{
+    const b=new Date(bd+'T00:00:00');
+    let age=today.getFullYear()-b.getFullYear();
+    if(today.getMonth()<b.getMonth()||(today.getMonth()===b.getMonth()&&today.getDate()<b.getDate())) age--;
+    // "28세" → 실제 나이로, "여성 28세" → "여성 29세" 등
+    text=text.replace(new RegExp('('+name+'[^\\n]{0,20}?)(\\d{2,3})세','g'),(match,prefix,oldAge)=>prefix+age+'세');
+  });
+  return text;
 }
 
 function buildUserPrompt(aiId, roundNum) {
