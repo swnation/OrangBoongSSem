@@ -1063,11 +1063,33 @@ function _renderLabsByPerson(labs, typeLabels, typeIcons) {
 }
 
 function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
-  let summary='';
+  let summary='', interpret='';
   if(l.type==='semen'&&l.values) {
     const g=_semenGrade(l.values);
     const vals=['Vol '+(l.values.volume||'-'),'Count '+(l.values.count||'-'),'Mot '+(l.values.motility||'-')+'%','Morph '+(l.values.morphology||'-')+'%'].join(' · ');
     summary=`<span style="font-weight:600;color:${g.color}">${g.grade}</span> ${vals}${g.issues.length?' <span style="color:#dc2626;font-size:.65rem">('+g.issues.join(', ')+')</span>':''}`;
+    // 해석 한 줄
+    if(!g.issues.length) interpret='전 항목 WHO 정상 범위 — 자연임신에 유리';
+    else if(g.issues.includes('형태↓')&&g.issues.length===1) interpret='기형정자증 소견 — 형태 개선 위해 항산화제(CoQ10, 비타민E) 권장, 3개월 후 재검';
+    else if(g.issues.includes('운동성↓')&&g.issues.length===1) interpret='정자 운동성 저하 — 생활습관 개선(금주, 운동) 후 재검 권장';
+    else if(g.issues.includes('농도↓')&&g.issues.length===1) interpret='정자 농도 저하 — 비뇨기과 정밀검사 권장';
+    else interpret='복합 이상 소견 — 비뇨기과 상담 및 IUI/ICSI 등 보조생식술 검토 권장';
+  } else if(l.type==='hormone'&&l.values) {
+    const parts=[];
+    if(l.values.AMH!==undefined) parts.push(l.values.AMH>=1.0?'AMH 정상':'AMH 저하→난소 예비력 감소');
+    if(l.values.FSH!==undefined) parts.push(l.values.FSH<=10?'FSH 정상':'FSH 상승→난소기능 확인 필요');
+    if(l.values.TSH!==undefined) parts.push(l.values.TSH<=4.0?'TSH 정상':'TSH 이상→갑상선 확인');
+    summary=Object.entries(l.values).map(([k,v])=>k+':'+v).join(' · ');
+    interpret=parts.join(' · ')||'수치 확인 필요';
+  } else if(l.type==='blood'&&l.values) {
+    const parts=[];
+    if(l.values.Hb!==undefined) parts.push(l.values.Hb>=12?'Hb 정상':'Hb 저하→빈혈');
+    if(l.values.AST!==undefined||l.values.ALT!==undefined) {
+      const ast=l.values.AST||0,alt=l.values.ALT||0;
+      parts.push(ast<=40&&alt<=40?'간기능 정상':'간수치 상승→확인 필요');
+    }
+    summary=Object.entries(l.values).map(([k,v])=>k+':'+v).join(' · ');
+    interpret=parts.join(' · ')||'';
   } else if(l.values&&typeof l.values==='object') {
     summary=Object.entries(l.values).slice(0,4).map(([k,v])=>k+':'+v).join(' · ');
   }
@@ -1079,6 +1101,7 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
       <button class="accum-del" onclick="brkDeleteLab(${globalIdx})" title="삭제">🗑</button>
     </div>
     <div style="font-size:.7rem;color:var(--tx);margin-top:3px">${summary}</div>
+    ${interpret?`<div style="font-size:.65rem;color:#0369a1;margin-top:2px">💡 ${esc(interpret)}</div>`:''}
     ${l.memo?`<div style="margin-top:3px">
       <div style="font-size:.6rem;color:var(--ac);cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 상세</div>
       <div style="display:none;font-size:.65rem;color:var(--mu);margin-top:3px;padding:5px;background:var(--sf);border-radius:5px;white-space:pre-wrap">${esc(l.memo)}</div>
