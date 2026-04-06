@@ -841,7 +841,11 @@ function renderLabResults() {
   }
 
   return '<div>'
-    + '<button class="btn-accum-add" onclick="brkOpenLabForm()" style="font-size:.75rem;margin-bottom:10px">+ 검사 결과 추가</button>'
+    + '<div style="display:flex;gap:6px;margin-bottom:10px">'
+    + '<button class="btn-accum-add" onclick="brkOpenLabForm()" style="font-size:.75rem">+ 검사 결과 추가</button>'
+    + '<button onclick="document.getElementById(\'brk-lab-photo\').click()" style="background:none;border:1.5px solid var(--bd);border-radius:6px;padding:5px 12px;font-size:.72rem;cursor:pointer;color:var(--mu)">📷 검사결과 사진 분석</button>'
+    + '<input type="file" id="brk-lab-photo" accept="image/*" capture="environment" style="display:none" onchange="brkProcessLabPhoto(this)">'
+    + '</div>'
     + '<div id="brk-lab-form" style="display:none;margin-bottom:12px;padding:12px;background:var(--sf2);border-radius:8px;border:1.5px solid var(--bd)">'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<div><div class="dx-form-label">날짜 *</div><input type="date" id="brk-lab-date" class="dx-form-input" style="width:140px"></div>'
@@ -929,6 +933,101 @@ async function brkSaveLab() {
   await saveBrkMaster();
   renderView('meds');
   showToast('검사 결과 저장됨');
+}
+
+// 📷 검사결과 사진 AI 분석
+async function brkProcessLabPhoto(input) {
+  if(!input.files||!input.files[0]) return;
+  const file=input.files[0];
+  const aiId=S.keys?.claude?'claude':(S.keys?.gpt?'gpt':null);
+  if(!aiId){showToast('⚠️ AI API 키가 필요합니다 (Claude 또는 GPT)');return;}
+  showToast('📷 검사결과 분석 중...',6000);
+  try {
+    const reader=new FileReader();
+    reader.onload=async function(e){
+      const base64=e.target.result.split(',')[1];
+      const mediaType=file.type||'image/jpeg';
+      const prompt=`이 이미지는 의료 검사 결과지(혈액검사, 호르몬검사, 정액검사, 초음파 등)입니다.
+
+다음을 추출하세요:
+1. 검사 종류 (semen/blood/hormone/ultrasound/other)
+2. 검사 날짜 (YYYY-MM-DD)
+3. 검사 대상 (남성이면 "붕쌤", 여성이면 "오랑이")
+4. 수치 결과 (항목명: 수치)
+5. 정상 범위 대비 이상 여부
+6. 임신 준비 관점에서의 소견
+
+반드시 아래 JSON으로 응답:
+{"type":"semen","date":"2026-04-06","who":"붕쌤","values":{"항목":"수치"},"abnormal":["이상 항목 설명"],"opinion":"임신준비 관점 소견"}`;
+      let result='';
+      if(aiId==='claude'){
+        const resp=await fetchWithRetry('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-api-key':S.keys.claude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+          body:JSON.stringify({model:S.models?.claude||DEFAULT_MODELS.claude,max_tokens:1500,messages:[{role:'user',content:[
+            {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+            {type:'text',text:prompt}
+          ]}]})
+        });
+        const data=await resp.json();
+        result=data.content?.[0]?.text||'';
+      } else {
+        const resp=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.keys.gpt},
+          body:JSON.stringify({model:S.models?.gpt||DEFAULT_MODELS.gpt,max_tokens:1500,messages:[{role:'user',content:[
+            {type:'image_url',image_url:{url:'data:'+mediaType+';base64,'+base64}},
+            {type:'text',text:prompt}
+          ]}]})
+        });
+        const data=await resp.json();
+        result=data.choices?.[0]?.message?.content||'';
+      }
+      const jsonMatch=result.match(/\{[\s\S]*\}/);
+      if(!jsonMatch){showToast('⚠️ 검사결과를 인식하지 못했습니다',3000);return;}
+      const parsed=JSON.parse(jsonMatch[0]);
+      // 결과를 인라인으로 표시
+      const abnormalHtml=(parsed.abnormal||[]).length
+        ?'<div style="margin-top:6px"><div style="font-size:.7rem;font-weight:600;color:#dc2626">⚠️ 이상 소견:</div>'+parsed.abnormal.map(a=>'<div style="font-size:.72rem;color:#dc2626;padding:2px 0">• '+esc(a)+'</div>').join('')+'</div>':'';
+      const valuesHtml=parsed.values?Object.entries(parsed.values).map(([k,v])=>'<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">'+esc(k)+': '+esc(String(v))+'</span>').join(' '):'';
+      document.getElementById('confirm-title').textContent='📷 검사결과 분석';
+      document.getElementById('confirm-body').innerHTML=`
+        <div style="font-size:.78rem;margin-bottom:6px"><b>검사:</b> ${esc(parsed.type||'기타')} · <b>날짜:</b> ${esc(parsed.date||'미인식')} · <b>대상:</b> ${esc(parsed.who||'')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${valuesHtml}</div>
+        ${abnormalHtml}
+        ${parsed.opinion?'<div style="margin-top:8px;padding:8px;background:#f0fdf4;border-radius:6px;font-size:.75rem;color:#15803d"><b>💡 소견:</b> '+esc(parsed.opinion)+'</div>':''}
+        <div style="margin-top:10px;font-size:.7rem;color:var(--mu)">위 내용을 검사결과로 저장하시겠습니까?</div>`;
+      document.getElementById('confirm-foot').innerHTML=
+        '<button class="btn-cancel" onclick="closeConfirmModal()" style="font-size:.78rem">취소</button>'+
+        `<button class="btn-accum-add" onclick="brkSaveLabFromPhoto()">💾 저장</button>`;
+      window._brkLabPhotoResult=parsed;
+      openModal('confirm-modal');
+    };
+    reader.readAsDataURL(file);
+  } catch(e){
+    showToast('❌ 분석 실패: '+e.message,4000);
+  }
+  input.value='';
+}
+
+async function brkSaveLabFromPhoto() {
+  const parsed=window._brkLabPhotoResult;
+  if(!parsed) return;
+  const m=getBrkMaster();if(!m) return;
+  const typeMap={semen:'semen',blood:'blood',hormone:'hormone',ultrasound:'ultrasound'};
+  const type=typeMap[parsed.type]||'other';
+  const values=parsed.values||{};
+  if(type==='other'&&parsed.opinion) values.text=(parsed.opinion||'');
+  const memo=[
+    ...(parsed.abnormal||[]).map(a=>'⚠️ '+a),
+    parsed.opinion?'💡 '+parsed.opinion:''
+  ].filter(Boolean).join('; ');
+  m.labResults.push({id:Date.now(),date:parsed.date||kstToday(),who:parsed.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo});
+  await saveBrkMaster();
+  closeConfirmModal();
+  delete window._brkLabPhotoResult;
+  renderView('meds');
+  showToast('✅ 검사결과 저장됨');
 }
 
 async function brkDeleteLab(idx) {
@@ -1123,13 +1222,12 @@ async function refreshDrugSafety(drugName) {
 }
 
 function renderDrugSafety() {
-  // Collect meds from cross-domain conditions
-  var currentUser = DC().user;
+  // Collect meds from ALL domains (붕룩이는 두 유저 모두의 약물을 봄)
   var allMeds = {};
   Object.entries(S.domainState).forEach(function(entry){
     var domainId = entry[0], ds = entry[1];
     var dd = DOMAINS[domainId];
-    if (!dd || dd.user !== currentUser || !ds.master?.conditions) return;
+    if (!dd || domainId === 'bungruki' || !ds.master?.conditions) return;
     ds.master.conditions.forEach(function(c){
       if (!c.medsList?.length || c.status === 'resolved') return;
       c.medsList.forEach(function(med){
