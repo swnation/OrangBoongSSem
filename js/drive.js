@@ -103,7 +103,10 @@ function handleToken(resp) {
   const locked = document.getElementById('sb-locked'); if(locked) locked.style.display='none';
   const unlocked = document.getElementById('sb-unlocked');
   if(unlocked) { unlocked.style.display='flex'; unlocked.style.flexDirection='column'; }
-  loadDomainData(S.currentDomain);
+  loadDomainData(S.currentDomain).then(()=>{
+    // 백그라운드에서 나머지 도메인도 로드 (비용 추적 등)
+    if(typeof loadAllUserDomains==='function') loadAllUserDomains().then(()=>updateSidebarCost());
+  });
 }
 
 function requireLogin() {

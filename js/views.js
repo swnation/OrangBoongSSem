@@ -1210,9 +1210,12 @@ function renderUsageView() {
   const domainCosts = {};
   let totalToday=0, totalMonth=0, totalAll=0;
   const allUsageByDate = {}; // {date: {cost, byAI:{gpt:x,...}}}
+  const processedDomains=new Set();
 
+  // 1) 로드된 도메인
   Object.entries(S.domainState).forEach(([domainId, ds])=>{
     if(!ds.master?.usage_data) return;
+    processedDomains.add(domainId);
     const dd = DOMAINS[domainId];
     let dToday=0, dMonth=0, dAll=0;
     Object.entries(ds.master.usage_data).forEach(([date,aiMap])=>{
@@ -1228,7 +1231,6 @@ function renderUsageView() {
       if(date.startsWith(monthStr)){dMonth+=dayCost;totalMonth+=dayCost;}
       dAll+=dayCost; totalAll+=dayCost;
     });
-    // Per-domain AI breakdown
     const dByAI={};
     Object.entries(ds.master.usage_data).forEach(([date,aiMap])=>{
       Object.entries(aiMap).forEach(([aiId,data])=>{
@@ -1240,6 +1242,36 @@ function renderUsageView() {
       });
     });
     if(dToday>0||dMonth>0||dAll>0) domainCosts[domainId]={label:`${dd.icon} ${dd.user}·${dd.label}`,today:dToday,month:dMonth,all:dAll,byAI:dByAI};
+  });
+
+  // 2) 미로드 도메인은 localStorage 캐시에서 읽기
+  Object.entries(DOMAINS).forEach(([domainId,dd])=>{
+    if(processedDomains.has(domainId)) return;
+    try {
+      const cached=localStorage.getItem('om_usage_'+domainId);
+      if(!cached) return;
+      const usageData=JSON.parse(cached);
+      let dToday=0, dMonth=0, dAll=0;
+      const dByAI={};
+      Object.entries(usageData).forEach(([date,aiMap])=>{
+        let dayCost=0;
+        Object.entries(aiMap).forEach(([aiId,data])=>{
+          const cost=recalcCost(data);
+          dayCost+=cost;
+          if(!allUsageByDate[date]) allUsageByDate[date]={cost:0,byAI:{}};
+          allUsageByDate[date].cost+=cost;
+          allUsageByDate[date].byAI[aiId]=(allUsageByDate[date].byAI[aiId]||0)+cost;
+          if(!dByAI[aiId]) dByAI[aiId]={today:0,month:0,all:0};
+          if(date===todayStr) dByAI[aiId].today+=cost;
+          if(date.startsWith(monthStr)) dByAI[aiId].month+=cost;
+          dByAI[aiId].all+=cost;
+        });
+        if(date===todayStr){dToday+=dayCost;totalToday+=dayCost;}
+        if(date.startsWith(monthStr)){dMonth+=dayCost;totalMonth+=dayCost;}
+        dAll+=dayCost; totalAll+=dayCost;
+      });
+      if(dToday>0||dMonth>0||dAll>0) domainCosts[domainId]={label:`${dd.icon} ${dd.user}·${dd.label}`,today:dToday,month:dMonth,all:dAll,byAI:dByAI};
+    } catch(e){}
   });
 
   // ── 최근 14일 일별 차트 ──

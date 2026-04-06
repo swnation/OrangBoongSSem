@@ -23,16 +23,23 @@ function recalcCost(data) {
 function getSidebarCostToday() {
   const today=kstToday();
   let total=0;
-  // 모든 로드된 도메인의 비용 합산
-  Object.values(S.domainState).forEach(ds=>{
+  // 1) 로드된 도메인의 비용 합산
+  const loadedDomains=new Set();
+  Object.entries(S.domainState).forEach(([domId,ds])=>{
     const usage=ds.master?.usage_data?.[today];
-    if(usage) total+=Object.values(usage).reduce((s,v)=>s+recalcCost(v),0);
+    if(usage) { total+=Object.values(usage).reduce((s,v)=>s+recalcCost(v),0); loadedDomains.add(domId); }
   });
-  // 현재 도메인만 로드된 경우 fallback
-  if(total===0) {
-    const usage=DM()?.usage_data?.[today];
-    if(usage) total=Object.values(usage).reduce((s,v)=>s+recalcCost(v),0);
-  }
+  // 2) 미로드 도메인은 localStorage 캐시에서 읽기
+  Object.keys(DOMAINS).forEach(domId=>{
+    if(loadedDomains.has(domId)) return;
+    try {
+      const cached=localStorage.getItem('om_usage_'+domId);
+      if(!cached) return;
+      const usageData=JSON.parse(cached);
+      const usage=usageData?.[today];
+      if(usage) total+=Object.values(usage).reduce((s,v)=>s+recalcCost(v),0);
+    } catch(e){}
+  });
   return total;
 }
 function updateSidebarCost() {
