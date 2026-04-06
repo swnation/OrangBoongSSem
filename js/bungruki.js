@@ -921,6 +921,8 @@ function estimateConceptionRate(m) {
   const labs=m.labResults||[];
   const semenLabs=labs.filter(l=>l.type==='semen'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
   const sv=semenLabs[0]?.values;
+  const hormoneLabs=labs.filter(l=>l.type==='hormone'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
+  const hv=hormoneLabs[0]?.values;
   // 주기 분석
   const sorted=[...cycles].sort((a,b)=>a.startDate.localeCompare(b.startDate));
   const lens=[];
@@ -928,42 +930,76 @@ function estimateConceptionRate(m) {
   const cycleStd=lens.length>=3?Math.sqrt(lens.reduce((s,v)=>s+Math.pow(v-lens.reduce((a,b)=>a+b,0)/lens.length,2),0)/lens.length):0;
   const avgCycle=lens.length?lens.reduce((a,b)=>a+b,0)/lens.length:30;
 
-  // === 모델 1: WHO/Hunault 간이 모델 ===
-  const factors1=[];
-  let r1=25; // 건강한 커플 기저 (Gnoth 2003: 주기당 ~25%)
-  if(sv){
-    if(sv.morphology!==undefined&&sv.morphology<4){r1*=0.55;factors1.push({name:'형태<4%',impact:-45,tip:'항산화제(CoQ10 200mg, 비타민E, 아연) 3개월 복용'});}
-    if(sv.motility!==undefined&&sv.motility<42){r1*=0.65;factors1.push({name:'운동성<42%',impact:-35,tip:'금주·금연, 규칙적 운동, 꽉 끼는 속옷 회피'});}
-    if(sv.count!==undefined&&sv.count<15){r1*=0.45;factors1.push({name:'농도<15M',impact:-55,tip:'비뇨기과 정밀검사 권장'});}
-    if(sv.count!==undefined&&sv.count>=15&&sv.motility!==undefined&&sv.motility>=42&&(sv.morphology===undefined||sv.morphology>=4)){factors1.push({name:'정액검사 정상',impact:0,tip:'양호'});}
-  } else {factors1.push({name:'정액검사 미실시',impact:0,tip:'검사 추가 시 정확도 향상'});}
-  if(cycleStd>7){r1*=0.7;factors1.push({name:'주기 불규칙(±'+cycleStd.toFixed(1)+'일)',impact:-30,tip:'배란일 예측 정확도↓, 배란테스트기(LH strip) 병행 권장'});}
-  else if(lens.length>=3){factors1.push({name:'주기 규칙적(±'+cycleStd.toFixed(1)+'일)',impact:0,tip:'배란 예측 유리'});}
-  r1=Math.round(Math.max(3,Math.min(r1,30)));
+  // === 여성 연령 (SSOT에서 파싱 또는 기본값) ===
+  let femaleAge=28;
+  try{const ctx=DOMAINS['orangi-health']?.defaultContext||DOMAINS['orangi-migraine']?.defaultContext||'';const ageMatch=ctx.match(/(\d{2,3})\s*세/);if(ageMatch)femaleAge=parseInt(ageMatch[1]);}catch(e){}
+  // 연령 보정 계수 (PRESTO 2024 + Gnoth 2003)
+  let ageMult=1.0;
+  if(femaleAge<=30) ageMult=1.0;
+  else if(femaleAge<=33) ageMult=0.85;
+  else if(femaleAge<=35) ageMult=0.75;
+  else if(femaleAge<=37) ageMult=0.60;
+  else if(femaleAge<=39) ageMult=0.45;
+  else if(femaleAge<=42) ageMult=0.25;
+  else ageMult=0.10;
 
-  // === 모델 2: TMSC(Total Motile Sperm Count) 기반 ===
+  // === 모델 1: 종합 모델 (연령+정액+주기+호르몬) ===
+  const factors=[];
+  let r1=25*ageMult; // 연령 보정 기저율
+  factors.push({name:`여성 ${femaleAge}세`,impact:ageMult<1?Math.round((ageMult-1)*100):0,tip:ageMult>=0.75?'양호한 연령대':'난소 예비력 검사(AMH) 권장'});
+  // 정액검사
+  if(sv){
+    if(sv.morphology!==undefined&&sv.morphology<4){r1*=0.55;factors.push({name:'형태<4% (기형정자증)',impact:-45,tip:'항산화제(CoQ10 200mg, 비타민E, 아연) 3개월 복용 후 재검'});}
+    if(sv.motility!==undefined&&sv.motility<42){r1*=0.65;factors.push({name:'운동성<42%',impact:-35,tip:'금주·금연, 규칙적 유산소 운동, 꽉 끼는 속옷·사우나 회피'});}
+    if(sv.count!==undefined&&sv.count<15){r1*=0.45;factors.push({name:'농도<15M/mL',impact:-55,tip:'비뇨기과 정밀검사(정계정맥류 등) 권장'});}
+    if(sv.count!==undefined&&sv.count>=15&&sv.motility!==undefined&&sv.motility>=42&&(sv.morphology===undefined||sv.morphology>=4)){factors.push({name:'정액검사 정상',impact:0,tip:'양호'});}
+  } else {factors.push({name:'정액검사 미실시',impact:0,tip:'검사 추가 시 정확도 크게 향상'});}
+  // 주기 규칙성
+  if(cycleStd>7){r1*=0.7;factors.push({name:'주기 불규칙(±'+cycleStd.toFixed(1)+'일)',impact:-30,tip:'배란테스트기(LH strip) 필수 + 배란 앱 연동'});}
+  else if(lens.length>=3){factors.push({name:'주기 규칙적(±'+cycleStd.toFixed(1)+'일)',impact:0,tip:'배란 예측 유리 — 주기 중간 2일 전후 집중'});}
+  // AMH 반영 (있으면)
+  if(hv?.AMH!==undefined){
+    if(hv.AMH<0.5){r1*=0.5;factors.push({name:'AMH<0.5 (난소예비력 저하)',impact:-50,tip:'생식의학과 상담 — IVF 조기 검토'});}
+    else if(hv.AMH<1.0){r1*=0.8;factors.push({name:'AMH 0.5-1.0 (경계)',impact:-20,tip:'난소기능 추적 관찰 권장'});}
+    else{factors.push({name:'AMH≥1.0 (정상)',impact:0,tip:'난소 예비력 양호'});}
+  }
+  // FSH
+  if(hv?.FSH!==undefined&&hv.FSH>10){r1*=0.7;factors.push({name:'FSH>10 (상승)',impact:-30,tip:'난소기능 저하 가능 — 생식의학과 상담'});}
+  r1=Math.round(Math.max(2,Math.min(r1,30)));
+
+  // === 모델 2: TMSC 기반 ===
   let r2=null,tmsc=null;
   if(sv&&sv.count!==undefined&&sv.motility!==undefined&&sv.volume!==undefined){
     tmsc=Math.round(sv.volume*sv.count*(sv.motility/100));
-    // Ayala 2003 + Hamilton 2015 + van Weert 2021: TMSC 구간별 자연임신율
-    if(tmsc>=20) r2=25;
-    else if(tmsc>=9) r2=18;
-    else if(tmsc>=5) r2=10;
-    else if(tmsc>=1) r2=5;
+    if(tmsc>=20) r2=Math.round(25*ageMult);
+    else if(tmsc>=9) r2=Math.round(18*ageMult);
+    else if(tmsc>=5) r2=Math.round(10*ageMult);
+    else if(tmsc>=1) r2=Math.round(5*ageMult);
     else r2=2;
   }
 
-  // === 모델 3: 나이 기반 기저율 (여성 나이 — SSOT에서) ===
-  // 간이: 28세 기준 ~25%, 데이터 없으면 기본값 사용
-  const r3=25; // 28세 여성 기준
+  // === 모델 3: 연령 기저율 (연령만) ===
+  const r3=Math.round(25*ageMult);
 
-  // 일별 확률 (배란일 기준 Wilcox 1995 + Dunson 2002 + 2019 앱기반 코호트 보정)
+  // 누적 확률 (1-(1-p)^n)
+  const cumulative=[1,3,6,9,12].map(n=>({months:n,pct:Math.round((1-Math.pow(1-r1/100,n))*100)}));
+
+  // 일별 확률 (배란일 기준)
   const dailyRates=[
     {day:-5,rate:4},{day:-4,rate:8},{day:-3,rate:14},{day:-2,rate:27},{day:-1,rate:31},{day:0,rate:12},{day:1,rate:1}
   ];
-  // 보정: 정액검사 결과 반영
-  const semenMult=sv?(r1/25):1;
-  const adjDaily=dailyRates.map(d=>({...d,adjRate:Math.round(Math.max(0,d.rate*semenMult))}));
+  const semenMult=sv?(r1/(25*ageMult||25)):1;
+  const adjDaily=dailyRates.map(d=>({...d,adjRate:Math.round(Math.max(0,d.rate*semenMult*ageMult))}));
+
+  // 개인화 타임라인 권장
+  let timeline='';
+  if(r1>=20) timeline='자연임신 시도 6개월 → 미임신 시 생식의학과 상담';
+  else if(r1>=12) timeline='자연임신 시도 3-6개월 + 배란 타이밍 최적화 → 미임신 시 IUI 검토';
+  else if(r1>=5) timeline='생식의학과 조기 상담 권장 — IUI 또는 IVF 병행 검토';
+  else timeline='생식의학과 즉시 상담 — IVF/ICSI 적극 검토';
+
+  return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,femaleAge,ageMult,factors,dailyRates:adjDaily,cumulative,cycleStd,avgCycle,hasSemen:!!sv,hasHormone:!!hv,timeline};
+}
 
   return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,factors:factors1,dailyRates:adjDaily,cycleStd,avgCycle,hasSemen:!!sv};
 }
@@ -1059,7 +1095,24 @@ function _renderConceptionCard(m) {
     </div>
     ${modelRows}
     ${factorsHtml}
+    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-top:8px;margin-bottom:4px">📈 누적 임신 확률 <span style="font-weight:400;font-size:.6rem">(시도 기간별)</span></div>
+    <div style="display:flex;align-items:flex-end;gap:4px;height:55px;margin-bottom:2px">
+      ${r.cumulative.map(c=>{
+        const h=Math.max(4,Math.round(c.pct/100*48));
+        const col=c.pct>=80?'#10b981':c.pct>=50?'#3b82f6':'#f59e0b';
+        return `<div style="flex:1;text-align:center">
+          <div style="font-size:.55rem;color:${col};font-weight:700">${c.pct}%</div>
+          <div style="height:${h}px;background:${col};border-radius:3px 3px 0 0;margin:0 auto;width:60%"></div>
+          <div style="font-size:.5rem;color:var(--mu)">${c.months}개월</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:.55rem;color:var(--mu2);text-align:center">월 ${rate}% 기준 누적 (독립 시행 가정)</div>
     ${dailyHtml}
+    <div style="margin-top:8px;padding:8px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px">
+      <div style="font-size:.68rem;font-weight:600;color:#0369a1;margin-bottom:3px">🗓 권장 타임라인</div>
+      <div style="font-size:.7rem;color:#0c4a6e">${r.timeline}</div>
+    </div>
     <div style="font-size:.6rem;color:var(--ac);cursor:pointer;margin-top:6px" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 계산 근거 및 참고 문헌</div>
     <div style="display:none">${refHtml}</div>
   </div>`;
