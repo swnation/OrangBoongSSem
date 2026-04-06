@@ -1,5 +1,11 @@
 // js/bungruki.js — 붕룩이 임신 준비 대시보드 (Phase 5 모듈화)
 
+// ── 로컬 날짜 포맷 (UTC 변환 방지) ──
+function _localDateStr(d) {
+  const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
+
 // ── 붕룩이 전용 대시보드 (기능 7) ──
 
 // 3소스 임신 약물 안전성 DB: fda(FDA등급), pllr(PLLR 요약), kfda(한국 식약처)
@@ -157,7 +163,7 @@ function getAvgCycleLength(cycles) {
 function getOvulationDate(lmpDate, cycleLen) {
   var d = new Date(lmpDate + 'T00:00:00');
   d.setDate(d.getDate() + cycleLen - 14);
-  return d.toISOString().slice(0,10);
+  return _localDateStr(d);
 }
 
 function isFertileWindow(dateStr, ovDate) {
@@ -223,17 +229,51 @@ function renderNextCycleInfo(today, lastCycle, avgLen) {
     + '</div>';
 }
 
+let _brkShowAllCycles=false;
+function toggleShowAllCycles(){_brkShowAllCycles=!_brkShowAllCycles;renderView('meds');}
+
 function renderRecentCycles(cycles, avgLen) {
-  return cycles.slice(0,3).map(function(c,i){
-    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.78rem">'
-      + '<span style="color:#dc2626;font-weight:600">'+esc(c.startDate.slice(5))+'</span>'
-      + (c.endDate ? '<span style="color:var(--mu)">~ '+esc(c.endDate.slice(5))+'</span>' : '')
-      + '<span class="log-tag" style="background:#fef3c7;color:#92400e">'+(c.length||avgLen)+'일</span>'
+  if(!cycles.length) return '';
+  const show=_brkShowAllCycles?cycles:cycles.slice(0,5);
+  // 통계 요약
+  const lengths=cycles.filter(c=>c.length>0).map(c=>c.length);
+  const avg=lengths.length?(lengths.reduce((a,b)=>a+b,0)/lengths.length).toFixed(1):avgLen;
+  const shortest=lengths.length?Math.min(...lengths):'-';
+  const longest=lengths.length?Math.max(...lengths):'-';
+  const pains=cycles.filter(c=>c.pain>=0).map(c=>c.pain);
+  const avgPain=pains.length?(pains.reduce((a,b)=>a+b,0)/pains.length).toFixed(1):'-';
+  // 주기 변동성 (표준편차)
+  const variance=lengths.length>1?Math.sqrt(lengths.reduce((s,v)=>s+Math.pow(v-avg,2),0)/lengths.length).toFixed(1):'-';
+
+  const statsHtml='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px">'
+    +[['평균',avg+'일'],['최단',shortest+'일'],['최장',longest+'일'],['변동성','±'+variance+'일']].map(([l,v])=>
+      `<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center">
+        <div style="font-size:.58rem;color:var(--mu)">${l}</div>
+        <div style="font-size:.82rem;font-weight:700">${v}</div>
+      </div>`).join('')
+    +'</div>'
+    +(avgPain!=='-'?`<div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">평균 통증: ${avgPain}/10 · 기록 ${pains.length}회</div>`:'');
+
+  const rowsHtml=show.map(function(c,i){
+    const duration=c.endDate?Math.round((new Date(c.endDate+'T00:00:00')-new Date(c.startDate+'T00:00:00'))/86400000+1)+'일간':'';
+    const lenDiff=c.length?c.length-avg:0;
+    const lenColor=Math.abs(lenDiff)>5?'#dc2626':Math.abs(lenDiff)>3?'#f59e0b':'#10b981';
+    return '<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.78rem">'
+      + '<span style="color:#dc2626;font-weight:600;min-width:50px">'+esc(c.startDate.slice(5))+'</span>'
+      + (c.endDate?'<span style="color:var(--mu);font-size:.7rem">~'+esc(c.endDate.slice(5))+'</span>':'')
+      + (duration?'<span style="font-size:.6rem;color:var(--mu2)">'+duration+'</span>':'')
+      + '<span class="log-tag" style="background:#fef3c7;color:'+lenColor+';font-weight:600">'+(c.length||avgLen)+'일</span>'
       + (c.flow?'<span class="log-tag" style="background:#fce7f3;color:#be185d">'+(c.flow==='heavy'?'많음':c.flow==='light'?'적음':'보통')+'</span>':'')
-      + (c.pain>=0?'<span class="log-tag" style="background:#fee2e2;color:#dc2626">통증 '+c.pain+'</span>':'')
+      + (c.pain>=0?'<span class="log-tag" style="background:#fee2e2;color:#dc2626">통증'+c.pain+'</span>':'')
+      + (c.memo?'<span style="font-size:.6rem;color:var(--mu2)" title="'+esc(c.memo)+'">📝</span>':'')
       + '<button class="accum-del" onclick="brkDeleteCycle('+i+')" style="margin-left:auto" title="삭제">🗑</button>'
       + '</div>';
   }).join('');
+
+  const toggleBtn=cycles.length>5
+    ?`<button onclick="toggleShowAllCycles()" style="width:100%;background:none;border:1px solid var(--bd);border-radius:6px;padding:5px;font-size:.72rem;cursor:pointer;color:var(--mu);margin-top:4px">${_brkShowAllCycles?'▲ 접기':'▼ 전체 '+cycles.length+'건 보기'}</button>`:'';
+
+  return statsHtml+rowsHtml+toggleBtn;
 }
 
 function renderCycleTracker() {
@@ -252,18 +292,18 @@ function renderCycleTracker() {
   cycles.forEach(function(c) {
     var s = new Date(c.startDate+'T00:00:00');
     var e = c.endDate ? new Date(c.endDate+'T00:00:00') : new Date(s.getTime() + 4*86400000);
-    for (var d = new Date(s); d <= e; d.setDate(d.getDate()+1)) periodDays[d.toISOString().slice(0,10)] = true;
+    for (var d = new Date(s); d <= e; d.setDate(d.getDate()+1)) periodDays[_localDateStr(d)] = true;
     var ovD = getOvulationDate(c.startDate, c.length || avgLen);
     ovDays[ovD] = true;
-    for (var i = -3; i <= 3; i++) { var fd = new Date(ovD+'T00:00:00'); fd.setDate(fd.getDate()+i); fertileDays[fd.toISOString().slice(0,10)] = true; }
+    for (var i = -3; i <= 3; i++) { var fd = new Date(ovD+'T00:00:00'); fd.setDate(fd.getDate()+i); fertileDays[_localDateStr(fd)] = true; }
   });
   if (lastCycle) {
     var nextStart = new Date(lastCycle.startDate+'T00:00:00');
     nextStart.setDate(nextStart.getDate() + avgLen);
-    for (var pd = 0; pd < 5; pd++) { var pdate = new Date(nextStart.getTime() + pd*86400000); var pstr = pdate.toISOString().slice(0,10); if (!periodDays[pstr]) periodDays[pstr] = 'predicted'; }
-    var nextOv = getOvulationDate(nextStart.toISOString().slice(0,10), avgLen);
+    for (var pd = 0; pd < 5; pd++) { var pdate = new Date(nextStart.getTime() + pd*86400000); var pstr = _localDateStr(pdate); if (!periodDays[pstr]) periodDays[pstr] = 'predicted'; }
+    var nextOv = getOvulationDate(_localDateStr(nextStart), avgLen);
     if (!ovDays[nextOv]) ovDays[nextOv] = 'predicted';
-    for (var fi = -3; fi <= 3; fi++) { var fdd = new Date(nextOv+'T00:00:00'); fdd.setDate(fdd.getDate()+fi); var fstr = fdd.toISOString().slice(0,10); if (!fertileDays[fstr]) fertileDays[fstr] = 'predicted'; }
+    for (var fi = -3; fi <= 3; fi++) { var fdd = new Date(nextOv+'T00:00:00'); fdd.setDate(fdd.getDate()+fi); var fstr = _localDateStr(fdd); if (!fertileDays[fstr]) fertileDays[fstr] = 'predicted'; }
   }
 
   var calCells = buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDays, m.dailyChecks);
@@ -537,7 +577,7 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
   var weekDays = [];
   for (var i = 6; i >= 0; i--) {
     var d = new Date(new Date(today+'T00:00:00').getTime() - i*86400000);
-    weekDays.push(d.toISOString().slice(0,10));
+    weekDays.push(_localDateStr(d));
   }
   var weekSummary = items.map(function(it) {
     var count = 0;
