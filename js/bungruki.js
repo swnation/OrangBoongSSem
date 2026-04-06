@@ -1037,9 +1037,53 @@ function renderLabResults() {
     + '<button class="btn-accum-add" onclick="brkSaveLab()">💾 저장</button>'
     + '<button class="btn-cancel" onclick="document.getElementById(\'brk-lab-form\').style.display=\'none\'" style="font-size:.78rem">취소</button>'
     + '</div></div>'
-    + listHtml
+    + _renderLabsByPerson(labs, typeLabels, typeIcons)
     + trendHtml
     + '</div>';
+}
+
+function _renderLabsByPerson(labs, typeLabels, typeIcons) {
+  const bung=labs.filter(l=>(l.who||'')==='붕쌤');
+  const orangi=labs.filter(l=>(l.who||'')==='오랑이');
+  const other=labs.filter(l=>l.who!=='붕쌤'&&l.who!=='오랑이');
+  const renderGroup=(title,icon,color,items)=>{
+    if(!items.length) return '';
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:2px solid ${color}">
+        <span style="font-size:.85rem">${icon}</span>
+        <span style="font-size:.78rem;font-weight:700;color:${color}">${title}</span>
+        <span style="font-size:.62rem;color:var(--mu)">${items.length}건</span>
+      </div>
+      ${items.map((l,i)=>_renderLabCard(l,labs.indexOf(l),typeLabels,typeIcons)).join('')}
+    </div>`;
+  };
+  return renderGroup('붕쌤','🩵','#06b6d4',bung)
+    + renderGroup('오랑이','🧡','#f97316',orangi)
+    + (other.length?renderGroup('기타','📋','var(--mu)',other):'');
+}
+
+function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
+  let summary='';
+  if(l.type==='semen'&&l.values) {
+    const g=_semenGrade(l.values);
+    const vals=['Vol '+(l.values.volume||'-'),'Count '+(l.values.count||'-'),'Mot '+(l.values.motility||'-')+'%','Morph '+(l.values.morphology||'-')+'%'].join(' · ');
+    summary=`<span style="font-weight:600;color:${g.color}">${g.grade}</span> ${vals}${g.issues.length?' <span style="color:#dc2626;font-size:.65rem">('+g.issues.join(', ')+')</span>':''}`;
+  } else if(l.values&&typeof l.values==='object') {
+    summary=Object.entries(l.values).slice(0,4).map(([k,v])=>k+':'+v).join(' · ');
+  }
+  return `<div style="padding:7px 10px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;margin-top:4px">
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:.72rem">${typeIcons[l.type]}</span>
+      <span style="font-size:.75rem;font-weight:600">${typeLabels[l.type]}</span>
+      <span style="font-size:.65rem;color:var(--mu);margin-left:auto">${esc(l.date)}</span>
+      <button class="accum-del" onclick="brkDeleteLab(${globalIdx})" title="삭제">🗑</button>
+    </div>
+    <div style="font-size:.7rem;color:var(--tx);margin-top:3px">${summary}</div>
+    ${l.memo?`<div style="margin-top:3px">
+      <div style="font-size:.6rem;color:var(--ac);cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 상세</div>
+      <div style="display:none;font-size:.65rem;color:var(--mu);margin-top:3px;padding:5px;background:var(--sf);border-radius:5px;white-space:pre-wrap">${esc(l.memo)}</div>
+    </div>`:''}
+  </div>`;
 }
 
 function brkLabFieldsFor(type) {
