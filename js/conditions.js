@@ -333,6 +333,10 @@ function renderMedsViewLegacy() {
             <label style="display:flex;align-items:center;gap:3px;font-size:.65rem;color:var(--mu);white-space:nowrap;cursor:pointer"><input type="checkbox" id="dx-med-prn"> PRN</label>
             <button class="btn-accum-add" onclick="addDxMed()" style="padding:6px 12px;font-size:.75rem">+추가</button>
           </div>
+          <div style="margin-top:6px">
+            <button onclick="document.getElementById('dx-rx-photo').click()" style="background:none;border:1.5px solid var(--bd);border-radius:6px;padding:5px 12px;font-size:.72rem;cursor:pointer;color:var(--mu)">📷 처방전/약봉투 사진으로 추가</button>
+            <input type="file" id="dx-rx-photo" accept="image/*" capture="environment" style="display:none" onchange="processRxPhoto(this)">
+          </div>
         </div>
         <div class="dx-form-group">
           <div class="dx-form-label">${isBungruki?'💊 변경 사유':'💊 투약 변경 사유'} <span style="font-size:.6rem;color:var(--mu2)">(${isBungruki?'보충제 변경 시 기록':'약 변경 시 자동 기록됨'})</span></div>
@@ -520,6 +524,100 @@ function addDxMed() {
   input.value='';
   if(isPrn) document.getElementById('dx-med-prn').checked=false;
   renderDxMedChips();
+}
+
+// 📷 처방전/약봉투 사진에서 약물 자동 추출
+async function processRxPhoto(input) {
+  if(!input.files||!input.files[0]) return;
+  const file=input.files[0];
+  const aiId=S.keys?.claude?'claude':(S.keys?.gpt?'gpt':null);
+  if(!aiId){showToast('⚠️ AI API 키가 필요합니다 (Claude 또는 GPT)');return;}
+  showToast('📷 처방전 분석 중...',5000);
+  try {
+    const reader=new FileReader();
+    reader.onload=async function(e){
+      const base64=e.target.result.split(',')[1];
+      const mediaType=file.type||'image/jpeg';
+      const prompt=`이 이미지는 처방전, 약봉투, 또는 약품 사진입니다. 이미지에서 약물 정보를 추출해주세요.
+
+반드시 아래 JSON 형식으로만 응답하세요 (다른 텍스트 없이):
+[{"name":"약품명(성분명 포함)","dose":"용량","freq":"복용횟수","prn":false}]
+
+규칙:
+- name: 제품명이 보이면 "제품명(성분명)" 형태. 성분명만 보이면 성분명만.
+- dose: "150mg", "50mg" 등 용량
+- freq: "1일1회", "1일2회", "필요시" 등
+- prn: 필요시 복용이면 true, 정규 복용이면 false
+- 여러 약이 보이면 모두 추출`;
+      let result='';
+      if(aiId==='claude'){
+        const resp=await fetchWithRetry('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-api-key':S.keys.claude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+          body:JSON.stringify({model:S.models?.claude||DEFAULT_MODELS.claude,max_tokens:1000,messages:[{role:'user',content:[
+            {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
+            {type:'text',text:prompt}
+          ]}]})
+        });
+        const data=await resp.json();
+        result=data.content?.[0]?.text||'';
+      } else {
+        const resp=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.keys.gpt},
+          body:JSON.stringify({model:S.models?.gpt||DEFAULT_MODELS.gpt,max_tokens:1000,messages:[{role:'user',content:[
+            {type:'image_url',image_url:{url:'data:'+mediaType+';base64,'+base64}},
+            {type:'text',text:prompt}
+          ]}]})
+        });
+        const data=await resp.json();
+        result=data.choices?.[0]?.message?.content||'';
+      }
+      // Parse
+      const jsonMatch=result.match(/\[[\s\S]*?\]/);
+      if(!jsonMatch){showToast('⚠️ 약물을 인식하지 못했습니다',3000);return;}
+      const meds=JSON.parse(jsonMatch[0]);
+      if(!meds.length){showToast('⚠️ 약물을 찾지 못했습니다',3000);return;}
+      // 추천 목록 표시 — 사용자가 선택
+      const listHtml=meds.map((m,i)=>{
+        const label=`${m.name}${m.dose?' '+m.dose:''}${m.freq?' ('+m.freq+')':''}`;
+        return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
+          <input type="checkbox" checked class="rx-med-cb" data-idx="${i}" style="width:16px;height:16px;accent-color:var(--ac)">
+          <span style="font-size:.78rem">${esc(label)}</span>
+          ${m.prn?'<span style="font-size:.6rem;color:#f59e0b">PRN</span>':''}
+        </label>`;
+      }).join('');
+      document.getElementById('confirm-title').textContent='📷 인식된 약물';
+      document.getElementById('confirm-body').innerHTML=`
+        <div style="font-size:.72rem;color:var(--mu);margin-bottom:6px">추가할 약물을 선택하세요:</div>
+        ${listHtml}`;
+      document.getElementById('confirm-foot').innerHTML=
+        '<button class="btn-cancel" onclick="closeConfirmModal()" style="font-size:.78rem">취소</button>'+
+        '<button class="btn-accum-add" onclick="applyRxPhoto()">✅ 선택 추가</button>';
+      window._rxPhotoMeds=meds;
+      openModal('confirm-modal');
+    };
+    reader.readAsDataURL(file);
+  } catch(e){
+    showToast('❌ 사진 분석 실패: '+e.message,4000);
+  }
+  input.value='';
+}
+
+function applyRxPhoto() {
+  const meds=window._rxPhotoMeds||[];
+  let added=0;
+  document.querySelectorAll('.rx-med-cb:checked').forEach(cb=>{
+    const idx=parseInt(cb.dataset.idx);
+    const m=meds[idx];if(!m) return;
+    let name=m.name+(m.dose?' '+m.dose:'');
+    if(m.prn&&!name.includes('(PRN)')) name+=' (PRN)';
+    if(!_dxMedsList.includes(name)){_dxMedsList.push(name);added++;}
+  });
+  renderDxMedChips();
+  closeConfirmModal();
+  delete window._rxPhotoMeds;
+  showToast(`✅ ${added}개 약물 추가됨`);
 }
 
 function removeDxMed(idx) {

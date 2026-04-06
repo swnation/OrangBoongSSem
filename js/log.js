@@ -500,7 +500,9 @@ function renderLog() {
       </div>
       <div class="log-section-title">카테고리</div>
       <div class="log-chips">
-        ${cats.map(s=>`<div class="log-chip" data-group="cat" data-val="${s}" onclick="toggleChip(this,'sel-sym')">${s}</div>`).join('')}
+        ${cats.map(s=>s==='|'
+          ?'<div style="width:100%;border-top:1px dashed var(--bd);margin:4px 0"></div><div style="font-size:.58rem;color:var(--mu2);margin-bottom:2px">건강 행동</div>'
+          :`<div class="log-chip" data-group="cat" data-val="${s}" onclick="toggleChip(this,'sel-sym')">${s}</div>`).join('')}
       </div>
       <div class="log-section-title">내용</div>
       <textarea class="log-memo" id="log-memo" rows="4" placeholder="자유롭게 기록하세요..."></textarea>

@@ -168,7 +168,7 @@ const DOMAINS = {
     logConfig: {
       sites: null,
       customFields: true,
-      journalCategories: ['컨디션','식사','운동','수면','검사결과','급성질환','투약','기타'],
+      journalCategories: ['컨디션','급성질환','투약','검사결과','|','운동','식단','수면','기타'],
       symptoms: [],
       meds: [],
       treatments: [],
@@ -262,7 +262,7 @@ const DOMAINS = {
     logConfig: {
       sites: null,
       customFields: true,
-      journalCategories: ['컨디션','운동','식단','수면','검사결과','급성질환','투약','통풍','기타'],
+      journalCategories: ['컨디션','급성질환','투약','통풍','검사결과','|','운동','식단','수면','기타'],
       symptoms: [],
       meds: [],
       treatments: [],

@@ -1737,14 +1737,24 @@ function renderTimelineView() {
     const dd=DOMAINS[domainId];
     if(!dd||dd.user!==currentUser||!ds.master) return;
     const icon=dd.icon;const label=dd.label;const color=dd.color;
+    const lc=dd.logConfig;
 
     // Log entries
     (ds.logData||[]).forEach(log=>{
-      if(log.nrs>=0) {
-        events.push({date:log.date,type:'log',domain:label,icon,color,
-          text:`NRS ${log.nrs} — ${(log.symptoms||[]).join(', ')||'기록'}`,
-          detail:(log.medications||[]).join(', ')});
-      }
+      const date=log.datetime?.slice(0,10)||'';
+      if(!date) return;
+      let text='';
+      if(lc.moodMode) {
+        text=log.mood||'기분 기록';
+        if(log.symptoms?.length) text+=' — '+log.symptoms.join(', ');
+      } else if(lc.customFields) {
+        text=(log.categories||[]).join(', ')||'기록';
+        if(log.memo) text+=' — '+log.memo.substring(0,40);
+      } else if(log.nrs>=0) {
+        text=`NRS ${log.nrs} — ${(log.symptoms||[]).join(', ')||'기록'}`;
+      } else { return; }
+      events.push({date,type:'log',domain:label,icon,color,text,
+        detail:(log.meds||[]).join(', ')});
     });
     // Sessions
     (ds.master?.sessions||[]).forEach(sess=>{
@@ -1753,19 +1763,6 @@ function renderTimelineView() {
         detail:`R${sess.rounds?.length||0} · ${Object.keys(sess.rounds?.[0]?.answers||{}).length}개 AI`});
     });
   });
-
-  // Also include current domain's log data
-  const m=DM();
-  if(m) {
-    const dd=DC();
-    (D().logData||[]).forEach(log=>{
-      if(log.nrs>=0 && !events.find(e=>e.date===log.date&&e.type==='log'&&e.domain===dd.label)) {
-        events.push({date:log.date,type:'log',domain:dd.label,icon:dd.icon,color:dd.color,
-          text:`NRS ${log.nrs} — ${(log.symptoms||[]).join(', ')||'기록'}`,
-          detail:(log.medications||[]).join(', ')});
-      }
-    });
-  }
 
   if(!events.length) return '<div class="hint">데이터를 로딩 중입니다... 잠시만 기다려 주세요.</div>';
 
