@@ -515,6 +515,7 @@ function renderLog() {
       <label style="display:flex;align-items:center;gap:5px;font-size:.73rem;color:var(--mu);cursor:pointer">
         <input type="checkbox" id="journal-nrs-skip" checked onchange="const r=document.getElementById('journal-nrs');r.disabled=this.checked;document.getElementById('journal-nrs-val').textContent=this.checked?'-':r.value"> 기록 안 함
       </label>
+      <div id="journal-medcheck-container" style="margin-top:12px"></div>
       <input type="hidden" id="log-edit-idx" value="-1">
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
         <button class="btn-cancel" id="log-cancel-edit" style="display:none;font-size:.78rem" onclick="cancelLogEdit()">편집 취소</button>
@@ -1513,7 +1514,12 @@ async function saveJournalLog() {
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
   const jNrsSkip=document.getElementById('journal-nrs-skip')?.checked;
   const jNrs=jNrsSkip?-1:parseInt(document.getElementById('journal-nrs')?.value||'5');
-  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:jNrs,sites:[],symptoms:[],meds:[],treatments:[]};
+  // medCheck 수집 (저널 모드에서도 복용 체크 포함)
+  const jMedCheck={};
+  document.querySelectorAll('.med-check-cb').forEach(cb=>{jMedCheck[cb.dataset.med]=cb.checked;});
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:jNrs,
+    medCheck:Object.keys(jMedCheck).length?jMedCheck:undefined,
+    sites:[],symptoms:[],meds:[],treatments:[]};
   await ensureLogLoaded();
   const ds=D();
   if(editIdx>=0 && ds.logData[editIdx]) {

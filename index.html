@@ -217,6 +217,12 @@ renderView = function(view) {
       if(hdEl&&DC().logConfig?.sites) { hdEl.innerHTML=getMainHeadSVG(); setTimeout(syncMainHeadDiagram,50); }
       // 자동저장 복원
       if(typeof _tryRestoreLogForm==='function') setTimeout(_tryRestoreLogForm,100);
+      // 저널 모드: 복용 체크 추가
+      const jmc=document.getElementById('journal-medcheck-container');
+      if(jmc&&typeof renderDailyMedCheck==='function'){
+        const date=document.getElementById('log-date')?.value||kstToday();
+        jmc.innerHTML=renderDailyMedCheck(date);
+      }
     }, 50);
   }
   if (view === 'meds') {

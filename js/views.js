@@ -1534,40 +1534,41 @@ function renderCalendarHeatmap(logs,lc) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 💊 MED COMPLIANCE CALENDAR (30일 약물 복용 캘린더)
+// 💊 MED COMPLIANCE CALENDAR (30일 약물 복용 캘린더 — 데일리체크 동일 수준)
 // ═══════════════════════════════════════════════════════════════
 function renderMedComplianceCalendar(logs) {
   const condMeds=typeof getConditionMeds==='function'?getConditionMeds():[];
   const expectedMeds=condMeds.flatMap(g=>g.meds.filter(m=>!m.includes('(PRN)')&&!m.includes('PRN')));
   const withMc=logs.filter(l=>l.medCheck&&Object.keys(l.medCheck).length);
-  if(!withMc.length&&!expectedMeds.length) return '';
+  const withMeds=logs.filter(l=>(l.meds||[]).length>0);
+  if(!withMc.length&&!withMeds.length&&!expectedMeds.length) return '';
 
   const byDate={};
-  withMc.forEach(l=>{
-    const d=l.datetime.slice(0,10);
-    if(!byDate[d]) byDate[d]={total:0,taken:0,meds:{}};
-    Object.entries(l.medCheck).forEach(([med,taken])=>{
-      if(!byDate[d].meds[med]){
-        byDate[d].total++;
-        if(taken) byDate[d].taken++;
-        byDate[d].meds[med]=taken;
-      }
-    });
+  logs.forEach(l=>{
+    const d=l.datetime?.slice(0,10);if(!d)return;
+    if(!byDate[d]) byDate[d]={total:0,taken:0,meds:{},hasRecord:false,entries:[]};
+    byDate[d].entries.push(l);
+    if(l.medCheck&&Object.keys(l.medCheck).length){
+      byDate[d].hasRecord=true;
+      Object.entries(l.medCheck).forEach(([med,taken])=>{
+        if(!byDate[d].meds[med]){byDate[d].total++;if(taken)byDate[d].taken++;byDate[d].meds[med]=taken;}
+      });
+    }
+    if(!l.medCheck&&(l.meds||[]).length){
+      byDate[d].hasRecord=true;
+      l.meds.forEach(m=>{if(!byDate[d].meds[m]){byDate[d].total++;byDate[d].taken++;byDate[d].meds[m]=true;}});
+    }
   });
-
-  // 캘린더 데이터를 전역에 저장 (클릭 상세용)
   window._mcCalData=byDate;
 
   const today=kstToday();
   const cells=[];
   for(let i=29;i>=0;i--){
-    const date=kstDaysAgo(i);
-    const data=byDate[date];
-    const d=new Date(date+'T00:00:00');
-    const dayNum=d.getDate();
+    const date=kstDaysAgo(i);const data=byDate[date];
+    const d=new Date(date+'T00:00:00');const dayNum=d.getDate();
     let dotColor='var(--bd)';
-    if(data){
-      const rate=data.total>0?Math.round(data.taken/data.total*100):0;
+    if(data?.hasRecord){
+      const rate=data.total>0?Math.round(data.taken/data.total*100):100;
       dotColor=rate>=90?'#10b981':rate>=50?'#f59e0b':'#ef4444';
     }
     const isT=date===today;
@@ -1577,9 +1578,10 @@ function renderMedComplianceCalendar(logs) {
     </div>`);
   }
 
-  const recorded=Object.values(byDate).filter(d=>d.total>0);
-  const overall=recorded.length?Math.round(recorded.reduce((s,d)=>s+(d.taken/d.total*100),0)/recorded.length):0;
+  const recorded=Object.values(byDate).filter(d=>d.hasRecord);
+  const overall=recorded.length?Math.round(recorded.reduce((s,d)=>s+(d.total>0?d.taken/d.total*100:0),0)/recorded.length):0;
   const oc=recorded.length?(overall>=90?'#10b981':overall>=70?'#f59e0b':'#ef4444'):'var(--mu2)';
+  const unmapped=logs.filter(l=>!l.medCheck&&(l.meds||[]).length).length;
 
   return `<div class="card">
     <div class="card-title">💊 약물 복용 캘린더 (30일)</div>
@@ -1591,17 +1593,56 @@ function renderMedComplianceCalendar(logs) {
     <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;font-size:.6rem;color:var(--mu)">
       <span>🟢 90%+</span><span>🟡 50-89%</span><span>🔴 &lt;50%</span><span>⬜ 미기록</span>
     </div>
+    ${unmapped?`<div style="margin-top:8px;text-align:center"><button onclick="_syncMedsToMedCheck()" style="font-size:.68rem;padding:5px 14px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">🔄 기존 투약 기록 ${unmapped}건 → 캘린더 반영</button></div>`:''}
     <div id="mc-cal-detail"></div>
   </div>`;
 }
+
 function _showMcDetail(date){
   const el=document.getElementById('mc-cal-detail');if(!el)return;
   const data=window._mcCalData?.[date];
-  if(!data){el.innerHTML=`<div style="font-size:.72rem;color:var(--mu2);padding:8px;text-align:center;border-top:1px solid var(--bd);margin-top:8px">${date}: 기록 없음</div>`;return;}
-  const lines=Object.entries(data.meds).map(([m,t])=>`<div style="font-size:.72rem;padding:1px 0">${t?'✅':'❌'} ${esc(m)}</div>`).join('');
-  const rate=data.total>0?Math.round(data.taken/data.total*100):0;
-  el.innerHTML=`<div style="border-top:1px solid var(--bd);margin-top:8px;padding-top:8px"><div style="font-size:.75rem;font-weight:600;margin-bottom:4px">${date} <span style="color:${rate>=90?'#10b981':rate>=50?'#f59e0b':'#ef4444'}">${rate}%</span></div>${lines}</div>`;
+  let html=`<div style="border-top:1px solid var(--bd);margin-top:8px;padding-top:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+    <span style="font-size:.78rem;font-weight:600">${date}</span>`;
+  if(data?.hasRecord){
+    const rate=data.total>0?Math.round(data.taken/data.total*100):0;
+    html+=`<span style="font-size:.68rem;font-weight:600;color:${rate>=90?'#10b981':rate>=50?'#f59e0b':'#ef4444'}">${rate}%</span>`;
+  }else{html+=`<span style="font-size:.68rem;color:var(--mu2)">기록 없음</span>`;}
+  html+=`</div>`;
+  if(data?.meds&&Object.keys(data.meds).length){
+    html+=Object.entries(data.meds).map(([m,t])=>`<div style="font-size:.72rem;padding:1px 0 1px 8px">${t?'✅':'❌'} ${esc(m)}</div>`).join('');
+  }
+  if(data?.entries?.length){
+    data.entries.forEach(e=>{
+      const parts=[];
+      if(e.nrs>=0)parts.push('컨디션:'+e.nrs);
+      if(e.mood)parts.push(e.mood);
+      if(e.symptoms?.length)parts.push('증상:'+e.symptoms.join(','));
+      if(e.memo)parts.push(esc(e.memo.slice(0,40)));
+      if(parts.length)html+=`<div style="font-size:.65rem;color:var(--mu);padding:2px 0 2px 8px;border-top:1px dotted var(--bd);margin-top:3px">${e.datetime?.slice(11,16)||''} ${parts.join(' · ')}</div>`;
+    });
+  }
+  html+=`</div>`;el.innerHTML=html;
 }
+
+async function _syncMedsToMedCheck(){
+  if(!confirm('투약(meds) 기록 → medCheck 자동 변환합니다.\n조건 약물 중 투약에 없는 것은 미복용으로 표시됩니다.'))return;
+  const ds=D();if(!ds.logData)return;
+  let count=0;
+  ds.logData.forEach(l=>{
+    if(l.medCheck||!(l.meds||[]).length)return;
+    const mc={};
+    l.meds.forEach(m=>{mc[m]=true;});
+    if(typeof getConditionMeds==='function'){
+      const cm=getConditionMeds(l.datetime?.slice(0,10));
+      cm.forEach(g=>g.meds.forEach(m=>{if(!(m in mc)&&!m.includes('(PRN)')&&!m.includes('PRN'))mc[m]=false;}));
+    }
+    if(Object.keys(mc).length){l.medCheck=mc;count++;}
+  });
+  if(!count){showToast('변환할 기록이 없습니다.');return;}
+  try{await saveLogData();showToast('✅ '+count+'건 캘린더 반영');renderView(S.currentView);}
+  catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
+}
+
 
 // ═══════════════════════════════════════════════════════════════
 // TREATMENT CYCLE TRACKING
