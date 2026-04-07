@@ -145,7 +145,7 @@ function handleToken(resp){
 function checkGSI(n){
   if(!n)n=0;
   if(window.google?.accounts?.oauth2){document.getElementById('gsi-status').textContent='✓ 준비됨';document.getElementById('gsi-status').style.color='#2d6a4f';
-    if(localStorage.getItem('om_auto_login')==='true'){try{if(!tokenClient)tokenClient=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:handleToken});tokenClient.requestAccessToken({prompt:''});}catch(e){}}
+    if(localStorage.getItem('om_auto_login')==='true'){try{if(!tokenClient)tokenClient=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:handleToken});tokenClient.requestAccessToken({prompt:''});}catch(e){console.error('Auto-login failed:',e);}}
   }else if(n<20){setTimeout(()=>checkGSI(n+1),500);}
   else{document.getElementById('gsi-status').textContent='⚠️ 인증 로드 실패';}
 }
@@ -362,7 +362,7 @@ async function saveAll(){
       }else{
         // Only create if we have something to save
         if(!Object.keys(mc).length&&nrs===-1&&!memo&&!symptoms.length){results.push({domId,status:'skip'});continue;}
-        entry={id:Date.now(),datetime:selectedDate+'T'+kstTimeStr(),nrs,medCheck:Object.keys(mc).length?mc:undefined,symptoms:symptoms.length?symptoms:undefined,memo:memo||''};
+        entry={id:crypto.randomUUID(),datetime:selectedDate+'T'+kstTimeStr(),nrs,medCheck:Object.keys(mc).length?mc:undefined,symptoms:symptoms.length?symptoms:undefined,memo:memo||''};
         ml.data.push(entry);
       }
       ml.data.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
