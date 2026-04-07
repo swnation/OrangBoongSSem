@@ -506,6 +506,15 @@ function renderLog() {
       </div>
       <div class="log-section-title">내용</div>
       <textarea class="log-memo" id="log-memo" rows="4" placeholder="자유롭게 기록하세요..."></textarea>
+      <div class="log-section-title" style="margin-top:12px">${lc.nrsLabel||'컨디션 (0=최악 10=최상)'}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin:4px 0">
+        <span style="font-size:1.3rem;font-weight:700;min-width:28px;text-align:center" id="journal-nrs-val">-</span>
+        <input type="range" id="journal-nrs" min="0" max="10" value="5" disabled style="flex:1;accent-color:var(--ac);height:24px"
+          oninput="document.getElementById('journal-nrs-val').textContent=this.value;document.getElementById('journal-nrs-skip').checked=false">
+      </div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:.73rem;color:var(--mu);cursor:pointer">
+        <input type="checkbox" id="journal-nrs-skip" checked onchange="const r=document.getElementById('journal-nrs');r.disabled=this.checked;document.getElementById('journal-nrs-val').textContent=this.checked?'-':r.value"> 기록 안 함
+      </label>
       <input type="hidden" id="log-edit-idx" value="-1">
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
         <button class="btn-cancel" id="log-cancel-edit" style="display:none;font-size:.78rem" onclick="cancelLogEdit()">편집 취소</button>
@@ -1447,7 +1456,9 @@ async function saveJournalLog() {
   const memo=document.getElementById('log-memo')?.value.trim();
   if(!memo){showToast('내용을 입력해 주세요.');if(btn)btn.disabled=false;if(sp)sp.style.display='none';return;}
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
-  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:-1,sites:[],symptoms:[],meds:[],treatments:[]};
+  const jNrsSkip=document.getElementById('journal-nrs-skip')?.checked;
+  const jNrs=jNrsSkip?-1:parseInt(document.getElementById('journal-nrs')?.value||'5');
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:jNrs,sites:[],symptoms:[],meds:[],treatments:[]};
   await ensureLogLoaded();
   const ds=D();
   if(editIdx>=0 && ds.logData[editIdx]) {

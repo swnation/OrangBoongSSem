@@ -188,18 +188,55 @@ function switchTab(idx){currentTab=idx;document.querySelectorAll('.tab').forEach
 // ═══════════════════════════════════════════════════════════════
 // CHECK TAB
 // ═══════════════════════════════════════════════════════════════
+let editingEntryId=null; // null=새기록, string=수정
+
 function renderCheckTab(){
   const content=document.getElementById('content');
   let html='';const isToday=selectedDate===kstToday();
-  const anyEntry=Object.keys(BUNG_DOMAINS).map(d=>findEntry(d,selectedDate)).find(e=>e);
 
-  // Date + Time
+  // 이 날짜의 모든 기존 기록 수집
+  const existingEntries=[];
+  for(const domId of Object.keys(BUNG_DOMAINS)){
+    const ml=domainData[domId]?.logs?.[selectedDate.slice(0,7)];
+    if(!ml?.data)continue;
+    ml.data.filter(l=>l.datetime?.slice(0,10)===selectedDate).forEach(e=>{
+      if(!existingEntries.find(x=>x.id===e.id))existingEntries.push(e);
+    });
+  }
+  const editEntry=editingEntryId?existingEntries.find(e=>e.id===editingEntryId):null;
+  const anyEntry=editEntry||existingEntries[0];
+
+  // Date nav
   html+='<div class="date-nav"><button onclick="changeDate(-1)">◀</button>';
   html+='<span class="date-label">'+selectedDate+(isToday?' (오늘)':'')+'</span>';
   html+='<button onclick="changeDate(1)"'+(isToday?' disabled':'')+'>▶</button></div>';
-  html+='<div style="text-align:center;margin-bottom:10px"><input type="time" id="entry-time" value="'+(anyEntry?.datetime?.slice(11,16)||kstTimeStr())+'" style="border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font-family:var(--font);font-size:.8rem;background:var(--sf);color:var(--ink)"></div>';
 
-  // NRS / 컨디션 (메인앱과 동일)
+  // 기존 기록 목록 (있으면 표시)
+  if(existingEntries.length){
+    html+='<div class="card"><div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">📋 이 날짜 기록 ('+existingEntries.length+'건)</div>';
+    existingEntries.forEach(e=>{
+      const isEditing=editingEntryId===e.id;
+      const time=e.datetime?.slice(11,16)||'';
+      const mcCount=e.medCheck?Object.values(e.medCheck).filter(v=>v).length+'/'+Object.keys(e.medCheck).length:'';
+      html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;margin-bottom:3px;background:'+(isEditing?'var(--ac)20':'var(--sf2)')+';border:1px solid '+(isEditing?'var(--ac)':'var(--bd)')+';cursor:pointer" onclick="editingEntryId=\''+(e.id||'')+'\';renderCheckTab()">';
+      html+='<span style="font-size:.72rem;font-family:var(--mono);color:var(--mu)">'+(time||'--:--')+'</span>';
+      if(mcCount)html+='<span style="font-size:.68rem;color:var(--mu)">💊'+mcCount+'</span>';
+      if(e.nrs>=0)html+='<span style="font-size:.68rem;color:var(--mu)">컨디션:'+e.nrs+'</span>';
+      if(e.memo)html+='<span style="font-size:.68rem;color:var(--mu);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(e.memo.slice(0,20))+'</span>';
+      html+='</div>';
+    });
+    html+='<button class="btn-toggle" style="width:100%;padding:6px;margin-top:4px;font-size:.72rem" onclick="editingEntryId=null;renderCheckTab()">➕ 새 기록 추가</button>';
+    html+='</div>';
+  }
+
+  // Time input with skip
+  const timeVal=editEntry?.datetime?.slice(11,16)||(editingEntryId?'':kstTimeStr());
+  const timeSkip=!editingEntryId&&!isToday;
+  html+='<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px">';
+  html+='<input type="time" id="entry-time" value="'+timeVal+'"'+(timeSkip?' disabled':'')+' style="border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font-family:var(--font);font-size:.8rem;background:var(--sf);color:var(--ink)">';
+  html+='<label style="font-size:.68rem;color:var(--mu);display:flex;align-items:center;gap:4px"><input type="checkbox" id="time-skip"'+(timeSkip?' checked':'')+' onchange="document.getElementById(\'entry-time\').disabled=this.checked" style="accent-color:var(--ac)">시간 생략</label></div>';
+
+  // NRS / 컨디션
   const curNrs=anyEntry?.nrs??-1;const nrsSkip=curNrs===-1;
   html+='<div class="card"><div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">컨디션 (0=최악 10=최상)</div>';
   html+='<div class="nrs-wrap"><span class="nrs-val" id="nrs-val">'+(nrsSkip?'-':curNrs)+'</span>';
@@ -257,7 +294,7 @@ function renderCheckTab(){
   // Memo + Save
   html+='<div style="margin-bottom:8px"><div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">메모</div>';
   html+='<textarea class="memo" id="daily-memo" placeholder="컨디션, 특이사항..."></textarea></div>';
-  html+='<button class="btn-save" id="btn-save" onclick="saveAll()">💾 저장</button><div class="save-status" id="save-status"></div>';
+  html+='<button class="btn-save" id="btn-save" onclick="saveAll()">💾 '+(editingEntryId?'수정 저장':'새 기록 저장')+'</button><div class="save-status" id="save-status"></div>';
   content.innerHTML=html;
   if(anyEntry?.memo)document.getElementById('daily-memo').value=anyEntry.memo;
 }
@@ -274,7 +311,8 @@ async function saveAll(){
   const memo=(document.getElementById('daily-memo')?.value||'').trim();
   const nrsSkip=document.getElementById('nrs-skip')?.checked;
   const nrs=nrsSkip?-1:parseInt(document.getElementById('nrs-range')?.value||'5');
-  const timeVal=document.getElementById('entry-time')?.value||kstTimeStr();
+  const timeSkip=document.getElementById('time-skip')?.checked;
+  const timeVal=timeSkip?'00:00':(document.getElementById('entry-time')?.value||kstTimeStr());
   const symptoms=[...document.querySelectorAll('.chip.sel[data-sym]')].map(c=>c.dataset.sym);
   const dailyChecks={};
   document.querySelectorAll('.dc-btn.sel').forEach(b=>{dailyChecks[b.dataset.dc]=parseInt(b.dataset.val);});
@@ -291,9 +329,10 @@ async function saveAll(){
       const month=selectedDate.slice(0,7);await loadLogMonth(domId,month);
       const ml=ds.logs[month];if(!ml){results.push({domId,status:'skip'});continue;}
       const mc=domChecks[domId]||{};
-      let entry=ml.data.find(l=>l.datetime?.slice(0,10)===selectedDate);
+
+      // 편집 모드: editingEntryId로 기존 엔트리 찾기 / 새 기록 모드: 무조건 새로 생성
+      let entry=editingEntryId?ml.data.find(l=>l.id===editingEntryId):null;
       if(entry){
-        // 기존 엔트리 업데이트 — medCheck 전체 교체 (키 불일치 해결)
         if(Object.keys(mc).length)entry.medCheck=mc;
         entry.memo=memo;entry.nrs=nrs;entry.datetime=selectedDate+'T'+timeVal;
         if(symptoms.length)entry.symptoms=symptoms;
@@ -332,10 +371,12 @@ async function saveBulk(){
     const d=cb.dataset.domain,m=cb.dataset.med;if(!domChecks[d])domChecks[d]={};domChecks[d][m]=cb.checked;
   });
 
-  // 일괄 모드: 체크박스 상태를 가져옴 (checked/unchecked 패턴)
-  const bulkChecked={};
+  // 조건별 체크 상태 수집
+  const condChecked={}; // {domId: {condName: bool}}
   document.querySelectorAll('#bulk-med-panel input[type=checkbox]').forEach(cb=>{
-    const d=cb.dataset.domain,m=cb.dataset.med;if(!bulkChecked[d])bulkChecked[d]={};bulkChecked[d][m]=cb.checked;
+    const d=cb.dataset.domain,c=cb.dataset.condition;
+    if(!condChecked[d])condChecked[d]={};
+    condChecked[d][c]=cb.checked;
   });
 
   let saved=0,failed=0;
@@ -344,15 +385,17 @@ async function saveBulk(){
     for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
       try{
         const ds=domainData[domId];if(!ds?.folderId)continue;
-        // 해당 날짜에 활성이었던 약물 기반으로 medCheck 생성
+        const checks=condChecked[domId]||{};
+        // 해당 날짜의 실제 약물로 medCheck 생성
         const groups=getDomainMeds(domId,date);if(!groups.length)continue;
         const mc={};
-        groups.forEach(g=>g.meds.forEach(m=>{
-          // 일괄 패턴에서 같은 약이 있으면 해당 체크 상태 사용, 없으면 기본값(non-PRN=true)
-          const patternMc=bulkChecked[domId]||{};
-          const isPrn=m.includes('(PRN)')||m.includes('PRN');
-          mc[m]=(m in patternMc)?patternMc[m]:!isPrn;
-        }));
+        groups.forEach(g=>{
+          const taken=checks[g.condition]!==false; // 체크 해제 안 했으면 복용
+          g.meds.forEach(m=>{
+            const isPrn=m.includes('(PRN)')||m.includes('PRN');
+            mc[m]=isPrn?false:taken;
+          });
+        });
         if(!Object.keys(mc).length)continue;
         await loadLogMonth(domId,month);
         const ml=ds.logs[month];if(!ml)continue;
@@ -420,16 +463,18 @@ async function renderCalendarTab(){
 
   // Bulk med panel (일괄 모드)
   if(bulkMode){
-    html+='<div class="card" id="bulk-med-panel"><div style="font-size:.78rem;font-weight:600;margin-bottom:8px">📋 선택된 날짜: '+bulkDates.size+'일</div>';
+    html+='<div class="card" id="bulk-med-panel"><div style="font-size:.78rem;font-weight:600;margin-bottom:4px">📋 선택된 날짜: '+bulkDates.size+'일</div>';
+    html+='<div style="font-size:.62rem;color:var(--mu);margin-bottom:8px">※ 약물 변경이력에 따라 각 날짜의 실제 약물명으로 자동 저장됩니다</div>';
     for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
-      const groups=getDomainMeds(domId);if(!groups.length)continue;
+      const ds=domainData[domId];
+      const conds=(ds?.master?.conditions||[]).filter(c=>c.status==='active'||c.status==='remission').filter(c=>(c.medsList||[]).length);
+      if(!conds.length)continue;
       html+='<div style="font-size:.72rem;font-weight:600;color:'+dc.color+';margin:8px 0 4px">'+dc.icon+' '+dc.label+'</div>';
-      groups.forEach(g=>g.meds.forEach(m=>{
-        const isPrn=m.includes('(PRN)')||m.includes('PRN');
+      conds.forEach(c=>{
         html+='<div class="med-row" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
-        html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(!isPrn?' checked':'')+'>';
-        html+='<label>'+esc(m)+'</label>';if(isPrn)html+='<span class="prn">PRN</span>';html+='</div>';
-      }));
+        html+='<input type="checkbox" data-domain="'+domId+'" data-condition="'+esc(c.name)+'" checked>';
+        html+='<label>'+esc(c.name)+' ('+c.medsList.length+'개 약물)</label></div>';
+      });
     }
     html+='<button class="btn-save" id="bulk-save-btn" onclick="saveBulk()">💾 선택 날짜에 일괄 저장</button></div>';
   }
