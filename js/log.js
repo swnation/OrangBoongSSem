@@ -813,6 +813,7 @@ function renderLogList() {
         <span style="font-size:.78rem;font-weight:700;color:var(--ink)">${esc(dateLabel)}</span>
         <span style="font-size:.65rem;color:var(--mu)">${logs.length}건</span>
         ${avgNrs!==null&&!lc.moodMode?`<span style="font-size:.65rem;font-weight:600;color:${nc}">평균 ${avgNrs}</span>`:''}
+        ${logs.length>=2?`<button onclick="event.stopPropagation();mergeDayEntries('${date}')" style="margin-left:auto;font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">🔗 병합</button>`:''}
       </div>
       ${collapsed?'':`<div style="padding:0 4px">${logsHtml}</div>`}
     </div>`;
@@ -877,6 +878,7 @@ function renderLogListInner() {
         <span style="font-size:.78rem;font-weight:700;color:var(--ink)">${esc(dateLabel)}</span>
         <span style="font-size:.65rem;color:var(--mu)">${logs.length}건</span>
         ${avgNrs!==null&&!lc.moodMode?`<span style="font-size:.65rem;font-weight:600;color:${nc}">평균 ${avgNrs}</span>`:''}
+        ${logs.length>=2?`<button onclick="event.stopPropagation();mergeDayEntries('${date}')" style="margin-left:auto;font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">🔗 병합</button>`:''}
       </div>
       ${collapsed?'':`<div style="padding:0 4px">${logsHtml}</div>`}
     </div>`;
@@ -890,6 +892,48 @@ function toggleAllLogDates() {
   dates.forEach(d=>{ _logCollapsed[d]=!allCollapsed; });
   const el=document.getElementById('content').querySelector('[data-log-list]');
   if(el) el.innerHTML=renderLogListInner();
+}
+
+// ── 같은 날 기록 병합 ──
+async function mergeDayEntries(date) {
+  const ds=D();if(!ds.logData?.length)return;
+  const entries=ds.logData.filter(l=>l.datetime?.slice(0,10)===date);
+  if(entries.length<2){showToast('병합할 기록이 없습니다.');return;}
+  if(!confirm(`${date}의 ${entries.length}건을 1건으로 병합합니다.\n메모는 합치고, 증상/투약/medCheck는 통합됩니다.`))return;
+
+  // 병합: 마지막 엔트리 기준 + 이전 데이터 통합
+  const merged={...entries[entries.length-1]};
+  merged.id=merged.id||Date.now();
+  // NRS: 가장 마지막 유효값
+  const lastNrs=entries.filter(e=>e.nrs>=0).pop();
+  if(lastNrs)merged.nrs=lastNrs.nrs;
+  // 증상/투약/치료: 합집합
+  merged.symptoms=[...new Set(entries.flatMap(e=>e.symptoms||[]))];
+  merged.meds=[...new Set(entries.flatMap(e=>e.meds||[]))];
+  merged.treatments=[...new Set(entries.flatMap(e=>e.treatments||[]))];
+  // medCheck: 모든 키 통합 (나중 기록이 우선)
+  const mc={};entries.forEach(e=>{if(e.medCheck)Object.assign(mc,e.medCheck);});
+  if(Object.keys(mc).length)merged.medCheck=mc;
+  // dailyChecks: 마지막 값 우선
+  const dc={};entries.forEach(e=>{if(e.dailyChecks)Object.assign(dc,e.dailyChecks);});
+  if(Object.keys(dc).length)merged.dailyChecks=dc;
+  // 메모: 합치기
+  const memos=entries.map(e=>e.memo).filter(Boolean);
+  merged.memo=memos.length>1?memos.join(' | '):memos[0]||'';
+  // mood: 마지막 유효값
+  const lastMood=entries.filter(e=>e.mood).pop();
+  if(lastMood)merged.mood=lastMood.mood;
+
+  // 기존 엔트리 제거 후 병합본 추가
+  ds.logData=ds.logData.filter(l=>l.datetime?.slice(0,10)!==date);
+  ds.logData.push(merged);
+  ds.logData.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
+
+  try{
+    await saveLogData();
+    showToast(`✅ ${entries.length}건 → 1건 병합 완료`);
+    renderView('log');
+  }catch(e){showToast('❌ 병합 저장 실패: '+e.message,4000);}
 }
 
 // ── ntfy 푸시 알림 ──

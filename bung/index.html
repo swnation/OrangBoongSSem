@@ -74,6 +74,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
   <div class="header">
     <span style="font-size:1.3rem">💊</span>
     <span class="header-title">붕쌤 Daily Check</span>
+    <button onclick="refreshData()" style="background:none;border:none;font-size:1rem;cursor:pointer;padding:4px" title="새로고침">🔄</button>
     <span id="status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--mu2)"></span>
   </div>
   <div class="tabs" id="tab-bar" style="display:none">
@@ -180,6 +181,16 @@ function getDomainMeds(id,date){
   const d=date||selectedDate;
   return(ds.master.conditions||[]).filter(c=>c.status==='active'||c.status==='remission')
     .map(c=>({condition:c.name,meds:_medsAtDate(c,d)})).filter(g=>g.meds.length);
+}
+
+// 새로고침 — 캐시 무효화 + Drive 재로드
+async function refreshData(){
+  showToast('🔄 새로고침 중...');
+  for(const id of Object.keys(BUNG_DOMAINS)){
+    if(domainData[id])domainData[id].logs={}; // 캐시 전체 클리어
+  }
+  await loadAllDomains();
+  showToast('✅ 최신 데이터 로드됨');
 }
 
 // TAB
