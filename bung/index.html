@@ -164,7 +164,23 @@ async function loadLogMonth(id,month){
   }catch(e){ds.logs[month]={fileId:null,data:[]};}
 }
 function findEntry(id,date){const ml=domainData[id]?.logs?.[date.slice(0,7)];return ml?.data?.find(l=>l.datetime?.slice(0,10)===date)||null;}
-function getDomainMeds(id){const ds=domainData[id];if(!ds?.master?.conditions)return[];return(ds.master.conditions||[]).filter(c=>c.status==='active'||c.status==='remission').filter(c=>c.medsList?.length).map(c=>({condition:c.name,meds:c.medsList}));}
+
+// 날짜별 활성 약물 (medHistory 반영 — 메인앱 getMedsAtDate 동일)
+function _medsAtDate(condition,date){
+  const hist=condition.medHistory;
+  if(!hist?.length)return condition.medsList||[];
+  const sorted=[...hist].sort((a,b)=>a.date.localeCompare(b.date));
+  let meds=null;
+  for(const h of sorted){if(h.date.localeCompare(date)>0)break;if(h.meds?.length)meds=h.meds;}
+  return meds||condition.medsList||[];
+}
+
+function getDomainMeds(id,date){
+  const ds=domainData[id];if(!ds?.master?.conditions)return[];
+  const d=date||selectedDate;
+  return(ds.master.conditions||[]).filter(c=>c.status==='active'||c.status==='remission')
+    .map(c=>({condition:c.name,meds:_medsAtDate(c,d)})).filter(g=>g.meds.length);
+}
 
 // TAB
 function switchTab(idx){currentTab=idx;document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===idx));if(idx===0)renderCheckTab();else renderCalendarTab();}
@@ -316,13 +332,28 @@ async function saveBulk(){
     const d=cb.dataset.domain,m=cb.dataset.med;if(!domChecks[d])domChecks[d]={};domChecks[d][m]=cb.checked;
   });
 
+  // 일괄 모드: 체크박스 상태를 가져옴 (checked/unchecked 패턴)
+  const bulkChecked={};
+  document.querySelectorAll('#bulk-med-panel input[type=checkbox]').forEach(cb=>{
+    const d=cb.dataset.domain,m=cb.dataset.med;if(!bulkChecked[d])bulkChecked[d]={};bulkChecked[d][m]=cb.checked;
+  });
+
   let saved=0,failed=0;
   for(const date of bulkDates){
     const month=date.slice(0,7);
     for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
-      const mc=domChecks[domId];if(!mc||!Object.keys(mc).length)continue;
       try{
         const ds=domainData[domId];if(!ds?.folderId)continue;
+        // 해당 날짜에 활성이었던 약물 기반으로 medCheck 생성
+        const groups=getDomainMeds(domId,date);if(!groups.length)continue;
+        const mc={};
+        groups.forEach(g=>g.meds.forEach(m=>{
+          // 일괄 패턴에서 같은 약이 있으면 해당 체크 상태 사용, 없으면 기본값(non-PRN=true)
+          const patternMc=bulkChecked[domId]||{};
+          const isPrn=m.includes('(PRN)')||m.includes('PRN');
+          mc[m]=(m in patternMc)?patternMc[m]:!isPrn;
+        }));
+        if(!Object.keys(mc).length)continue;
         await loadLogMonth(domId,month);
         const ml=ds.logs[month];if(!ml)continue;
         let entry=ml.data.find(l=>l.datetime?.slice(0,10)===date);
@@ -351,12 +382,17 @@ async function renderCalendarTab(){
 
   const days=[];
   for(let i=34;i>=0;i--){const d=new Date(today+'T00:00:00');d.setDate(d.getDate()-i);const dateStr=localDateStr(d);
-    let totalD=0,takenD=0;
-    for(const domId of Object.keys(BUNG_DOMAINS)){getDomainMeds(domId).forEach(g=>g.meds.forEach(m=>{
-      if(m.includes('(PRN)')||m.includes('PRN'))return;totalD++;
-      const e=findEntry(domId,dateStr);if(e?.medCheck?.[m]===true)takenD++;
-    }));}
-    days.push({date:dateStr,dow:d.getDay(),rate:totalD>0?Math.round(takenD/totalD*100):-1});
+    let totalD=0,takenD=0,hasRecord=false;
+    for(const domId of Object.keys(BUNG_DOMAINS)){
+      const entry=findEntry(domId,dateStr);
+      if(entry?.medCheck&&Object.keys(entry.medCheck).length)hasRecord=true;
+      getDomainMeds(domId,dateStr).forEach(g=>g.meds.forEach(m=>{
+        if(m.includes('(PRN)')||m.includes('PRN'))return;totalD++;
+        if(entry?.medCheck?.[m]===true)takenD++;
+      }));
+    }
+    // 미기록=-1(회색), 기록있음=실제비율
+    days.push({date:dateStr,dow:d.getDay(),rate:hasRecord?(totalD>0?Math.round(takenD/totalD*100):100):-1});
   }
 
   const rec=days.filter(d=>d.rate>=0);

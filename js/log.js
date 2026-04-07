@@ -807,7 +807,7 @@ function renderLogList() {
     <button onclick="changeLogMonth(1)" ${isCurrentMonth?'disabled style="font-size:.8rem;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf2);color:var(--mu);cursor:not-allowed;opacity:.4"':'style="font-size:.8rem;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf2);color:var(--ink);cursor:pointer"'}>다음 달 ▶</button>
   </div>`;
 
-  return renderLogFilter(ds.logData)+monthNav+`<div class="card"><div class="card-title" style="display:flex;align-items:center;gap:8px">📋 ${ds.logMonth} ${hasFilter?`필터 결과 (${filtered.length}/${ds.logData.length}건)`:`전체 (${ds.logData.length}건)`}
+  return renderLogFilter(ds.logData)+monthNav+(typeof renderMedComplianceCalendar==='function'?renderMedComplianceCalendar(ds.logData):'')+`<div class="card"><div class="card-title" style="display:flex;align-items:center;gap:8px">📋 ${ds.logMonth} ${hasFilter?`필터 결과 (${filtered.length}/${ds.logData.length}건)`:`전체 (${ds.logData.length}건)`}
     <button onclick="toggleAllLogDates()" style="margin-left:auto;font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf2);color:var(--mu);cursor:pointer">전체 접기/펼치기</button>
   </div><div data-log-list>${groupsHtml}</div></div>`;
 }

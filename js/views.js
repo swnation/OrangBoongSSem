@@ -1537,7 +1537,6 @@ function renderCalendarHeatmap(logs,lc) {
 // 💊 MED COMPLIANCE CALENDAR (30일 약물 복용 캘린더)
 // ═══════════════════════════════════════════════════════════════
 function renderMedComplianceCalendar(logs) {
-  // 조건 약물이 있거나 medCheck 기록이 있으면 표시
   const condMeds=typeof getConditionMeds==='function'?getConditionMeds():[];
   const expectedMeds=condMeds.flatMap(g=>g.meds.filter(m=>!m.includes('(PRN)')&&!m.includes('PRN')));
   const withMc=logs.filter(l=>l.medCheck&&Object.keys(l.medCheck).length);
@@ -1556,6 +1555,9 @@ function renderMedComplianceCalendar(logs) {
     });
   });
 
+  // 캘린더 데이터를 전역에 저장 (클릭 상세용)
+  window._mcCalData=byDate;
+
   const today=kstToday();
   const cells=[];
   for(let i=29;i>=0;i--){
@@ -1569,7 +1571,7 @@ function renderMedComplianceCalendar(logs) {
       dotColor=rate>=90?'#10b981':rate>=50?'#f59e0b':'#ef4444';
     }
     const isT=date===today;
-    cells.push(`<div style="text-align:center;padding:4px 2px;border-radius:4px;font-size:.65rem${isT?';border:1px solid var(--ac)':''}">
+    cells.push(`<div style="text-align:center;padding:4px 2px;border-radius:4px;font-size:.65rem;cursor:pointer${isT?';border:1px solid var(--ac)':''}" onclick="_showMcDetail('${date}')">
       <div>${dayNum}</div>
       <div style="width:7px;height:7px;border-radius:50%;background:${dotColor};margin:2px auto 0"></div>
     </div>`);
@@ -1589,7 +1591,16 @@ function renderMedComplianceCalendar(logs) {
     <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;font-size:.6rem;color:var(--mu)">
       <span>🟢 90%+</span><span>🟡 50-89%</span><span>🔴 &lt;50%</span><span>⬜ 미기록</span>
     </div>
+    <div id="mc-cal-detail"></div>
   </div>`;
+}
+function _showMcDetail(date){
+  const el=document.getElementById('mc-cal-detail');if(!el)return;
+  const data=window._mcCalData?.[date];
+  if(!data){el.innerHTML=`<div style="font-size:.72rem;color:var(--mu2);padding:8px;text-align:center;border-top:1px solid var(--bd);margin-top:8px">${date}: 기록 없음</div>`;return;}
+  const lines=Object.entries(data.meds).map(([m,t])=>`<div style="font-size:.72rem;padding:1px 0">${t?'✅':'❌'} ${esc(m)}</div>`).join('');
+  const rate=data.total>0?Math.round(data.taken/data.total*100):0;
+  el.innerHTML=`<div style="border-top:1px solid var(--bd);margin-top:8px;padding-top:8px"><div style="font-size:.75rem;font-weight:600;margin-bottom:4px">${date} <span style="color:${rate>=90?'#10b981':rate>=50?'#f59e0b':'#ef4444'}">${rate}%</span></div>${lines}</div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════
