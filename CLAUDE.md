@@ -180,6 +180,7 @@ backup/v9.2  ← 처치효과회고 · 트리거칩 · 날씨자동수집 · 통
 11. ntfy 호출은 단순 POST만 (커스텀 헤더/JSON 금지 → CORS 문제)
 12. Grok Multi-Agent는 `/v1/responses` 엔드포인트 사용 (chat/completions 아님)
 13. 머리 이미지: SVG가 아닌 PNG + 투명 SVG 오버레이. `icons/head-front.png`, `head-back.png`
-10. 버전 업 시 `APP_VERSION` 배열에 새 항목 추가 필수
-11. 버전 업 시 **백업 자동화 절차** (위 "버전업 시 백업 자동화 절차" 섹션) 반드시 수행
-12. 버전 업 시 `codeBackupToDrive()` 실행하여 Google Drive에 코드+맥락 백업 필수 (사용자가 로그인 상태일 때 자동 호출)
+14. 코드 변경 배포 시 `sw.js`의 `CACHE_NAME` 버전을 반드시 올릴 것 (예: `v97a`→`v97b`). 안 올리면 SW가 업데이트 감지 못하고 구 캐시 계속 서빙
+15. 버전 업 시 `APP_VERSION` 배열에 새 항목 추가 필수
+16. 버전 업 시 **백업 자동화 절차** (위 "버전업 시 백업 자동화 절차" 섹션) 반드시 수행
+17. 버전 업 시 `codeBackupToDrive()` 실행하여 Google Drive에 코드+맥락 백업 필수 (사용자가 로그인 상태일 때 자동 호출)
