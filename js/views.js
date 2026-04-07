@@ -1038,6 +1038,7 @@ function renderStatsView() {
   ${topSyms.length?`<div class="card"><div class="card-title">증상 빈도 (30일)</div>${symHtml}</div>`:''}
   ${topMeds.length?`<div class="card"><div class="card-title">투약 빈도 (30일)</div>${medHtml}</div>`:''}
   ${lc.moodMode?renderMedComplianceStats(last30)+renderDailyCheckTrend(last30,lc):renderCalendarHeatmap(logs,lc)}
+  ${renderMedComplianceCalendar(logs)}
   ${renderTrendChart(logs, 90)}
   ${renderCorrelationAnalysis(logs)}
   ${renderMedEffectAnalysis(logs)}
@@ -1528,6 +1529,65 @@ function renderCalendarHeatmap(logs,lc) {
     <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;font-size:.6rem;color:var(--mu)">
       <span>⬜ 없음</span><span style="color:#2d8a5a">🟩 0-2</span><span style="color:#4ade80">🟢 3-4</span>
       <span style="color:#fbbf24">🟡 5-6</span><span style="color:#f97316">🟠 7-8</span><span style="color:#ef4444">🔴 9-10</span>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💊 MED COMPLIANCE CALENDAR (30일 약물 복용 캘린더)
+// ═══════════════════════════════════════════════════════════════
+function renderMedComplianceCalendar(logs) {
+  const withMc=logs.filter(l=>l.medCheck&&Object.keys(l.medCheck).length);
+  if(!withMc.length) return '';
+
+  // Build per-date compliance
+  const byDate={};
+  withMc.forEach(l=>{
+    const d=l.datetime.slice(0,10);
+    if(!byDate[d]) byDate[d]={total:0,taken:0,meds:{}};
+    Object.entries(l.medCheck).forEach(([med,taken])=>{
+      if(!byDate[d].meds[med]){
+        byDate[d].total++;
+        if(taken) byDate[d].taken++;
+        byDate[d].meds[med]=taken;
+      }
+    });
+  });
+
+  // Last 30 days calendar
+  const today=kstToday();
+  const cells=[];
+  for(let i=29;i>=0;i--){
+    const date=kstDaysAgo(i);
+    const data=byDate[date];
+    const d=new Date(date+'T00:00:00');
+    const dayNum=d.getDate();
+    let dotColor='var(--bd)';
+    if(data){
+      const rate=data.total>0?Math.round(data.taken/data.total*100):0;
+      dotColor=rate>=90?'#10b981':rate>=50?'#f59e0b':'#ef4444';
+    }
+    const isT=date===today;
+    cells.push(`<div style="text-align:center;padding:4px 2px;border-radius:4px;font-size:.65rem${isT?';border:1px solid var(--ac)':''}">
+      <div>${dayNum}</div>
+      <div style="width:7px;height:7px;border-radius:50%;background:${dotColor};margin:2px auto 0"></div>
+    </div>`);
+  }
+
+  // Overall rate
+  const allDates=Object.values(byDate);
+  const overall=allDates.length?Math.round(allDates.reduce((s,d)=>s+(d.total>0?d.taken/d.total*100:0),0)/allDates.length):0;
+  const oc=overall>=90?'#10b981':overall>=70?'#f59e0b':'#ef4444';
+
+  return `<div class="card">
+    <div class="card-title">💊 약물 복용 캘린더 (30일)</div>
+    <div style="text-align:center;margin-bottom:8px">
+      <span style="font-size:1.5rem;font-weight:700;color:${oc}">${overall}%</span>
+      <span style="font-size:.7rem;color:var(--mu)"> 순응도</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${cells.join('')}</div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;font-size:.6rem;color:var(--mu)">
+      <span>🟢 90%+</span><span>🟡 50-89%</span><span>🔴 &lt;50%</span><span>⬜ 미기록</span>
     </div>
   </div>`;
 }
