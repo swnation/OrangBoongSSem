@@ -965,24 +965,45 @@ async function deleteMedHist() {
   showToast('🗑 이력 삭제됨');
 }
 
-// Build conditions context for AI prompts
+// Build conditions context for AI prompts (전체 유저 도메인 통합)
 function getConditionsContext() {
-  const conditions = getConditions();
-  if (!conditions.length) return '';
-  const statusLabels = {active:'치료 중',remission:'관해',resolved:'완치',['self-stopped']:'자의 중단'};
-  const lines = conditions.map(c => {
-    let line = `- ${c.name} (${statusLabels[c.status]||c.status})`;
-    if (c.diagnosisDate) line += ` [진단: ${c.diagnosisDate}]`;
-    if (c.medications) line += `\n  투약: ${c.medications}`;
-    if (c.medHistory?.length) {
-      const recent=c.medHistory.slice(-3);
-      line += `\n  투약이력(최근): ${recent.map(h=>`${h.date} ${h.type}${h.added?.length?' +'+h.added.join(','):''}${h.removed?.length?' -'+h.removed.join(','):''}${h.detail||''}${h.reason?' ('+h.reason+')':''}`).join(' → ')}`;
+  const currentUser=DC().user;
+  const currentDomain=S.currentDomain;
+  const statusLabels={active:'치료 중',remission:'관해',resolved:'완치',['self-stopped']:'자의 중단'};
+  const sections=[];
+
+  const _formatCondition=(c,brief)=>{
+    let line=`- ${c.name} (${statusLabels[c.status]||c.status})`;
+    if(c.diagnosisDate) line+=` [진단: ${c.diagnosisDate}]`;
+    if(c.medications) line+=`\n  투약: ${c.medications}`;
+    if(!brief){
+      if(c.medHistory?.length){
+        const recent=c.medHistory.slice(-3);
+        line+=`\n  투약이력(최근): ${recent.map(h=>`${h.date} ${h.type}${h.added?.length?' +'+h.added.join(','):''}${h.removed?.length?' -'+h.removed.join(','):''}${h.detail||''}${h.reason?' ('+h.reason+')':''}`).join(' → ')}`;
+      }
+      if(c.drugResponse) line+=`\n  반응: ${c.drugResponse}`;
+      if(c.course) line+=`\n  경과: ${c.course}`;
     }
-    if (c.drugResponse) line += `\n  반응: ${c.drugResponse}`;
-    if (c.course) line += `\n  경과: ${c.course}`;
     return line;
-  }).join('\n');
-  return `\n\n[등록된 질환]\n${lines}`;
+  };
+
+  // 현재 도메인 질환 (상세)
+  const currentConds=getConditions();
+  if(currentConds.length){
+    sections.push(`[등록된 질환]\n${currentConds.map(c=>_formatCondition(c,false)).join('\n')}`);
+  }
+
+  // 다른 도메인 질환 (요약 — 투약이력/반응/경과 생략)
+  Object.entries(S.domainState).forEach(([domainId,ds])=>{
+    if(domainId===currentDomain||!ds.master) return;
+    const dd=DOMAINS[domainId];
+    if(!dd||dd.user!==currentUser) return;
+    const conds=ds.master.conditions||[];
+    if(!conds.length) return;
+    sections.push(`[${dd.icon} ${dd.label} 질환]\n${conds.map(c=>_formatCondition(c,true)).join('\n')}`);
+  });
+
+  return sections.length?'\n\n'+sections.join('\n\n'):'';
 }
 
 // ═══════════════════════════════════════════════════════════════
