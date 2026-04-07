@@ -263,7 +263,8 @@ async function getOrCreateFolder(name){
 async function loadAllDomains(){
   const content=document.getElementById('content');
   content.innerHTML='<div class="loading">📡 도메인 데이터 로딩 중...</div>';
-  const results=await Promise.all(Object.entries(BUNG_DOMAINS).map(async([domId,dc])=>{
+  const results=[];
+  for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
     try{
       if(!domainData[domId])domainData[domId]={};
       const ds=domainData[domId];
@@ -289,12 +290,12 @@ async function loadAllDomains(){
         ds.logFileId=null;
         ds.logData=[];
       }
-      return{domId,ok:true};
+      results.push({domId,ok:true});
     }catch(e){
       console.error('Load '+domId+' failed:',e);
-      return{domId,ok:false,error:e.message};
+      results.push({domId,ok:false,error:e.message});
     }
-  }));
+  }
   renderCheckTab();
 }
 
@@ -425,7 +426,7 @@ function renderCheckTab(){
 function changeDate(delta){
   const d=new Date(selectedDate+'T00:00:00');
   d.setDate(d.getDate()+delta);
-  const nd=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  const nd=d.toISOString().slice(0,10);
   if(nd>kstToday())return;
   selectedDate=nd;
   // Check if month changed, reload logs if needed
@@ -475,7 +476,7 @@ async function saveAll(){
       if(entry){
         // Update existing — only modify medCheck and memo
         entry.medCheck=mc;
-        entry.memo=memo;
+        if(memo)entry.memo=memo;
       }else{
         // Create new entry
         entry={
@@ -535,7 +536,7 @@ async function renderCalendarTab(){
   for(let i=0;i<35;i++){
     const d=new Date(today+'T00:00:00');
     d.setDate(d.getDate()-i);
-    months.add(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'));
+    months.add(d.toISOString().slice(0,7));
   }
   // Ensure all needed months are loaded
   for(const month of months){
@@ -549,8 +550,8 @@ async function renderCalendarTab(){
   for(let i=34;i>=0;i--){
     const d=new Date(today+'T00:00:00');
     d.setDate(d.getDate()-i);
-    const dateStr=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-    const dow=d.getDay();
+    const dateStr=d.toISOString().slice(0,10);
+    const dow=new Date(dateStr+'T00:00:00Z').getUTCDay();
 
     let totalDaily=0,takenDaily=0,totalPrn=0,takenPrn=0;
     const domDetails={};
