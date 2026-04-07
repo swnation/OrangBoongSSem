@@ -544,7 +544,16 @@ function renderLog() {
         ${visMoodOpts.map(({s,i})=>`<div class="log-chip" data-group="mood" data-val="${s}" onclick="selectMood(this,${i})">${s}</div>`).join('')}
       </div>
     </div>
-    ${skipNrsHtml}` : `
+    ${skipNrsHtml}
+    <div class="log-section-title" style="margin-top:12px">컨디션 점수 (0=최악 10=최상)</div>
+    <div style="display:flex;align-items:center;gap:10px;margin:4px 0">
+      <span style="font-size:1.3rem;font-weight:700;min-width:28px;text-align:center" id="mood-nrs-val">-</span>
+      <input type="range" id="mood-nrs" min="0" max="10" value="5" disabled style="flex:1;accent-color:var(--ac);height:24px"
+        oninput="document.getElementById('mood-nrs-val').textContent=this.value;document.getElementById('mood-nrs-skip').checked=false">
+    </div>
+    <label style="display:flex;align-items:center;gap:5px;font-size:.73rem;color:var(--mu);cursor:pointer">
+      <input type="checkbox" id="mood-nrs-skip" checked onchange="const r=document.getElementById('mood-nrs');r.disabled=this.checked;document.getElementById('mood-nrs-val').textContent=this.checked?'-':r.value"> 기록 안 함
+    </label>` : `
     <div class="log-section-title">${lc.nrsLabel}</div>
     <div id="nrs-area">
       <div class="log-nrs">
@@ -1041,7 +1050,9 @@ async function saveLogEntry() {
   } else if(lc.moodMode) {
     const sel=document.querySelector('#mood-chips .log-chip.sel');
     mood=sel?.dataset.val||'';
-    nrs=-1;
+    // moodMode 컨디션 점수 (별도 슬라이더)
+    const moodNrsSkip=document.getElementById('mood-nrs-skip')?.checked;
+    nrs=moodNrsSkip?-1:parseInt(document.getElementById('mood-nrs')?.value??-1);
   } else {
     nrs=parseInt(document.getElementById('log-nrs')?.value??-1);
   }

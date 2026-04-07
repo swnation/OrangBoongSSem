@@ -190,20 +190,26 @@ function switchTab(idx){currentTab=idx;document.querySelectorAll('.tab').forEach
 // ═══════════════════════════════════════════════════════════════
 let editingEntryId=null; // null=새기록, string=수정
 
+// 날짜의 고유 엔트리 목록 (도메인 간 중복 제거 — datetime 기준)
+function getDateEntries(date){
+  const byTime={};
+  for(const domId of Object.keys(BUNG_DOMAINS)){
+    const ml=domainData[domId]?.logs?.[date.slice(0,7)];
+    if(!ml?.data)continue;
+    ml.data.filter(l=>l.datetime?.slice(0,10)===date).forEach(e=>{
+      const key=e.datetime||'';
+      if(!byTime[key])byTime[key]={...e,_domains:[domId]};
+      else byTime[key]._domains.push(domId);
+    });
+  }
+  return Object.values(byTime).sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
+}
+
 function renderCheckTab(){
   const content=document.getElementById('content');
   let html='';const isToday=selectedDate===kstToday();
-
-  // 이 날짜의 모든 기존 기록 수집
-  const existingEntries=[];
-  for(const domId of Object.keys(BUNG_DOMAINS)){
-    const ml=domainData[domId]?.logs?.[selectedDate.slice(0,7)];
-    if(!ml?.data)continue;
-    ml.data.filter(l=>l.datetime?.slice(0,10)===selectedDate).forEach(e=>{
-      if(!existingEntries.find(x=>x.id===e.id))existingEntries.push(e);
-    });
-  }
-  const editEntry=editingEntryId?existingEntries.find(e=>e.id===editingEntryId):null;
+  const existingEntries=getDateEntries(selectedDate);
+  const editEntry=editingEntryId?existingEntries.find(e=>e.datetime===editingEntryId):null;
   const anyEntry=editEntry||existingEntries[0];
 
   // Date nav
@@ -211,18 +217,21 @@ function renderCheckTab(){
   html+='<span class="date-label">'+selectedDate+(isToday?' (오늘)':'')+'</span>';
   html+='<button onclick="changeDate(1)"'+(isToday?' disabled':'')+'>▶</button></div>';
 
-  // 기존 기록 목록 (있으면 표시)
+  // 기존 기록 목록
   if(existingEntries.length){
     html+='<div class="card"><div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">📋 이 날짜 기록 ('+existingEntries.length+'건)</div>';
     existingEntries.forEach(e=>{
-      const isEditing=editingEntryId===e.id;
+      const isEditing=editingEntryId===e.datetime;
       const time=e.datetime?.slice(11,16)||'';
       const mcCount=e.medCheck?Object.values(e.medCheck).filter(v=>v).length+'/'+Object.keys(e.medCheck).length:'';
-      html+='<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;margin-bottom:3px;background:'+(isEditing?'var(--ac)20':'var(--sf2)')+';border:1px solid '+(isEditing?'var(--ac)':'var(--bd)')+';cursor:pointer" onclick="editingEntryId=\''+(e.id||'')+'\';renderCheckTab()">';
+      html+='<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;margin-bottom:3px;background:'+(isEditing?'var(--ac)20':'var(--sf2)')+';border:1px solid '+(isEditing?'var(--ac)':'var(--bd)')+'">';
+      html+='<span style="cursor:pointer;flex:1;display:flex;align-items:center;gap:6px" onclick="editingEntryId=\''+esc(e.datetime)+'\';renderCheckTab()">';
       html+='<span style="font-size:.72rem;font-family:var(--mono);color:var(--mu)">'+(time||'--:--')+'</span>';
       if(mcCount)html+='<span style="font-size:.68rem;color:var(--mu)">💊'+mcCount+'</span>';
-      if(e.nrs>=0)html+='<span style="font-size:.68rem;color:var(--mu)">컨디션:'+e.nrs+'</span>';
-      if(e.memo)html+='<span style="font-size:.68rem;color:var(--mu);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(e.memo.slice(0,20))+'</span>';
+      if(e.nrs>=0)html+='<span style="font-size:.68rem;color:var(--mu)">'+e.nrs+'점</span>';
+      if(e.memo)html+='<span style="font-size:.68rem;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">'+esc(e.memo.slice(0,20))+'</span>';
+      html+='</span>';
+      html+='<button class="btn-toggle" style="color:var(--re);border-color:var(--re);font-size:.6rem;padding:2px 6px" onclick="deleteEntry(\''+esc(e.datetime)+'\')">삭제</button>';
       html+='</div>';
     });
     html+='<button class="btn-toggle" style="width:100%;padding:6px;margin-top:4px;font-size:.72rem" onclick="editingEntryId=null;renderCheckTab()">➕ 새 기록 추가</button>';
@@ -300,6 +309,23 @@ function renderCheckTab(){
 }
 function selectDC(btn){const label=btn.dataset.dc;btn.parentElement.querySelectorAll('.dc-btn').forEach(b=>b.classList.toggle('sel',b===btn&&!btn.classList.contains('sel')));}
 function toggleAll(domId,checked){document.querySelectorAll('.med-row input[data-domain="'+domId+'"]').forEach(cb=>cb.checked=checked);}
+async function deleteEntry(datetime){
+  if(!confirm('이 기록을 삭제하시겠습니까?'))return;
+  for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
+    const month=datetime.slice(0,7);
+    const ml=domainData[domId]?.logs?.[month];if(!ml?.data)continue;
+    const idx=ml.data.findIndex(l=>l.datetime===datetime);
+    if(idx>=0){
+      ml.data.splice(idx,1);
+      try{
+        const logName=dc.logPrefix+'_'+month+'.json';
+        if(ml.fileId)await driveUpdate(ml.fileId,ml.data);
+      }catch(e){console.error('Delete error:',e);}
+    }
+  }
+  editingEntryId=null;showToast('🗑 삭제됨');renderCheckTab();
+}
+
 function changeDate(delta){const d=new Date(selectedDate+'T00:00:00');d.setDate(d.getDate()+delta);const nd=localDateStr(d);if(nd>kstToday())return;selectedDate=nd;Promise.all(Object.keys(BUNG_DOMAINS).map(id=>loadLogMonth(id,nd.slice(0,7)))).then(()=>renderCheckTab());}
 
 // ═══════════════════════════════════════════════════════════════
@@ -322,6 +348,7 @@ async function saveAll(){
     const d=cb.dataset.domain,m=cb.dataset.med;if(!domChecks[d])domChecks[d]={};domChecks[d][m]=cb.checked;
   });
 
+  const _sharedId=crypto.randomUUID(); // 새 기록 시 모든 도메인에 동일 ID
   const results=[];
   for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
     try{
@@ -330,16 +357,17 @@ async function saveAll(){
       const ml=ds.logs[month];if(!ml){results.push({domId,status:'skip'});continue;}
       const mc=domChecks[domId]||{};
 
-      // 편집 모드: editingEntryId로 기존 엔트리 찾기 / 새 기록 모드: 무조건 새로 생성
-      let entry=editingEntryId?ml.data.find(l=>l.id===editingEntryId):null;
+      // 편집: datetime으로 기존 엔트리 찾기 / 새 기록: 새로 생성
+      let entry=editingEntryId?ml.data.find(l=>l.datetime===editingEntryId):null;
       if(entry){
         if(Object.keys(mc).length)entry.medCheck=mc;
         entry.memo=memo;entry.nrs=nrs;entry.datetime=selectedDate+'T'+timeVal;
         if(symptoms.length)entry.symptoms=symptoms;
+        else delete entry.symptoms;
         if(Object.keys(dailyChecks).length)entry.dailyChecks=dailyChecks;
       }else{
         if(!Object.keys(mc).length&&nrs===-1&&!memo&&!symptoms.length&&!Object.keys(dailyChecks).length){results.push({domId,status:'skip'});continue;}
-        entry={id:crypto.randomUUID(),datetime:selectedDate+'T'+timeVal,nrs,
+        entry={id:_sharedId,datetime:selectedDate+'T'+timeVal,nrs,
           medCheck:Object.keys(mc).length?mc:undefined,
           symptoms:symptoms.length?symptoms:undefined,
           dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined,
@@ -356,7 +384,8 @@ async function saveAll(){
   statusEl.innerHTML=sh;
   const ok=results.every(r=>r.status==='ok'||r.status==='skip');
   btn.disabled=false;btn.textContent=ok?'✅ 저장 완료':'⚠️ 일부 실패';
-  if(ok)showToast('✅ 저장 완료');setTimeout(()=>{btn.textContent='💾 저장';},3000);
+  if(ok){showToast('✅ 저장 완료');editingEntryId=selectedDate+'T'+timeVal;setTimeout(()=>renderCheckTab(),500);}
+  setTimeout(()=>{if(btn)btn.textContent='💾 저장';},3000);
 }
 
 // ═══════════════════════════════════════════════════════════════
