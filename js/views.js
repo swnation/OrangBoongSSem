@@ -1538,10 +1538,18 @@ function renderCalendarHeatmap(logs,lc) {
 // ═══════════════════════════════════════════════════════════════
 function renderMedComplianceCalendar(logs) {
   const condMeds=typeof getConditionMeds==='function'?getConditionMeds():[];
-  // trackCompliance가 설정된 조건은 해당 약물만, 미설정은 전체 daily 약물
+  // trackCompliance 필터 (객체 배열 [{med,until}] 또는 문자열 배열 하위호환)
+  const _isTrackActive=(t,date)=>{
+    if(typeof t==='string')return true; // 하위호환
+    if(!t.until||t.until==='change')return true; // 약 변경시까지 = 항상 활성
+    return date?date<=t.until:true; // 날짜 비교
+  };
   const expectedMeds=condMeds.flatMap(g=>{
     const track=g.trackCompliance;
-    if(track?.length) return g.meds.filter(m=>track.includes(m));
+    if(track?.length) return g.meds.filter(m=>{
+      const t=track.find(x=>(typeof x==='string'?x:x.med)===m);
+      return t&&_isTrackActive(t,kstToday());
+    });
     return g.meds.filter(m=>!m.includes('(PRN)')&&!m.includes('PRN'));
   });
   const withMc=logs.filter(l=>l.medCheck&&Object.keys(l.medCheck).length);

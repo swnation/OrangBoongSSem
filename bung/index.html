@@ -470,9 +470,13 @@ async function renderCalendarTab(){
       const entry=findEntry(domId,dateStr);
       if(entry?.medCheck&&Object.keys(entry.medCheck).length)hasRecord=true;
       getDomainMeds(domId,dateStr).forEach(g=>{
-        // trackCompliance가 있으면 해당 약물만, 없으면 전체 daily
         const track=g.trackCompliance;
-        const medsToCheck=track?.length?g.meds.filter(m=>track.includes(m)):g.meds.filter(m=>!m.includes('(PRN)')&&!m.includes('PRN'));
+        const medsToCheck=track?.length?g.meds.filter(m=>{
+          const t=track.find(x=>(typeof x==='string'?x:x.med)===m);
+          if(!t)return false;
+          if(typeof t==='string')return true;
+          return !t.until||t.until==='change'||dateStr<=t.until;
+        }):g.meds.filter(m=>!m.includes('(PRN)')&&!m.includes('PRN'));
         medsToCheck.forEach(m=>{totalD++;if(entry?.medCheck?.[m]===true)takenD++;});
       });
     }

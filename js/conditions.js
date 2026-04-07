@@ -625,23 +625,36 @@ function removeDxMed(idx) {
   renderDxMedChips();
 }
 
-let _dxTrackList=[]; // 순응도 추적 대상 약물 목록
+let _dxTrackList=[]; // [{med, until}] — until: 'change'|'YYYY-MM-DD'
+
+function _getTrackItem(med){return _dxTrackList.find(t=>t.med===med);}
+function _isTracked(med){return !!_getTrackItem(med);}
 
 function renderDxMedChips() {
   const el=document.getElementById('dx-med-chips');
   if(!el) return;
   el.innerHTML=_dxMedsList.map((m,i)=>{
     const isPrn=m.includes('(PRN)');
-    const isTracked=_dxTrackList.includes(m);
-    return `<span class="file-chip" style="${isPrn?'border:1.5px dashed #f59e0b;background:#fff7ed':''};position:relative">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span>
-      <button onclick="_toggleTrack(${i})" style="font-size:.55rem;padding:1px 4px;border:1px solid ${isTracked?'#10b981':'var(--bd)'};border-radius:3px;background:${isTracked?'#f0fdf4':'none'};color:${isTracked?'#10b981':'var(--mu)'};cursor:pointer;margin-left:4px;font-family:var(--font)" title="순응도 추적 대상">${isTracked?'📊추적':'추적'}</button></span>`;
+    const ti=_getTrackItem(m);
+    const tracked=!!ti;
+    const untilLabel=ti?(ti.until==='change'?'변경시까지':ti.until):'';
+    return `<span class="file-chip" style="${isPrn?'border:1.5px dashed #f59e0b;background:#fff7ed':''}">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span>
+      <button onclick="_toggleTrack(${i})" style="font-size:.55rem;padding:1px 4px;border:1px solid ${tracked?'#10b981':'var(--bd)'};border-radius:3px;background:${tracked?'#f0fdf4':'none'};color:${tracked?'#10b981':'var(--mu)'};cursor:pointer;margin-left:4px;font-family:var(--font)" title="순응도 추적">${tracked?'📊'+untilLabel:'추적'}</button></span>`;
   }).join('');
 }
 
 function _toggleTrack(idx){
   const m=_dxMedsList[idx];if(!m)return;
-  if(_dxTrackList.includes(m))_dxTrackList=_dxTrackList.filter(x=>x!==m);
-  else _dxTrackList.push(m);
+  const existing=_getTrackItem(m);
+  if(existing){
+    _dxTrackList=_dxTrackList.filter(t=>t.med!==m);
+  }else{
+    // 기본: 약 변경시까지. 날짜 지정 옵션 제공
+    const until=prompt(m+' 추적 기간 설정:\n\n• "change" → 약 변경 시까지 (기본)\n• "YYYY-MM-DD" → 특정 날짜까지\n\n입력:','change');
+    if(until===null)return;
+    const val=until.trim()||'change';
+    _dxTrackList.push({med:m,until:val});
+  }
   renderDxMedChips();
 }
 
@@ -664,7 +677,8 @@ function openConditionForm(domainId, idx) {
     document.getElementById('dx-course').value=c.course||'';
     document.getElementById('dx-notes').value=c.notes||'';
     _dxMedsList=c.medsList?[...c.medsList]:(c.medications?c.medications.split(',').map(s=>s.trim()).filter(Boolean):[]);
-    _dxTrackList=c.trackCompliance?[...c.trackCompliance]:[];
+    // 하위호환: 문자열 배열 → 객체 배열 변환
+    _dxTrackList=(c.trackCompliance||[]).map(t=>typeof t==='string'?{med:t,until:'change'}:t);
     renderDxMedChips();
     showDxMedSuggestions(c.name);
   } else {
