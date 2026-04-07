@@ -111,10 +111,10 @@ function getConditionMeds(date) {
     // 날짜가 지정되고 medHistory가 있으면 해당 날짜의 약물 세트 찾기
     if(date && c.medHistory?.length) {
       const medsAtDate=getMedsAtDate(c, date);
-      if(medsAtDate?.length) { result.push({condition:c.name,domain:c._domainLabel,icon:c._domainIcon,meds:medsAtDate}); return; }
+      if(medsAtDate?.length) { result.push({condition:c.name,domain:c._domainLabel,icon:c._domainIcon,meds:medsAtDate,trackCompliance:c.trackCompliance}); return; }
     }
     if(!c.medsList?.length) return;
-    result.push({condition:c.name,domain:c._domainLabel,icon:c._domainIcon,meds:c.medsList});
+    result.push({condition:c.name,domain:c._domainLabel,icon:c._domainIcon,meds:c.medsList,trackCompliance:c.trackCompliance});
   });
   return result;
 }
@@ -625,13 +625,24 @@ function removeDxMed(idx) {
   renderDxMedChips();
 }
 
+let _dxTrackList=[]; // 순응도 추적 대상 약물 목록
+
 function renderDxMedChips() {
   const el=document.getElementById('dx-med-chips');
   if(!el) return;
   el.innerHTML=_dxMedsList.map((m,i)=>{
     const isPrn=m.includes('(PRN)');
-    return `<span class="file-chip" style="${isPrn?'border:1.5px dashed #f59e0b;background:#fff7ed':''}">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span></span>`;
+    const isTracked=_dxTrackList.includes(m);
+    return `<span class="file-chip" style="${isPrn?'border:1.5px dashed #f59e0b;background:#fff7ed':''};position:relative">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span>
+      <button onclick="_toggleTrack(${i})" style="font-size:.55rem;padding:1px 4px;border:1px solid ${isTracked?'#10b981':'var(--bd)'};border-radius:3px;background:${isTracked?'#f0fdf4':'none'};color:${isTracked?'#10b981':'var(--mu)'};cursor:pointer;margin-left:4px;font-family:var(--font)" title="순응도 추적 대상">${isTracked?'📊추적':'추적'}</button></span>`;
   }).join('');
+}
+
+function _toggleTrack(idx){
+  const m=_dxMedsList[idx];if(!m)return;
+  if(_dxTrackList.includes(m))_dxTrackList=_dxTrackList.filter(x=>x!==m);
+  else _dxTrackList.push(m);
+  renderDxMedChips();
 }
 
 function openConditionForm(domainId, idx) {
@@ -639,7 +650,7 @@ function openConditionForm(domainId, idx) {
   document.getElementById('dx-edit-idx').value=idx!==undefined?idx:-1;
   document.getElementById('dx-edit-domain').value=domainId||S.currentDomain;
   if(domainId) document.getElementById('dx-domain').value=domainId;
-  _conditionFiles=[];_dxMedsList=[];_dxManualHistory=[];
+  _conditionFiles=[];_dxMedsList=[];_dxManualHistory=[];_dxTrackList=[];
   const fileList=document.getElementById('dx-file-list');if(fileList)fileList.innerHTML='';
   if(idx!==undefined && domainId) {
     const ds=S.domainState[domainId];
@@ -653,6 +664,7 @@ function openConditionForm(domainId, idx) {
     document.getElementById('dx-course').value=c.course||'';
     document.getElementById('dx-notes').value=c.notes||'';
     _dxMedsList=c.medsList?[...c.medsList]:(c.medications?c.medications.split(',').map(s=>s.trim()).filter(Boolean):[]);
+    _dxTrackList=c.trackCompliance?[...c.trackCompliance]:[];
     renderDxMedChips();
     showDxMedSuggestions(c.name);
   } else {
@@ -684,6 +696,7 @@ async function saveCondition() {
     diagnosisDate:document.getElementById('dx-date').value.trim(),
     status:document.getElementById('dx-status').value,
     medsList:[..._dxMedsList],
+    trackCompliance:_dxTrackList.length?[..._dxTrackList]:undefined,
     medications:_dxMedsList.join(', '),
     drugChangeDate:document.getElementById('dx-drug-change')?.value||'',
     drugResponse:document.getElementById('dx-response').value.trim(),
@@ -754,7 +767,7 @@ async function saveCondition() {
   }
 
   if(ds.masterFileId){try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){}}
-  _conditionFiles=[];_dxMedsList=[];_dxManualHistory=[];
+  _conditionFiles=[];_dxMedsList=[];_dxManualHistory=[];_dxTrackList=[];
   closeConditionForm();
   renderView('meds');
   showToast('✅ 질환 정보 저장됨');

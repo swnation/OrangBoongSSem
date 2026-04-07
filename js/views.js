@@ -1538,7 +1538,12 @@ function renderCalendarHeatmap(logs,lc) {
 // ═══════════════════════════════════════════════════════════════
 function renderMedComplianceCalendar(logs) {
   const condMeds=typeof getConditionMeds==='function'?getConditionMeds():[];
-  const expectedMeds=condMeds.flatMap(g=>g.meds.filter(m=>!m.includes('(PRN)')&&!m.includes('PRN')));
+  // trackCompliance가 설정된 조건은 해당 약물만, 미설정은 전체 daily 약물
+  const expectedMeds=condMeds.flatMap(g=>{
+    const track=g.trackCompliance;
+    if(track?.length) return g.meds.filter(m=>track.includes(m));
+    return g.meds.filter(m=>!m.includes('(PRN)')&&!m.includes('PRN'));
+  });
   const withMc=logs.filter(l=>l.medCheck&&Object.keys(l.medCheck).length);
   const withMeds=logs.filter(l=>(l.meds||[]).length>0);
   if(!withMc.length&&!withMeds.length&&!expectedMeds.length) return '';

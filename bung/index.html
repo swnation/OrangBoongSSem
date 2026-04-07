@@ -180,7 +180,7 @@ function getDomainMeds(id,date){
   const ds=domainData[id];if(!ds?.master?.conditions)return[];
   const d=date||selectedDate;
   return(ds.master.conditions||[]).filter(c=>c.status==='active'||c.status==='remission')
-    .map(c=>({condition:c.name,meds:_medsAtDate(c,d)})).filter(g=>g.meds.length);
+    .map(c=>({condition:c.name,meds:_medsAtDate(c,d),trackCompliance:c.trackCompliance})).filter(g=>g.meds.length);
 }
 
 // 새로고침 — 캐시 무효화 + Drive 재로드
@@ -469,10 +469,12 @@ async function renderCalendarTab(){
     for(const domId of Object.keys(BUNG_DOMAINS)){
       const entry=findEntry(domId,dateStr);
       if(entry?.medCheck&&Object.keys(entry.medCheck).length)hasRecord=true;
-      getDomainMeds(domId,dateStr).forEach(g=>g.meds.forEach(m=>{
-        if(m.includes('(PRN)')||m.includes('PRN'))return;totalD++;
-        if(entry?.medCheck?.[m]===true)takenD++;
-      }));
+      getDomainMeds(domId,dateStr).forEach(g=>{
+        // trackCompliance가 있으면 해당 약물만, 없으면 전체 daily
+        const track=g.trackCompliance;
+        const medsToCheck=track?.length?g.meds.filter(m=>track.includes(m)):g.meds.filter(m=>!m.includes('(PRN)')&&!m.includes('PRN'));
+        medsToCheck.forEach(m=>{totalD++;if(entry?.medCheck?.[m]===true)takenD++;});
+      });
     }
     // 미기록=-1(회색), 기록있음=실제비율
     days.push({date:dateStr,dow:d.getDay(),rate:hasRecord?(totalD>0?Math.round(takenD/totalD*100):100):-1});
