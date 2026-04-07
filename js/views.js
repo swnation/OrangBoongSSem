@@ -1537,10 +1537,12 @@ function renderCalendarHeatmap(logs,lc) {
 // 💊 MED COMPLIANCE CALENDAR (30일 약물 복용 캘린더)
 // ═══════════════════════════════════════════════════════════════
 function renderMedComplianceCalendar(logs) {
+  // 조건 약물이 있거나 medCheck 기록이 있으면 표시
+  const condMeds=typeof getConditionMeds==='function'?getConditionMeds():[];
+  const expectedMeds=condMeds.flatMap(g=>g.meds.filter(m=>!m.includes('(PRN)')&&!m.includes('PRN')));
   const withMc=logs.filter(l=>l.medCheck&&Object.keys(l.medCheck).length);
-  if(!withMc.length) return '';
+  if(!withMc.length&&!expectedMeds.length) return '';
 
-  // Build per-date compliance
   const byDate={};
   withMc.forEach(l=>{
     const d=l.datetime.slice(0,10);
@@ -1554,7 +1556,6 @@ function renderMedComplianceCalendar(logs) {
     });
   });
 
-  // Last 30 days calendar
   const today=kstToday();
   const cells=[];
   for(let i=29;i>=0;i--){
@@ -1574,16 +1575,15 @@ function renderMedComplianceCalendar(logs) {
     </div>`);
   }
 
-  // Overall rate
-  const allDates=Object.values(byDate);
-  const overall=allDates.length?Math.round(allDates.reduce((s,d)=>s+(d.total>0?d.taken/d.total*100:0),0)/allDates.length):0;
-  const oc=overall>=90?'#10b981':overall>=70?'#f59e0b':'#ef4444';
+  const recorded=Object.values(byDate).filter(d=>d.total>0);
+  const overall=recorded.length?Math.round(recorded.reduce((s,d)=>s+(d.taken/d.total*100),0)/recorded.length):0;
+  const oc=recorded.length?(overall>=90?'#10b981':overall>=70?'#f59e0b':'#ef4444'):'var(--mu2)';
 
   return `<div class="card">
     <div class="card-title">💊 약물 복용 캘린더 (30일)</div>
     <div style="text-align:center;margin-bottom:8px">
-      <span style="font-size:1.5rem;font-weight:700;color:${oc}">${overall}%</span>
-      <span style="font-size:.7rem;color:var(--mu)"> 순응도</span>
+      ${recorded.length?`<span style="font-size:1.5rem;font-weight:700;color:${oc}">${overall}%</span><span style="font-size:.7rem;color:var(--mu)"> 순응도 (${recorded.length}일 기록)</span>`
+        :`<span style="font-size:.8rem;color:var(--mu2)">등록 약물 ${expectedMeds.length}개 · 기록을 시작하세요</span>`}
     </div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${cells.join('')}</div>
     <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;font-size:.6rem;color:var(--mu)">

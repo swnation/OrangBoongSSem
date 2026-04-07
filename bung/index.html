@@ -24,7 +24,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .domain-header{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 12px;border-radius:8px}
 .domain-header span{font-size:.85rem;font-weight:600}
 .condition-name{font-size:.68rem;color:var(--mu);font-weight:600;margin:8px 0 4px 4px;letter-spacing:.05em}
-.med-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;margin-bottom:4px;background:var(--sf2);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .15s}
+.med-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;margin-bottom:4px;background:var(--sf2);cursor:pointer;-webkit-tap-highlight-color:transparent}
 .med-row:active{background:var(--bd)}
 .med-row input[type=checkbox]{width:20px;height:20px;accent-color:var(--ac);pointer-events:none;flex-shrink:0}
 .med-row label{flex:1;font-size:.85rem;pointer-events:none}
@@ -45,10 +45,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .date-nav .date-label{font-size:.88rem;font-weight:600;min-width:120px;text-align:center}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:12px}
 .cal-header{font-size:.62rem;text-align:center;color:var(--mu);font-weight:600;padding:4px 0}
-.cal-day{text-align:center;padding:6px 2px;border-radius:6px;cursor:pointer;font-size:.72rem;position:relative;min-height:36px}
+.cal-day{text-align:center;padding:6px 2px;border-radius:6px;cursor:pointer;font-size:.72rem;min-height:36px}
 .cal-day:hover{background:var(--sf2)}
 .cal-day.today{font-weight:700;border:1.5px solid var(--ac)}
-.cal-day.selected{background:var(--ac);color:#fff;border-radius:6px}
+.cal-day.bulk-sel{background:var(--ac);color:#fff;border-radius:6px}
 .cal-day .dot{width:8px;height:8px;border-radius:50%;margin:2px auto 0}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:10px 20px;border-radius:8px;font-size:.82rem;z-index:999;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
@@ -56,14 +56,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .nrs-wrap{display:flex;align-items:center;gap:10px;margin:6px 0}
 .nrs-wrap input[type=range]{flex:1;accent-color:var(--ac);height:24px}
 .nrs-val{font-size:1.3rem;font-weight:700;min-width:28px;text-align:center}
-.nrs-skip{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--mu);margin-top:2px}
-.nrs-skip input{accent-color:var(--ac)}
 .chips{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}
-.chip{padding:5px 12px;border-radius:18px;border:1.5px solid var(--bd);font-size:.78rem;cursor:pointer;user-select:none;background:var(--sf2);-webkit-tap-highlight-color:transparent}
+.chip{padding:5px 12px;border-radius:18px;border:1.5px solid var(--bd);font-size:.78rem;cursor:pointer;user-select:none;background:var(--sf2)}
 .chip:active{transform:scale(.96)}
 .chip.sel{font-weight:600;color:#fff;background:var(--ac);border-color:var(--ac)}
 .btn-toggle{font-size:.62rem;padding:3px 8px;border:1px solid var(--bd);border-radius:5px;background:none;color:var(--mu);cursor:pointer;font-family:var(--font)}
 .btn-toggle:hover{border-color:var(--ac);color:var(--ac)}
+.dc-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.dc-label{font-size:.75rem;min-width:48px;color:var(--mu)}
+.dc-btns{display:flex;gap:3px}
+.dc-btn{width:28px;height:28px;border:1.5px solid var(--bd);border-radius:6px;background:var(--sf2);font-size:.72rem;font-weight:600;cursor:pointer;color:var(--mu);font-family:var(--font)}
+.dc-btn.sel{background:var(--ac);color:#fff;border-color:var(--ac)}
 </style>
 </head>
 <body>
@@ -89,399 +92,338 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 <div class="toast" id="toast"></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
-// ═══════════════════════════════════════════════════════════════
-// CONFIG & STATE
-// ═══════════════════════════════════════════════════════════════
 const CLIENT_ID='103056429713-6ne324793lgc09nl9rkjqonlg4pcd12i.apps.googleusercontent.com';
 const SCOPES='https://www.googleapis.com/auth/drive.file';
 const BUNG_DOMAINS={
   'bung-mental':{icon:'🩵',label:'마음관리',color:'#06b6d4',folder:'Bung Mental',masterFile:'bung_mental_master.json',logPrefix:'bung_mental_log',
     symptoms:['불안','우울감','번아웃','불면','무기력','과민','집중력저하','공황','식욕변화'],
-    dailyChecks:['수면','집중력','발화','기억력','에너지','식욕']},
+    dailyChecks:['수면','집중력','발화','기억력','에너지','식욕'],nrsLabel:'기분'},
   'bung-health':{icon:'💪',label:'건강관리',color:'#f59e0b',folder:'Bung Health',masterFile:'bung_health_master.json',logPrefix:'bung_health_log',
-    symptoms:['통풍발작','소화불량','피로','두통','근육통','불면'],dailyChecks:[]},
+    symptoms:['통풍발작','소화불량','피로','두통','근육통','불면'],dailyChecks:[],nrsLabel:'컨디션 (0=최악 10=최상)'},
   'bungruki':{icon:'🍼',label:'임신준비',color:'#ec4899',folder:'Bungruki Pregnancy',masterFile:'bungruki_master.json',logPrefix:'bungruki_log',
-    symptoms:[],dailyChecks:[]},
+    symptoms:[],dailyChecks:[],nrsLabel:'컨디션 (0=최악 10=최상)'},
 };
-
 let token=null,tokenClient=null,_tokenExpiresAt=0,_tokenRefreshTimer=null,_tokenRefreshResolve=null;
-let domainData={};  // {domainId: {folderId, masterFileId, master, logs:{month:{fileId,data}}}}
-let currentTab=0, selectedDate='';
+let domainData={};
+let currentTab=0,selectedDate='';
+let bulkMode=false,bulkDates=new Set();
 
-// ═══════════════════════════════════════════════════════════════
-// KST DATE UTILS
-// ═══════════════════════════════════════════════════════════════
 function kstNow(){return new Date(Date.now()+9*3600000);}
 function kstToday(){return kstNow().toISOString().slice(0,10);}
 function kstTimeStr(){return kstNow().toISOString().slice(11,16);}
 function localDateStr(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-
-// ═══════════════════════════════════════════════════════════════
-// TOAST & UTILS
-// ═══════════════════════════════════════════════════════════════
 let _toastTimer;
 function showToast(msg,ms){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(_toastTimer);_toastTimer=setTimeout(()=>el.classList.remove('show'),ms||2000);}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
-// ═══════════════════════════════════════════════════════════════
-// GOOGLE AUTH (same as main app)
-// ═══════════════════════════════════════════════════════════════
-function signIn(){
-  if(!window.google?.accounts?.oauth2){showToast('Google 인증 로딩 중...',2000);return;}
-  if(!tokenClient)tokenClient=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:handleToken});
-  tokenClient.requestAccessToken();
-}
-function scheduleTokenRefresh(sec){if(_tokenRefreshTimer)clearTimeout(_tokenRefreshTimer);_tokenExpiresAt=Date.now()+sec*1000;_tokenRefreshTimer=setTimeout(()=>{if(tokenClient)tokenClient.requestAccessToken({prompt:''});},Math.max((sec-300)*1000,60000));}
+// AUTH
+function signIn(){if(!window.google?.accounts?.oauth2){showToast('인증 로딩 중...',2000);return;}if(!tokenClient)tokenClient=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:handleToken});tokenClient.requestAccessToken();}
+function scheduleTokenRefresh(s){if(_tokenRefreshTimer)clearTimeout(_tokenRefreshTimer);_tokenExpiresAt=Date.now()+s*1000;_tokenRefreshTimer=setTimeout(()=>{if(tokenClient)tokenClient.requestAccessToken({prompt:''});},Math.max((s-300)*1000,60000));}
 function isTokenExpired(){return _tokenExpiresAt>0&&Date.now()>_tokenExpiresAt;}
 async function ensureValidToken(){if(!token)return false;if(!isTokenExpired())return true;if(!tokenClient)return false;return new Promise(r=>{_tokenRefreshResolve=r;tokenClient.requestAccessToken({prompt:''});});}
 function handleToken(resp){
   if(resp.error){if(_tokenRefreshResolve){_tokenRefreshResolve(false);_tokenRefreshResolve=null;}showToast('❌ 로그인 실패',3000);return;}
-  const isRefresh=!!token;token=resp.access_token;localStorage.setItem('om_auto_login','true');scheduleTokenRefresh(resp.expires_in||3600);
-  if(_tokenRefreshResolve){_tokenRefreshResolve(true);_tokenRefreshResolve=null;return;}
-  if(isRefresh)return;
+  const isR=!!token;token=resp.access_token;localStorage.setItem('om_auto_login','true');scheduleTokenRefresh(resp.expires_in||3600);
+  if(_tokenRefreshResolve){_tokenRefreshResolve(true);_tokenRefreshResolve=null;return;}if(isR)return;
   document.getElementById('status-dot').style.background='#2d8a5a';document.getElementById('tab-bar').style.display='flex';
   selectedDate=kstToday();loadAllDomains();
 }
-function checkGSI(n){
-  if(!n)n=0;
-  if(window.google?.accounts?.oauth2){document.getElementById('gsi-status').textContent='✓ 준비됨';document.getElementById('gsi-status').style.color='#2d6a4f';
-    if(localStorage.getItem('om_auto_login')==='true'){try{if(!tokenClient)tokenClient=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:handleToken});tokenClient.requestAccessToken({prompt:''});}catch(e){console.error('Auto-login failed:',e);}}
-  }else if(n<20){setTimeout(()=>checkGSI(n+1),500);}
-  else{document.getElementById('gsi-status').textContent='⚠️ 인증 로드 실패';}
-}
+function checkGSI(n){if(!n)n=0;if(window.google?.accounts?.oauth2){document.getElementById('gsi-status').textContent='✓ 준비됨';document.getElementById('gsi-status').style.color='#2d6a4f';if(localStorage.getItem('om_auto_login')==='true'){try{if(!tokenClient)tokenClient=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:handleToken});tokenClient.requestAccessToken({prompt:''});}catch(e){console.error('Auto-login failed:',e);}}}else if(n<20){setTimeout(()=>checkGSI(n+1),500);}else{document.getElementById('gsi-status').textContent='⚠️ 인증 실패';}}
 checkGSI(0);
 
-// ═══════════════════════════════════════════════════════════════
-// DRIVE FUNCTIONS
-// ═══════════════════════════════════════════════════════════════
+// DRIVE
 async function fetchWithRetry(url,opts,mx){if(!mx)mx=2;for(let i=0;i<=mx;i++){try{const r=await fetch(url,opts);if(r.ok||r.status<429)return r;if(i<mx&&(r.status===429||r.status>=500)){await new Promise(r=>setTimeout(r,1000*(i+1)));continue;}return r;}catch(e){if(i<mx){await new Promise(r=>setTimeout(r,1000*(i+1)));continue;}throw e;}}}
-async function driveSearch(name,parentId){if(isTokenExpired())await ensureValidToken();let q="name='"+name+"' and trashed=false";if(parentId)q+=" and '"+parentId+"' in parents";const r=await fetchWithRetry('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.files||[];}
-async function driveRead(fileId){if(isTokenExpired())await ensureValidToken();return(await fetchWithRetry('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media',{headers:{Authorization:'Bearer '+token}})).json();}
-async function driveCreate(name,data,parentId){if(isTokenExpired())await ensureValidToken();const b='om_bd_x7',meta=JSON.stringify(parentId?{name,mimeType:'application/json',parents:[parentId]}:{name,mimeType:'application/json'}),body='--'+b+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+meta+'\r\n--'+b+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(data)+'\r\n--'+b+'--';const r=await fetchWithRetry('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'multipart/related; boundary='+b},body});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.id;}
-async function driveUpdate(fileId,data){if(isTokenExpired())await ensureValidToken();const r=await fetchWithRetry('https://www.googleapis.com/upload/drive/v3/files/'+fileId+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(data)});const d=await r.json();if(d.error)throw new Error(d.error.message);return d;}
-async function getOrCreateFolder(name){if(isTokenExpired())await ensureValidToken();const q="name='"+name+"' and mimeType='application/vnd.google-apps.folder' and trashed=false";const r=await fetchWithRetry('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(d.error)throw new Error(d.error.message);if(d.files?.length>0)return d.files[0].id;const cr=await fetchWithRetry('https://www.googleapis.com/drive/v3/files?fields=id',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder'})});const cd=await cr.json();if(cd.error)throw new Error(cd.error.message);return cd.id;}
+async function driveSearch(n,p){if(isTokenExpired())await ensureValidToken();let q="name='"+n+"' and trashed=false";if(p)q+=" and '"+p+"' in parents";const r=await fetchWithRetry('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.files||[];}
+async function driveRead(id){if(isTokenExpired())await ensureValidToken();return(await fetchWithRetry('https://www.googleapis.com/drive/v3/files/'+id+'?alt=media',{headers:{Authorization:'Bearer '+token}})).json();}
+async function driveCreate(n,data,p){if(isTokenExpired())await ensureValidToken();const b='om_bd_x7',meta=JSON.stringify(p?{name:n,mimeType:'application/json',parents:[p]}:{name:n,mimeType:'application/json'}),body='--'+b+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+meta+'\r\n--'+b+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(data)+'\r\n--'+b+'--';const r=await fetchWithRetry('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'multipart/related; boundary='+b},body});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.id;}
+async function driveUpdate(id,data){if(isTokenExpired())await ensureValidToken();const r=await fetchWithRetry('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(data)});const d=await r.json();if(d.error)throw new Error(d.error.message);return d;}
+async function getOrCreateFolder(n){if(isTokenExpired())await ensureValidToken();const q="name='"+n+"' and mimeType='application/vnd.google-apps.folder' and trashed=false";const r=await fetchWithRetry('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(d.error)throw new Error(d.error.message);if(d.files?.length>0)return d.files[0].id;const cr=await fetchWithRetry('https://www.googleapis.com/drive/v3/files?fields=id',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({name:n,mimeType:'application/vnd.google-apps.folder'})});const cd=await cr.json();if(cd.error)throw new Error(cd.error.message);return cd.id;}
 
-// ═══════════════════════════════════════════════════════════════
-// MULTI-MONTH LOG CACHE
-// ═══════════════════════════════════════════════════════════════
+// DATA LOADING (multi-month cache)
 async function loadAllDomains(){
   document.getElementById('content').innerHTML='<div class="loading">📡 로딩 중...</div>';
-  await Promise.all(Object.entries(BUNG_DOMAINS).map(async([domId,dc])=>{
+  await Promise.all(Object.entries(BUNG_DOMAINS).map(async([id,dc])=>{
     try{
-      if(!domainData[domId])domainData[domId]={logs:{}};
-      const ds=domainData[domId];
+      if(!domainData[id])domainData[id]={logs:{}};
+      const ds=domainData[id];
       ds.folderId=await getOrCreateFolder(dc.folder);
       const mf=await driveSearch(dc.masterFile,ds.folderId);
       if(mf.length>0){ds.masterFileId=mf[0].id;ds.master=await driveRead(ds.masterFileId);}
-      else{ds.master={conditions:[]};}
-      await loadLogMonth(domId,selectedDate.slice(0,7));
-    }catch(e){console.error('Load '+domId+':',e);}
+      else ds.master={conditions:[]};
+      await loadLogMonth(id,selectedDate.slice(0,7));
+    }catch(e){console.error('Load '+id+':',e);}
   }));
   renderCheckTab();
 }
-
-async function loadLogMonth(domId,month){
-  const ds=domainData[domId];if(!ds?.folderId)return;
-  if(ds.logs[month])return; // already cached
-  const dc=BUNG_DOMAINS[domId];
-  const logName=dc.logPrefix+'_'+month+'.json';
-  try{
-    const f=await driveSearch(logName,ds.folderId);
-    if(f.length>0){
-      const data=await driveRead(f[0].id);
-      ds.logs[month]={fileId:f[0].id,data:Array.isArray(data)?data:[]};
-    }else{
-      ds.logs[month]={fileId:null,data:[]};
-    }
+async function loadLogMonth(id,month){
+  const ds=domainData[id];if(!ds?.folderId||ds.logs[month])return;
+  const dc=BUNG_DOMAINS[id];
+  try{const f=await driveSearch(dc.logPrefix+'_'+month+'.json',ds.folderId);
+    if(f.length>0){const data=await driveRead(f[0].id);ds.logs[month]={fileId:f[0].id,data:Array.isArray(data)?data:[]};}
+    else ds.logs[month]={fileId:null,data:[]};
   }catch(e){ds.logs[month]={fileId:null,data:[]};}
 }
+function findEntry(id,date){const ml=domainData[id]?.logs?.[date.slice(0,7)];return ml?.data?.find(l=>l.datetime?.slice(0,10)===date)||null;}
+function getDomainMeds(id){const ds=domainData[id];if(!ds?.master?.conditions)return[];return(ds.master.conditions||[]).filter(c=>c.status==='active'||c.status==='remission').filter(c=>c.medsList?.length).map(c=>({condition:c.name,meds:c.medsList}));}
 
-function findEntry(domId,date){
-  const month=date.slice(0,7);
-  const ml=domainData[domId]?.logs?.[month];
-  if(!ml)return null;
-  return ml.data.find(l=>l.datetime?.slice(0,10)===date)||null;
-}
-
-function getDomainMeds(domId){
-  const ds=domainData[domId];if(!ds?.master?.conditions)return[];
-  const result=[];
-  (ds.master.conditions||[]).forEach(c=>{
-    if(c.status!=='active'&&c.status!=='remission')return;
-    const meds=c.medsList||[];if(!meds.length)return;
-    result.push({condition:c.name,meds});
-  });
-  return result;
-}
+// TAB
+function switchTab(idx){currentTab=idx;document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===idx));if(idx===0)renderCheckTab();else renderCalendarTab();}
 
 // ═══════════════════════════════════════════════════════════════
-// TAB SWITCHING
-// ═══════════════════════════════════════════════════════════════
-function switchTab(idx){
-  currentTab=idx;
-  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===idx));
-  if(idx===0)renderCheckTab();else renderCalendarTab();
-}
-
-// ═══════════════════════════════════════════════════════════════
-// CHECK TAB (체크 + 컨디션 + 증상)
+// CHECK TAB
 // ═══════════════════════════════════════════════════════════════
 function renderCheckTab(){
   const content=document.getElementById('content');
-  let html='';
-  const isToday=selectedDate===kstToday();
+  let html='';const isToday=selectedDate===kstToday();
+  const anyEntry=Object.keys(BUNG_DOMAINS).map(d=>findEntry(d,selectedDate)).find(e=>e);
 
-  // Date nav
+  // Date + Time
   html+='<div class="date-nav"><button onclick="changeDate(-1)">◀</button>';
   html+='<span class="date-label">'+selectedDate+(isToday?' (오늘)':'')+'</span>';
   html+='<button onclick="changeDate(1)"'+(isToday?' disabled':'')+'>▶</button></div>';
+  html+='<div style="text-align:center;margin-bottom:10px"><input type="time" id="entry-time" value="'+(anyEntry?.datetime?.slice(11,16)||kstTimeStr())+'" style="border:1px solid var(--bd);border-radius:6px;padding:4px 8px;font-family:var(--font);font-size:.8rem;background:var(--sf);color:var(--ink)"></div>';
 
-  // NRS / 컨디션
-  const anyEntry=Object.keys(BUNG_DOMAINS).map(d=>findEntry(d,selectedDate)).find(e=>e);
-  const curNrs=anyEntry?.nrs??-1;
-  const nrsSkip=curNrs===-1;
+  // NRS / 컨디션 (메인앱과 동일)
+  const curNrs=anyEntry?.nrs??-1;const nrsSkip=curNrs===-1;
   html+='<div class="card"><div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">컨디션 (0=최악 10=최상)</div>';
   html+='<div class="nrs-wrap"><span class="nrs-val" id="nrs-val">'+(nrsSkip?'-':curNrs)+'</span>';
   html+='<input type="range" id="nrs-range" min="0" max="10" value="'+(nrsSkip?5:curNrs)+'" oninput="document.getElementById(\'nrs-val\').textContent=this.value;document.getElementById(\'nrs-skip\').checked=false"'+(nrsSkip?' disabled':'')+'></div>';
-  html+='<div class="nrs-skip"><input type="checkbox" id="nrs-skip"'+(nrsSkip?' checked':'')+' onchange="const r=document.getElementById(\'nrs-range\');r.disabled=this.checked;document.getElementById(\'nrs-val\').textContent=this.checked?\'-\':r.value"> 기록 안 함</div></div>';
+  html+='<div style="display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--mu);margin-top:2px"><input type="checkbox" id="nrs-skip"'+(nrsSkip?' checked':'')+' onchange="const r=document.getElementById(\'nrs-range\');r.disabled=this.checked;document.getElementById(\'nrs-val\').textContent=this.checked?\'-\':r.value" style="accent-color:var(--ac)"> 기록 안 함</div></div>';
 
-  // Medication check per domain
-  let hasMeds=false;
-  for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
-    const groups=getDomainMeds(domId);
-    if(!groups.length)continue;
-    hasMeds=true;
-    const existing=findEntry(domId,selectedDate);
-    const existingMc=existing?.medCheck||{};
-
-    html+='<div class="card">';
-    html+='<div class="domain-header" style="background:'+dc.color+'15;border:1px solid '+dc.color+'30">';
-    html+='<span style="color:'+dc.color+'">'+dc.icon+' '+dc.label+'</span>';
-    html+='<span style="margin-left:auto;display:flex;gap:4px">';
-    html+='<button class="btn-toggle" onclick="toggleAll(\''+domId+'\',true)">전체 ✓</button>';
-    html+='<button class="btn-toggle" onclick="toggleAll(\''+domId+'\',false)">전체 ✗</button>';
-    html+='</span></div>';
-
-    groups.forEach(g=>{
-      html+='<div class="condition-name">'+esc(g.condition)+'</div>';
-      g.meds.forEach(m=>{
-        const isPrn=m.includes('(PRN)')||m.includes('PRN');
-        let checked;
-        if(m in existingMc)checked=existingMc[m];
-        else checked=!isPrn;
-        html+='<div class="med-row" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
-        html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(checked?' checked':'')+'>';
-        html+='<label>'+esc(m)+'</label>';
-        if(isPrn)html+='<span class="prn">PRN</span>';
-        html+='</div>';
-      });
+  // dailyChecks (기분 항목 — 메인앱 동일)
+  const allDC=BUNG_DOMAINS['bung-mental'].dailyChecks;
+  if(allDC.length){
+    const existDC=anyEntry?.dailyChecks||{};
+    html+='<div class="card"><div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">기분 체크 (1-5)</div>';
+    allDC.forEach(label=>{
+      const cur=existDC[label]||0;
+      html+='<div class="dc-row"><span class="dc-label">'+esc(label)+'</span><div class="dc-btns">';
+      for(let v=1;v<=5;v++){
+        html+='<button class="dc-btn'+(cur===v?' sel':'')+'" data-dc="'+esc(label)+'" data-val="'+v+'" onclick="selectDC(this)">'+v+'</button>';
+      }
+      html+='</div></div>';
     });
     html+='</div>';
   }
 
-  if(!hasMeds)html+='<div class="card" style="text-align:center;padding:20px;color:var(--mu)">등록된 약물 없음 — 메인앱 질환관리에서 등록</div>';
+  // Medication check per domain
+  let hasMeds=false;
+  for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
+    const groups=getDomainMeds(domId);if(!groups.length)continue;
+    hasMeds=true;
+    const existing=findEntry(domId,selectedDate);const existingMc=existing?.medCheck||{};
+    html+='<div class="card"><div class="domain-header" style="background:'+dc.color+'15;border:1px solid '+dc.color+'30">';
+    html+='<span style="color:'+dc.color+'">'+dc.icon+' '+dc.label+'</span>';
+    html+='<span style="margin-left:auto;display:flex;gap:4px"><button class="btn-toggle" onclick="toggleAll(\''+domId+'\',true)">전체 ✓</button><button class="btn-toggle" onclick="toggleAll(\''+domId+'\',false)">전체 ✗</button></span></div>';
+    groups.forEach(g=>{
+      html+='<div class="condition-name">'+esc(g.condition)+'</div>';
+      g.meds.forEach(m=>{
+        const isPrn=m.includes('(PRN)')||m.includes('PRN');
+        let checked=(m in existingMc)?existingMc[m]:!isPrn;
+        html+='<div class="med-row" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
+        html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(checked?' checked':'')+'>';
+        html+='<label>'+esc(m)+'</label>';if(isPrn)html+='<span class="prn">PRN</span>';html+='</div>';
+      });
+    });
+    html+='</div>';
+  }
+  if(!hasMeds)html+='<div class="card" style="text-align:center;padding:20px;color:var(--mu)">등록된 약물 없음</div>';
 
-  // Symptoms (combined from all domains)
+  // Symptoms
   const allSyms=[...new Set(Object.values(BUNG_DOMAINS).flatMap(d=>d.symptoms||[]))];
   const existingSyms=anyEntry?.symptoms||[];
   if(allSyms.length){
-    html+='<div class="card"><div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">증상</div>';
-    html+='<div class="chips">';
-    allSyms.forEach(s=>{
-      const sel=existingSyms.includes(s);
-      html+='<span class="chip'+(sel?' sel':'')+'" data-sym="'+esc(s)+'" onclick="this.classList.toggle(\'sel\')">'+esc(s)+'</span>';
-    });
+    html+='<div class="card"><div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">증상</div><div class="chips">';
+    allSyms.forEach(s=>{html+='<span class="chip'+(existingSyms.includes(s)?' sel':'')+'" data-sym="'+esc(s)+'" onclick="this.classList.toggle(\'sel\')">'+esc(s)+'</span>';});
     html+='</div></div>';
   }
 
-  // Memo
+  // Memo + Save
   html+='<div style="margin-bottom:8px"><div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">메모</div>';
   html+='<textarea class="memo" id="daily-memo" placeholder="컨디션, 특이사항..."></textarea></div>';
-
-  // Save
-  html+='<button class="btn-save" id="btn-save" onclick="saveAll()">💾 저장</button>';
-  html+='<div class="save-status" id="save-status"></div>';
-
+  html+='<button class="btn-save" id="btn-save" onclick="saveAll()">💾 저장</button><div class="save-status" id="save-status"></div>';
   content.innerHTML=html;
   if(anyEntry?.memo)document.getElementById('daily-memo').value=anyEntry.memo;
 }
-
-function toggleAll(domId,checked){
-  document.querySelectorAll('.med-row input[data-domain="'+domId+'"]').forEach(cb=>cb.checked=checked);
-}
-
-function changeDate(delta){
-  const d=new Date(selectedDate+'T00:00:00');
-  d.setDate(d.getDate()+delta);
-  const nd=localDateStr(d);
-  if(nd>kstToday())return;
-  selectedDate=nd;
-  const month=nd.slice(0,7);
-  // Load month if needed for all domains
-  Promise.all(Object.keys(BUNG_DOMAINS).map(id=>loadLogMonth(id,month))).then(()=>renderCheckTab());
-}
+function selectDC(btn){const label=btn.dataset.dc;btn.parentElement.querySelectorAll('.dc-btn').forEach(b=>b.classList.toggle('sel',b===btn&&!btn.classList.contains('sel')));}
+function toggleAll(domId,checked){document.querySelectorAll('.med-row input[data-domain="'+domId+'"]').forEach(cb=>cb.checked=checked);}
+function changeDate(delta){const d=new Date(selectedDate+'T00:00:00');d.setDate(d.getDate()+delta);const nd=localDateStr(d);if(nd>kstToday())return;selectedDate=nd;Promise.all(Object.keys(BUNG_DOMAINS).map(id=>loadLogMonth(id,nd.slice(0,7)))).then(()=>renderCheckTab());}
 
 // ═══════════════════════════════════════════════════════════════
-// SAVE (도메인별 독립 저장)
+// SAVE (medCheck 전체교체 — 키 불일치 해결)
 // ═══════════════════════════════════════════════════════════════
 async function saveAll(){
-  const btn=document.getElementById('btn-save');
-  const statusEl=document.getElementById('save-status');
+  const btn=document.getElementById('btn-save');const statusEl=document.getElementById('save-status');
   btn.disabled=true;btn.textContent='저장 중...';statusEl.innerHTML='';
-
   const memo=(document.getElementById('daily-memo')?.value||'').trim();
   const nrsSkip=document.getElementById('nrs-skip')?.checked;
   const nrs=nrsSkip?-1:parseInt(document.getElementById('nrs-range')?.value||'5');
+  const timeVal=document.getElementById('entry-time')?.value||kstTimeStr();
   const symptoms=[...document.querySelectorAll('.chip.sel[data-sym]')].map(c=>c.dataset.sym);
+  const dailyChecks={};
+  document.querySelectorAll('.dc-btn.sel').forEach(b=>{dailyChecks[b.dataset.dc]=parseInt(b.dataset.val);});
 
-  // Collect medChecks per domain
   const domChecks={};
   document.querySelectorAll('.med-row input[type=checkbox]').forEach(cb=>{
-    const domId=cb.dataset.domain,med=cb.dataset.med;
-    if(!domChecks[domId])domChecks[domId]={};
-    domChecks[domId][med]=cb.checked;
+    const d=cb.dataset.domain,m=cb.dataset.med;if(!domChecks[d])domChecks[d]={};domChecks[d][m]=cb.checked;
   });
 
   const results=[];
   for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
     try{
-      const ds=domainData[domId];
-      if(!ds?.folderId){results.push({domId,status:'skip'});continue;}
-      const month=selectedDate.slice(0,7);
-      await loadLogMonth(domId,month);
-      const ml=ds.logs[month];if(!ml){results.push({domId,status:'error',msg:'로그 없음'});continue;}
-
+      const ds=domainData[domId];if(!ds?.folderId){results.push({domId,status:'skip'});continue;}
+      const month=selectedDate.slice(0,7);await loadLogMonth(domId,month);
+      const ml=ds.logs[month];if(!ml){results.push({domId,status:'skip'});continue;}
       const mc=domChecks[domId]||{};
       let entry=ml.data.find(l=>l.datetime?.slice(0,10)===selectedDate);
       if(entry){
-        // Update existing — merge medCheck, preserve other fields
-        if(Object.keys(mc).length)entry.medCheck={...(entry.medCheck||{}),...mc};
-        entry.memo=memo;
-        entry.nrs=nrs;
-        if(symptoms.length)entry.symptoms=[...new Set([...(entry.symptoms||[]),...symptoms])];
+        // 기존 엔트리 업데이트 — medCheck 전체 교체 (키 불일치 해결)
+        if(Object.keys(mc).length)entry.medCheck=mc;
+        entry.memo=memo;entry.nrs=nrs;entry.datetime=selectedDate+'T'+timeVal;
+        if(symptoms.length)entry.symptoms=symptoms;
+        if(Object.keys(dailyChecks).length)entry.dailyChecks=dailyChecks;
       }else{
-        // Only create if we have something to save
-        if(!Object.keys(mc).length&&nrs===-1&&!memo&&!symptoms.length){results.push({domId,status:'skip'});continue;}
-        entry={id:crypto.randomUUID(),datetime:selectedDate+'T'+kstTimeStr(),nrs,medCheck:Object.keys(mc).length?mc:undefined,symptoms:symptoms.length?symptoms:undefined,memo:memo||''};
+        if(!Object.keys(mc).length&&nrs===-1&&!memo&&!symptoms.length&&!Object.keys(dailyChecks).length){results.push({domId,status:'skip'});continue;}
+        entry={id:crypto.randomUUID(),datetime:selectedDate+'T'+timeVal,nrs,
+          medCheck:Object.keys(mc).length?mc:undefined,
+          symptoms:symptoms.length?symptoms:undefined,
+          dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined,
+          memo:memo||''};
         ml.data.push(entry);
       }
       ml.data.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
-
       const logName=dc.logPrefix+'_'+month+'.json';
-      if(ml.fileId){await driveUpdate(ml.fileId,ml.data);}
-      else{ml.fileId=await driveCreate(logName,ml.data,ds.folderId);}
+      if(ml.fileId)await driveUpdate(ml.fileId,ml.data);else ml.fileId=await driveCreate(logName,ml.data,ds.folderId);
       results.push({domId,status:'ok'});
-    }catch(e){
-      console.error('Save '+domId+':',e);
-      results.push({domId,status:'error',msg:e.message});
-    }
+    }catch(e){console.error('Save '+domId+':',e);results.push({domId,status:'error',msg:e.message});}
   }
-
-  let statusHtml='';
-  results.forEach(r=>{const dc=BUNG_DOMAINS[r.domId];if(!dc||r.status==='skip')return;
-    statusHtml+=dc.icon+' '+dc.label+(r.status==='ok'?' ✅':' ❌ '+esc(r.msg))+'<br>';});
-  statusEl.innerHTML=statusHtml;
-  const allOk=results.every(r=>r.status==='ok'||r.status==='skip');
-  btn.disabled=false;btn.textContent=allOk?'✅ 저장 완료':'⚠️ 일부 실패';
-  if(allOk)showToast('✅ 저장 완료');
-  setTimeout(()=>{btn.textContent='💾 저장';},3000);
+  let sh='';results.forEach(r=>{const dc=BUNG_DOMAINS[r.domId];if(!dc||r.status==='skip')return;sh+=dc.icon+' '+dc.label+(r.status==='ok'?' ✅':' ❌ '+esc(r.msg))+'<br>';});
+  statusEl.innerHTML=sh;
+  const ok=results.every(r=>r.status==='ok'||r.status==='skip');
+  btn.disabled=false;btn.textContent=ok?'✅ 저장 완료':'⚠️ 일부 실패';
+  if(ok)showToast('✅ 저장 완료');setTimeout(()=>{btn.textContent='💾 저장';},3000);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CALENDAR TAB (다중 월 지원)
+// BULK SAVE (여러 날짜 일괄 약물 기록)
 // ═══════════════════════════════════════════════════════════════
-let _calSelectedDate=null;
+async function saveBulk(){
+  if(!bulkDates.size){showToast('날짜를 선택하세요');return;}
+  const btn=document.getElementById('bulk-save-btn');btn.disabled=true;btn.textContent='저장 중...';
+  // Get current medCheck state from checkboxes in bulk panel
+  const domChecks={};
+  document.querySelectorAll('#bulk-med-panel input[type=checkbox]').forEach(cb=>{
+    const d=cb.dataset.domain,m=cb.dataset.med;if(!domChecks[d])domChecks[d]={};domChecks[d][m]=cb.checked;
+  });
 
+  let saved=0,failed=0;
+  for(const date of bulkDates){
+    const month=date.slice(0,7);
+    for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
+      const mc=domChecks[domId];if(!mc||!Object.keys(mc).length)continue;
+      try{
+        const ds=domainData[domId];if(!ds?.folderId)continue;
+        await loadLogMonth(domId,month);
+        const ml=ds.logs[month];if(!ml)continue;
+        let entry=ml.data.find(l=>l.datetime?.slice(0,10)===date);
+        if(entry){entry.medCheck=mc;}
+        else{entry={id:crypto.randomUUID(),datetime:date+'T09:00',nrs:-1,medCheck:mc,memo:''};ml.data.push(entry);}
+        ml.data.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
+        const logName=dc.logPrefix+'_'+month+'.json';
+        if(ml.fileId)await driveUpdate(ml.fileId,ml.data);else ml.fileId=await driveCreate(logName,ml.data,ds.folderId);
+        saved++;
+      }catch(e){failed++;console.error(e);}
+    }
+  }
+  btn.disabled=false;btn.textContent='💾 선택 날짜에 일괄 저장';
+  showToast(saved+'건 저장'+(failed?' / '+failed+'건 실패':''));
+  bulkMode=false;bulkDates.clear();renderCalendarTab();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CALENDAR TAB
+// ═══════════════════════════════════════════════════════════════
 async function renderCalendarTab(){
-  const content=document.getElementById('content');
-  content.innerHTML='<div class="loading">📅 로딩 중...</div>';
+  const content=document.getElementById('content');content.innerHTML='<div class="loading">📅 로딩 중...</div>';
   const today=kstToday();
-
-  // Collect needed months and load
-  const months=new Set();
-  for(let i=0;i<35;i++){const d=new Date(today+'T00:00:00');d.setDate(d.getDate()-i);months.add(localDateStr(d).slice(0,7));}
+  const months=new Set();for(let i=0;i<35;i++){const d=new Date(today+'T00:00:00');d.setDate(d.getDate()-i);months.add(localDateStr(d).slice(0,7));}
   await Promise.all([...months].flatMap(m=>Object.keys(BUNG_DOMAINS).map(id=>loadLogMonth(id,m))));
 
-  // Build daily data
   const days=[];
-  for(let i=34;i>=0;i--){
-    const d=new Date(today+'T00:00:00');d.setDate(d.getDate()-i);
-    const dateStr=localDateStr(d),dow=d.getDay();
+  for(let i=34;i>=0;i--){const d=new Date(today+'T00:00:00');d.setDate(d.getDate()-i);const dateStr=localDateStr(d);
     let totalD=0,takenD=0;
-    for(const [domId] of Object.entries(BUNG_DOMAINS)){
-      getDomainMeds(domId).forEach(g=>g.meds.forEach(m=>{
-        const isPrn=m.includes('(PRN)')||m.includes('PRN');
-        if(isPrn)return;
-        totalD++;
-        const entry=findEntry(domId,dateStr);
-        if(entry?.medCheck?.[m]===true)takenD++;
-      }));
-    }
-    days.push({date:dateStr,dow,rate:totalD>0?Math.round(takenD/totalD*100):-1});
+    for(const domId of Object.keys(BUNG_DOMAINS)){getDomainMeds(domId).forEach(g=>g.meds.forEach(m=>{
+      if(m.includes('(PRN)')||m.includes('PRN'))return;totalD++;
+      const e=findEntry(domId,dateStr);if(e?.medCheck?.[m]===true)takenD++;
+    }));}
+    days.push({date:dateStr,dow:d.getDay(),rate:totalD>0?Math.round(takenD/totalD*100):-1});
   }
 
-  const recorded=days.filter(d=>d.rate>=0);
-  const overall=recorded.length?Math.round(recorded.reduce((s,d)=>s+d.rate,0)/recorded.length):-1;
-  const oc=overall>=90?'#10b981':overall>=70?'#f59e0b':'#ef4444';
+  const rec=days.filter(d=>d.rate>=0);
+  const overall=rec.length?Math.round(rec.reduce((s,d)=>s+d.rate,0)/rec.length):0;
+  const oc=rec.length?(overall>=90?'#10b981':overall>=70?'#f59e0b':'#ef4444'):'var(--mu2)';
 
-  let html='';
-  // Summary
-  html+='<div class="card" style="text-align:center"><div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">최근 30일 복용 순응도</div>';
-  if(overall>=0){html+='<div style="font-size:2rem;font-weight:700;color:'+oc+'">'+overall+'%</div>';
-    html+='<div style="height:8px;border-radius:4px;background:var(--bd);overflow:hidden;margin:8px 20px 0"><div style="width:'+overall+'%;height:100%;background:'+oc+';border-radius:4px"></div></div>';}
-  else html+='<div style="color:var(--mu2);padding:12px">기록 없음</div>';
+  let html='<div class="card" style="text-align:center"><div style="font-size:.72rem;color:var(--mu);margin-bottom:4px">최근 30일 복용 순응도</div>';
+  html+=rec.length?'<div style="font-size:2rem;font-weight:700;color:'+oc+'">'+overall+'%</div><div style="height:8px;border-radius:4px;background:var(--bd);overflow:hidden;margin:8px 20px 0"><div style="width:'+overall+'%;height:100%;background:'+oc+';border-radius:4px"></div></div>':'<div style="color:var(--mu2);padding:12px">기록 없음</div>';
   html+='</div>';
 
-  // Grid
+  // Bulk mode toggle
+  html+='<div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn-toggle" style="flex:1;padding:6px;font-size:.75rem" onclick="toggleBulkMode()">📋 '+(bulkMode?'일괄 모드 끄기':'여러 날짜 일괄 입력')+'</button></div>';
+
+  // Calendar grid
   html+='<div class="card"><div class="cal-grid">';
   ['일','월','화','수','목','금','토'].forEach(l=>html+='<div class="cal-header">'+l+'</div>');
-  const firstDow=days[0]?.dow||0;
-  for(let i=0;i<firstDow;i++)html+='<div></div>';
+  for(let i=0;i<(days[0]?.dow||0);i++)html+='<div></div>';
   days.forEach(d=>{
-    const isT=d.date===today;
+    const isT=d.date===today;const isBulk=bulkDates.has(d.date);
     let dc;if(d.rate<0)dc='var(--bd2)';else if(d.rate>=90)dc='#10b981';else if(d.rate>=50)dc='#f59e0b';else dc='#ef4444';
-    html+='<div class="cal-day'+(isT?' today':'')+'" onclick="selectCalDate(\''+d.date+'\')">';
+    html+='<div class="cal-day'+(isT?' today':'')+(isBulk?' bulk-sel':'')+'" onclick="'+(bulkMode?'toggleBulkDate(\''+d.date+'\')':'selectCalDate(\''+d.date+'\')')+'">';
     html+='<div>'+parseInt(d.date.slice(8,10))+'</div><div class="dot" style="background:'+dc+'"></div></div>';
   });
-  html+='</div>';
-  // Legend
-  html+='<div style="display:flex;justify-content:center;gap:10px;font-size:.6rem;color:var(--mu)">';
-  html+='<span>🟢 90%+</span><span>🟡 50-89%</span><span>🔴 &lt;50%</span><span>⚪ 미기록</span>';
-  html+='</div></div>';
+  html+='</div><div style="display:flex;justify-content:center;gap:10px;font-size:.6rem;color:var(--mu)">🟢 90%+ 🟡 50-89% 🔴 &lt;50% ⚪ 미기록</div></div>';
+
+  // Bulk med panel (일괄 모드)
+  if(bulkMode){
+    html+='<div class="card" id="bulk-med-panel"><div style="font-size:.78rem;font-weight:600;margin-bottom:8px">📋 선택된 날짜: '+bulkDates.size+'일</div>';
+    for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
+      const groups=getDomainMeds(domId);if(!groups.length)continue;
+      html+='<div style="font-size:.72rem;font-weight:600;color:'+dc.color+';margin:8px 0 4px">'+dc.icon+' '+dc.label+'</div>';
+      groups.forEach(g=>g.meds.forEach(m=>{
+        const isPrn=m.includes('(PRN)')||m.includes('PRN');
+        html+='<div class="med-row" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
+        html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(!isPrn?' checked':'')+'>';
+        html+='<label>'+esc(m)+'</label>';if(isPrn)html+='<span class="prn">PRN</span>';html+='</div>';
+      }));
+    }
+    html+='<button class="btn-save" id="bulk-save-btn" onclick="saveBulk()">💾 선택 날짜에 일괄 저장</button></div>';
+  }
 
   html+='<div id="cal-detail"></div>';
   content.innerHTML=html;
 }
 
-function selectCalDate(date){
-  _calSelectedDate=date;
-  const el=document.getElementById('cal-detail');if(!el)return;
+function toggleBulkMode(){bulkMode=!bulkMode;if(!bulkMode)bulkDates.clear();renderCalendarTab();}
+function toggleBulkDate(date){if(bulkDates.has(date))bulkDates.delete(date);else bulkDates.add(date);renderCalendarTab();}
 
+function selectCalDate(date){
+  const el=document.getElementById('cal-detail');if(!el)return;
   let html='<div class="card"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">';
   html+='<span style="font-size:.85rem;font-weight:600">'+date+'</span>';
-  html+='<button class="btn-toggle" style="margin-left:auto;padding:5px 12px;font-size:.72rem" onclick="selectedDate=\''+date+'\';switchTab(0)">✏️ 편집</button>';
-  html+='</div>';
-
+  html+='<button class="btn-toggle" style="margin-left:auto;padding:5px 12px;font-size:.72rem" onclick="selectedDate=\''+date+'\';switchTab(0)">✏️ 편집</button></div>';
   for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
     const groups=getDomainMeds(domId);if(!groups.length)continue;
-    const entry=findEntry(domId,date);
-    const mc=entry?.medCheck||{};
-    const hasMc=Object.keys(mc).length>0;
-    html+='<div style="margin-bottom:8px"><div style="font-size:.72rem;font-weight:600;color:'+dc.color+'">'+dc.icon+' '+dc.label+'</div>';
-    if(!hasMc){html+='<div style="font-size:.7rem;color:var(--mu2);padding:2px 0 2px 16px">기록 없음</div></div>';continue;}
-    groups.forEach(g=>g.meds.forEach(m=>{
-      const taken=mc[m];const icon=taken===true?'✅':taken===false?'❌':'➖';
-      html+='<div style="font-size:.72rem;padding:1px 0 1px 16px">'+icon+' '+esc(m)+'</div>';
-    }));
+    const entry=findEntry(domId,date);const mc=entry?.medCheck||{};
+    html+='<div style="margin-bottom:6px"><div style="font-size:.72rem;font-weight:600;color:'+dc.color+'">'+dc.icon+' '+dc.label+'</div>';
+    if(!Object.keys(mc).length){html+='<div style="font-size:.7rem;color:var(--mu2);padding:1px 0 1px 16px">기록 없음</div></div>';continue;}
+    groups.forEach(g=>g.meds.forEach(m=>{const t=mc[m];html+='<div style="font-size:.72rem;padding:1px 0 1px 16px">'+(t===true?'✅':t===false?'❌':'➖')+' '+esc(m)+'</div>';}));
     html+='</div>';
   }
-  // Show NRS if exists
-  const anyEntry=Object.keys(BUNG_DOMAINS).map(d=>findEntry(d,date)).find(e=>e);
-  if(anyEntry?.nrs>=0)html+='<div style="font-size:.72rem;color:var(--mu);margin-top:4px">컨디션: '+anyEntry.nrs+'/10</div>';
-  if(anyEntry?.symptoms?.length)html+='<div style="font-size:.72rem;color:var(--mu)">증상: '+anyEntry.symptoms.map(esc).join(', ')+'</div>';
-  if(anyEntry?.memo)html+='<div style="font-size:.72rem;color:var(--mu)">메모: '+esc(anyEntry.memo)+'</div>';
-  html+='</div>';
-  el.innerHTML=html;
+  const ae=Object.keys(BUNG_DOMAINS).map(d=>findEntry(d,date)).find(e=>e);
+  if(ae?.nrs>=0)html+='<div style="font-size:.72rem;color:var(--mu);margin-top:4px">컨디션: '+ae.nrs+'/10</div>';
+  if(ae?.dailyChecks){const dc=ae.dailyChecks;html+='<div style="font-size:.72rem;color:var(--mu)">기분: '+Object.entries(dc).map(([k,v])=>k+':'+v).join(' ')+'</div>';}
+  if(ae?.symptoms?.length)html+='<div style="font-size:.72rem;color:var(--mu)">증상: '+ae.symptoms.map(esc).join(', ')+'</div>';
+  if(ae?.memo)html+='<div style="font-size:.72rem;color:var(--mu)">메모: '+esc(ae.memo)+'</div>';
+  html+='</div>';el.innerHTML=html;
 }
 </script>
 </body>
