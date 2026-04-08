@@ -1123,7 +1123,9 @@ function estimateConceptionRate(m) {
   const semenLabs=labs.filter(l=>l.type==='semen'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
   const sv=semenLabs[0]?.values?_normalizeSemenValues(semenLabs[0].values):null;
   const hormoneLabs=labs.filter(l=>l.type==='hormone'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
-  const hv=hormoneLabs[0]?.values;
+  // 호르몬 값 부분 매칭 (단위 포함 키 대응: "AMH(ng/mL)" → _hv('amh'))
+  const _hvRaw=hormoneLabs[0]?.values||{};
+  const _hv=(name)=>{for(const[k,v]of Object.entries(_hvRaw)){if(k.toLowerCase().includes(name.toLowerCase())){const n=parseFloat(v);if(!isNaN(n))return n;}}return undefined;};
   // 주기 분석
   const sorted=[...cycles].sort((a,b)=>a.startDate.localeCompare(b.startDate));
   const lens=[];
@@ -1166,13 +1168,15 @@ function estimateConceptionRate(m) {
   if(cycleStd>7){r1*=0.7;factors.push({name:'주기 불규칙(±'+cycleStd.toFixed(1)+'일)',impact:-30,tip:'배란테스트기(LH strip) 필수 + 배란 앱 연동'});}
   else if(lens.length>=3){factors.push({name:'주기 규칙적(±'+cycleStd.toFixed(1)+'일)',impact:0,tip:'배란 예측 유리 — 주기 중간 2일 전후 집중'});}
   // AMH 반영 (있으면)
-  if(hv?.AMH!==undefined){
-    if(hv.AMH<0.5){r1*=0.5;factors.push({name:'AMH<0.5 (난소예비력 저하)',impact:-50,tip:'생식의학과 상담 — IVF 조기 검토'});}
-    else if(hv.AMH<1.0){r1*=0.8;factors.push({name:'AMH 0.5-1.0 (경계)',impact:-20,tip:'난소기능 추적 관찰 권장'});}
+  const _amh=_hv('amh');
+  if(_amh!==undefined){
+    if(_amh<0.5){r1*=0.5;factors.push({name:'AMH<0.5 (난소예비력 저하)',impact:-50,tip:'생식의학과 상담 — IVF 조기 검토'});}
+    else if(_amh<1.0){r1*=0.8;factors.push({name:'AMH 0.5-1.0 (경계)',impact:-20,tip:'난소기능 추적 관찰 권장'});}
     else{factors.push({name:'AMH≥1.0 (정상)',impact:0,tip:'난소 예비력 양호'});}
   }
   // FSH
-  if(hv?.FSH!==undefined&&hv.FSH>10){r1*=0.7;factors.push({name:'FSH>10 (상승)',impact:-30,tip:'난소기능 저하 가능 — 생식의학과 상담'});}
+  const _fsh=_hv('fsh');
+  if(_fsh!==undefined&&_fsh>10){r1*=0.7;factors.push({name:'FSH>10 (상승)',impact:-30,tip:'난소기능 저하 가능 — 생식의학과 상담'});}
   r1=Math.round(Math.max(2,Math.min(r1,30)));
 
   // === 모델 2: TMSC 기반 ===
