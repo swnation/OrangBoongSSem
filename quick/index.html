@@ -167,6 +167,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
           onchange="localStorage.setItem('om_outcome_delay',this.value)">
         <span style="font-size:.72rem;color:var(--mu)">분 후</span>
       </div>
+      <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:.72rem;color:var(--mu)">💊 약물 복용 알림:</span>
+        <select id="ntfy-med-delay-input" class="settings-input" style="width:80px;text-align:center"
+          onchange="localStorage.setItem('om_med_reminder_delay',this.value)">
+          <option value="0">끄기</option>
+          <option value="15">15분</option>
+          <option value="30">30분</option>
+          <option value="60">1시간</option>
+          <option value="90">1시간30분</option>
+          <option value="120">2시간</option>
+        </select>
+        <span style="font-size:.68rem;color:var(--mu2)">약 미입력 시</span>
+      </div>
     </div>
   </div>
   <div class="tabs">
@@ -890,8 +903,9 @@ async function sendQuickNtfy(entry) {
   // 경과 알림 예약 (클라이언트 타이머 — 새 기록 시 이전 예약 자동 취소)
   const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||'0');
   if(outcomeDelay>0) scheduleOutcomeNtfy(entry,outcomeDelay);
-  // 약물 미입력 시 30분 후 복용 확인 알림 (서버사이드)
-  if(!(entry.meds||[]).length&&!entry._medReminderSent) _sendMedReminder(entry, 30);
+  // 약물 미입력 시 복용 확인 알림 (서버사이드, 설정값 사용)
+  const medDelay=parseInt(localStorage.getItem('om_med_reminder_delay')||'30');
+  if(medDelay>0&&!(entry.meds||[]).length&&!entry._medReminderSent) _sendMedReminder(entry, medDelay);
 }
 
 let _outcomeTimer=null;
@@ -1312,6 +1326,7 @@ function toggleSettings() {
     document.getElementById('ntfy-bung-input').value = localStorage.getItem('om_ntfy_bung')||'';
     document.getElementById('ntfy-orangi-input').value = localStorage.getItem('om_ntfy_orangi')||'';
     document.getElementById('ntfy-delay-input').value = localStorage.getItem('om_outcome_delay')||'60';
+    document.getElementById('ntfy-med-delay-input').value = localStorage.getItem('om_med_reminder_delay')||'30';
   }
 }
 
