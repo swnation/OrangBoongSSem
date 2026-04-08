@@ -1643,6 +1643,7 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
         <div style="display:none;margin-top:4px"><img src="${l.imgSrc}" style="max-width:100%;border-radius:6px;border:1px solid var(--bd)"></div>
       </div>`:''}
       ${_brkMissingFieldsHtml(l)}
+      ${_brkMissingRefHtml(l,labId)}
       <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
         <button onclick="_brkEditLabType(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid var(--mu);border-radius:4px;background:none;color:var(--mu);cursor:pointer;font-family:var(--font)">📝 이름 수정</button>
         <button onclick="_brkEditLabValues(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">✏️ 수치 수정</button>
@@ -1783,45 +1784,54 @@ function _brkMissingFieldsHtml(l){
   const expected={semen:['volume','count','motility','morphology'],hormone:['FSH','LH','E2','AMH','TSH'],blood:['Hb','WBC','PLT','AST','ALT']};
   const fields=expected[l.type];if(!fields)return '';
   const nv=l.type==='semen'?_normalizeSemenValues(l.values):l.values;
-  const missing=fields.filter(f=>nv[f]===undefined||nv[f]===null||nv[f]==='');
+  // 부분 매칭으로 누락 체크
+  const missing=fields.filter(f=>!Object.keys(nv).some(k=>k.toLowerCase().includes(f.toLowerCase())));
   if(!missing.length)return '';
   return `<div style="font-size:.6rem;color:#b45309;margin-top:3px;padding:3px 6px;background:#fef3c7;border-radius:4px">⚠️ 누락: ${missing.join(', ')}</div>`;
+}
+function _brkMissingRefHtml(l,labId){
+  if(!l.values||!Object.keys(l.values).length)return '';
+  const ref=l.ref||{};
+  const noRef=Object.keys(l.values).filter(k=>!ref[k]&&typeof l.values[k]==='number');
+  if(!noRef.length)return '';
+  return `<div style="font-size:.58rem;color:var(--mu2);margin-top:2px;display:flex;align-items:center;gap:4px">
+    <span>📏 참고치 없는 항목 ${noRef.length}개</span>
+    <button onclick="_brkFillStdRef(${labId})" style="font-size:.55rem;padding:1px 6px;border:1px solid var(--bd);border-radius:3px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">일반 참고치 추가</button>
+  </div>`;
+}
+// 일반적인 정상 참고치 (KDCA/WHO 기준)
+const _STD_REF={
+  'wbc':'4.0-10.0','rbc':'4.0-5.5','hemoglobin':'12.0-16.0','hematocrit':'36-48','platelet':'150-400',
+  'ast':'0-40','got':'0-40','alt':'0-40','gpt':'0-40','bun':'7-20','creatinine':'0.5-1.2',
+  'tsh':'0.35-5.50','fsh':'3.0-12.0','lh':'2.0-12.0','amh':'1.0-10.0','prolactin':'2-25',
+  'e2':'30-400','hba1c':'4.0-6.0','glucose':'70-100','cholesterol':'0-200','triglyceride':'0-150',
+  'hdl':'40-60','ldl':'0-130','vitamin d':'20-100','25-oh':'20-100',
+  'volume':'1.5-6.0','count':'15-200','motility':'42-100','morphology':'4-100',
+};
+async function _brkFillStdRef(labId){
+  const m=getBrkMaster();if(!m)return;
+  const l=m.labResults.find(x=>x.id===labId);if(!l?.values)return;
+  if(!l.ref)l.ref={};
+  let added=0;
+  Object.keys(l.values).forEach(k=>{
+    if(l.ref[k])return;// 이미 있으면 스킵
+    const kl=k.toLowerCase();
+    for(const[std,range] of Object.entries(_STD_REF)){
+      if(kl.includes(std)){l.ref[k]=range;added++;break;}
+    }
+  });
+  if(!added){showToast('추가할 참고치 없음');return;}
+  await saveBrkMaster();showToast('📏 일반 참고치 '+added+'개 추가 (검사실 기준과 다를 수 있음)');renderView('meds');
 }
 async function _brkReanalyzeLab(labId,forceAiId){
   const m=getBrkMaster();if(!m)return;
   const l=m.labResults.find(x=>x.id===labId);if(!l?.imgSrc)return;
-  // Vision 유리 모델 우선순위: gemini > gpt > claude (또는 강제 지정)
   const aiId=forceAiId||(S.keys?.gemini?'gemini':(S.keys?.gpt?'gpt':(S.keys?.claude?'claude':null)));
-  if(!aiId){showToast('⚠️ AI API 키 필요 (Gemini/GPT/Claude)');return;}
+  if(!aiId){showToast('⚠️ AI API 키 필요');return;}
   showToast('🔄 '+AI_DEFS[aiId].name+'으로 재분석 중...',8000);
-  const base64=l.imgSrc.split(',')[1];
-  const mediaType=l.imgSrc.split(';')[0].split(':')[1]||'image/jpeg';
-  const prompt=`이 의료 검사 결과 이미지에서 모든 수치를 정확히 추출하세요.
-항목명과 수치를 빠짐없이 읽어주세요. 정상 범위도 함께 표기해 주세요.
-반드시 JSON으로 응답: {"type":"semen","date":"YYYY-MM-DD","who":"붕쌤","values":{"항목":수치},"abnormal":["이상소견"],"opinion":"소견"}`;
   try{
-    let result='';
-    if(aiId==='gemini'){
-      const resp=await fetchWithRetry('https://generativelanguage.googleapis.com/v1beta/models/'+(S.models?.gemini||DEFAULT_MODELS.gemini)+':generateContent?key='+S.keys.gemini,{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mediaType,data:base64}},{text:prompt}]}]})});
-      const d=await resp.json();result=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
-    }else if(aiId==='gpt'){
-      const resp=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.keys.gpt},
-        body:JSON.stringify({model:S.models?.gpt||DEFAULT_MODELS.gpt,max_tokens:1500,messages:[{role:'user',content:[
-          {type:'image_url',image_url:{url:l.imgSrc}},{type:'text',text:prompt}]}]})});
-      const d=await resp.json();result=d.choices?.[0]?.message?.content||'';
-    }else{
-      const resp=await fetchWithRetry('https://api.anthropic.com/v1/messages',{method:'POST',
-        headers:{'Content-Type':'application/json','x-api-key':S.keys.claude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model:S.models?.claude||DEFAULT_MODELS.claude,max_tokens:1500,messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},{type:'text',text:prompt}]}]})});
-      const d=await resp.json();result=d.content?.[0]?.text||'';
-    }
-    const jsonMatch=result.match(/\{[\s\S]*\}/);
-    if(!jsonMatch){showToast('⚠️ 인식 실패',3000);return;}
-    const parsed=JSON.parse(jsonMatch[0]);
+    // _analyzeOnePhoto 재사용 (비용 추적 + 이미지 분할 + 에러 처리 포함)
+    const parsed=await _analyzeOnePhoto({dataUrl:l.imgSrc,type:l.imgSrc.split(';')[0].split(':')[1]||'image/jpeg'},aiId);
     // 기존 값과 비교
     const oldVals=l.values||{};
     const newVals=parsed.values||{};
@@ -2239,28 +2249,38 @@ async function _analyzeOnePhoto(photo,aiId){
 6. 이상 소견 + 임신 준비 관점 소견
 반드시 JSON으로 응답:
 {"type":"blood","date":"YYYY-MM-DD","who":"오랑이","values":{"WBC(10^3/uL)":6.78,"TSH(mIU/L)":3.63},"ref":{"WBC(10^3/uL)":"4.0-10.0","TSH(mIU/L)":"0.35-5.50"},"abnormal":["이상소견"],"opinion":"소견"}
-중요: values 키에 반드시 단위를 괄호로 포함하세요. ref에 검사지에 적힌 참고치 범위를 기록하세요.`;
+중요 규칙:
+1. values 키에 반드시 단위를 괄호로 포함 (예: "TSH(mIU/L)")
+2. ref는 검사지에 인쇄된 참고치(정상범위)를 그대로 기록 — 검사실마다 다를 수 있으므로 검사지의 값을 우선
+3. 검사지에 참고치가 없는 항목은 ref에서 제외 (임의로 넣지 말 것)
+4. abnormal은 참고치 범위를 벗어난 항목만 기록`;
   let result='';
   if(aiId==='gemini'){
+    const gemModel=S.models?.gemini||DEFAULT_MODELS.gemini;
     const parts=tiles.map(t=>{const b=t.split(',')[1];const mt=t.startsWith('data:image/jpeg')?'image/jpeg':'image/png';return{inline_data:{mime_type:mt,data:b}};});
     parts.push({text:prompt});
-    const resp=await fetchWithRetry('https://generativelanguage.googleapis.com/v1beta/models/'+(S.models?.gemini||DEFAULT_MODELS.gemini)+':generateContent?key='+S.keys.gemini,{
+    const resp=await fetchWithRetry('https://generativelanguage.googleapis.com/v1beta/models/'+gemModel+':generateContent?key='+S.keys.gemini,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts}]})});
     const d=await resp.json();
     if(d.error)throw new Error('Gemini: '+(d.error.message||d.error.status||JSON.stringify(d.error)));
     result=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
     if(!result)throw new Error('Gemini: 빈 응답'+(d.candidates?.[0]?.finishReason?' ('+d.candidates[0].finishReason+')':''));
+    // 비용 추적
+    const gu=d.usageMetadata;if(gu)recordUsage('gemini',gemModel,gu.promptTokenCount||0,gu.candidatesTokenCount||0);
   }else if(aiId==='claude'){
+    const clModel=S.models?.claude||DEFAULT_MODELS.claude;
     const content=tiles.map(t=>{const b=t.split(',')[1];const mt=t.startsWith('data:image/jpeg')?'image/jpeg':'image/png';return{type:'image',source:{type:'base64',media_type:mt,data:b}};});
     content.push({type:'text',text:prompt});
     const resp=await fetchWithRetry('https://api.anthropic.com/v1/messages',{method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':S.keys.claude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:S.models?.claude||DEFAULT_MODELS.claude,max_tokens:2000,messages:[{role:'user',content}]})});
+      body:JSON.stringify({model:clModel,max_tokens:2000,messages:[{role:'user',content}]})});
     const d=await resp.json();
     if(d.error)throw new Error('Claude: '+(d.error.message||JSON.stringify(d.error)));
     result=d.content?.[0]?.text||'';
     if(!result)throw new Error('Claude: 빈 응답');
+    // 비용 추적
+    if(d.usage)recordUsage('claude',clModel,d.usage.input_tokens||0,d.usage.output_tokens||0);
   }else{
     const gptModel=S.models?.gpt||DEFAULT_MODELS.gpt;
     const content=tiles.map(t=>({type:'image_url',image_url:{url:t,detail:'high'}}));
@@ -2273,6 +2293,8 @@ async function _analyzeOnePhoto(photo,aiId){
     if(d.error)throw new Error('GPT: '+(d.error.message||d.error.code||JSON.stringify(d.error)));
     result=d.choices?.[0]?.message?.content||'';
     if(!result)throw new Error('GPT: 빈 응답');
+    // 비용 추적
+    if(d.usage)recordUsage('gpt',gptModel,d.usage.prompt_tokens||0,d.usage.completion_tokens||0);
   }
   const jsonMatch=result.match(/\{[\s\S]*\}/);
   if(!jsonMatch)throw new Error('인식 실패');
