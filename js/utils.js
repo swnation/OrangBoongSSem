@@ -25,9 +25,10 @@ function showConfirmModal(title,body,buttons) {
   document.getElementById('confirm-title').textContent=title;
   document.getElementById('confirm-body').innerHTML=body;
   _confirmActions = buttons.map(b => b.action);
+  const hasCancel=buttons.some(b=>b.label==='취소'||b.action===closeConfirmModal);
   document.getElementById('confirm-foot').innerHTML=buttons.map((b,i)=>
     `<button data-confirm-idx="${i}" class="${b.primary?'btn-save':'btn-cancel'}"${b.color?` style="background:${b.color};color:#fff;border:none"`:''}>
-      ${esc(b.label)}</button>`).join('')+'<button class="btn-cancel" data-confirm-close="1">취소</button>';
+      ${esc(b.label)}</button>`).join('')+(hasCancel?'':'<button class="btn-cancel" data-confirm-close="1">취소</button>');
   // Event delegation for confirm modal buttons
   document.getElementById('confirm-foot').onclick = function(e) {
     const btn = e.target.closest('[data-confirm-idx]');
