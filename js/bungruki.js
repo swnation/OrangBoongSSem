@@ -2099,19 +2099,32 @@ async function _analyzeOnePhoto(photo,aiId){
     const resp=await fetchWithRetry('https://generativelanguage.googleapis.com/v1beta/models/'+(S.models?.gemini||DEFAULT_MODELS.gemini)+':generateContent?key='+S.keys.gemini,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mediaType,data:base64}},{text:prompt}]}]})});
-    const d=await resp.json();result=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    const d=await resp.json();
+    if(d.error)throw new Error('Gemini: '+(d.error.message||d.error.status||JSON.stringify(d.error)));
+    result=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    if(!result)throw new Error('Gemini: 빈 응답'+(d.candidates?.[0]?.finishReason?' ('+d.candidates[0].finishReason+')':''));
   }else if(aiId==='claude'){
     const resp=await fetchWithRetry('https://api.anthropic.com/v1/messages',{method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':S.keys.claude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:S.models?.claude||DEFAULT_MODELS.claude,max_tokens:1500,messages:[{role:'user',content:[
         {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},{type:'text',text:prompt}]}]})});
-    const d=await resp.json();result=d.content?.[0]?.text||'';
+    const d=await resp.json();
+    if(d.error)throw new Error('Claude: '+(d.error.message||JSON.stringify(d.error)));
+    result=d.content?.[0]?.text||'';
+    if(!result)throw new Error('Claude: 빈 응답');
   }else{
+    const gptModel=S.models?.gpt||DEFAULT_MODELS.gpt;
+    const isO=gptModel.startsWith('o');
+    const body={model:gptModel,messages:[{role:'user',content:[
+      {type:'image_url',image_url:{url:photo.dataUrl,detail:'high'}},{type:'text',text:prompt}]}]};
+    if(isO)body.max_completion_tokens=4000;else body.max_tokens=2000;
     const resp=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.keys.gpt},
-      body:JSON.stringify({model:S.models?.gpt||DEFAULT_MODELS.gpt,max_tokens:1500,messages:[{role:'user',content:[
-        {type:'image_url',image_url:{url:photo.dataUrl}},{type:'text',text:prompt}]}]})});
-    const d=await resp.json();result=d.choices?.[0]?.message?.content||'';
+      body:JSON.stringify(body)});
+    const d=await resp.json();
+    if(d.error)throw new Error('GPT: '+(d.error.message||d.error.code||JSON.stringify(d.error)));
+    result=d.choices?.[0]?.message?.content||'';
+    if(!result)throw new Error('GPT: 빈 응답');
   }
   const jsonMatch=result.match(/\{[\s\S]*\}/);
   if(!jsonMatch)throw new Error('인식 실패');
