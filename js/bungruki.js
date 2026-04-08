@@ -1726,7 +1726,9 @@ async function brkSaveLab() {
     if (textEl && textEl.value) values.text = textEl.value;
   }
 
-  m.labResults.push({ id: Date.now(), date: date, who: who, type: type, values: values, memo: memo });
+  const labEntry3={ id: Date.now(), date: date, who: who, type: type, values: values, memo: memo };
+  m.labResults.push(labEntry3);
+  if(typeof _checkAntibodyAndSyncVax==='function')_checkAntibodyAndSyncVax(labEntry3);
   await saveBrkMaster();
   renderView('meds');
   showToast('검사 결과 저장됨');
@@ -2068,7 +2070,9 @@ function _showConsensusResults(allResults){
         const memo=['🏆 멀티AI('+r._usedAis.join('+')+')',...(r.abnormal||[]).map(a=>'⚠️ '+a),r.opinion?'💡 '+r.opinion:''].filter(Boolean).join('; ');
         const entry={id:Date.now()+saved,date:r.date||kstToday(),who:r.who||'붕쌤',type,values:r.values||{},memo,imgSrc:r._imgSrc};
         if(r.ref)entry.ref=r.ref;
-        m.labResults.push(entry);saved++;
+        m.labResults.push(entry);
+        if(typeof _checkAntibodyAndSyncVax==='function')_checkAntibodyAndSyncVax(entry);
+        saved++;
       });
       if(saved){await saveBrkMaster();showToast('✅ '+saved+'건 저장됨 (수정 반영)');}
       closeConfirmModal();_consensusResults=[];renderView('meds');
@@ -2181,6 +2185,7 @@ async function _brkAnalyzeStagedPhotos(selectedAiId){
         const entry2={id:Date.now()+saved,date:r.date||kstToday(),who:r.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo,imgSrc:r._imgSrc};
         if(r.ref)entry2.ref=r.ref;
         m.labResults.push(entry2);
+        if(typeof _checkAntibodyAndSyncVax==='function')_checkAntibodyAndSyncVax(entry2);
         saved++;
       });
       if(saved){await saveBrkMaster();showToast('✅ '+saved+'건 저장됨');}
@@ -2291,6 +2296,7 @@ async function brkSaveLabFromPhoto() {
   const labEntry={id:Date.now(),date:parsed.date||kstToday(),who:parsed.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo,imgSrc};
   if(parsed.ref)labEntry.ref=parsed.ref;
   m.labResults.push(labEntry);
+  if(typeof _checkAntibodyAndSyncVax==='function')_checkAntibodyAndSyncVax(labEntry);
   await saveBrkMaster();
   closeConfirmModal();
   delete window._brkLabPhotoResult;

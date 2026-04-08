@@ -2124,6 +2124,80 @@ function _vaxDateModeChange(){
   else{dateEl.style.display='none';yearEl.style.display='none';}
 }
 
+// ── 검사결과 항체 → 예방접종 자동 연동 ──
+// 검사 키 → 백신 매핑 (항체 양성 시 접종 완료로 기록)
+const _ANTIBODY_VAX_MAP={
+  'HBsAb':{vaccine:'HepB',posThreshold:10,label:'B형간염 항체'},
+  'HBs Ab':{vaccine:'HepB',posThreshold:10,label:'B형간염 항체'},
+  'Anti-HBs':{vaccine:'HepB',posThreshold:10,label:'B형간염 항체'},
+  'HAV IgG':{vaccine:'HepA',posKeyword:'Positive',label:'A형간염 항체'},
+  'HAV Ab':{vaccine:'HepA',posKeyword:'Positive',label:'A형간염 항체'},
+  'Rubella IgG':{vaccine:'MMR',posThreshold:8,label:'풍진 항체'},
+  'Rubella Ab':{vaccine:'MMR',posKeyword:'Positive',label:'풍진 항체'},
+  'Varicella IgG':{vaccine:'Varicella',posKeyword:'Positive',label:'수두 항체'},
+  'VZV IgG':{vaccine:'Varicella',posKeyword:'Positive',label:'수두 항체'},
+};
+
+function _checkAntibodyAndSyncVax(labResult,domainId){
+  if(!labResult?.values)return;
+  const vals=labResult.values;
+  const detected=[];
+  // 정규화된 키와 원본 키 모두 체크
+  for(const [valKey,valRaw] of Object.entries(vals)){
+    // 키에서 괄호 전 이름 추출 (예: "HBs Ab:Positive(67.69)" → "HBs Ab")
+    const cleanKey=valKey.replace(/\(.*?\)/g,'').trim();
+    for(const [abKey,map] of Object.entries(_ANTIBODY_VAX_MAP)){
+      if(!cleanKey.toLowerCase().includes(abKey.toLowerCase())&&!valKey.toLowerCase().includes(abKey.toLowerCase()))continue;
+      // 양성 판정
+      let isPositive=false;
+      const strVal=String(valRaw);
+      if(map.posThreshold!==undefined){
+        const num=parseFloat(strVal.replace(/[^0-9.]/g,''));
+        if(!isNaN(num))isPositive=num>=map.posThreshold;
+      }
+      if(map.posKeyword){
+        isPositive=isPositive||strVal.toLowerCase().includes(map.posKeyword.toLowerCase());
+      }
+      // Equivocal(경계)는 양성으로 처리 안 함
+      if(strVal.toLowerCase().includes('equivocal')||strVal.toLowerCase().includes('경계'))isPositive=false;
+      if(strVal.toLowerCase().includes('negative')||strVal.toLowerCase().includes('음성'))isPositive=false;
+      if(isPositive){
+        detected.push({vaccine:map.vaccine,label:map.label,value:strVal,date:labResult.date,who:labResult.who});
+      }
+    }
+  }
+  if(!detected.length)return;
+  // 해당 건강관리 도메인에 접종 기록 추가
+  const healthDom=labResult.who==='오랑이'?'orangi-health':'bung-health';
+  const ds=S.domainState[healthDom];
+  if(!ds?.master)return;
+  if(!ds.master.vaccinations)ds.master.vaccinations=[];
+  const added=[];
+  detected.forEach(d=>{
+    // 이미 항체 확인 기록 있으면 스킵
+    const exists=ds.master.vaccinations.find(v=>v.vaccine===d.vaccine&&v.status==='antibody');
+    if(exists)return;
+    ds.master.vaccinations.push({
+      id:Date.now()+Math.random()*1000|0,vaccine:d.vaccine,label:d.label+' (검사 자동)',
+      date:d.date||kstToday(),memo:'🔬 검사결과 자동 연동: '+d.value,
+      who:d.who||DC().user,pregnancy:_VACCINE_DB[d.vaccine]?.pregnancy||false,
+      status:'antibody',doseKey:'all',complete:true
+    });
+    added.push(d.label);
+  });
+  if(added.length){
+    saveMasterForDomain(healthDom);
+    showToast('💉 항체 확인 → 접종 자동 기록: '+added.join(', '));
+  }
+}
+
+// 특정 도메인 마스터 저장
+async function saveMasterForDomain(domainId){
+  const ds=S.domainState[domainId];
+  if(!ds?.masterFileId||!ds.master)return;
+  try{await driveUpdate(ds.masterFileId,ds.master);}catch(e){console.error('saveMasterForDomain:',e);}
+}
+
 async function _deleteVax(vaxId){
   if(!confirm('이 접종 기록을 삭제하시겠습니까?'))return;
   const m=DM();if(!m)return;
