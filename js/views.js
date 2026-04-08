@@ -947,6 +947,12 @@ function renderPressureChart(logs) {
 function renderStatsView() {
   const ds=D(); const lc=DC().logConfig; const dc=DC();
   const logs=ds.logData||[];
+
+  // 붕룩이 도메인: 임신준비 전용 통계
+  if(S.currentDomain==='bungruki'){
+    return _renderBungrukiStats();
+  }
+
   if(!logs.length) return `<div class="hint">📈 통계를 보려면 먼저 기록을 쌓아주세요.<br><button class="btn-cancel" onclick="switchView('log')" style="margin-top:10px">📊 기록하러 가기</button></div>`;
 
   const now=new Date();
@@ -3001,3 +3007,88 @@ function renderAIQuestionSuggestions() {
   </div>`;
 }
 let _aiSuggestions=[];
+
+// ═══════════════════════════════════════════════════════════════
+// 🍼 BUNGRUKI STATS (임신준비 전용 통계)
+// ═══════════════════════════════════════════════════════════════
+function _renderBungrukiStats(){
+  const m=typeof getBrkMaster==='function'?getBrkMaster():null;
+  if(!m) return '<div class="hint">데이터 로딩 중...</div>';
+
+  // 임신확률 카드
+  const rateHtml=typeof _renderConceptionCard==='function'?_renderConceptionCard(m):'';
+
+  // 영양제 순응도 (30일)
+  const today=kstToday();
+  let supplDays=0,supplTotal=0;
+  for(let i=0;i<30;i++){
+    const d=kstDaysAgo(i);
+    const dc=m.dailyChecks?.[d];
+    if(!dc)continue;
+    const o=dc.orangi||{},b=dc.bung||{};
+    const oKeys=typeof BRK_SUPPL_ORANGI!=='undefined'?BRK_SUPPL_ORANGI:[];
+    const bKeys=typeof BRK_SUPPL_BUNG!=='undefined'?BRK_SUPPL_BUNG:[];
+    const oCount=oKeys.filter(k=>o[k]).length;
+    const bCount=bKeys.filter(k=>b[k]).length;
+    if(oCount||bCount){supplDays++;supplTotal+=oCount+bCount;}
+  }
+
+  // 주기 통계
+  const cycles=(m.menstrualCycles||[]).sort((a,b)=>b.startDate.localeCompare(a.startDate));
+  const lens=[];
+  const sorted=[...cycles].sort((a,b)=>a.startDate.localeCompare(b.startDate));
+  for(let i=0;i<sorted.length-1;i++){
+    const d=Math.round((new Date(sorted[i+1].startDate+'T00:00:00')-new Date(sorted[i].startDate+'T00:00:00'))/86400000);
+    if(d>0&&d<60)lens.push(d);
+  }
+  const avgCycle=lens.length?Math.round(lens.reduce((a,b)=>a+b,0)/lens.length):'-';
+  const cycleStd=lens.length>=3?Math.round(Math.sqrt(lens.reduce((s,v)=>s+Math.pow(v-avgCycle,2),0)/lens.length)*10)/10:'-';
+
+  // 검사 결과 요약
+  const labs=m.labResults||[];
+  const semen=labs.filter(l=>l.type==='semen'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
+  const hormone=labs.filter(l=>l.type==='hormone'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
+  let semenSummary='미검사';
+  if(semen.length){
+    const g=typeof _semenGrade==='function'?_semenGrade(semen[0].values):{grade:'-',norm:{}};
+    const n=g.norm||{};
+    semenSummary=`<span style="color:${g.color};font-weight:600">${g.grade}</span> Vol:${n.volume||'-'} Count:${n.count||'-'} Mot:${n.motility||'-'}% Morph:${n.morphology||'-'}%`;
+  }
+
+  // 마일스톤 진행률
+  const milestones=m.milestones||[];
+  const done=milestones.filter(x=>x.done).length;
+  const total=milestones.length;
+  const milePct=total?Math.round(done/total*100):0;
+
+  return `
+    ${rateHtml}
+    <div class="card">
+      <div class="card-title">🍼 임신 준비 — 30일 요약</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="text-align:center;padding:12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+          <div style="font-size:.68rem;color:var(--mu)">영양제 복용일</div>
+          <div style="font-size:1.2rem;font-weight:700;color:#16a34a">${supplDays}/30일</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+          <div style="font-size:.68rem;color:var(--mu)">마일스톤</div>
+          <div style="font-size:1.2rem;font-weight:700;color:${milePct>=80?'#10b981':milePct>=50?'#f59e0b':'#ef4444'}">${done}/${total} (${milePct}%)</div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+          <div style="font-size:.68rem;color:var(--mu)">평균 주기</div>
+          <div style="font-size:1.2rem;font-weight:700;color:var(--ink)">${avgCycle}일 <span style="font-size:.7rem;color:var(--mu)">±${cycleStd}</span></div>
+        </div>
+        <div style="text-align:center;padding:12px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+          <div style="font-size:.68rem;color:var(--mu)">기록 주기 수</div>
+          <div style="font-size:1.2rem;font-weight:700;color:var(--ink)">${cycles.length}회</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🔬 최신 검사 결과</div>
+      <div style="font-size:.78rem;margin-bottom:6px">정액검사: ${semenSummary}</div>
+      ${semen.length?`<div style="font-size:.65rem;color:var(--mu)">검사일: ${semen[0].date}</div>`:''}
+      ${hormone.length?`<div style="font-size:.78rem;margin-top:6px">호르몬: ${Object.entries(hormone[0].values).map(([k,v])=>k+':'+v).join(' · ')}</div>`:''}
+      <button onclick="switchView('meds')" style="margin-top:8px;font-size:.72rem;padding:5px 14px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">📋 검사 결과 관리 →</button>
+    </div>`;
+}

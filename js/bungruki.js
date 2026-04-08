@@ -958,16 +958,44 @@ async function brkSetMemo(val) {
 // 정액검사 WHO 정상 범위
 const _SEMEN_NORMS={volume:{min:1.5,unit:'mL',label:'Volume'},count:{min:15,unit:'M/mL',label:'Count'},motility:{min:42,unit:'%',label:'Motility'},morphology:{min:4,unit:'%',label:'Morphology'}};
 
-function _semenGrade(vals) {
-  if(!vals) return {grade:'-',color:'var(--mu)',issues:[]};
+// AI가 다양한 키명으로 저장하므로 표준 키로 정규화
+function _normalizeSemenValues(vals){
+  if(!vals)return vals;
+  const map={
+    volume:['volume','vol','Volume','Vol','정액량','Semen Volume'],
+    count:['count','Count','Sperm Count','sperm count','concentration','Concentration','정자수','농도','Sperm Concentration'],
+    motility:['motility','Motility','Total Motility','total motility','운동성','Progressive Motility','progressive motility'],
+    morphology:['morphology','Morphology','Strict Morphology','strict morphology','형태','Normal Morphology','normal morphology','Normal Forms'],
+  };
+  const norm={};
+  // 표준 키 매핑
+  for(const [std,aliases] of Object.entries(map)){
+    for(const alias of aliases){
+      if(vals[alias]!==undefined){
+        const v=parseFloat(vals[alias]);
+        if(!isNaN(v)){norm[std]=v;break;}
+      }
+    }
+  }
+  // 나머지 키도 보존
+  Object.entries(vals).forEach(([k,v])=>{
+    const isAlias=Object.values(map).some(a=>a.includes(k));
+    if(!isAlias)norm[k]=v;
+  });
+  return norm;
+}
+
+function _semenGrade(rawVals) {
+  if(!rawVals) return {grade:'-',color:'var(--mu)',issues:[],norm:{}};
+  const vals=_normalizeSemenValues(rawVals);
   const issues=[];
   if(vals.morphology!==undefined&&vals.morphology<4) issues.push('형태↓');
   if(vals.motility!==undefined&&vals.motility<42) issues.push('운동성↓');
   if(vals.count!==undefined&&vals.count<15) issues.push('농도↓');
   if(vals.volume!==undefined&&vals.volume<1.5) issues.push('양↓');
-  if(!issues.length) return {grade:'정상',color:'#10b981',issues:[]};
-  if(issues.length===1) return {grade:'경미',color:'#f59e0b',issues};
-  return {grade:'주의',color:'#dc2626',issues};
+  if(!issues.length) return {grade:'정상',color:'#10b981',issues:[],norm:vals};
+  if(issues.length===1) return {grade:'경미',color:'#f59e0b',issues,norm:vals};
+  return {grade:'주의',color:'#dc2626',issues,norm:vals};
 }
 
 // 자연임신 확률 다중 모델 추정
@@ -975,7 +1003,7 @@ function estimateConceptionRate(m) {
   const cycles=m.menstrualCycles||[];
   const labs=m.labResults||[];
   const semenLabs=labs.filter(l=>l.type==='semen'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
-  const sv=semenLabs[0]?.values;
+  const sv=semenLabs[0]?.values?_normalizeSemenValues(semenLabs[0].values):null;
   const hormoneLabs=labs.filter(l=>l.type==='hormone'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
   const hv=hormoneLabs[0]?.values;
   // 주기 분석
@@ -1063,34 +1091,73 @@ function estimateConceptionRate(m) {
   return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,femaleAge,ageMult,factors,dailyRates:adjDaily,cumulative,cycleStd,avgCycle,hasSemen:!!sv,hasHormone:!!hv,timeline};
 }
 
+function _showModelInfo(model){
+  const el=document.getElementById('model-info-box');if(!el)return;
+  const infos={
+    who:`<b>WHO/Hunault 모델</b><br>
+    네덜란드 Hunault 등(2004)이 개발한 자연임신 확률 예측 모델. WHO 정상 참고치(2021, 6th edition)를 기반으로 여성 나이, 불임 기간, 정액검사 결과, 주기 규칙성 등을 종합하여 월간 임신 확률(fecundability)을 추정합니다.<br><br>
+    <b>주요 변수:</b> 여성 연령, 주기 길이/규칙성, 정액검사(양, 농도, 운동성, 형태), 불임 기간<br>
+    <b>정상 하한(WHO 2021):</b> Vol ≥1.5mL, Count ≥15M/mL, Motility ≥42%, Morphology ≥4%<br>
+    <b>기저율:</b> 건강한 커플 ~25%/주기 (Gnoth 2003)<br>
+    <b>한계:</b> 나팔관 이상, 자궁내막증 등 기질적 원인은 반영 불가`,
+    tmsc:`<b>TMSC (Total Motile Sperm Count)</b><br>
+    정액량(mL) × 농도(M/mL) × 운동성(%) = 총 운동 정자 수. 단일 수치로 남성 가임력을 평가하는 가장 실용적인 지표입니다.<br><br>
+    <b>해석 기준:</b><br>
+    • ≥20M: 자연임신에 유리 (임신율 ~25%)<br>
+    • 10-19M: 경계 — IUI 검토 (임신율 ~18%)<br>
+    • 5-9M: IUI 권장 (임신율 ~12%)<br>
+    • 1-4M: IVF/ICSI 검토 (임신율 ~5%)<br>
+    • <1M: ICSI 필요<br><br>
+    <b>참고:</b> Hamilton(2015), van Weert(2021) — TMSC ≥9M이 IUI 최소 임계값`,
+    age:`<b>연령 기저율 (PRESTO 2024)</b><br>
+    Wesselink 등(2024) PRESTO 코호트 연구에서 도출된 연령별 월간 자연임신 확률입니다. 여성 연령이 가장 강력한 예측 변수입니다.<br><br>
+    <b>연령별 보정계수:</b><br>
+    • ≤30세: ×1.0 (기본)<br>
+    • 31-33세: ×0.85<br>
+    • 34-35세: ×0.75<br>
+    • 36-37세: ×0.60<br>
+    • 38-39세: ×0.45<br>
+    • 40-42세: ×0.25<br>
+    • 43+세: ×0.10<br><br>
+    <b>의미:</b> 다른 조건이 동일해도 35세 이후 급격히 감소. 조기 상담 권장.`,
+  };
+  const html=infos[model];if(!html)return;
+  el.innerHTML=`<div style="margin-top:6px;padding:10px;background:var(--sf);border:1px solid var(--bd);border-radius:8px;font-size:.68rem;color:var(--tx);line-height:1.6">
+    ${html}
+    <div style="text-align:right;margin-top:6px"><button onclick="document.getElementById('model-info-box').innerHTML=''" style="font-size:.62rem;padding:2px 10px;border:1px solid var(--bd);border-radius:4px;background:none;color:var(--mu);cursor:pointer;font-family:var(--font)">닫기</button></div>
+  </div>`;
+}
+
 function _renderConceptionCard(m) {
   const r=estimateConceptionRate(m);
   const rate=r.monthly;
   const rateColor=rate>=20?'#10b981':rate>=12?'#f59e0b':'#dc2626';
 
-  // 비교 모델 표
-  let modelRows=`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-top:8px;margin-bottom:4px">📊 추정 모델 비교</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px">
-      <div style="background:${rateColor}10;border:1px solid ${rateColor}40;border-radius:6px;padding:6px;text-align:center">
+  // 비교 모델 표 (클릭 시 설명)
+  let modelRows=`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-top:8px;margin-bottom:4px">📊 추정 모델 비교 <span style="font-weight:400;font-size:.58rem">(클릭하면 설명)</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px">
+      <div style="background:${rateColor}10;border:1px solid ${rateColor}40;border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('who')">
         <div style="font-size:.55rem;color:var(--mu)">WHO/Hunault</div>
         <div style="font-size:.88rem;font-weight:700;color:${rateColor}">${rate}%</div>
       </div>`;
   if(r.tmscRate!==null){
     const tc=r.tmscRate>=20?'#10b981':r.tmscRate>=10?'#f59e0b':'#dc2626';
-    modelRows+=`<div style="background:${tc}10;border:1px solid ${tc}40;border-radius:6px;padding:6px;text-align:center">
+    modelRows+=`<div style="background:${tc}10;border:1px solid ${tc}40;border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('tmsc')">
       <div style="font-size:.55rem;color:var(--mu)">TMSC(${r.tmsc}M)</div>
       <div style="font-size:.88rem;font-weight:700;color:${tc}">${r.tmscRate}%</div>
     </div>`;
   } else {
-    modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center">
+    modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('tmsc')">
       <div style="font-size:.55rem;color:var(--mu)">TMSC</div>
       <div style="font-size:.75rem;color:var(--mu2)">검사 필요</div>
     </div>`;
   }
-  modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center">
+  modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('age')">
     <div style="font-size:.55rem;color:var(--mu)">연령 기저율</div>
     <div style="font-size:.88rem;font-weight:700">${r.ageRate}%</div>
   </div></div>`;
+  // 모델 설명 표시 영역
+  modelRows+=`<div id="model-info-box"></div>`;
 
   // 영향 요소
   const factorsHtml=r.factors.length?`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">📋 영향 요소</div>
@@ -1119,6 +1186,45 @@ function _renderConceptionCard(m) {
       }).join('')}
     </div>
     <div style="font-size:.55rem;color:var(--mu2);text-align:center">D-2~D-1이 가장 높음 (배란 전 1~2일)</div>`;
+
+  // 확률 향상 팁 (현재 데이터 기반 맞춤 — 잘 하고 있는 것 체크)
+  const tips=[];
+  // dailyChecks에서 최근 7일 복용 현황 확인
+  const _last7=[];for(let i=0;i<7;i++){const dd=new Date(kstToday()+'T00:00:00');dd.setDate(dd.getDate()-i);_last7.push(dd.toISOString().slice(0,10));}
+  const dc7=_last7.map(d=>m.dailyChecks?.[d]).filter(Boolean);
+  const bungSupplDays=dc7.filter(d=>BRK_SUPPL_BUNG.some(k=>d.bung?.[k])).length;
+  const orangiSupplDays=dc7.filter(d=>BRK_SUPPL_ORANGI.some(k=>d.orangi?.[k])).length;
+  const milestones=m.milestones||[];
+  const alcoholMilestone=milestones.find(x=>x.label?.includes('금주'));
+
+  // 타이밍
+  tips.push({icon:'🎯',title:'타이밍 최적화',desc:'배란일 D-2~D-1에 집중 (이 시기가 확률 최고). 배란 예측 키트(LH strip) 사용 시 양성 후 24-36시간 내가 가장 유리',ref:'Wilcox 1995, Bull 2019'});
+  // 빈도
+  tips.push({icon:'📅',title:'관계 빈도',desc:'가임기(배란 전 5일~당일) 중 격일 관계가 최적. 매일도 괜찮지만 정자 농도 유지 관점에서 격일 권장',ref:'NICE 2013, Practice Committee ASRM 2017'});
+  // 남성 영양제
+  if(r.hasSemen){
+    tips.push({icon:'💊',title:'남성 영양제',desc:'CoQ10(200-300mg), 아르기닌(2-3g), 비타민E(400IU), 아연(30mg), 셀레늄(200μg) — 정자 질 개선에 3개월 소요',ref:'Salas-Huetos 2017 메타분석',doing:bungSupplDays>=5});
+  }
+  // 여성 영양제
+  tips.push({icon:'🥬',title:'여성 영양제',desc:'엽산(0.4-5mg, 필수), 비타민D(1000-4000IU), 철분, 오메가3(DHA 200mg) — 임신 3개월 전부터 시작',ref:'WHO, ACOG 2023',doing:orangiSupplDays>=5});
+  // 생활습관
+  tips.push({icon:'🚭',title:'생활습관',desc:'금주·금연(남녀 모두), 카페인 <200mg/일, BMI 19-25 유지, 7-8시간 수면, 과도한 운동 피하기',ref:'ASRM Committee 2017',doing:alcoholMilestone?.done});
+  // 체중
+  tips.push({icon:'⚖️',title:'체중 관리',desc:'저체중(BMI <18.5)은 배란 장애 위험 증가. 목표 BMI 19+ 달성 시 임신율 유의미하게 향상',ref:'Rich-Edwards 2002'});
+  // 스트레스
+  tips.push({icon:'🧘',title:'스트레스 관리',desc:'만성 스트레스는 시상하부-뇌하수체-난소 축에 영향 → 배란 지연. 명상, 요가 등 권장',ref:'Lynch 2014 PRESTO'});
+  // 연령
+  if(r.femaleAge>=35) tips.push({icon:'⏰',title:'조기 상담',desc:'35세 이후 6개월 시도 후 미임신 시 생식의학과 상담 권장 (일반: 12개월)',ref:'ASRM 2020'});
+
+  const tipsHtml=`<div style="margin-top:10px"><div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:6px;cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">💡 확률 향상 팁 ▸</div>
+    <div style="display:none">
+    ${tips.map(t=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px dotted var(--bd);${t.doing?'background:#f0fdf408':''}">
+      <span style="font-size:1rem">${t.icon}</span>
+      <div><div style="font-size:.72rem;font-weight:600;color:var(--ink)">${t.doing?'✅ ':''}${t.title}${t.doing?' <span style="font-size:.6rem;color:#10b981;font-weight:400">잘 하고 있어요!</span>':''}</div>
+      <div style="font-size:.65rem;color:var(--mu);line-height:1.5">${t.desc}</div>
+      <div style="font-size:.55rem;color:var(--mu2)">📚 ${t.ref}</div></div>
+    </div>`).join('')}
+    </div></div>`;
 
   // 레퍼런스
   const refHtml=`<div style="margin-top:8px;padding:6px 8px;background:var(--sf);border-radius:6px;font-size:.58rem;color:var(--mu2)">
@@ -1172,6 +1278,7 @@ function _renderConceptionCard(m) {
       <div style="font-size:.68rem;font-weight:600;color:#0369a1;margin-bottom:3px">🗓 권장 타임라인</div>
       <div style="font-size:.7rem;color:#0c4a6e">${r.timeline}</div>
     </div>
+    ${tipsHtml}
     <div style="font-size:.6rem;color:var(--ac);cursor:pointer;margin-top:6px" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 계산 근거 및 참고 문헌</div>
     <div style="display:none">${refHtml}</div>
   </div>`;
@@ -1193,7 +1300,8 @@ function renderLabResults() {
     let summary='';
     if(l.type==='semen'&&l.values) {
       const g=_semenGrade(l.values);
-      const vals=['Vol '+(l.values.volume||'-'),'Count '+(l.values.count||'-'),'Mot '+(l.values.motility||'-')+'%','Morph '+(l.values.morphology||'-')+'%'].join(' · ');
+      const n=g.norm||{};
+    const vals=['Vol '+(n.volume||'-'),'Count '+(n.count||'-'),'Mot '+(n.motility||'-')+'%','Morph '+(n.morphology||'-')+'%'].join(' · ');
       summary=`<span style="font-weight:600;color:${g.color}">${g.grade}</span> ${vals}${g.issues.length?' <span style="color:#dc2626;font-size:.65rem">('+g.issues.join(', ')+')</span>':''}`;
     } else if(l.values&&typeof l.values==='object') {
       summary=Object.entries(l.values).slice(0,4).map(([k,v])=>k+':'+v).join(' · ');
@@ -1296,7 +1404,8 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
   let summary='', interpret='';
   if(l.type==='semen'&&l.values) {
     const g=_semenGrade(l.values);
-    const vals=['Vol '+(l.values.volume||'-'),'Count '+(l.values.count||'-'),'Mot '+(l.values.motility||'-')+'%','Morph '+(l.values.morphology||'-')+'%'].join(' · ');
+    const n=g.norm||{};
+    const vals=['Vol '+(n.volume||'-'),'Count '+(n.count||'-'),'Mot '+(n.motility||'-')+'%','Morph '+(n.morphology||'-')+'%'].join(' · ');
     summary=`<span style="font-weight:600;color:${g.color}">${g.grade}</span> ${vals}${g.issues.length?' <span style="color:#dc2626;font-size:.65rem">('+g.issues.join(', ')+')</span>':''}`;
     // 해석 한 줄
     if(!g.issues.length) interpret='전 항목 WHO 정상 범위 — 자연임신에 유리';
