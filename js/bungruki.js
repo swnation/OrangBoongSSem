@@ -1799,19 +1799,32 @@ function _showStagedPhotos(){
       <button onclick="document.getElementById('brk-lab-photo-add').click()" style="font-size:.72rem;padding:5px 12px;border:1.5px dashed var(--bd);border-radius:6px;background:none;color:var(--mu);cursor:pointer">+ 사진 추가</button>
       <input type="file" id="brk-lab-photo-add" accept="image/*" multiple style="display:none" onchange="_addMorePhotos(this)">
     </div>
-    <div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">🤖 AI 모델 선택</div>
-    <div id="brk-photo-ai-select" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">
-    ${_brkVisionAiOptions().map(a=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1.5px solid ${a.available?'var(--bd)':'var(--bd)'};border-radius:8px;cursor:${a.available?'pointer':'default'};opacity:${a.available?1:.4};background:var(--sf)">
-      <input type="radio" name="brk-photo-ai" value="${a.id}" ${a.available?'':'disabled'} ${a.default?'checked':''} style="accent-color:var(--ac)">
-      <div style="flex:1"><span style="font-size:.75rem;font-weight:600;color:${a.color}">${a.name}</span>
-      <span style="font-size:.6rem;color:var(--mu);margin-left:4px">${a.tag}</span>
-      <div style="font-size:.6rem;color:var(--mu2)">${a.desc}</div></div>
-    </label>`).join('')}
+    <div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">🤖 분석 모드</div>
+    <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">
+    ${(()=>{
+      const opts=_brkVisionAiOptions();
+      const availCount=opts.filter(a=>a.available).length;
+      const consensusOpt=availCount>=2?`<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:2px solid #8b5cf6;border-radius:8px;cursor:pointer;background:#f5f3ff">
+        <input type="radio" name="brk-photo-ai" value="_consensus" checked style="accent-color:#8b5cf6">
+        <div style="flex:1"><span style="font-size:.75rem;font-weight:700;color:#7c3aed">🏆 멀티 AI 병렬 분석</span>
+        <span style="font-size:.6rem;color:#8b5cf6;margin-left:4px">⭐ 추천</span>
+        <div style="font-size:.6rem;color:var(--mu2)">${opts.filter(a=>a.available).map(a=>a.name).join('+')} 동시 분석 → 수치 교차 검증 (가장 정확)</div></div>
+      </label>`:'';
+      const singles=opts.map(a=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1.5px solid var(--bd);border-radius:8px;cursor:${a.available?'pointer':'default'};opacity:${a.available?1:.4};background:var(--sf)">
+        <input type="radio" name="brk-photo-ai" value="${a.id}" ${a.available?'':'disabled'} ${!availCount||availCount<2&&a.default?'checked':''} style="accent-color:var(--ac)">
+        <div style="flex:1"><span style="font-size:.75rem;font-weight:600;color:${a.color}">${a.name}</span>
+        <span style="font-size:.6rem;color:var(--mu);margin-left:4px">${a.tag}</span>
+        <div style="font-size:.6rem;color:var(--mu2)">${a.desc}</div></div>
+      </label>`).join('');
+      return consensusOpt+singles;
+    })()}
     </div>
-    <div style="font-size:.65rem;color:var(--mu2)">사진 ${_stagedLabPhotos.length}장을 순서대로 분석합니다.</div>`,
+    <div style="font-size:.65rem;color:var(--mu2)">사진 ${_stagedLabPhotos.length}장을 분석합니다.</div>`,
     [{label:'🔬 분석 시작',action:()=>{
-      const sel=document.querySelector('input[name="brk-photo-ai"]:checked');
-      closeConfirmModal();_brkAnalyzeStagedPhotos(sel?.value);
+      const sel=document.querySelector('input[name="brk-photo-ai"]:checked')?.value;
+      closeConfirmModal();
+      if(sel==='_consensus')_brkConsensusAnalyze();
+      else _brkAnalyzeStagedPhotos(sel);
     },primary:true},
      {label:'취소',action:()=>{_stagedLabPhotos=[];closeConfirmModal();}}]);
 }
@@ -1828,6 +1841,103 @@ function _addMorePhotos(input){
   });
   input.value='';
 }
+// ── 멀티 AI 병렬 분석 (교차 검증) ──
+async function _brkConsensusAnalyze(){
+  if(!_stagedLabPhotos.length)return;
+  const opts=_brkVisionAiOptions().filter(a=>a.available);
+  if(opts.length<2){showToast('⚠️ 멀티 분석에는 2개 이상 AI 키 필요');return _brkAnalyzeStagedPhotos();}
+  const aiIds=opts.map(a=>a.id);
+  const allResults=[];
+  for(let i=0;i<_stagedLabPhotos.length;i++){
+    showToast('📷 사진 '+(i+1)+'/'+_stagedLabPhotos.length+' — '+aiIds.length+'개 AI 병렬 분석 중...',12000);
+    const p=_stagedLabPhotos[i];
+    // 병렬 호출
+    const promises=aiIds.map(async aid=>{try{return{ai:aid,result:await _analyzeOnePhoto(p,aid)};}catch(e){return{ai:aid,error:e.message};}});
+    const results=await Promise.all(promises);
+    const merged=_mergeConsensus(results,p.dataUrl);
+    allResults.push(merged);
+  }
+  _stagedLabPhotos=[];
+  // 결과 확인 모달
+  const html=allResults.map((r,i)=>{
+    if(r.error)return `<div style="padding:6px;background:#fef2f2;border-radius:6px;margin-bottom:6px;font-size:.72rem">사진 ${i+1}: ❌ ${esc(r.error)}</div>`;
+    const vals=r.values?Object.entries(r.values).map(([k,v])=>{
+      const conf=r._confidence?.[k];
+      const confBadge=conf==='unanimous'?'<span style="font-size:.45rem;color:#10b981">✓일치</span>'
+        :conf==='majority'?'<span style="font-size:.45rem;color:#f59e0b">△다수</span>'
+        :'<span style="font-size:.45rem;color:#dc2626">?확인</span>';
+      return '<span class="log-tag" style="background:#eff6ff;color:#1d4ed8;font-size:.6rem">'+esc(k)+':'+esc(String(v))+' '+confBadge+'</span>';
+    }).join(' '):'';
+    return `<div style="padding:8px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;margin-bottom:6px">
+      <div style="display:flex;gap:6px;align-items:center"><img src="${r._imgSrc}" style="width:40px;height:40px;object-fit:cover;border-radius:4px">
+      <div><div style="font-size:.72rem;font-weight:600">사진 ${i+1}: ${esc(r.type||'기타')} · ${esc(r.date||'')} · ${esc(r.who||'')}</div>
+      <div style="font-size:.6rem;color:#8b5cf6">${r._usedAis.join(' + ')} 교차 검증</div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:2px">${vals}</div></div></div>
+      ${r.opinion?'<div style="font-size:.65rem;color:#15803d;margin-top:4px">💡 '+esc(r.opinion)+'</div>':''}
+    </div>`;
+  }).join('');
+  showConfirmModal('🏆 멀티 AI 분석 완료 ('+allResults.filter(r=>!r.error).length+'/'+allResults.length+')',
+    html+'<div style="font-size:.65rem;color:var(--mu);margin-top:4px">✓일치=모든 AI 동일 △다수=다수결 ?확인=불일치(수동 확인 권장)</div>',
+    [{label:'💾 전체 저장',action:async()=>{
+      const m=getBrkMaster();if(!m)return;let saved=0;
+      allResults.forEach(r=>{
+        if(r.error)return;
+        const typeMap={semen:'semen',blood:'blood',hormone:'hormone',ultrasound:'ultrasound'};
+        const type=typeMap[r.type]||'other';
+        const memo=['🏆 멀티AI('+r._usedAis.join('+')+')',...(r.abnormal||[]).map(a=>'⚠️ '+a),r.opinion?'💡 '+r.opinion:''].filter(Boolean).join('; ');
+        m.labResults.push({id:Date.now()+saved,date:r.date||kstToday(),who:r.who||'붕쌤',type,values:r.values||{},memo,imgSrc:r._imgSrc});
+        saved++;
+      });
+      if(saved){await saveBrkMaster();showToast('✅ '+saved+'건 저장됨');}
+      closeConfirmModal();renderView('meds');
+    },primary:true},{label:'취소',action:closeConfirmModal}]);
+}
+function _mergeConsensus(results,imgSrc){
+  const successes=results.filter(r=>!r.error&&r.result);
+  if(!successes.length)return{error:'모든 AI 실패: '+results.map(r=>r.error).join(', '),_imgSrc:imgSrc};
+  if(successes.length===1){const r=successes[0].result;r._imgSrc=imgSrc;r._usedAis=[successes[0].ai];r._confidence={};Object.keys(r.values||{}).forEach(k=>r._confidence[k]='single');return r;}
+  // 다수결 병합
+  const base={...successes[0].result};base._imgSrc=imgSrc;base._usedAis=successes.map(s=>s.ai);base._confidence={};
+  // type/date/who — 다수결
+  const types=successes.map(s=>s.result.type).filter(Boolean);base.type=_majority(types)||base.type;
+  const dates=successes.map(s=>s.result.date).filter(Boolean);base.date=_majority(dates)||base.date;
+  const whos=successes.map(s=>s.result.who).filter(Boolean);base.who=_majority(whos)||base.who;
+  // values — 키별 다수결/평균
+  const allKeys=new Set();
+  successes.forEach(s=>Object.keys(s.result.values||{}).forEach(k=>allKeys.add(k)));
+  const mergedVals={};
+  allKeys.forEach(k=>{
+    const vals=successes.map(s=>(s.result.values||{})[k]).filter(v=>v!==undefined);
+    if(!vals.length)return;
+    const nums=vals.map(v=>parseFloat(v)).filter(v=>!isNaN(v));
+    if(nums.length===vals.length&&nums.length>1){
+      // 수치: 일치 여부 확인
+      const allSame=nums.every(n=>Math.abs(n-nums[0])<0.01);
+      if(allSame){mergedVals[k]=nums[0];base._confidence[k]='unanimous';}
+      else{
+        // 가장 많이 나온 값 또는 중간값
+        const sorted=[...nums].sort((a,b)=>a-b);
+        mergedVals[k]=sorted[Math.floor(sorted.length/2)];
+        const spread=Math.max(...nums)-Math.min(...nums);
+        base._confidence[k]=spread/Math.max(1,mergedVals[k])<0.1?'majority':'divergent';
+      }
+    }else{
+      const strVals=vals.map(String);
+      mergedVals[k]=_majority(strVals)||vals[0];
+      const allSame=strVals.every(v=>v===strVals[0]);
+      base._confidence[k]=allSame?'unanimous':(strVals.filter(v=>v===mergedVals[k]).length>1?'majority':'divergent');
+    }
+  });
+  base.values=mergedVals;
+  // opinion — 가장 긴 것
+  const opinions=successes.map(s=>s.result.opinion).filter(Boolean);
+  base.opinion=opinions.sort((a,b)=>b.length-a.length)[0]||'';
+  // abnormal — 합집합
+  base.abnormal=[...new Set(successes.flatMap(s=>s.result.abnormal||[]))];
+  return base;
+}
+function _majority(arr){const freq={};arr.forEach(v=>{freq[v]=(freq[v]||0)+1;});return Object.entries(freq).sort((a,b)=>b[1]-a[1])[0]?.[0];}
+
 function _brkVisionAiOptions(){
   return [
     {id:'gemini',name:'Gemini',color:'#4285f4',tag:'⭐ 추천',desc:'Vision 최적화, 표/수치 인식 우수, 빠름',available:!!S.keys?.gemini,default:!!S.keys?.gemini},
