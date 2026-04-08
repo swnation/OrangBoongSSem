@@ -1091,34 +1091,73 @@ function estimateConceptionRate(m) {
   return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,femaleAge,ageMult,factors,dailyRates:adjDaily,cumulative,cycleStd,avgCycle,hasSemen:!!sv,hasHormone:!!hv,timeline};
 }
 
+function _showModelInfo(model){
+  const el=document.getElementById('model-info-box');if(!el)return;
+  const infos={
+    who:`<b>WHO/Hunault 모델</b><br>
+    네덜란드 Hunault 등(2004)이 개발한 자연임신 확률 예측 모델. WHO 정상 참고치(2021, 6th edition)를 기반으로 여성 나이, 불임 기간, 정액검사 결과, 주기 규칙성 등을 종합하여 월간 임신 확률(fecundability)을 추정합니다.<br><br>
+    <b>주요 변수:</b> 여성 연령, 주기 길이/규칙성, 정액검사(양, 농도, 운동성, 형태), 불임 기간<br>
+    <b>정상 하한(WHO 2021):</b> Vol ≥1.5mL, Count ≥15M/mL, Motility ≥42%, Morphology ≥4%<br>
+    <b>기저율:</b> 건강한 커플 ~25%/주기 (Gnoth 2003)<br>
+    <b>한계:</b> 나팔관 이상, 자궁내막증 등 기질적 원인은 반영 불가`,
+    tmsc:`<b>TMSC (Total Motile Sperm Count)</b><br>
+    정액량(mL) × 농도(M/mL) × 운동성(%) = 총 운동 정자 수. 단일 수치로 남성 가임력을 평가하는 가장 실용적인 지표입니다.<br><br>
+    <b>해석 기준:</b><br>
+    • ≥20M: 자연임신에 유리 (임신율 ~25%)<br>
+    • 10-19M: 경계 — IUI 검토 (임신율 ~18%)<br>
+    • 5-9M: IUI 권장 (임신율 ~12%)<br>
+    • 1-4M: IVF/ICSI 검토 (임신율 ~5%)<br>
+    • <1M: ICSI 필요<br><br>
+    <b>참고:</b> Hamilton(2015), van Weert(2021) — TMSC ≥9M이 IUI 최소 임계값`,
+    age:`<b>연령 기저율 (PRESTO 2024)</b><br>
+    Wesselink 등(2024) PRESTO 코호트 연구에서 도출된 연령별 월간 자연임신 확률입니다. 여성 연령이 가장 강력한 예측 변수입니다.<br><br>
+    <b>연령별 보정계수:</b><br>
+    • ≤30세: ×1.0 (기본)<br>
+    • 31-33세: ×0.85<br>
+    • 34-35세: ×0.75<br>
+    • 36-37세: ×0.60<br>
+    • 38-39세: ×0.45<br>
+    • 40-42세: ×0.25<br>
+    • 43+세: ×0.10<br><br>
+    <b>의미:</b> 다른 조건이 동일해도 35세 이후 급격히 감소. 조기 상담 권장.`,
+  };
+  const html=infos[model];if(!html)return;
+  el.innerHTML=`<div style="margin-top:6px;padding:10px;background:var(--sf);border:1px solid var(--bd);border-radius:8px;font-size:.68rem;color:var(--tx);line-height:1.6">
+    ${html}
+    <div style="text-align:right;margin-top:6px"><button onclick="document.getElementById('model-info-box').innerHTML=''" style="font-size:.62rem;padding:2px 10px;border:1px solid var(--bd);border-radius:4px;background:none;color:var(--mu);cursor:pointer;font-family:var(--font)">닫기</button></div>
+  </div>`;
+}
+
 function _renderConceptionCard(m) {
   const r=estimateConceptionRate(m);
   const rate=r.monthly;
   const rateColor=rate>=20?'#10b981':rate>=12?'#f59e0b':'#dc2626';
 
-  // 비교 모델 표
-  let modelRows=`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-top:8px;margin-bottom:4px">📊 추정 모델 비교</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px">
-      <div style="background:${rateColor}10;border:1px solid ${rateColor}40;border-radius:6px;padding:6px;text-align:center">
+  // 비교 모델 표 (클릭 시 설명)
+  let modelRows=`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-top:8px;margin-bottom:4px">📊 추정 모델 비교 <span style="font-weight:400;font-size:.58rem">(클릭하면 설명)</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px">
+      <div style="background:${rateColor}10;border:1px solid ${rateColor}40;border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('who')">
         <div style="font-size:.55rem;color:var(--mu)">WHO/Hunault</div>
         <div style="font-size:.88rem;font-weight:700;color:${rateColor}">${rate}%</div>
       </div>`;
   if(r.tmscRate!==null){
     const tc=r.tmscRate>=20?'#10b981':r.tmscRate>=10?'#f59e0b':'#dc2626';
-    modelRows+=`<div style="background:${tc}10;border:1px solid ${tc}40;border-radius:6px;padding:6px;text-align:center">
+    modelRows+=`<div style="background:${tc}10;border:1px solid ${tc}40;border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('tmsc')">
       <div style="font-size:.55rem;color:var(--mu)">TMSC(${r.tmsc}M)</div>
       <div style="font-size:.88rem;font-weight:700;color:${tc}">${r.tmscRate}%</div>
     </div>`;
   } else {
-    modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center">
+    modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('tmsc')">
       <div style="font-size:.55rem;color:var(--mu)">TMSC</div>
       <div style="font-size:.75rem;color:var(--mu2)">검사 필요</div>
     </div>`;
   }
-  modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center">
+  modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('age')">
     <div style="font-size:.55rem;color:var(--mu)">연령 기저율</div>
     <div style="font-size:.88rem;font-weight:700">${r.ageRate}%</div>
   </div></div>`;
+  // 모델 설명 표시 영역
+  modelRows+=`<div id="model-info-box"></div>`;
 
   // 영향 요소
   const factorsHtml=r.factors.length?`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">📋 영향 요소</div>
