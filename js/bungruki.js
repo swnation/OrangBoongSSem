@@ -1559,19 +1559,19 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
     if(l.values.AMH!==undefined) parts.push(l.values.AMH>=1.0?'AMH 정상':'AMH 저하→난소 예비력 감소');
     if(l.values.FSH!==undefined) parts.push(l.values.FSH<=10?'FSH 정상':'FSH 상승→난소기능 확인 필요');
     if(l.values.TSH!==undefined) parts.push(l.values.TSH<=4.0?'TSH 정상':'TSH 이상→갑상선 확인');
-    summary=Object.entries(l.values).map(([k,v])=>k+':'+v).join(' · ');
+    summary=Object.entries(l.values).map(([k,v])=>k+':'+v+(l.ref?.[k]?' <span style="font-size:.55rem;color:var(--mu2)">['+l.ref[k]+']</span>':'')).join(' · ');
     interpret=parts.join(' · ')||'수치 확인 필요';
   } else if(l.type==='blood'&&l.values) {
     const parts=[];
-    if(l.values.Hb!==undefined) parts.push(l.values.Hb>=12?'Hb 정상':'Hb 저하→빈혈');
+    if(l.values.Hb!==undefined||l.values['Hemoglobin(Hb)(g/dL)']!==undefined){const hb=l.values.Hb||l.values['Hemoglobin(Hb)(g/dL)'];parts.push(hb>=12?'Hb 정상':'Hb 저하→빈혈');}
     if(l.values.AST!==undefined||l.values.ALT!==undefined) {
       const ast=l.values.AST||0,alt=l.values.ALT||0;
       parts.push(ast<=40&&alt<=40?'간기능 정상':'간수치 상승→확인 필요');
     }
-    summary=Object.entries(l.values).map(([k,v])=>k+':'+v).join(' · ');
+    summary=Object.entries(l.values).map(([k,v])=>k+':'+v+(l.ref?.[k]?' <span style="font-size:.55rem;color:var(--mu2)">['+l.ref[k]+']</span>':'')).join(' · ');
     interpret=parts.join(' · ')||'';
   } else if(l.values&&typeof l.values==='object') {
-    summary=Object.entries(l.values).slice(0,4).map(([k,v])=>k+':'+v).join(' · ');
+    summary=Object.entries(l.values).slice(0,4).map(([k,v])=>k+':'+v+(l.ref?.[k]?' <span style="font-size:.55rem;color:var(--mu2)">['+l.ref[k]+']</span>':'')).join(' · ');
   }
   return `<div style="padding:7px 10px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;margin-top:4px">
     <div style="display:flex;align-items:center;gap:6px">
@@ -2009,8 +2009,9 @@ function _showConsensusResults(allResults){
         const typeMap={semen:'semen',blood:'blood',hormone:'hormone',ultrasound:'ultrasound'};
         const type=typeMap[r.type]||'other';
         const memo=['🏆 멀티AI('+r._usedAis.join('+')+')',...(r.abnormal||[]).map(a=>'⚠️ '+a),r.opinion?'💡 '+r.opinion:''].filter(Boolean).join('; ');
-        m.labResults.push({id:Date.now()+saved,date:r.date||kstToday(),who:r.who||'붕쌤',type,values:r.values||{},memo,imgSrc:r._imgSrc});
-        saved++;
+        const entry={id:Date.now()+saved,date:r.date||kstToday(),who:r.who||'붕쌤',type,values:r.values||{},memo,imgSrc:r._imgSrc};
+        if(r.ref)entry.ref=r.ref;
+        m.labResults.push(entry);saved++;
       });
       if(saved){await saveBrkMaster();showToast('✅ '+saved+'건 저장됨 (수정 반영)');}
       closeConfirmModal();_consensusResults=[];renderView('meds');
@@ -2058,6 +2059,10 @@ function _mergeConsensus(results,imgSrc){
     }
   });
   base.values=mergedVals;
+  // ref (참고치) — 합집합 병합
+  const mergedRef={};
+  successes.forEach(s=>{if(s.result.ref)Object.entries(s.result.ref).forEach(([k,v])=>{if(!mergedRef[k])mergedRef[k]=v;});});
+  if(Object.keys(mergedRef).length)base.ref=mergedRef;
   // opinion — 가장 긴 것
   const opinions=successes.map(s=>s.result.opinion).filter(Boolean);
   base.opinion=opinions.sort((a,b)=>b.length-a.length)[0]||'';
@@ -2116,7 +2121,9 @@ async function _brkAnalyzeStagedPhotos(selectedAiId){
         const type=typeMap[r.type]||'other';
         const values=r.values||{};
         const memo=[(r.abnormal||[]).map(a=>'⚠️ '+a).join('; '),r.opinion?'💡 '+r.opinion:''].filter(Boolean).join('; ');
-        m.labResults.push({id:Date.now()+saved,date:r.date||kstToday(),who:r.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo,imgSrc:r._imgSrc});
+        const entry2={id:Date.now()+saved,date:r.date||kstToday(),who:r.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo,imgSrc:r._imgSrc};
+        if(r.ref)entry2.ref=r.ref;
+        m.labResults.push(entry2);
         saved++;
       });
       if(saved){await saveBrkMaster();showToast('✅ '+saved+'건 저장됨');}
@@ -2166,10 +2173,12 @@ async function _analyzeOnePhoto(photo,aiId){
 1. 검사 종류 (semen/blood/hormone/ultrasound/other)
 2. 검사 날짜 (YYYY-MM-DD)
 3. 검사 대상 (남성이면 "붕쌤", 여성이면 "오랑이")
-4. 수치 결과 (항목명: 수치) — 빠짐없이 모두 추출
-5. 정상 범위 대비 이상 여부
-6. 임신 준비 관점에서의 소견
-반드시 JSON으로 응답: {"type":"semen","date":"YYYY-MM-DD","who":"붕쌤","values":{"항목":"수치"},"abnormal":["이상소견"],"opinion":"소견"}`;
+4. 모든 수치 결과 — 항목명에 단위를 포함 (예: "TSH(mIU/L)": 3.63). 빠짐없이 전부 추출
+5. 정상 범위 (참고치가 보이면 ref에 기록)
+6. 이상 소견 + 임신 준비 관점 소견
+반드시 JSON으로 응답:
+{"type":"blood","date":"YYYY-MM-DD","who":"오랑이","values":{"WBC(10^3/uL)":6.78,"TSH(mIU/L)":3.63},"ref":{"WBC(10^3/uL)":"4.0-10.0","TSH(mIU/L)":"0.35-5.50"},"abnormal":["이상소견"],"opinion":"소견"}
+중요: values 키에 반드시 단위를 괄호로 포함하세요. ref에 검사지에 적힌 참고치 범위를 기록하세요.`;
   let result='';
   if(aiId==='gemini'){
     const parts=tiles.map(t=>{const b=t.split(',')[1];const mt=t.startsWith('data:image/jpeg')?'image/jpeg':'image/png';return{inline_data:{mime_type:mt,data:b}};});
@@ -2222,7 +2231,9 @@ async function brkSaveLabFromPhoto() {
     parsed.opinion?'💡 '+parsed.opinion:''
   ].filter(Boolean).join('; ');
   const imgSrc=window._brkLabPhotoBase64||null;
-  m.labResults.push({id:Date.now(),date:parsed.date||kstToday(),who:parsed.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo,imgSrc});
+  const labEntry={id:Date.now(),date:parsed.date||kstToday(),who:parsed.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo,imgSrc};
+  if(parsed.ref)labEntry.ref=parsed.ref;
+  m.labResults.push(labEntry);
   await saveBrkMaster();
   closeConfirmModal();
   delete window._brkLabPhotoResult;
