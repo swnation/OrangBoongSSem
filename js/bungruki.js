@@ -958,16 +958,44 @@ async function brkSetMemo(val) {
 // 정액검사 WHO 정상 범위
 const _SEMEN_NORMS={volume:{min:1.5,unit:'mL',label:'Volume'},count:{min:15,unit:'M/mL',label:'Count'},motility:{min:42,unit:'%',label:'Motility'},morphology:{min:4,unit:'%',label:'Morphology'}};
 
-function _semenGrade(vals) {
-  if(!vals) return {grade:'-',color:'var(--mu)',issues:[]};
+// AI가 다양한 키명으로 저장하므로 표준 키로 정규화
+function _normalizeSemenValues(vals){
+  if(!vals)return vals;
+  const map={
+    volume:['volume','vol','Volume','Vol','정액량','Semen Volume'],
+    count:['count','Count','Sperm Count','sperm count','concentration','Concentration','정자수','농도','Sperm Concentration'],
+    motility:['motility','Motility','Total Motility','total motility','운동성','Progressive Motility','progressive motility'],
+    morphology:['morphology','Morphology','Strict Morphology','strict morphology','형태','Normal Morphology','normal morphology','Normal Forms'],
+  };
+  const norm={};
+  // 표준 키 매핑
+  for(const [std,aliases] of Object.entries(map)){
+    for(const alias of aliases){
+      if(vals[alias]!==undefined){
+        const v=parseFloat(vals[alias]);
+        if(!isNaN(v)){norm[std]=v;break;}
+      }
+    }
+  }
+  // 나머지 키도 보존
+  Object.entries(vals).forEach(([k,v])=>{
+    const isAlias=Object.values(map).some(a=>a.includes(k));
+    if(!isAlias)norm[k]=v;
+  });
+  return norm;
+}
+
+function _semenGrade(rawVals) {
+  if(!rawVals) return {grade:'-',color:'var(--mu)',issues:[],norm:{}};
+  const vals=_normalizeSemenValues(rawVals);
   const issues=[];
   if(vals.morphology!==undefined&&vals.morphology<4) issues.push('형태↓');
   if(vals.motility!==undefined&&vals.motility<42) issues.push('운동성↓');
   if(vals.count!==undefined&&vals.count<15) issues.push('농도↓');
   if(vals.volume!==undefined&&vals.volume<1.5) issues.push('양↓');
-  if(!issues.length) return {grade:'정상',color:'#10b981',issues:[]};
-  if(issues.length===1) return {grade:'경미',color:'#f59e0b',issues};
-  return {grade:'주의',color:'#dc2626',issues};
+  if(!issues.length) return {grade:'정상',color:'#10b981',issues:[],norm:vals};
+  if(issues.length===1) return {grade:'경미',color:'#f59e0b',issues,norm:vals};
+  return {grade:'주의',color:'#dc2626',issues,norm:vals};
 }
 
 // 자연임신 확률 다중 모델 추정
@@ -975,7 +1003,7 @@ function estimateConceptionRate(m) {
   const cycles=m.menstrualCycles||[];
   const labs=m.labResults||[];
   const semenLabs=labs.filter(l=>l.type==='semen'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
-  const sv=semenLabs[0]?.values;
+  const sv=semenLabs[0]?.values?_normalizeSemenValues(semenLabs[0].values):null;
   const hormoneLabs=labs.filter(l=>l.type==='hormone'&&l.values).sort((a,b)=>b.date.localeCompare(a.date));
   const hv=hormoneLabs[0]?.values;
   // 주기 분석
@@ -1193,7 +1221,8 @@ function renderLabResults() {
     let summary='';
     if(l.type==='semen'&&l.values) {
       const g=_semenGrade(l.values);
-      const vals=['Vol '+(l.values.volume||'-'),'Count '+(l.values.count||'-'),'Mot '+(l.values.motility||'-')+'%','Morph '+(l.values.morphology||'-')+'%'].join(' · ');
+      const n=g.norm||{};
+    const vals=['Vol '+(n.volume||'-'),'Count '+(n.count||'-'),'Mot '+(n.motility||'-')+'%','Morph '+(n.morphology||'-')+'%'].join(' · ');
       summary=`<span style="font-weight:600;color:${g.color}">${g.grade}</span> ${vals}${g.issues.length?' <span style="color:#dc2626;font-size:.65rem">('+g.issues.join(', ')+')</span>':''}`;
     } else if(l.values&&typeof l.values==='object') {
       summary=Object.entries(l.values).slice(0,4).map(([k,v])=>k+':'+v).join(' · ');
@@ -1296,7 +1325,8 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
   let summary='', interpret='';
   if(l.type==='semen'&&l.values) {
     const g=_semenGrade(l.values);
-    const vals=['Vol '+(l.values.volume||'-'),'Count '+(l.values.count||'-'),'Mot '+(l.values.motility||'-')+'%','Morph '+(l.values.morphology||'-')+'%'].join(' · ');
+    const n=g.norm||{};
+    const vals=['Vol '+(n.volume||'-'),'Count '+(n.count||'-'),'Mot '+(n.motility||'-')+'%','Morph '+(n.morphology||'-')+'%'].join(' · ');
     summary=`<span style="font-weight:600;color:${g.color}">${g.grade}</span> ${vals}${g.issues.length?' <span style="color:#dc2626;font-size:.65rem">('+g.issues.join(', ')+')</span>':''}`;
     // 해석 한 줄
     if(!g.issues.length) interpret='전 항목 WHO 정상 범위 — 자연임신에 유리';
