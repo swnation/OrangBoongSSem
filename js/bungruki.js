@@ -658,7 +658,7 @@ function renderCrossSyncStatus(date, who) {
 }
 
 var BRK_SUPPL_ORANGI = ['folicAcid','iron','vitaminD','multivitamin','magnesium'];
-var BRK_SUPPL_BUNG = ['arginine','coq10','silymarin','multivitamin','febuxostat'];
+var BRK_SUPPL_BUNG = ['arginine','coq10','silymarin','multivitamin'];
 
 function _getBrkWhoData(m) {
   if (!m) m = getBrkMaster(); if (!m) return null;
@@ -693,17 +693,26 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
     { key: 'coq10', label: 'CoQ10', icon: '⚡' },
     { key: 'silymarin', label: '실리마린', icon: '🌿' },
     { key: 'multivitamin', label: '멀티비타민', icon: '💊' },
-    { key: 'febuxostat', label: 'Febuxostat', icon: '💉' },
   ];
+  // 사용자 추가 영양제 (localStorage)
+  var customKey='om_brk_suppl_'+(isOrangi?'orangi':'bung');
+  var customs=JSON.parse(localStorage.getItem(customKey)||'[]');
+  if(isOrangi) customs.forEach(function(c){orangiItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
+  else customs.forEach(function(c){bungItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
   var items = isOrangi ? orangiItems : bungItems;
 
   var checkHtml = items.map(function(it) {
     var checked = whoData[it.key] ? true : false;
-    return '<div onclick="brkToggleCheck(\''+it.key+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:'+(checked?'#f0fdf4':'var(--sf2)')+';border:1.5px solid '+(checked?'#86efac':'var(--bd)')+';border-radius:8px;cursor:pointer;transition:all .2s">'
+    return '<div style="display:flex;align-items:center;gap:0">'
+      + '<div onclick="brkToggleCheck(\''+it.key+'\')" style="flex:1;display:flex;align-items:center;gap:10px;padding:10px 12px;background:'+(checked?'#f0fdf4':'var(--sf2)')+';border:1.5px solid '+(checked?'#86efac':'var(--bd)')+';border-radius:8px;cursor:pointer;transition:all .2s">'
       + '<span style="font-size:1.2rem">'+(checked?'✅':it.icon)+'</span>'
       + '<span style="font-size:.82rem;font-weight:'+(checked?'600':'400')+';color:'+(checked?'#16a34a':'var(--tx)')+'">'+it.label+'</span>'
+      + '</div>'
+      + (it.custom?'<button onclick="_brkRemoveSuppl(\''+esc(it.key)+'\')" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:.8rem;padding:4px 8px" title="삭제">✕</button>':'')
       + '</div>';
   }).join('');
+  // 추가 버튼
+  checkHtml += '<div style="display:flex;gap:6px;margin-top:8px"><input id="brk-suppl-add" class="dx-form-input" placeholder="영양제/약물 이름" style="flex:1;font-size:.78rem;padding:6px 10px"><button onclick="_brkAddSuppl()" style="font-size:.72rem;padding:6px 12px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font);white-space:nowrap">+ 추가</button></div>';
 
   // 주간 요약
   var weekDays = [];
@@ -791,6 +800,32 @@ function _brkRenderMemo(whoData) {
     + '<textarea id="brk-memo" class="dx-form-input" rows="4" placeholder="컨디션, 증상, 특이사항 등 자유롭게 기록" onchange="brkSetMemo(this.value)" style="width:100%;resize:vertical">'+esc(memo)+'</textarea></div>';
 }
 
+function _brkAddSuppl(){
+  const input=document.getElementById('brk-suppl-add');if(!input)return;
+  const label=input.value.trim();if(!label){showToast('이름을 입력하세요');return;}
+  const key=label.toLowerCase().replace(/[^a-z0-9가-힣]/g,'');
+  const who=_brkCheckWho==='orangi'?'orangi':'bung';
+  const storageKey='om_brk_suppl_'+who;
+  const customs=JSON.parse(localStorage.getItem(storageKey)||'[]');
+  if(customs.find(c=>c.key===key)){showToast('이미 존재합니다');return;}
+  customs.push({key,label});
+  localStorage.setItem(storageKey,JSON.stringify(customs));
+  showToast('✅ '+label+' 추가됨');
+  renderView('meds');
+}
+
+function _brkRemoveSuppl(key){
+  const who=_brkCheckWho==='orangi'?'orangi':'bung';
+  const storageKey='om_brk_suppl_'+who;
+  const customs=JSON.parse(localStorage.getItem(storageKey)||'[]');
+  const item=customs.find(c=>c.key===key);
+  if(!item)return;
+  if(!confirm(item.label+' 항목을 삭제하시겠습니까?'))return;
+  localStorage.setItem(storageKey,JSON.stringify(customs.filter(c=>c.key!==key)));
+  showToast('🗑 '+item.label+' 삭제됨');
+  renderView('meds');
+}
+
 async function brkToggleCheck(key) {
   var r = _getBrkWhoData(); if (!r) return;
   r.whoData[key] = !r.whoData[key];
@@ -812,7 +847,11 @@ function syncBrkToHealth(date, who) {
   const supplKeys = who==='orangi' ? BRK_SUPPL_ORANGI : BRK_SUPPL_BUNG;
   const supplItems = who==='orangi'
     ? [{key:'folicAcid',label:'엽산'},{key:'iron',label:'철분'},{key:'vitaminD',label:'비타민D'},{key:'multivitamin',label:'멀티비타민'},{key:'magnesium',label:'마그네슘'}]
-    : [{key:'arginine',label:'아르기닌'},{key:'coq10',label:'CoQ10'},{key:'silymarin',label:'실리마린'},{key:'multivitamin',label:'멀티비타민'},{key:'febuxostat',label:'Febuxostat'}];
+    : [{key:'arginine',label:'아르기닌'},{key:'coq10',label:'CoQ10'},{key:'silymarin',label:'실리마린'},{key:'multivitamin',label:'멀티비타민'}];
+  // 사용자 추가 영양제도 동기화에 포함
+  var syncCustomKey='om_brk_suppl_'+who;
+  var syncCustoms=JSON.parse(localStorage.getItem(syncCustomKey)||'[]');
+  syncCustoms.forEach(function(c){supplItems.push({key:c.key,label:c.label});});
   const takenSuppl = supplItems.filter(it=>dayData[it.key]).map(it=>it.label);
   const exercise = dayData.exercise || '';
   const memo = dayData.memo || '';
