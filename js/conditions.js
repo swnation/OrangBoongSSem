@@ -1946,15 +1946,16 @@ function renderVaccinationSection(){
   const catSections=_VACCINE_CATS.map(cat=>{
     const entries=Object.entries(_VACCINE_DB).filter(([k,v])=>v.cat===cat.id);
     if(!entries.length)return '';
-    const catDone=entries.filter(([k,v])=>{const d=byVax[k]||[];return d.length>=v.doses||d.some(r=>r.status==='antibody'||r.status==='childhood');}).length;
+    const catDone=entries.filter(([k,v])=>{const d=byVax[k]||[];const nr=d.some(r=>r.status==='non-responder');return !nr&&(d.length>=v.doses||d.some(r=>r.status==='antibody'||r.status==='childhood'));}).length;
     const rows=entries.map(([key,vax])=>{
       const doses=byVax[key]||[];
       const baseDoses=doses.filter(d=>!d.isBooster);
       const boosters=doses.filter(d=>d.isBooster);
       const hasAntibody=doses.some(d=>d.status==='antibody');
       const hasChildhood=doses.some(d=>d.status==='childhood');
-      const baseComplete=baseDoses.length>=vax.doses||hasAntibody||hasChildhood;
-      const statusIcon=hasAntibody?'🛡️':hasChildhood?'👶':baseComplete?'✅':'⬜';
+      const hasNR=doses.some(d=>d.status==='non-responder');
+      const baseComplete=!hasNR&&(baseDoses.length>=vax.doses||hasAntibody||hasChildhood);
+      const statusIcon=hasNR?'⚠️':hasAntibody?'🛡️':hasChildhood?'👶':baseComplete?'✅':'⬜';
       const liveTag=vax.live?'<span style="font-size:.5rem;background:#fef2f2;color:#dc2626;padding:1px 4px;border-radius:4px">생백신</span>':'';
       const boosterTag=vax.booster?'<span style="font-size:.5rem;background:#faf5ff;color:#7c3aed;padding:1px 4px;border-radius:4px">부스터 '+(vax.booster>1?vax.booster+'회':'')+'</span>':'';
       const totalSlots=vax.doses+(vax.booster||0);
@@ -1963,15 +1964,15 @@ function renderVaccinationSection(){
       }${vax.booster?'<div style="width:1px;height:4px;background:var(--mu2);margin:0 1px"></div>'+Array.from({length:vax.booster},(_,i)=>`<div style="width:${Math.min(32,100/totalSlots)}px;height:4px;border-radius:2px;background:${i<boosters.length?'#8b5cf6':'var(--bd)'}"></div>`).join(''):''}
       </div>`:'';
       const doseHtml=doses.map(d=>{
-        const dLabel=d.isBooster?'💪 '+(d.doseKey||'부스터'):d.status==='antibody'?'🛡️ 항체 확인':d.status==='childhood'?'👶 어릴 때 접종':(d.doseKey||'접종').replace('dose-','').replace(/(\d+)/,'$1차');
+        const dLabel=d.status==='non-responder'?'⚠️ 항체 미형성':d.isBooster?'💪 '+(d.doseKey||'부스터'):d.status==='antibody'?'🛡️ 항체 확인':d.status==='childhood'?'👶 어릴 때 접종 (전체)':d.doseKey==='all'?'전체 완료':(d.doseKey||'접종').replace('dose-','').replace(/(\d+)/,'$1차');
         const dateStr=d.date==='미상'?'날짜 미상':d.date;
-        const stColor=d.isBooster?'#8b5cf6':d.status==='antibody'?'#15803d':d.status==='childhood'?'#1d4ed8':'#10b981';
+        const stColor=d.status==='non-responder'?'#dc2626':d.isBooster?'#8b5cf6':d.status==='antibody'?'#15803d':d.status==='childhood'?'#1d4ed8':'#10b981';
         return `<div style="font-size:.62rem;color:var(--mu);padding:1px 0 1px 28px;display:flex;align-items:center;gap:4px">
           <span style="color:${stColor}">●</span> ${dLabel} <span style="color:var(--mu2)">${dateStr}</span>${d.memo?' <span style="color:var(--mu2)">'+esc(d.memo)+'</span>':''}
           <button onclick="_deleteVax(${d.id})" style="font-size:.5rem;background:none;border:none;color:var(--mu2);cursor:pointer;padding:0 2px">✕</button>
         </div>`;
       }).join('');
-      const countLabel=hasAntibody||hasChildhood?'완료':baseDoses.length+'/'+vax.doses+(boosters.length?' +💪'+boosters.length:'');
+      const countLabel=hasNR?'⚠️ 미형성':hasAntibody||hasChildhood?'완료':baseDoses.length+'/'+vax.doses+(boosters.length?' +💪'+boosters.length:'');
       return `<div style="padding:5px 0">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:.78rem;width:22px;text-align:center">${statusIcon}</span>
@@ -2006,7 +2007,7 @@ function renderVaccinationSection(){
     `).join('')}</div>`:'';
 
   const totalVax=Object.keys(_VACCINE_DB).length;
-  const doneCount=Object.entries(_VACCINE_DB).filter(([k,v])=>{const d=byVax[k]||[];return d.length>=v.doses||d.some(r=>r.status==='antibody'||r.status==='childhood');}).length;
+  const doneCount=Object.entries(_VACCINE_DB).filter(([k,v])=>{const d=byVax[k]||[];const nr=d.some(r=>r.status==='non-responder');return !nr&&(d.length>=v.doses||d.some(r=>r.status==='antibody'||r.status==='childhood'));}).length;
   const pct=Math.round(doneCount/totalVax*100);
 
   return `<div class="card">
@@ -2048,8 +2049,9 @@ function _openVaxForm(vaxKey,customName){
       <div><div class="dx-form-label">상태 *</div>
         <select id="vax-status" class="dx-form-input" style="width:170px" onchange="_vaxStatusChange()">
           <option value="done">💉 접종 완료</option>
-          <option value="childhood">👶 어릴 때 접종</option>
-          <option value="antibody">🛡️ 항체 확인됨</option>
+          <option value="childhood">👶 어릴 때 접종 (전체 완료)</option>
+          <option value="antibody">🛡️ 항체 확인됨 (접종 불필요)</option>
+          <option value="non-responder">⚠️ 항체 미형성 (non-responder)</option>
         </select>
       </div>
       <div id="vax-dose-row"><div class="dx-form-label">차수</div>
@@ -2068,10 +2070,14 @@ function _openVaxForm(vaxKey,customName){
         <input type="number" id="vax-year" class="dx-form-input" placeholder="예: 2020" min="1950" max="2030" style="width:90px;display:none">
       </div>
     </div>
+    <div id="vax-nonresp-note" style="display:none;margin-top:4px;padding:6px 8px;background:#fef3c7;border-radius:6px;font-size:.65rem;color:#92400e">
+      ⚠️ 3회 기본접종 + 1회 부스터 후에도 HBsAb 음성인 경우. 추가 3회 재접종 또는 고용량 접종 고려.
+    </div>
     <div style="margin-top:6px"><div class="dx-form-label">메모</div><input type="text" id="vax-memo" class="dx-form-input" placeholder="병원, 로트번호, 항체검사일 등" style="width:100%"></div>`,
     [{label:'💾 저장',action:async()=>{
       const status=document.getElementById('vax-status')?.value||'done';
-      const doseKey=document.getElementById('vax-dose')?.value||'dose-1';
+      const isAll=status==='childhood'||status==='antibody';
+      const doseKey=isAll?'all':(document.getElementById('vax-dose')?.value||'dose-1');
       const dateMode=document.getElementById('vax-date-mode')?.value||'exact';
       let date='';
       if(status==='antibody'){date=dateMode==='exact'?(document.getElementById('vax-date')?.value||kstToday()):dateMode==='year'?(document.getElementById('vax-year')?.value||'')+'년':'미상';}
@@ -2082,9 +2088,10 @@ function _openVaxForm(vaxKey,customName){
       const mm=DM();if(!mm)return;
       if(!mm.vaccinations)mm.vaccinations=[];
       const isBooster=doseKey.startsWith('booster');
+      const isNR=status==='non-responder';
       mm.vaccinations.push({id:Date.now(),vaccine:vaxKey||customName,label:name,
         date:date||'미상',memo,who:DC().user,pregnancy:vax?.pregnancy||false,
-        status,doseKey,isBooster,complete:true});
+        status,doseKey:isNR?'non-responder':doseKey,isBooster,complete:!isNR});
       await saveMaster();closeConfirmModal();showToast('✅ 저장됨');renderView('meds');
     },primary:true}]);
 }
@@ -2092,12 +2099,17 @@ function _vaxStatusChange(){
   const s=document.getElementById('vax-status')?.value;
   const doseRow=document.getElementById('vax-dose-row');
   const dateLabel=document.getElementById('vax-date-label');
+  const nrNote=document.getElementById('vax-nonresp-note');
+  if(nrNote)nrNote.style.display=s==='non-responder'?'':'none';
   if(s==='antibody'){
     if(doseRow)doseRow.style.display='none';
     if(dateLabel)dateLabel.textContent='확인일';
   }else if(s==='childhood'){
     if(doseRow)doseRow.style.display='none';
     document.getElementById('vax-date-mode').value='unknown';_vaxDateModeChange();
+  }else if(s==='non-responder'){
+    if(doseRow)doseRow.style.display='none';
+    if(dateLabel)dateLabel.textContent='확인일';
   }else{
     if(doseRow)doseRow.style.display='';
     if(dateLabel)dateLabel.textContent='접종일';
