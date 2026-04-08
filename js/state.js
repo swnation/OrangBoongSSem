@@ -30,5 +30,6 @@ function getDefaultMaster() {
     sessions:[], conditions:[], templates: dc.templates ? [...dc.templates] : [],
     last_backup:null, session_timeline:[], pending_qa:[], usage_data:{},
     monthly_summaries:{}, price_table:null, price_updated:null,
+    settings:{},
   };
 }

@@ -259,15 +259,25 @@ const _HOME_CARDS=[
   {id:'knowledge',label:'🧠 누적 협진 지식',default:true},
   {id:'recentSessions',label:'📅 최근 세션',default:true},
 ];
+function _getHomeCards(){
+  // 클라우드(마스터) 우선, localStorage 폴백
+  const master=DM();
+  const cloud=master?.settings?.homeCards;
+  if(cloud)return cloud;
+  return JSON.parse(localStorage.getItem('om_home_cards')||'{}');
+}
 function _homeCardVisible(id){
-  const saved=JSON.parse(localStorage.getItem('om_home_cards')||'{}');
+  const saved=_getHomeCards();
   if(id in saved)return saved[id];
   return (_HOME_CARDS.find(c=>c.id===id)||{}).default!==false;
 }
 function _toggleHomeCard(id){
-  const saved=JSON.parse(localStorage.getItem('om_home_cards')||'{}');
+  const saved=_getHomeCards();
   saved[id]=!_homeCardVisible(id);
+  // 클라우드 + localStorage 양쪽 저장
   localStorage.setItem('om_home_cards',JSON.stringify(saved));
+  const master=DM();
+  if(master){if(!master.settings)master.settings={};master.settings.homeCards=saved;saveMaster();}
   renderView('home');
 }
 function _renderHomeSettings(){

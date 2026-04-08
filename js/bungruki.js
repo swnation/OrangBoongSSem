@@ -713,9 +713,9 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
     { key: 'silymarin', label: '실리마린', icon: '🌿' },
     { key: 'multivitamin', label: '멀티비타민', icon: '💊' },
   ];
-  // 사용자 추가 영양제 (localStorage)
-  var customKey='om_brk_suppl_'+(isOrangi?'orangi':'bung');
-  var customs=JSON.parse(localStorage.getItem(customKey)||'[]');
+  // 사용자 추가 영양제 (클라우드 우선, localStorage 폴백)
+  var who2=isOrangi?'orangi':'bung';
+  var customs=_getBrkCustomSuppl(who2);
   if(isOrangi) customs.forEach(function(c){orangiItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
   else customs.forEach(function(c){bungItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
   var items = isOrangi ? orangiItems : bungItems;
@@ -921,28 +921,39 @@ async function brkRemoveIntimacy(){
   renderView('meds');
 }
 
+function _getBrkCustomSuppl(who){
+  // 클라우드(마스터) 우선, localStorage 폴백
+  const m=getBrkMaster();
+  const cloud=m?.customSuppl?.[who];
+  if(cloud?.length) return cloud;
+  return JSON.parse(localStorage.getItem('om_brk_suppl_'+who)||'[]');
+}
+async function _saveBrkCustomSuppl(who,customs){
+  // localStorage + 클라우드(마스터) 양쪽 저장
+  localStorage.setItem('om_brk_suppl_'+who,JSON.stringify(customs));
+  const m=getBrkMaster();
+  if(m){if(!m.customSuppl)m.customSuppl={};m.customSuppl[who]=customs;await saveBrkMaster();}
+}
 function _brkAddSuppl(){
   const input=document.getElementById('brk-suppl-add');if(!input)return;
   const label=input.value.trim();if(!label){showToast('이름을 입력하세요');return;}
   const key=label.toLowerCase().replace(/[^a-z0-9가-힣]/g,'');
   const who=_brkCheckWho==='orangi'?'orangi':'bung';
-  const storageKey='om_brk_suppl_'+who;
-  const customs=JSON.parse(localStorage.getItem(storageKey)||'[]');
+  const customs=_getBrkCustomSuppl(who);
   if(customs.find(c=>c.key===key)){showToast('이미 존재합니다');return;}
   customs.push({key,label});
-  localStorage.setItem(storageKey,JSON.stringify(customs));
+  _saveBrkCustomSuppl(who,customs);
   showToast('✅ '+label+' 추가됨');
   renderView('meds');
 }
 
 function _brkRemoveSuppl(key){
   const who=_brkCheckWho==='orangi'?'orangi':'bung';
-  const storageKey='om_brk_suppl_'+who;
-  const customs=JSON.parse(localStorage.getItem(storageKey)||'[]');
+  const customs=_getBrkCustomSuppl(who);
   const item=customs.find(c=>c.key===key);
   if(!item)return;
   if(!confirm(item.label+' 항목을 삭제하시겠습니까?'))return;
-  localStorage.setItem(storageKey,JSON.stringify(customs.filter(c=>c.key!==key)));
+  _saveBrkCustomSuppl(who,customs.filter(c=>c.key!==key));
   showToast('🗑 '+item.label+' 삭제됨');
   renderView('meds');
 }

@@ -164,13 +164,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
       <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
         <span style="font-size:.72rem;color:var(--mu)">기본 경과 알림:</span>
         <input type="number" class="settings-input" id="ntfy-delay-input" style="width:60px;text-align:center" min="10" max="480" value="60"
-          onchange="localStorage.setItem('om_outcome_delay',this.value)">
+          onchange="localStorage.setItem('om_outcome_delay',this.value);syncNtfyConfig()">
         <span style="font-size:.72rem;color:var(--mu)">분 후</span>
       </div>
       <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
         <span style="font-size:.72rem;color:var(--mu)">💊 약물 복용 알림:</span>
         <select id="ntfy-med-delay-input" class="settings-input" style="width:80px;text-align:center"
-          onchange="localStorage.setItem('om_med_reminder_delay',this.value)">
+          onchange="localStorage.setItem('om_med_reminder_delay',this.value);syncNtfyConfig()">
           <option value="0">끄기</option>
           <option value="15">15분</option>
           <option value="30">30분</option>
@@ -287,18 +287,18 @@ function saveQuickConfig(cfg){
 }
 function applyQuickConfig(){
   const cfg=getQuickConfig();
-  if(cfg.ntfy_bung&&!localStorage.getItem('om_ntfy_bung')) localStorage.setItem('om_ntfy_bung',cfg.ntfy_bung);
-  if(cfg.ntfy_orangi&&!localStorage.getItem('om_ntfy_orangi')) localStorage.setItem('om_ntfy_orangi',cfg.ntfy_orangi);
-  // 항상 최신으로 덮어쓰기 (클라우드에서 온 값이 더 최신)
+  // 클라우드 → localStorage 복원 (클라우드가 진실)
   if(cfg.ntfy_bung) localStorage.setItem('om_ntfy_bung',cfg.ntfy_bung);
   if(cfg.ntfy_orangi) localStorage.setItem('om_ntfy_orangi',cfg.ntfy_orangi);
+  if(cfg.outcome_delay) localStorage.setItem('om_outcome_delay',cfg.outcome_delay);
+  if(cfg.med_reminder_delay!==undefined) localStorage.setItem('om_med_reminder_delay',String(cfg.med_reminder_delay));
 }
 function syncNtfyConfig(){
   const nb=localStorage.getItem('om_ntfy_bung')||'';
   const no=localStorage.getItem('om_ntfy_orangi')||'';
-  if(!nb&&!no) return;
-  const entry=saveQuickConfig({ntfy_bung:nb,ntfy_orangi:no});
-  // 클라우드에도 즉시 전송
+  const od=localStorage.getItem('om_outcome_delay')||'60';
+  const md=localStorage.getItem('om_med_reminder_delay')||'30';
+  const entry=saveQuickConfig({ntfy_bung:nb,ntfy_orangi:no,outcome_delay:od,med_reminder_delay:md});
   cloudSave([entry]);
 }
 
