@@ -1887,41 +1887,41 @@ function renderDrugInteractionWarning() {
 // 질병관리청(KDCA) 성인 예방접종 가이드 2024 + 대한산부인과학회 임신 전/중 접종 기준
 const _VACCINE_DB = {
   // ── 임신 관련 ──
-  'MMR':{label:'MMR (홍역·풍진·유행성이하선염)',doses:2,interval:'4주',pregnancy:true,cat:'임신',live:true,
-    note:'풍진 항체 음성 시 필수. 생백신 → 임신 중 금기, 접종 후 4주 피임',src:'KDCA/산부인과학회'},
-  'Varicella':{label:'수두',doses:2,interval:'4-8주',pregnancy:true,cat:'임신',live:true,
-    note:'항체 음성 시 2회. 생백신 → 임신 중 금기, 접종 후 4주 피임',src:'KDCA'},
-  'Tdap':{label:'Tdap (파상풍·디프테리아·백일해)',doses:1,interval:'매 임신 27-36주',pregnancy:true,cat:'임신',
-    note:'매 임신마다 1회 접종. 신생아 백일해 수동면역 전달',src:'KDCA/ACIP'},
-  'HepB':{label:'B형간염',doses:3,interval:'0-1-6개월',pregnancy:true,cat:'임신',
-    note:'HBsAg·HBsAb 음성 시 3회. 불활성화 → 임신 중 접종 가능',src:'KDCA'},
-  'Flu':{label:'인플루엔자',doses:1,interval:'매년 10-12월',pregnancy:true,cat:'임신',
-    note:'매년. 불활성화 백신 → 임신 중 어느 시기든 안전. 비강분무형 금기',src:'KDCA/WHO'},
-  'COVID19':{label:'COVID-19',doses:2,interval:'제조사별',pregnancy:true,cat:'임신',
-    note:'mRNA(화이자/모더나) 권장. 임신 중 접종 가능',src:'KDCA/WHO'},
-  'HPV':{label:'HPV (인유두종바이러스)',doses:2,interval:'6-12개월',pregnancy:true,cat:'임신',
-    note:'26세 이하 권장. 임신 전 완료. 임신 중 접종 연기',src:'KDCA/ACIP'},
+  'MMR':{label:'MMR (홍역·풍진·유행성이하선염)',doses:2,booster:0,interval:'4주',pregnancy:true,cat:'임신',live:true,
+    doseLabels:['1차','2차'],note:'풍진 항체 음성 시 필수. 생백신 → 임신 중 금기, 접종 후 4주 피임',src:'KDCA/산부인과학회'},
+  'Varicella':{label:'수두',doses:2,booster:0,interval:'4-8주',pregnancy:true,cat:'임신',live:true,
+    doseLabels:['1차','2차'],note:'항체 음성 시 2회. 생백신 → 임신 중 금기, 접종 후 4주 피임',src:'KDCA'},
+  'Tdap':{label:'Tdap (파상풍·디프테리아·백일해)',doses:1,booster:1,interval:'매 임신 27-36주',pregnancy:true,cat:'임신',
+    doseLabels:['기본'],boosterLabels:['부스터 (매 임신)'],note:'매 임신마다 1회. 신생아 백일해 수동면역',src:'KDCA/ACIP'},
+  'HepB':{label:'B형간염',doses:3,booster:1,interval:'0-1-6개월',pregnancy:true,cat:'임신',
+    doseLabels:['1차(0개월)','2차(1개월)','3차(6개월)'],boosterLabels:['부스터 (항체 저하 시)'],note:'HBsAg·HBsAb 음성 시 3회. 임신 중 접종 가능',src:'KDCA'},
+  'Flu':{label:'인플루엔자',doses:1,booster:1,interval:'매년 10-12월',pregnancy:true,cat:'임신',
+    doseLabels:['접종'],boosterLabels:['연간 재접종'],note:'매년. 불활성화 → 임신 중 안전. 비강분무형 금기',src:'KDCA/WHO'},
+  'COVID19':{label:'COVID-19',doses:2,booster:2,interval:'제조사별',pregnancy:true,cat:'임신',
+    doseLabels:['1차','2차'],boosterLabels:['부스터 1차','부스터 2차'],note:'mRNA 권장. 임신 중 접종 가능',src:'KDCA/WHO'},
+  'HPV':{label:'HPV (인유두종바이러스)',doses:2,booster:0,interval:'6-12개월',pregnancy:true,cat:'임신',
+    doseLabels:['1차','2차'],note:'26세 이하 권장. 임신 전 완료',src:'KDCA/ACIP'},
   // ── 성인 기본 ──
-  'HepA':{label:'A형간염',doses:2,interval:'6-12개월',pregnancy:false,cat:'성인기본',
-    note:'1970년 이후 출생, 항체 음성 시 2회',src:'KDCA'},
-  'Td':{label:'Td (파상풍·디프테리아)',doses:1,interval:'10년마다',pregnancy:false,cat:'성인기본',
-    note:'매 10년 추가접종. 1회는 Tdap으로 대체 권장',src:'KDCA'},
-  'JapEnc_inact':{label:'일본뇌염 (불활성화)',doses:2,interval:'7-30일',pregnancy:false,cat:'성인기본',
-    note:'면역력 없는 성인. 고위험지역 거주/여행 시',src:'KDCA'},
-  'JapEnc_live':{label:'일본뇌염 (생백신)',doses:1,interval:'-',pregnancy:false,cat:'성인기본',live:true,
-    note:'1회 접종. 면역저하자·임산부 금기',src:'KDCA'},
+  'HepA':{label:'A형간염',doses:2,booster:0,interval:'6-12개월',pregnancy:false,cat:'성인기본',
+    doseLabels:['1차','2차'],note:'1970년 이후 출생, 항체 음성 시 2회',src:'KDCA'},
+  'Td':{label:'Td (파상풍·디프테리아)',doses:1,booster:1,interval:'10년마다',pregnancy:false,cat:'성인기본',
+    doseLabels:['기본'],boosterLabels:['10년 추가접종'],note:'매 10년 추가접종. 1회는 Tdap으로 대체 권장',src:'KDCA'},
+  'JapEnc_inact':{label:'일본뇌염 (불활성화)',doses:2,booster:1,interval:'7-30일',pregnancy:false,cat:'성인기본',
+    doseLabels:['1차','2차'],boosterLabels:['추가접종'],note:'면역력 없는 성인. 고위험지역 거주/여행 시',src:'KDCA'},
+  'JapEnc_live':{label:'일본뇌염 (생백신)',doses:1,booster:0,interval:'-',pregnancy:false,cat:'성인기본',live:true,
+    doseLabels:['접종'],note:'1회 접종. 면역저하자·임산부 금기',src:'KDCA'},
   // ── 50세+ / 65세+ ──
-  'Zoster_RZV':{label:'대상포진 (Shingrix, 재조합)',doses:2,interval:'2-6개월',pregnancy:false,cat:'50세이상',
-    note:'50세 이상 2회. 기존 생백신 접종자도 가능',src:'KDCA/ACIP'},
-  'PCV20':{label:'폐렴구균 (PCV20)',doses:1,interval:'-',pregnancy:false,cat:'65세이상',
-    note:'65세 이상 1회. PCV15+PPSV23 대체 가능',src:'ACIP 2023'},
-  'PPSV23':{label:'폐렴구균 (PPSV23)',doses:1,interval:'-',pregnancy:false,cat:'고위험',
-    note:'65세 이상 또는 만성질환/면역저하',src:'KDCA'},
+  'Zoster_RZV':{label:'대상포진 (Shingrix, 재조합)',doses:2,booster:0,interval:'2-6개월',pregnancy:false,cat:'50세이상',
+    doseLabels:['1차','2차'],note:'50세 이상 2회. 기존 생백신 접종자도 가능',src:'KDCA/ACIP'},
+  'PCV20':{label:'폐렴구균 (PCV20)',doses:1,booster:0,interval:'-',pregnancy:false,cat:'65세이상',
+    doseLabels:['접종'],note:'65세 이상 1회. PCV15+PPSV23 대체 가능',src:'ACIP 2023'},
+  'PPSV23':{label:'폐렴구균 (PPSV23)',doses:1,booster:1,interval:'-',pregnancy:false,cat:'고위험',
+    doseLabels:['접종'],boosterLabels:['재접종 (5년 후)'],note:'65세 이상 또는 만성질환/면역저하',src:'KDCA'},
   // ── 고위험군 ──
-  'Meningococcal':{label:'수막구균',doses:1,interval:'고위험 시 5년마다',pregnancy:false,cat:'고위험',
-    note:'군입대, 유행지역 여행, 무비장, 보체결핍',src:'KDCA'},
-  'Hib':{label:'Hib (b형 헤모필루스)',doses:1,interval:'-',pregnancy:false,cat:'고위험',
-    note:'무비장, 조혈모세포이식 등',src:'KDCA'},
+  'Meningococcal':{label:'수막구균',doses:1,booster:1,interval:'고위험 시 5년마다',pregnancy:false,cat:'고위험',
+    doseLabels:['접종'],boosterLabels:['재접종 (5년)'],note:'군입대, 유행지역 여행, 무비장, 보체결핍',src:'KDCA'},
+  'Hib':{label:'Hib (b형 헤모필루스)',doses:1,booster:0,interval:'-',pregnancy:false,cat:'고위험',
+    doseLabels:['접종'],note:'무비장, 조혈모세포이식 등',src:'KDCA'},
 };
 const _VACCINE_CATS=[
   {id:'임신',label:'🤰 임신 관련',color:'#be185d'},
@@ -1949,24 +1949,35 @@ function renderVaccinationSection(){
     const catDone=entries.filter(([k,v])=>{const d=byVax[k]||[];return d.length>=v.doses||d.some(r=>r.status==='antibody'||r.status==='childhood');}).length;
     const rows=entries.map(([key,vax])=>{
       const doses=byVax[key]||[];
+      const baseDoses=doses.filter(d=>!d.isBooster);
+      const boosters=doses.filter(d=>d.isBooster);
       const hasAntibody=doses.some(d=>d.status==='antibody');
       const hasChildhood=doses.some(d=>d.status==='childhood');
-      const complete=doses.length>=vax.doses||hasAntibody||hasChildhood;
-      const statusIcon=hasAntibody?'🛡️':hasChildhood?'👶':complete?'✅':'⬜';
+      const baseComplete=baseDoses.length>=vax.doses||hasAntibody||hasChildhood;
+      const statusIcon=hasAntibody?'🛡️':hasChildhood?'👶':baseComplete?'✅':'⬜';
       const liveTag=vax.live?'<span style="font-size:.5rem;background:#fef2f2;color:#dc2626;padding:1px 4px;border-radius:4px">생백신</span>':'';
-      const progress=!hasAntibody&&!hasChildhood&&vax.doses>1?`<div style="display:flex;gap:2px;margin:2px 0 0 28px">${Array.from({length:vax.doses},(_,i)=>`<div style="width:${Math.min(40,100/vax.doses)}px;height:4px;border-radius:2px;background:${i<doses.filter(d=>d.status!=='antibody'&&d.status!=='childhood').length?'#10b981':'var(--bd)'}"></div>`).join('')}</div>`:'';
-      const _statusLabel={done:'',childhood:'<span style="font-size:.5rem;background:#dbeafe;color:#1d4ed8;padding:1px 4px;border-radius:4px">어릴 때 접종</span>',antibody:'<span style="font-size:.5rem;background:#dcfce7;color:#15803d;padding:1px 4px;border-radius:4px">항체 확인</span>'};
-      const doseHtml=doses.map((d,i)=>`<div style="font-size:.62rem;color:var(--mu);padding:1px 0 1px 28px;display:flex;align-items:center;gap:4px">
-        <span style="color:${d.status==='antibody'?'#15803d':d.status==='childhood'?'#1d4ed8':'#10b981'}">●</span>
-        ${d.status==='antibody'?'🛡️ 항체 확인':d.status==='childhood'?'👶 어릴 때 접종':(i+1)+'차'} ${d.date!=='미상'?d.date:''}${d.memo?' <span style="color:var(--mu2)">'+esc(d.memo)+'</span>':''} ${_statusLabel[d.status]||''}
-        <button onclick="_deleteVax(${d.id})" style="font-size:.5rem;background:none;border:none;color:var(--mu2);cursor:pointer;padding:0 2px">✕</button>
-      </div>`).join('');
+      const boosterTag=vax.booster?'<span style="font-size:.5rem;background:#faf5ff;color:#7c3aed;padding:1px 4px;border-radius:4px">부스터 '+(vax.booster>1?vax.booster+'회':'')+'</span>':'';
+      const totalSlots=vax.doses+(vax.booster||0);
+      const progress=!hasAntibody&&!hasChildhood&&totalSlots>1?`<div style="display:flex;gap:2px;margin:2px 0 0 28px">${
+        Array.from({length:vax.doses},(_,i)=>`<div style="width:${Math.min(32,100/totalSlots)}px;height:4px;border-radius:2px;background:${i<baseDoses.length?'#10b981':'var(--bd)'}"></div>`).join('')
+      }${vax.booster?'<div style="width:1px;height:4px;background:var(--mu2);margin:0 1px"></div>'+Array.from({length:vax.booster},(_,i)=>`<div style="width:${Math.min(32,100/totalSlots)}px;height:4px;border-radius:2px;background:${i<boosters.length?'#8b5cf6':'var(--bd)'}"></div>`).join(''):''}
+      </div>`:'';
+      const doseHtml=doses.map(d=>{
+        const dLabel=d.isBooster?'💪 '+(d.doseKey||'부스터'):d.status==='antibody'?'🛡️ 항체 확인':d.status==='childhood'?'👶 어릴 때 접종':(d.doseKey||'접종').replace('dose-','').replace(/(\d+)/,'$1차');
+        const dateStr=d.date==='미상'?'날짜 미상':d.date;
+        const stColor=d.isBooster?'#8b5cf6':d.status==='antibody'?'#15803d':d.status==='childhood'?'#1d4ed8':'#10b981';
+        return `<div style="font-size:.62rem;color:var(--mu);padding:1px 0 1px 28px;display:flex;align-items:center;gap:4px">
+          <span style="color:${stColor}">●</span> ${dLabel} <span style="color:var(--mu2)">${dateStr}</span>${d.memo?' <span style="color:var(--mu2)">'+esc(d.memo)+'</span>':''}
+          <button onclick="_deleteVax(${d.id})" style="font-size:.5rem;background:none;border:none;color:var(--mu2);cursor:pointer;padding:0 2px">✕</button>
+        </div>`;
+      }).join('');
+      const countLabel=hasAntibody||hasChildhood?'완료':baseDoses.length+'/'+vax.doses+(boosters.length?' +💪'+boosters.length:'');
       return `<div style="padding:5px 0">
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-size:.78rem;width:22px;text-align:center">${statusIcon}</span>
-          <div style="flex:1;min-width:0"><div style="font-size:.73rem;font-weight:${complete?'400':'500'};color:${complete?'var(--mu)':'var(--ink)'}${complete?';text-decoration:line-through':''}">${vax.label} ${liveTag}</div>
+          <div style="flex:1;min-width:0"><div style="font-size:.73rem;font-weight:${baseComplete?'400':'500'};color:${baseComplete?'var(--mu)':'var(--ink)'}${baseComplete?';text-decoration:line-through':''}">${vax.label} ${liveTag} ${boosterTag}</div>
           <div style="font-size:.58rem;color:var(--mu2)">${esc(vax.note)}</div></div>
-          <span style="font-size:.58rem;color:var(--mu);font-family:var(--mono);white-space:nowrap">${complete&&(hasAntibody||hasChildhood)?'완료':doses.filter(d=>d.status!=='antibody'&&d.status!=='childhood').length+'/'+vax.doses}</span>
+          <span style="font-size:.58rem;color:var(--mu);font-family:var(--mono);white-space:nowrap">${countLabel}</span>
           <button onclick="_openVaxForm('${key}')" style="font-size:.56rem;padding:2px 6px;border:1px solid ${cat.color};border-radius:4px;background:none;color:${cat.color};cursor:pointer;font-family:var(--font);white-space:nowrap">+ 기록</button>
         </div>${progress}${doseHtml}
       </div>`;
@@ -2020,32 +2031,85 @@ function renderVaccinationSection(){
 function _openVaxForm(vaxKey,customName){
   const vax=_VACCINE_DB[vaxKey];
   const name=vax?vax.label:(customName||vaxKey);
-  showConfirmModal('💉 접종 기록 — '+name,
+  const m=DM();if(!m)return;
+  const existing=(m.vaccinations||[]).filter(v=>v.vaccine===(vaxKey||customName));
+  // 차수 옵션 생성
+  const allLabels=[];
+  if(vax){
+    (vax.doseLabels||[]).forEach((l,i)=>allLabels.push({value:'dose-'+(i+1),label:'기본 '+l,type:'dose'}));
+    (vax.boosterLabels||[]).forEach((l,i)=>allLabels.push({value:'booster-'+(i+1),label:'💪 '+l,type:'booster'}));
+  }
+  const doseOpts=allLabels.length?allLabels.map(d=>{
+    const done=existing.find(e=>e.doseKey===d.value);
+    return `<option value="${d.value}"${done?' disabled':''}>${d.label}${done?' (기록됨)':''}</option>`;
+  }).join(''):'<option value="dose-1">접종</option>';
+  showConfirmModal('💉 접종 기록 — '+esc(name),
     `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <div><div class="dx-form-label">상태 *</div>
-        <select id="vax-status" class="dx-form-input" style="width:160px" onchange="document.getElementById('vax-date-row').style.display=this.value==='antibody'?'none':''">
+        <select id="vax-status" class="dx-form-input" style="width:170px" onchange="_vaxStatusChange()">
           <option value="done">💉 접종 완료</option>
-          <option value="childhood">👶 어릴 때 접종 (날짜 불확실)</option>
-          <option value="antibody">🛡️ 항체 확인됨 (접종 불필요)</option>
+          <option value="childhood">👶 어릴 때 접종</option>
+          <option value="antibody">🛡️ 항체 확인됨</option>
         </select>
       </div>
+      <div id="vax-dose-row"><div class="dx-form-label">차수</div>
+        <select id="vax-dose" class="dx-form-input" style="width:170px">${doseOpts}</select>
+      </div>
     </div>
-    <div id="vax-date-row" style="display:flex;gap:8px;flex-wrap:wrap">
-      <div><div class="dx-form-label">접종일</div><input type="date" id="vax-date" class="dx-form-input" value="${kstToday()}" style="width:150px"></div>
+    <div id="vax-date-row">
+      <div class="dx-form-label" id="vax-date-label">접종일</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="vax-date-mode" class="dx-form-input" style="width:130px" onchange="_vaxDateModeChange()">
+          <option value="exact">정확한 날짜</option>
+          <option value="year">연도만 기억</option>
+          <option value="unknown">날짜 모름</option>
+        </select>
+        <input type="date" id="vax-date" class="dx-form-input" value="${kstToday()}" style="width:150px">
+        <input type="number" id="vax-year" class="dx-form-input" placeholder="예: 2020" min="1950" max="2030" style="width:90px;display:none">
+      </div>
     </div>
     <div style="margin-top:6px"><div class="dx-form-label">메모</div><input type="text" id="vax-memo" class="dx-form-input" placeholder="병원, 로트번호, 항체검사일 등" style="width:100%"></div>`,
     [{label:'💾 저장',action:async()=>{
       const status=document.getElementById('vax-status')?.value||'done';
-      const date=status==='antibody'?kstToday():(document.getElementById('vax-date')?.value||'');
-      if(status==='done'&&!date){showToast('날짜를 입력하세요');return;}
+      const doseKey=document.getElementById('vax-dose')?.value||'dose-1';
+      const dateMode=document.getElementById('vax-date-mode')?.value||'exact';
+      let date='';
+      if(status==='antibody'){date=dateMode==='exact'?(document.getElementById('vax-date')?.value||kstToday()):dateMode==='year'?(document.getElementById('vax-year')?.value||'')+'년':'미상';}
+      else if(dateMode==='exact'){date=document.getElementById('vax-date')?.value||'';if(!date&&status==='done'){showToast('날짜를 입력하세요');return;}}
+      else if(dateMode==='year'){date=(document.getElementById('vax-year')?.value||'')+'년';}
+      else{date='미상';}
       const memo=document.getElementById('vax-memo')?.value?.trim()||'';
-      const m=DM();if(!m)return;
-      if(!m.vaccinations)m.vaccinations=[];
-      m.vaccinations.push({id:Date.now(),vaccine:vaxKey||customName,label:name,
+      const mm=DM();if(!mm)return;
+      if(!mm.vaccinations)mm.vaccinations=[];
+      const isBooster=doseKey.startsWith('booster');
+      mm.vaccinations.push({id:Date.now(),vaccine:vaxKey||customName,label:name,
         date:date||'미상',memo,who:DC().user,pregnancy:vax?.pregnancy||false,
-        status,complete:true});
+        status,doseKey,isBooster,complete:true});
       await saveMaster();closeConfirmModal();showToast('✅ 저장됨');renderView('meds');
     },primary:true}]);
+}
+function _vaxStatusChange(){
+  const s=document.getElementById('vax-status')?.value;
+  const doseRow=document.getElementById('vax-dose-row');
+  const dateLabel=document.getElementById('vax-date-label');
+  if(s==='antibody'){
+    if(doseRow)doseRow.style.display='none';
+    if(dateLabel)dateLabel.textContent='확인일';
+  }else if(s==='childhood'){
+    if(doseRow)doseRow.style.display='none';
+    document.getElementById('vax-date-mode').value='unknown';_vaxDateModeChange();
+  }else{
+    if(doseRow)doseRow.style.display='';
+    if(dateLabel)dateLabel.textContent='접종일';
+  }
+}
+function _vaxDateModeChange(){
+  const mode=document.getElementById('vax-date-mode')?.value;
+  const dateEl=document.getElementById('vax-date');
+  const yearEl=document.getElementById('vax-year');
+  if(mode==='exact'){dateEl.style.display='';yearEl.style.display='none';}
+  else if(mode==='year'){dateEl.style.display='none';yearEl.style.display='';}
+  else{dateEl.style.display='none';yearEl.style.display='none';}
 }
 
 async function _deleteVax(vaxId){
