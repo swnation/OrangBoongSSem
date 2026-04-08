@@ -1884,22 +1884,52 @@ function renderDrugInteractionWarning() {
 // 💉 VACCINATION TRACKING
 // ═══════════════════════════════════════════════════════════════
 
+// 질병관리청(KDCA) 성인 예방접종 가이드 2024 + 대한산부인과학회 임신 전/중 접종 기준
 const _VACCINE_DB = {
-  // 임신 관련 (pregnancy: true)
-  'MMR': {label:'MMR (홍역·유행성이하선염·풍진)',doses:2,interval:'4주',pregnancy:true,note:'임신 전 최소 1개월 전 접종. 임신 중 금기 (생백신)'},
-  'Varicella': {label:'수두',doses:2,interval:'4주',pregnancy:true,note:'항체 없으면 2회. 임신 중 금기 (생백신)'},
-  'Tdap': {label:'Tdap (파상풍·디프테리아·백일해)',doses:1,interval:'매 임신 27-36주',pregnancy:true,note:'매 임신마다 1회. 신생아 백일해 예방'},
-  'HepB': {label:'B형간염',doses:3,interval:'0-1-6개월',pregnancy:true,note:'항체 없으면 3회. 임신 중 접종 가능'},
-  'Flu': {label:'인플루엔자',doses:1,interval:'매년',pregnancy:true,note:'매년 접종. 임신 중 안전 (불활성화 백신)'},
-  'COVID19': {label:'COVID-19',doses:2,interval:'제조사별',pregnancy:true,note:'mRNA 백신 권장. 임신 중 접종 가능'},
-  'HPV': {label:'HPV (자궁경부암)',doses:2,interval:'6-12개월',pregnancy:true,note:'임신 전 완료 권장. 임신 중 접종 연기'},
-  // 일반 성인
-  'HepA': {label:'A형간염',doses:2,interval:'6-12개월',pregnancy:false,note:'항체 없으면 2회'},
-  'Zoster': {label:'대상포진 (Shingrix)',doses:2,interval:'2-6개월',pregnancy:false,note:'50세 이상 권장'},
-  'PCV13': {label:'폐렴구균 (PCV13)',doses:1,interval:'-',pregnancy:false,note:'65세 이상 또는 고위험군'},
-  'PPSV23': {label:'폐렴구균 (PPSV23)',doses:1,interval:'PCV13 후 1년',pregnancy:false,note:'65세 이상 또는 고위험군'},
-  'JapEnc': {label:'일본뇌염',doses:2,interval:'7-30일',pregnancy:false,note:'위험지역 거주/여행 시'},
+  // ── 임신 관련 ──
+  'MMR':{label:'MMR (홍역·풍진·유행성이하선염)',doses:2,interval:'4주',pregnancy:true,cat:'임신',live:true,
+    note:'풍진 항체 음성 시 필수. 생백신 → 임신 중 금기, 접종 후 4주 피임',src:'KDCA/산부인과학회'},
+  'Varicella':{label:'수두',doses:2,interval:'4-8주',pregnancy:true,cat:'임신',live:true,
+    note:'항체 음성 시 2회. 생백신 → 임신 중 금기, 접종 후 4주 피임',src:'KDCA'},
+  'Tdap':{label:'Tdap (파상풍·디프테리아·백일해)',doses:1,interval:'매 임신 27-36주',pregnancy:true,cat:'임신',
+    note:'매 임신마다 1회 접종. 신생아 백일해 수동면역 전달',src:'KDCA/ACIP'},
+  'HepB':{label:'B형간염',doses:3,interval:'0-1-6개월',pregnancy:true,cat:'임신',
+    note:'HBsAg·HBsAb 음성 시 3회. 불활성화 → 임신 중 접종 가능',src:'KDCA'},
+  'Flu':{label:'인플루엔자',doses:1,interval:'매년 10-12월',pregnancy:true,cat:'임신',
+    note:'매년. 불활성화 백신 → 임신 중 어느 시기든 안전. 비강분무형 금기',src:'KDCA/WHO'},
+  'COVID19':{label:'COVID-19',doses:2,interval:'제조사별',pregnancy:true,cat:'임신',
+    note:'mRNA(화이자/모더나) 권장. 임신 중 접종 가능',src:'KDCA/WHO'},
+  'HPV':{label:'HPV (인유두종바이러스)',doses:2,interval:'6-12개월',pregnancy:true,cat:'임신',
+    note:'26세 이하 권장. 임신 전 완료. 임신 중 접종 연기',src:'KDCA/ACIP'},
+  // ── 성인 기본 ──
+  'HepA':{label:'A형간염',doses:2,interval:'6-12개월',pregnancy:false,cat:'성인기본',
+    note:'1970년 이후 출생, 항체 음성 시 2회',src:'KDCA'},
+  'Td':{label:'Td (파상풍·디프테리아)',doses:1,interval:'10년마다',pregnancy:false,cat:'성인기본',
+    note:'매 10년 추가접종. 1회는 Tdap으로 대체 권장',src:'KDCA'},
+  'JapEnc_inact':{label:'일본뇌염 (불활성화)',doses:2,interval:'7-30일',pregnancy:false,cat:'성인기본',
+    note:'면역력 없는 성인. 고위험지역 거주/여행 시',src:'KDCA'},
+  'JapEnc_live':{label:'일본뇌염 (생백신)',doses:1,interval:'-',pregnancy:false,cat:'성인기본',live:true,
+    note:'1회 접종. 면역저하자·임산부 금기',src:'KDCA'},
+  // ── 50세+ / 65세+ ──
+  'Zoster_RZV':{label:'대상포진 (Shingrix, 재조합)',doses:2,interval:'2-6개월',pregnancy:false,cat:'50세이상',
+    note:'50세 이상 2회. 기존 생백신 접종자도 가능',src:'KDCA/ACIP'},
+  'PCV20':{label:'폐렴구균 (PCV20)',doses:1,interval:'-',pregnancy:false,cat:'65세이상',
+    note:'65세 이상 1회. PCV15+PPSV23 대체 가능',src:'ACIP 2023'},
+  'PPSV23':{label:'폐렴구균 (PPSV23)',doses:1,interval:'-',pregnancy:false,cat:'고위험',
+    note:'65세 이상 또는 만성질환/면역저하',src:'KDCA'},
+  // ── 고위험군 ──
+  'Meningococcal':{label:'수막구균',doses:1,interval:'고위험 시 5년마다',pregnancy:false,cat:'고위험',
+    note:'군입대, 유행지역 여행, 무비장, 보체결핍',src:'KDCA'},
+  'Hib':{label:'Hib (b형 헤모필루스)',doses:1,interval:'-',pregnancy:false,cat:'고위험',
+    note:'무비장, 조혈모세포이식 등',src:'KDCA'},
 };
+const _VACCINE_CATS=[
+  {id:'임신',label:'🤰 임신 관련',color:'#be185d'},
+  {id:'성인기본',label:'👤 성인 기본',color:'#2563eb'},
+  {id:'50세이상',label:'50+ 연령별',color:'#7c3aed'},
+  {id:'65세이상',label:'65+ 연령별',color:'#7c3aed'},
+  {id:'고위험',label:'⚠️ 고위험군',color:'#dc2626'},
+];
 
 function renderVaccinationSection(){
   const dc=DC();const domId=S.currentDomain;
@@ -1912,44 +1942,71 @@ function renderVaccinationSection(){
   const byVax={};
   recs.forEach(r=>{if(!byVax[r.vaccine])byVax[r.vaccine]=[];byVax[r.vaccine].push(r);});
 
-  const vaxList=Object.entries(_VACCINE_DB).map(([key,vax])=>{
-    const doses=byVax[key]||[];
-    const complete=doses.length>=vax.doses;
-    const pregTag=vax.pregnancy?'<span style="font-size:.55rem;background:#fdf2f8;color:#be185d;padding:1px 5px;border-radius:8px;margin-left:4px">임신</span>':'';
-    const doseHtml=doses.map((d,i)=>`<div style="font-size:.65rem;color:var(--mu);padding:1px 0 1px 28px">${i+1}차: ${d.date}${d.memo?' — '+esc(d.memo):''} <button onclick="_deleteVax(${d.id})" style="font-size:.55rem;background:none;border:none;color:var(--re);cursor:pointer">✕</button></div>`).join('');
-    return `<div style="padding:6px 0;border-bottom:1px solid var(--bd)">
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:.8rem">${complete?'✅':'💉'}</span>
-        <span style="font-size:.75rem;font-weight:${complete?'400':'600'};color:${complete?'var(--mu)':'var(--ink)'}">${vax.label}</span>
-        ${pregTag}
-        <span style="font-size:.6rem;color:var(--mu);margin-left:auto">${doses.length}/${vax.doses}회</span>
-        <button onclick="_openVaxForm('${key}')" style="font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 기록</button>
-      </div>
-      <div style="font-size:.6rem;color:var(--mu2);padding:2px 0 2px 28px">${esc(vax.note)}</div>
-      ${doseHtml}
+  // 카테고리별 그룹 렌더
+  const catSections=_VACCINE_CATS.map(cat=>{
+    const entries=Object.entries(_VACCINE_DB).filter(([k,v])=>v.cat===cat.id);
+    if(!entries.length)return '';
+    const catDone=entries.filter(([k,v])=>(byVax[k]||[]).length>=v.doses).length;
+    const rows=entries.map(([key,vax])=>{
+      const doses=byVax[key]||[];
+      const complete=doses.length>=vax.doses;
+      const liveTag=vax.live?'<span style="font-size:.5rem;background:#fef2f2;color:#dc2626;padding:1px 4px;border-radius:4px">생백신</span>':'';
+      const progress=vax.doses>1?`<div style="display:flex;gap:2px;margin:2px 0 0 28px">${Array.from({length:vax.doses},(_,i)=>`<div style="width:${Math.min(40,100/vax.doses)}px;height:4px;border-radius:2px;background:${i<doses.length?'#10b981':'var(--bd)'}"></div>`).join('')}</div>`:'';
+      const doseHtml=doses.map((d,i)=>`<div style="font-size:.62rem;color:var(--mu);padding:1px 0 1px 28px;display:flex;align-items:center;gap:4px">
+        <span style="color:#10b981">●</span> ${i+1}차 ${d.date}${d.memo?' <span style="color:var(--mu2)">'+esc(d.memo)+'</span>':''}
+        <button onclick="_deleteVax(${d.id})" style="font-size:.5rem;background:none;border:none;color:var(--mu2);cursor:pointer;padding:0 2px">✕</button>
+      </div>`).join('');
+      return `<div style="padding:5px 0">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:.78rem;width:22px;text-align:center">${complete?'✅':'⬜'}</span>
+          <div style="flex:1;min-width:0"><div style="font-size:.73rem;font-weight:${complete?'400':'500'};color:${complete?'var(--mu)':'var(--ink)'}${complete?';text-decoration:line-through':''}">${vax.label} ${liveTag}</div>
+          <div style="font-size:.58rem;color:var(--mu2)">${esc(vax.note)}</div></div>
+          <span style="font-size:.58rem;color:var(--mu);font-family:var(--mono);white-space:nowrap">${doses.length}/${vax.doses}</span>
+          <button onclick="_openVaxForm('${key}')" style="font-size:.56rem;padding:2px 6px;border:1px solid ${cat.color};border-radius:4px;background:none;color:${cat.color};cursor:pointer;font-family:var(--font);white-space:nowrap">+ 접종</button>
+        </div>${progress}${doseHtml}
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 0;margin-bottom:2px;border-bottom:2px solid ${cat.color}20">
+        <span style="font-size:.72rem;font-weight:700;color:${cat.color}">${cat.label}</span>
+        <span style="font-size:.58rem;color:var(--mu);font-family:var(--mono)">${catDone}/${entries.length}</span>
+      </div>${rows}
     </div>`;
   }).join('');
 
+  // 기타 접종
   const customVax=recs.filter(r=>!_VACCINE_DB[r.vaccine]);
   const customByName={};
   customVax.forEach(r=>{if(!customByName[r.vaccine])customByName[r.vaccine]=[];customByName[r.vaccine].push(r);});
-  const customHtml=Object.entries(customByName).map(([name,doses])=>`<div style="padding:6px 0;border-bottom:1px solid var(--bd)">
-    <div style="display:flex;align-items:center;gap:6px">
-      <span style="font-size:.8rem">💉</span>
-      <span style="font-size:.75rem;font-weight:600">${esc(name)}</span>
-      <span style="font-size:.6rem;color:var(--mu);margin-left:auto">${doses.length}회</span>
-      <button onclick="_openVaxForm('','${esc(name)}')" style="font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 기록</button>
+  const customHtml=Object.keys(customByName).length?`<div style="margin-bottom:8px">
+    <div style="font-size:.72rem;font-weight:700;color:var(--mu);padding:4px 0;border-bottom:2px solid var(--bd)20">📋 기타 접종</div>
+    ${Object.entries(customByName).map(([name,doses])=>`<div style="padding:5px 0;display:flex;align-items:center;gap:6px">
+      <span style="font-size:.78rem">💉</span>
+      <span style="font-size:.73rem;font-weight:500;flex:1">${esc(name)}</span>
+      <span style="font-size:.58rem;color:var(--mu)">${doses.length}회</span>
+      <button onclick="_openVaxForm('','${esc(name)}')" style="font-size:.56rem;padding:2px 6px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 접종</button>
     </div>
-    ${doses.map((d,i)=>`<div style="font-size:.65rem;color:var(--mu);padding:1px 0 1px 28px">${i+1}차: ${d.date}${d.memo?' — '+esc(d.memo):''} <button onclick="_deleteVax(${d.id})" style="font-size:.55rem;background:none;border:none;color:var(--re);cursor:pointer">✕</button></div>`).join('')}
-  </div>`).join('');
+    ${doses.map((d,i)=>`<div style="font-size:.62rem;color:var(--mu);padding:1px 0 1px 28px"><span style="color:#10b981">●</span> ${d.date}${d.memo?' — '+esc(d.memo):''} <button onclick="_deleteVax(${d.id})" style="font-size:.5rem;background:none;border:none;color:var(--mu2);cursor:pointer">✕</button></div>`).join('')}
+    `).join('')}</div>`:'';
 
-  const doneCount=Object.keys(byVax).filter(k=>_VACCINE_DB[k]&&(byVax[k]||[]).length>=_VACCINE_DB[k].doses).length;
+  const totalVax=Object.keys(_VACCINE_DB).length;
+  const doneCount=Object.entries(_VACCINE_DB).filter(([k,v])=>(byVax[k]||[]).length>=v.doses).length;
+  const pct=Math.round(doneCount/totalVax*100);
 
   return `<div class="card">
-    <div class="card-title">💉 예방접종 — ${esc(who)} <span class="badge badge-green">${doneCount}/${Object.keys(_VACCINE_DB).length} 완료</span></div>
-    ${vaxList}${customHtml}
-    <div style="display:flex;gap:6px;margin-top:8px">
-      <input id="vax-custom-name" class="dx-form-input" placeholder="기타 접종명" style="flex:1;font-size:.78rem">
+    <div class="card-title">💉 예방접종 — ${esc(who)}
+      <span class="badge" style="background:${pct>=80?'#dcfce7':pct>=50?'#fef3c7':'#fee2e2'};color:${pct>=80?'#15803d':pct>=50?'#92400e':'#dc2626'}">${doneCount}/${totalVax} (${pct}%)</span>
+    </div>
+    <div style="height:6px;background:var(--bd);border-radius:3px;margin-bottom:12px;overflow:hidden">
+      <div style="width:${pct}%;height:100%;background:${pct>=80?'#10b981':pct>=50?'#f59e0b':'#ef4444'};border-radius:3px;transition:width .3s"></div>
+    </div>
+    <div style="font-size:.6rem;color:var(--mu2);margin-bottom:10px;padding:4px 8px;background:var(--sf2);border-radius:4px">
+      출처: 질병관리청(KDCA) 성인 예방접종 가이드 2024, 대한산부인과학회
+    </div>
+    ${catSections}${customHtml}
+    <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--bd)">
+      <input id="vax-custom-name" list="vax-ac-list" class="dx-form-input" placeholder="기타 접종 검색/추가" style="flex:1;font-size:.78rem">
+      <datalist id="vax-ac-list">${Object.values(_VACCINE_DB).map(v=>'<option value="'+esc(v.label)+'">').join('')}</datalist>
       <button onclick="_addCustomVax()" style="font-size:.72rem;padding:5px 12px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 추가</button>
     </div>
   </div>`;

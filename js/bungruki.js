@@ -2247,7 +2247,8 @@ async function refreshDrugSafety(drugName) {
 
 // ── 임신 관련 접종 탭 (bungruki) ──
 function _renderBrkVaccineTab(){
-  const pregVaxKeys=Object.entries(_VACCINE_DB).filter(([k,v])=>v.pregnancy).map(([k])=>k);
+  const pregVaxKeys=Object.entries(typeof _VACCINE_DB!=='undefined'?_VACCINE_DB:{}).filter(([k,v])=>v.pregnancy).map(([k])=>k);
+  if(!pregVaxKeys.length)return '<div style="color:var(--mu);font-size:.72rem;text-align:center;padding:20px">접종 데이터를 불러오는 중...</div>';
   const allRecs=typeof getPregnancyVaccinations==='function'?getPregnancyVaccinations():[];
   // 도메인별로 그룹
   const byWho={오랑이:[],붕쌤:[]};
@@ -2256,22 +2257,27 @@ function _renderBrkVaccineTab(){
   function renderPersonVax(who,recs,color,icon){
     const byVax={};
     recs.forEach(r=>{if(!byVax[r.vaccine])byVax[r.vaccine]=[];byVax[r.vaccine].push(r);});
+    const done=pregVaxKeys.filter(k=>(byVax[k]||[]).length>=_VACCINE_DB[k].doses).length;
+    const pct=Math.round(done/pregVaxKeys.length*100);
     const rows=pregVaxKeys.map(key=>{
       const vax=_VACCINE_DB[key];const doses=byVax[key]||[];
       const complete=doses.length>=vax.doses;
+      const liveTag=vax.live?'<span style="font-size:.48rem;background:#fef2f2;color:#dc2626;padding:1px 3px;border-radius:3px">생백신</span>':'';
       return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">
-        <span style="font-size:.75rem">${complete?'✅':'⬜'}</span>
-        <span style="font-size:.72rem;flex:1;color:${complete?'var(--mu)':'var(--ink)'}">${vax.label}</span>
-        <span style="font-size:.6rem;color:var(--mu)">${doses.length}/${vax.doses}</span>
-        ${doses.length?'<span style="font-size:.58rem;color:var(--mu2)">'+doses.map(d=>d.date).join(', ')+'</span>':''}
+        <span style="font-size:.72rem;width:20px;text-align:center">${complete?'✅':'⬜'}</span>
+        <div style="flex:1;min-width:0"><span style="font-size:.7rem;color:${complete?'var(--mu)':'var(--ink)'};${complete?'text-decoration:line-through':''}">${vax.label}</span> ${liveTag}</div>
+        <span style="font-size:.58rem;color:var(--mu);font-family:var(--mono)">${doses.length}/${vax.doses}</span>
+        ${doses.length?'<span style="font-size:.55rem;color:var(--mu2)">'+doses.map(d=>d.date).join(', ')+'</span>':''}
       </div>`;
     }).join('');
-    const done=pregVaxKeys.filter(k=>(byVax[k]||[]).length>=_VACCINE_DB[k].doses).length;
-    return `<div style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span style="font-size:.85rem">${icon}</span>
+    return `<div style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:.9rem">${icon}</span>
         <span style="font-size:.78rem;font-weight:700;color:${color}">${who}</span>
-        <span style="font-size:.62rem;color:var(--mu)">${done}/${pregVaxKeys.length} 완료</span>
+        <span style="font-size:.6rem;color:var(--mu)">${done}/${pregVaxKeys.length}</span>
+        <div style="flex:1;height:4px;background:var(--bd);border-radius:2px;overflow:hidden;max-width:80px">
+          <div style="width:${pct}%;height:100%;background:${color};border-radius:2px"></div>
+        </div>
       </div>${rows}</div>`;
   }
   const orangiHtml=renderPersonVax('오랑이',byWho['오랑이'],'#ec4899','🧡');
