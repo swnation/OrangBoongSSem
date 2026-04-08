@@ -1078,25 +1078,27 @@ const _SEMEN_NORMS={volume:{min:1.5,unit:'mL',label:'Volume'},count:{min:15,unit
 function _normalizeSemenValues(vals){
   if(!vals)return vals;
   const map={
-    volume:['volume','vol','Volume','Vol','정액량','Semen Volume'],
-    count:['count','Count','Sperm Count','sperm count','concentration','Concentration','정자수','농도','Sperm Concentration'],
-    motility:['motility','Motility','Total Motility','total motility','운동성','Progressive Motility','progressive motility'],
-    morphology:['morphology','Morphology','Strict Morphology','strict morphology','형태','Normal Morphology','normal morphology','Normal Forms'],
+    volume:['volume','vol','정액량','semen volume'],
+    count:['sperm count','count','concentration','정자수','농도','sperm concentration'],
+    motility:['motility','total motility','운동성'],
+    morphology:['morphology','strict morphology','형태','normal morphology','normal forms'],
   };
   const norm={};
-  // 표준 키 매핑
+  // 부분 매칭: 키에 alias가 포함되어 있으면 매칭 (단위 포함 키 대응)
+  const valKeys=Object.keys(vals);
   for(const [std,aliases] of Object.entries(map)){
     for(const alias of aliases){
-      if(vals[alias]!==undefined){
-        const v=parseFloat(vals[alias]);
+      const found=valKeys.find(k=>k.toLowerCase().includes(alias.toLowerCase()));
+      if(found&&vals[found]!==undefined){
+        const v=parseFloat(vals[found]);
         if(!isNaN(v)){norm[std]=v;break;}
       }
     }
   }
   // 나머지 키도 보존
   Object.entries(vals).forEach(([k,v])=>{
-    const isAlias=Object.values(map).some(a=>a.includes(k));
-    if(!isAlias)norm[k]=v;
+    const isMatched=Object.values(map).some(aliases=>aliases.some(a=>k.toLowerCase().includes(a.toLowerCase())));
+    if(!isMatched)norm[k]=v;
   });
   return norm;
 }
