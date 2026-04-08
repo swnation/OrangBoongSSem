@@ -1852,7 +1852,7 @@ function _addMorePhotos(input){
   });
   input.value='';
 }
-// ── 멀티 AI 병렬 분석 (교차 검증) + 진행률 UI ──
+// ── 멀티 AI 병렬 분석 (교차 검증) + 진행률 UI + 실패 시 재시도/제외 ──
 var _brkAnalyzeAbort=false;
 async function _brkConsensusAnalyze(){
   if(!_stagedLabPhotos.length)return;
@@ -1861,40 +1861,86 @@ async function _brkConsensusAnalyze(){
   const aiIds=opts.map(a=>a.id);
   const total=_stagedLabPhotos.length;
   _brkAnalyzeAbort=false;
-  // 진행률 모달
-  showConfirmModal('🔬 멀티 AI 분석 중...',
+  _showAnalyzeProgress('멀티 AI 분석',total,'#8b5cf6');
+  const allResults=[];
+  for(let i=0;i<total;i++){
+    if(_brkAnalyzeAbort){allResults.push({error:'사용자 중단',_imgSrc:_stagedLabPhotos[i].dataUrl});continue;}
+    _updateProgress(i,total,'📷 사진 '+(i+1)+'/'+total+' — '+aiIds.join('+')+' 동시 분석 중...');
+    const detailEl=document.getElementById('brk-ap-detail');if(detailEl)detailEl.innerHTML='';
+    const p=_stagedLabPhotos[i];
+    // 병렬 호출 + 개별 상태
+    let results=await _runParallelAIs(aiIds,p,detailEl);
+    // 실패한 AI 있으면 재시도/제외 선택
+    let failures=results.filter(r=>r.error);
+    while(failures.length>0&&failures.length<results.length&&!_brkAnalyzeAbort){
+      const choice=await _askRetryOrSkip(i+1,failures,results);
+      if(choice==='skip')break;
+      if(choice==='abort'){_brkAnalyzeAbort=true;break;}
+      // retry: 실패한 AI만 재실행
+      const retryIds=failures.map(f=>f.ai);
+      if(detailEl)detailEl.innerHTML='🔄 재시도: '+retryIds.join(', ');
+      const retryResults=await _runParallelAIs(retryIds,p,detailEl);
+      // 결과 병합: 재시도 성공한 것으로 교체
+      retryResults.forEach(rr=>{const idx2=results.findIndex(r=>r.ai===rr.ai);if(idx2>=0)results[idx2]=rr;});
+      failures=results.filter(r=>r.error);
+    }
+    allResults.push(_mergeConsensus(results,p.dataUrl));
+  }
+  _updateProgress(total,total,'✅ 분석 완료');
+  _stagedLabPhotos=[];
+  _showConsensusResults(allResults);
+}
+async function _runParallelAIs(aiIds,photo,detailEl){
+  const promises=aiIds.map(async aid=>{
+    if(detailEl)detailEl.innerHTML+='<span id="brk-ai-st-'+aid+'" style="color:var(--ac)">'+aid+' 호출 중... </span>';
+    try{
+      const r=await _analyzeOnePhoto(photo,aid);
+      const el=document.getElementById('brk-ai-st-'+aid);if(el){el.style.color='#10b981';el.textContent=aid+' ✅ ';}
+      return{ai:aid,result:r};
+    }catch(e){
+      const el=document.getElementById('brk-ai-st-'+aid);if(el){el.style.color='#dc2626';el.textContent=aid+' ❌ ';}
+      return{ai:aid,error:e.message};
+    }
+  });
+  return Promise.all(promises);
+}
+function _askRetryOrSkip(photoNum,failures,allResults){
+  return new Promise(resolve=>{
+    const succCount=allResults.filter(r=>!r.error).length;
+    const failNames=failures.map(f=>f.ai+': '+f.error).join('<br>');
+    const statusEl=document.getElementById('brk-ap-status');
+    const detailEl=document.getElementById('brk-ap-detail');
+    if(statusEl)statusEl.innerHTML=`<span style="color:#dc2626">⚠️ 사진 ${photoNum} — ${failures.length}개 AI 실패 (${succCount}개 성공)</span>`;
+    if(detailEl)detailEl.innerHTML=`<div style="font-size:.62rem;color:#dc2626;margin:4px 0">${failNames}</div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button id="brk-retry-btn" style="padding:5px 12px;font-size:.72rem;border:1.5px solid #f59e0b;border-radius:6px;background:#fef3c7;color:#92400e;cursor:pointer;font-family:var(--font);font-weight:600">🔄 실패 AI 재시도</button>
+        <button id="brk-skip-btn" style="padding:5px 12px;font-size:.72rem;border:1.5px solid #10b981;border-radius:6px;background:#dcfce7;color:#15803d;cursor:pointer;font-family:var(--font)">▶ 성공분만 사용</button>
+        <button id="brk-abort-btn" style="padding:5px 12px;font-size:.72rem;border:1.5px solid #dc2626;border-radius:6px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:var(--font)">⏹ 전체 중단</button>
+      </div>`;
+    document.getElementById('brk-retry-btn')?.addEventListener('click',()=>resolve('retry'));
+    document.getElementById('brk-skip-btn')?.addEventListener('click',()=>resolve('skip'));
+    document.getElementById('brk-abort-btn')?.addEventListener('click',()=>resolve('abort'));
+  });
+}
+function _showAnalyzeProgress(title,total,color){
+  showConfirmModal('🔬 '+title+' 중...',
     `<div id="brk-analyze-progress">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <div style="flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden"><div id="brk-ap-bar" style="width:0%;height:100%;background:#8b5cf6;border-radius:4px;transition:width .3s"></div></div>
+        <div style="flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden"><div id="brk-ap-bar" style="width:0%;height:100%;background:${color};border-radius:4px;transition:width .3s"></div></div>
         <span id="brk-ap-pct" style="font-size:.78rem;font-weight:600;font-family:var(--mono);min-width:40px">0%</span>
       </div>
       <div id="brk-ap-status" style="font-size:.72rem;color:var(--mu)">준비 중...</div>
       <div id="brk-ap-detail" style="font-size:.62rem;color:var(--mu2);margin-top:4px"></div>
     </div>`,
     [{label:'⏹ 중단',action:()=>{_brkAnalyzeAbort=true;},color:'#dc2626'}]);
-  const allResults=[];
-  for(let i=0;i<total;i++){
-    if(_brkAnalyzeAbort){allResults.push({error:'사용자 중단',_imgSrc:_stagedLabPhotos[i].dataUrl});continue;}
-    const pct=Math.round((i/total)*100);
-    const bar=document.getElementById('brk-ap-bar');if(bar)bar.style.width=pct+'%';
-    const pctEl=document.getElementById('brk-ap-pct');if(pctEl)pctEl.textContent=pct+'%';
-    const statusEl=document.getElementById('brk-ap-status');if(statusEl)statusEl.textContent='📷 사진 '+(i+1)+'/'+total+' — '+aiIds.join('+')+' 동시 분석 중...';
-    const detailEl=document.getElementById('brk-ap-detail');
-    const p=_stagedLabPhotos[i];
-    // 병렬 호출 + 개별 상태 표시
-    const promises=aiIds.map(async aid=>{
-      if(detailEl){const cur=detailEl.innerHTML;detailEl.innerHTML=cur+'<span style="color:var(--ac)">'+aid+' 호출 중... </span>';}
-      try{const r=await _analyzeOnePhoto(p,aid);if(detailEl)detailEl.innerHTML=detailEl.innerHTML.replace(aid+' 호출 중...',aid+' ✅ ');return{ai:aid,result:r};}
-      catch(e){if(detailEl)detailEl.innerHTML=detailEl.innerHTML.replace(aid+' 호출 중...',aid+' ❌ ');return{ai:aid,error:e.message};}
-    });
-    const results=await Promise.all(promises);
-    allResults.push(_mergeConsensus(results,p.dataUrl));
-  }
-  // 완료
-  const bar=document.getElementById('brk-ap-bar');if(bar)bar.style.width='100%';
-  const pctEl=document.getElementById('brk-ap-pct');if(pctEl)pctEl.textContent='100%';
-  _stagedLabPhotos=[];
-  // 결과 확인 모달
+}
+function _updateProgress(i,total,text){
+  const pct=Math.round((i/total)*100);
+  const bar=document.getElementById('brk-ap-bar');if(bar)bar.style.width=pct+'%';
+  const pctEl=document.getElementById('brk-ap-pct');if(pctEl)pctEl.textContent=pct+'%';
+  const statusEl=document.getElementById('brk-ap-status');if(statusEl)statusEl.textContent=text;
+}
+function _showConsensusResults(allResults){
   const html=allResults.map((r,i)=>{
     if(r.error)return `<div style="padding:6px;background:#fef2f2;border-radius:6px;margin-bottom:6px;font-size:.72rem">사진 ${i+1}: ❌ ${esc(r.error)}</div>`;
     const aiCount=r._usedAis?.length||0;
@@ -1993,22 +2039,11 @@ async function _brkAnalyzeStagedPhotos(selectedAiId){
   if(!aiId||!S.keys?.[aiId]){showToast('⚠️ AI API 키 필요');return;}
   const total=_stagedLabPhotos.length;
   _brkAnalyzeAbort=false;
-  showConfirmModal('🔬 '+aiId+' 분석 중...',
-    `<div id="brk-analyze-progress">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <div style="flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden"><div id="brk-ap-bar" style="width:0%;height:100%;background:var(--ac);border-radius:4px;transition:width .3s"></div></div>
-        <span id="brk-ap-pct" style="font-size:.78rem;font-weight:600;font-family:var(--mono);min-width:40px">0%</span>
-      </div>
-      <div id="brk-ap-status" style="font-size:.72rem;color:var(--mu)">준비 중...</div>
-    </div>`,
-    [{label:'⏹ 중단',action:()=>{_brkAnalyzeAbort=true;},color:'#dc2626'}]);
+  _showAnalyzeProgress(aiId+' 분석',total,'var(--ac)');
   const results=[];
   for(let i=0;i<total;i++){
     if(_brkAnalyzeAbort){results.push({error:'사용자 중단',_imgSrc:_stagedLabPhotos[i].dataUrl});continue;}
-    const pct=Math.round((i/total)*100);
-    const bar=document.getElementById('brk-ap-bar');if(bar)bar.style.width=pct+'%';
-    const pctEl=document.getElementById('brk-ap-pct');if(pctEl)pctEl.textContent=pct+'%';
-    const statusEl=document.getElementById('brk-ap-status');if(statusEl)statusEl.textContent='📷 사진 '+(i+1)+'/'+total+' 분석 중...';
+    _updateProgress(i,total,'📷 사진 '+(i+1)+'/'+total+' — '+aiId+' 분석 중...');
     const p=_stagedLabPhotos[i];
     try{
       const parsed=await _analyzeOnePhoto(p,aiId);
@@ -2016,8 +2051,7 @@ async function _brkAnalyzeStagedPhotos(selectedAiId){
       results.push(parsed);
     }catch(e){results.push({error:e.message,_imgSrc:p.dataUrl});}
   }
-  const bar=document.getElementById('brk-ap-bar');if(bar)bar.style.width='100%';
-  const pctEl=document.getElementById('brk-ap-pct');if(pctEl)pctEl.textContent='100%';
+  _updateProgress(total,total,'✅ 분석 완료');
   _stagedLabPhotos=[];
   // 결과 확인 모달
   const html=results.map((r,i)=>{
