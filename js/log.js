@@ -523,7 +523,7 @@ function renderLog() {
       <div style="display:flex;align-items:center;gap:10px;margin:4px 0">
         <span style="font-size:1.3rem;font-weight:700;min-width:28px;text-align:center" id="journal-nrs-val">-</span>
         <input type="range" id="journal-nrs" min="0" max="10" value="5" disabled style="flex:1;accent-color:var(--ac);height:24px"
-          oninput="this.disabled=false;document.getElementById('journal-nrs-val').textContent=this.value;document.getElementById('journal-nrs-skip').checked=false">
+          oninput="document.getElementById('journal-nrs-val').textContent=this.value;document.getElementById('journal-nrs-skip').checked=false">
       </div>
       <label style="display:flex;align-items:center;gap:5px;font-size:.73rem;color:var(--mu);cursor:pointer">
         <input type="checkbox" id="journal-nrs-skip" checked onchange="const r=document.getElementById('journal-nrs');r.disabled=this.checked;document.getElementById('journal-nrs-val').textContent=this.checked?'-':r.value"> 기록 안 함
