@@ -2082,9 +2082,34 @@ async function _brkAnalyzeStagedPhotos(selectedAiId){
       closeConfirmModal();renderView('meds');
     },primary:true},{label:'취소',action:closeConfirmModal}]);
 }
+// 이미지 리사이즈 (Claude 5MB 제한 등)
+async function _resizeImageIfNeeded(dataUrl,maxBytes){
+  if(!maxBytes)maxBytes=4500000; // 4.5MB (base64 인코딩 오버헤드 감안)
+  const base64=dataUrl.split(',')[1]||'';
+  if(base64.length<=maxBytes) return dataUrl;
+  return new Promise((resolve)=>{
+    const img=new Image();
+    img.onload=function(){
+      const canvas=document.createElement('canvas');
+      let w=img.width,h=img.height;
+      // 단계적 축소: 80% → 60% → 50% 까지
+      for(const scale of [0.8,0.6,0.5,0.35]){
+        canvas.width=Math.round(w*scale);canvas.height=Math.round(h*scale);
+        const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        const result=canvas.toDataURL('image/jpeg',0.85);
+        if(result.split(',')[1].length<=maxBytes) return resolve(result);
+      }
+      // 최소 크기로도 초과 시 그냥 최소 결과 반환
+      resolve(canvas.toDataURL('image/jpeg',0.7));
+    };
+    img.onerror=()=>resolve(dataUrl);
+    img.src=dataUrl;
+  });
+}
 async function _analyzeOnePhoto(photo,aiId){
-  const base64=photo.dataUrl.split(',')[1];
-  const mediaType=photo.type;
+  const resized=await _resizeImageIfNeeded(photo.dataUrl);
+  const base64=resized.split(',')[1];
+  const mediaType=resized.startsWith('data:image/jpeg')?'image/jpeg':(photo.type||'image/jpeg');
   const prompt=`이 이미지는 의료 검사 결과지(혈액검사, 호르몬검사, 정액검사, 초음파 등)입니다.
 다음을 추출하세요:
 1. 검사 종류 (semen/blood/hormone/ultrasound/other)
@@ -2114,10 +2139,8 @@ async function _analyzeOnePhoto(photo,aiId){
     if(!result)throw new Error('Claude: 빈 응답');
   }else{
     const gptModel=S.models?.gpt||DEFAULT_MODELS.gpt;
-    const isO=gptModel.startsWith('o');
-    const body={model:gptModel,messages:[{role:'user',content:[
-      {type:'image_url',image_url:{url:photo.dataUrl,detail:'high'}},{type:'text',text:prompt}]}]};
-    if(isO)body.max_completion_tokens=4000;else body.max_tokens=2000;
+    const body={model:gptModel,max_completion_tokens:4000,messages:[{role:'user',content:[
+      {type:'image_url',image_url:{url:resized,detail:'high'}},{type:'text',text:prompt}]}]};
     const resp=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.keys.gpt},
       body:JSON.stringify(body)});
