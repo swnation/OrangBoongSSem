@@ -210,6 +210,7 @@ function buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDay
       var bData = bShow&&dc.bung?dc.bung:{};
       var allKeys = BRK_SUPPL_ORANGI.concat(BRK_SUPPL_BUNG);
       if (allKeys.some(function(k){return oData[k]||bData[k];})) ic.push('💊');
+      if (dc.intimacy) ic.push('❤️');
       if (oData.exercise||bData.exercise) ic.push('🏃');
       if (oData.treatment||bData.treatment) ic.push('🏥');
       if (oData.memo||bData.memo) ic.push('📝');
@@ -446,7 +447,7 @@ function renderCycleTracker() {
     + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;font-size:.65rem;color:var(--mu)">'
     + '<span>🔴 생리일</span><span>🟣 배란 추정</span><span>🟪 가임기</span><span style="border:1px dashed #ccc;padding:0 4px;border-radius:4px">점선=예측</span>'
     + '</div><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;font-size:.65rem;color:var(--mu)">'
-    + '<span>💊 영양제</span><span>🏃 운동</span><span>🏥 치료</span><span>📝 메모</span>'
+    + '<span>💊 영양제</span><span>❤️ 관계</span><span>🏃 운동</span><span>🏥 치료</span><span>📝 메모</span>'
     + '</div><div style="display:flex;gap:10px;margin-top:6px;align-items:center;font-size:.65rem;color:var(--mu)">'
     + '<span>필터:</span>'
     + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" '+(_brkCalShowOrangi?'checked':'')+' onchange="_brkCalShowOrangi=this.checked;renderView(\'meds\')" style="accent-color:#f97316"> 🧡 오랑이</label>'
@@ -622,6 +623,7 @@ function renderDailyChecks() {
   // 카테고리 서브탭
   var cats = [
     {id:'suppl',label:'💊 영양제',color:'#16a34a'},
+    {id:'intimacy',label:'❤️ 관계',color:'#e11d48'},
     {id:'exercise',label:'🏃 운동',color:'#2563eb'},
     {id:'treatment',label:'🏥 치료',color:'#dc2626'},
     {id:'memo',label:'📝 메모',color:'#7c3aed'},
@@ -634,6 +636,7 @@ function renderDailyChecks() {
   // 카테고리별 콘텐츠
   var contentHtml = '';
   if (_brkDailyCat === 'suppl') contentHtml = _brkRenderSuppl(isOrangi, whoData, m, today);
+  else if (_brkDailyCat === 'intimacy') contentHtml = _brkRenderIntimacy(m, selDate);
   else if (_brkDailyCat === 'exercise') contentHtml = _brkRenderExercise(isOrangi, whoData);
   else if (_brkDailyCat === 'treatment') contentHtml = _brkRenderTreatment(whoData);
   else if (_brkDailyCat === 'memo') contentHtml = _brkRenderMemo(whoData);
@@ -814,6 +817,108 @@ function _brkRenderMemo(whoData) {
   var memo = whoData.memo || '';
   return '<div><div class="dx-form-label">오늘의 메모</div>'
     + '<textarea id="brk-memo" class="dx-form-input" rows="4" placeholder="컨디션, 증상, 특이사항 등 자유롭게 기록" onchange="brkSetMemo(this.value)" style="width:100%;resize:vertical">'+esc(memo)+'</textarea></div>';
+}
+
+// ── 관계 기록 (가임기 자동 매칭) ──
+function _brkRenderIntimacy(m, selDate) {
+  if(!m.dailyChecks[selDate]) m.dailyChecks[selDate]={};
+  var rec=m.dailyChecks[selDate].intimacy||null;
+  // 가임기 판정
+  var fertileInfo=_getFertileStatus(m, selDate);
+  var fertBadge='';
+  if(fertileInfo.status==='fertile') fertBadge='<span style="background:#ede9fe;color:#7c3aed;padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:600">🟪 가임기</span>';
+  else if(fertileInfo.status==='ovulation') fertBadge='<span style="background:#f3e8ff;color:#9333ea;padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:600">🟣 배란 추정일</span>';
+  else if(fertileInfo.status==='period') fertBadge='<span style="background:#fee2e2;color:#dc2626;padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:600">🔴 생리 중</span>';
+  else fertBadge='<span style="background:var(--sf2);color:var(--mu);padding:2px 8px;border-radius:10px;font-size:.68rem">비가임기</span>';
+  var html='<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px">'+fertBadge;
+  if(fertileInfo.daysToOv!==null) html+='<span style="font-size:.65rem;color:var(--mu)">배란까지 '+(fertileInfo.daysToOv>0?fertileInfo.daysToOv+'일':'오늘')+'</span>';
+  html+='</div>';
+  if(rec){
+    html+='<div style="padding:12px;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:8px;margin-bottom:10px">'
+      +'<div style="font-size:.78rem;font-weight:600;color:#be185d;margin-bottom:6px">❤️ 관계 기록됨</div>'
+      +(rec.time?'<div style="font-size:.72rem;color:var(--mu)">시간: '+esc(rec.time)+'</div>':'')
+      +(rec.note?'<div style="font-size:.72rem;color:var(--mu)">메모: '+esc(rec.note)+'</div>':'')
+      +'<button onclick="brkRemoveIntimacy()" style="margin-top:6px;font-size:.68rem;background:none;border:none;color:#dc2626;cursor:pointer;text-decoration:underline">삭제</button>'
+      +'</div>';
+  } else {
+    html+='<div style="padding:12px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;margin-bottom:10px">'
+      +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
+      +'<input type="time" id="brk-int-time" class="dx-form-input" style="width:120px" value="'+kstTimeStr()+'">'
+      +'<button onclick="brkSaveIntimacy()" class="btn-accum-add" style="font-size:.75rem;padding:6px 16px">❤️ 기록</button>'
+      +'</div>'
+      +'<input type="text" id="brk-int-note" class="dx-form-input" placeholder="메모 (선택)" style="width:100%;font-size:.78rem">'
+      +'</div>';
+  }
+  // 최근 관계 기록 + 가임기 매칭 요약
+  html+=_brkIntimacyHistory(m);
+  return html;
+}
+function _getFertileStatus(m, date){
+  var cycles=(m.menstrualCycles||[]).slice().sort(function(a,b){return b.startDate.localeCompare(a.startDate);});
+  var avgLen=getAvgCycleLength(cycles);
+  // 생리 중 체크
+  for(var ci=0;ci<cycles.length;ci++){
+    var c=cycles[ci];var s=new Date(c.startDate+'T00:00:00');
+    var e=c.endDate?new Date(c.endDate+'T00:00:00'):new Date(s.getTime()+4*86400000);
+    if(date>=c.startDate&&date<=_localDateStr(e))return{status:'period',daysToOv:null};
+  }
+  // 배란일/가임기 체크
+  var closestOv=null,closestDiff=999;
+  for(var ci2=0;ci2<Math.min(cycles.length,3);ci2++){
+    var c2=cycles[ci2];var ovD=getOvulationDate(c2.startDate,c2.length||avgLen);
+    var diff=Math.round((new Date(date+'T00:00:00')-new Date(ovD+'T00:00:00'))/86400000);
+    if(Math.abs(diff)<Math.abs(closestDiff)){closestDiff=diff;closestOv=ovD;}
+  }
+  // 예측 배란일도 체크
+  if(cycles.length){
+    var last=cycles[0];var nextStart=new Date(last.startDate+'T00:00:00');nextStart.setDate(nextStart.getDate()+avgLen);
+    var nextOv=getOvulationDate(_localDateStr(nextStart),avgLen);
+    var nextDiff=Math.round((new Date(date+'T00:00:00')-new Date(nextOv+'T00:00:00'))/86400000);
+    if(Math.abs(nextDiff)<Math.abs(closestDiff)){closestDiff=nextDiff;closestOv=nextOv;}
+  }
+  if(closestDiff===0)return{status:'ovulation',daysToOv:0};
+  if(closestDiff>=-3&&closestDiff<=3)return{status:'fertile',daysToOv:-closestDiff};
+  return{status:'none',daysToOv:closestDiff<0?null:-closestDiff};
+}
+function _brkIntimacyHistory(m){
+  var dc=m.dailyChecks||{};
+  var records=[];
+  Object.keys(dc).sort().reverse().forEach(function(d){if(dc[d].intimacy)records.push({date:d,rec:dc[d].intimacy});});
+  if(!records.length) return '<div style="font-size:.72rem;color:var(--mu2);text-align:center;padding:10px">관계 기록이 없습니다</div>';
+  var html='<div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">최근 관계 기록</div>';
+  records.slice(0,10).forEach(function(r){
+    var fs=_getFertileStatus(m,r.date);
+    var badge='';
+    if(fs.status==='fertile')badge='<span style="background:#ede9fe;color:#7c3aed;font-size:.6rem;padding:1px 6px;border-radius:8px">가임기</span>';
+    else if(fs.status==='ovulation')badge='<span style="background:#f3e8ff;color:#9333ea;font-size:.6rem;padding:1px 6px;border-radius:8px">배란일</span>';
+    html+='<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd);font-size:.72rem">'
+      +'<span style="font-weight:500">'+r.date+'</span>'
+      +(r.rec.time?'<span style="color:var(--mu)">'+esc(r.rec.time)+'</span>':'')
+      +badge
+      +(r.rec.note?'<span style="color:var(--mu2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.rec.note)+'</span>':'')
+      +'</div>';
+  });
+  return html;
+}
+async function brkSaveIntimacy(){
+  var m=getBrkMaster();if(!m)return;
+  var selDate=_brkCheckDate||kstToday();
+  if(!m.dailyChecks[selDate])m.dailyChecks[selDate]={};
+  var time=(document.getElementById('brk-int-time')?.value||'').trim();
+  var note=(document.getElementById('brk-int-note')?.value||'').trim();
+  m.dailyChecks[selDate].intimacy={time:time,note:note,recordedAt:new Date(Date.now()+9*3600000).toISOString()};
+  await saveBrkMaster();
+  showToast('❤️ 관계 기록 저장');
+  renderView('meds');
+}
+async function brkRemoveIntimacy(){
+  if(!confirm('이 관계 기록을 삭제하시겠습니까?'))return;
+  var m=getBrkMaster();if(!m)return;
+  var selDate=_brkCheckDate||kstToday();
+  if(m.dailyChecks[selDate])delete m.dailyChecks[selDate].intimacy;
+  await saveBrkMaster();
+  showToast('🗑 삭제됨');
+  renderView('meds');
 }
 
 function _brkAddSuppl(){
@@ -1323,7 +1428,7 @@ function renderLabResults() {
     </div>`;
   }).join('');
 
-  // 정액검사 추세 차트 (수치별 색상 바)
+  // 정액검사 추세 차트 + 비교 (수치별 색상 바)
   var semenLabs = labs.filter(function(l){return l.type==='semen'&&l.values;}).reverse();
   var trendHtml = '';
   if (semenLabs.length >= 2) {
@@ -1331,15 +1436,19 @@ function renderLabResults() {
       {key:'count',label:'농도(M/mL)',norm:15,color:'#3b82f6'},
       {key:'motility',label:'운동성(%)',norm:42,color:'#10b981'},
       {key:'morphology',label:'형태(%)',norm:4,color:'#f59e0b'},
+      {key:'volume',label:'정액량(mL)',norm:1.5,color:'#8b5cf6'},
     ];
     const rows=metrics.map(mt=>{
-      const vals=semenLabs.map(s=>s.values[mt.key]||0);
-      const max=Math.max(...vals,mt.norm)*1.2;
+      const vals=semenLabs.map(s=>_normalizeSemenValues(s.values)[mt.key]);
+      if(vals.every(v=>v===undefined))return '';
+      const numVals=vals.map(v=>v||0);
+      const max=Math.max(...numVals,mt.norm)*1.2;
       return `<div style="margin-bottom:8px">
         <div style="font-size:.62rem;color:var(--mu);margin-bottom:2px">${mt.label} (정상≥${mt.norm})</div>
         <div style="display:flex;align-items:flex-end;gap:3px;height:40px">
           ${semenLabs.map((s,j)=>{
-            const v=s.values[mt.key]||0;
+            const nv=_normalizeSemenValues(s.values);
+            const v=nv[mt.key];if(v===undefined)return '<div style="flex:1;text-align:center;font-size:.45rem;color:var(--mu2)">-</div>';
             const h=Math.max(4,Math.round(v/max*36));
             const ok=v>=mt.norm;
             return `<div style="flex:1;text-align:center">
@@ -1350,9 +1459,29 @@ function renderLabResults() {
           }).join('')}
         </div>
       </div>`;
-    }).join('');
+    }).filter(Boolean).join('');
+    // 최근 2회 비교 카드
+    const latest=_normalizeSemenValues(semenLabs[semenLabs.length-1].values);
+    const prev=_normalizeSemenValues(semenLabs[semenLabs.length-2].values);
+    const compRows=metrics.map(mt=>{
+      const lv=latest[mt.key],pv=prev[mt.key];
+      if(lv===undefined&&pv===undefined)return '';
+      const delta=lv!==undefined&&pv!==undefined?lv-pv:null;
+      const pct=delta!==null&&pv>0?Math.round(delta/pv*100):null;
+      const arrow=delta===null?'':delta>0?'<span style="color:#10b981">↑</span>':delta<0?'<span style="color:#dc2626">↓</span>':'<span style="color:var(--mu)">→</span>';
+      return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--bd);font-size:.72rem">
+        <span style="width:80px;color:var(--mu)">${mt.label}</span>
+        <span style="width:50px;text-align:right;color:${(pv||0)>=mt.norm?mt.color:'#dc2626'}">${pv!==undefined?pv:'-'}</span>
+        <span style="width:20px;text-align:center">${arrow}</span>
+        <span style="width:50px;text-align:right;font-weight:600;color:${(lv||0)>=mt.norm?mt.color:'#dc2626'}">${lv!==undefined?lv:'-'}</span>
+        <span style="flex:1;font-size:.6rem;color:var(--mu2)">${pct!==null?(pct>=0?'+':'')+pct+'%':''}</span>
+      </div>`;
+    }).filter(Boolean).join('');
+    const compHtml=compRows?`<div style="margin-top:8px;padding:8px;background:var(--sf);border-radius:6px;border:1px solid var(--bd)">
+      <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px;display:flex;gap:8px">🔄 최근 비교
+        <span style="margin-left:auto;font-size:.6rem;color:var(--mu2)">${semenLabs[semenLabs.length-2].date} → ${semenLabs[semenLabs.length-1].date}</span></div>${compRows}</div>`:'';
     trendHtml=`<div style="margin-top:10px;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
-      <div style="font-size:.75rem;font-weight:600;color:var(--mu);margin-bottom:6px">📈 정액검사 추세</div>${rows}</div>`;
+      <div style="font-size:.75rem;font-weight:600;color:var(--mu);margin-bottom:6px">📈 정액검사 추세</div>${rows}${compHtml}</div>`;
   }
 
   return '<div>'
@@ -1449,9 +1578,16 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
       <div style="font-size:.6rem;color:#7c3aed;cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 원본 이미지</div>
       <div style="display:none;margin-top:4px"><img src="${l.imgSrc}" style="max-width:100%;border-radius:6px;border:1px solid var(--bd)"></div>
     </div>`:''}
-    <div style="display:flex;gap:4px;margin-top:4px">
+    ${_brkMissingFieldsHtml(l)}
+    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
       <button onclick="_brkEditLabValues(${globalIdx})" style="font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">✏️ 수치 수정</button>
-      ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${globalIdx})" style="font-size:.58rem;padding:2px 8px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>`:''}
+      ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${globalIdx})" style="font-size:.58rem;padding:2px 8px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>
+      <select onchange="if(this.value){_brkReanalyzeLab(${globalIdx},this.value);this.value='';}" style="font-size:.58rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);font-family:var(--font)">
+        <option value="">AI 선택 재분석</option>
+        ${S.keys?.gemini?'<option value="gemini">Gemini</option>':''}
+        ${S.keys?.gpt?'<option value="gpt">GPT</option>':''}
+        ${S.keys?.claude?'<option value="claude">Claude</option>':''}
+      </select>`:''}
     </div>
   </div>`;
 }
@@ -1573,11 +1709,20 @@ async function _brkSaveEditLabValues(){
 }
 
 // 재분석 (Vision 유리 모델 선택)
-async function _brkReanalyzeLab(idx){
+function _brkMissingFieldsHtml(l){
+  if(!l.values||!l.type)return '';
+  const expected={semen:['volume','count','motility','morphology'],hormone:['FSH','LH','E2','AMH','TSH'],blood:['Hb','WBC','PLT','AST','ALT']};
+  const fields=expected[l.type];if(!fields)return '';
+  const nv=l.type==='semen'?_normalizeSemenValues(l.values):l.values;
+  const missing=fields.filter(f=>nv[f]===undefined||nv[f]===null||nv[f]==='');
+  if(!missing.length)return '';
+  return `<div style="font-size:.6rem;color:#b45309;margin-top:3px;padding:3px 6px;background:#fef3c7;border-radius:4px">⚠️ 누락: ${missing.join(', ')}</div>`;
+}
+async function _brkReanalyzeLab(idx,forceAiId){
   const m=getBrkMaster();if(!m)return;
   const l=m.labResults?.[idx];if(!l?.imgSrc)return;
-  // Vision 유리 모델 우선순위: gemini > gpt > claude
-  const aiId=S.keys?.gemini?'gemini':(S.keys?.gpt?'gpt':(S.keys?.claude?'claude':null));
+  // Vision 유리 모델 우선순위: gemini > gpt > claude (또는 강제 지정)
+  const aiId=forceAiId||(S.keys?.gemini?'gemini':(S.keys?.gpt?'gpt':(S.keys?.claude?'claude':null)));
   if(!aiId){showToast('⚠️ AI API 키 필요 (Gemini/GPT/Claude)');return;}
   showToast('🔄 '+AI_DEFS[aiId].name+'으로 재분석 중...',8000);
   const base64=l.imgSrc.split(',')[1];

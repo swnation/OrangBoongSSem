@@ -246,6 +246,40 @@ function renderMigraineForecast() {
   </div>`;
 }
 
+// 홈 대시보드 카드 커스텀
+const _HOME_CARDS=[
+  {id:'sessions',label:'💬 세션 버튼',default:true},
+  {id:'forecast',label:'🌤 편두통 예보',default:true},
+  {id:'warnings',label:'⚠️ 패턴 경고',default:true},
+  {id:'drugWarn',label:'💊 약물 상호작용',default:true},
+  {id:'aiSuggestions',label:'🤖 AI 질문 추천',default:true},
+  {id:'insight',label:'💡 인사이트',default:true},
+  {id:'weeklySummary',label:'📊 주간 요약',default:true},
+  {id:'brkTimeline',label:'🍼 붕룩이 타임라인',default:true},
+  {id:'knowledge',label:'🧠 누적 협진 지식',default:true},
+  {id:'recentSessions',label:'📅 최근 세션',default:true},
+];
+function _homeCardVisible(id){
+  const saved=JSON.parse(localStorage.getItem('om_home_cards')||'{}');
+  if(id in saved)return saved[id];
+  return (_HOME_CARDS.find(c=>c.id===id)||{}).default!==false;
+}
+function _toggleHomeCard(id){
+  const saved=JSON.parse(localStorage.getItem('om_home_cards')||'{}');
+  saved[id]=!_homeCardVisible(id);
+  localStorage.setItem('om_home_cards',JSON.stringify(saved));
+  renderView('home');
+}
+function _renderHomeSettings(){
+  return `<div style="margin-bottom:10px;padding:10px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px">
+    <div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">📌 대시보드 카드 설정</div>
+    ${_HOME_CARDS.map(c=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.72rem;cursor:pointer">
+      <input type="checkbox" ${_homeCardVisible(c.id)?'checked':''} onchange="_toggleHomeCard('${c.id}')" style="accent-color:var(--ac)"> ${c.label}
+    </label>`).join('')}
+  </div>`;
+}
+var _homeSettingsOpen=false;
+
 function renderHome() {
   const m=DM(); if(!m) return '<div class="hint">데이터 로딩 중...</div>';
   const accum=m.accumulated; const sessions=m.sessions||[];
@@ -259,21 +293,26 @@ function renderHome() {
       <div class="hist-q">${esc((s.question||'').substring(0,80))}</div>
     </div>`).join('');
 
+  const _v=id=>_homeCardVisible(id);
   return `
-    <button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
+    <div style="display:flex;align-items:center;margin-bottom:8px">
+      <button onclick="_homeSettingsOpen=!_homeSettingsOpen;renderView('home')" style="margin-left:auto;font-size:.65rem;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">⚙️ 카드 설정</button>
+    </div>
+    ${_homeSettingsOpen?_renderHomeSettings():''}
+    ${_v('sessions')?`<button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
     <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
     <button onclick="startLightMode()" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,#f0fdf4,#eff6ff);border:1.5px solid var(--bd);border-radius:12px;cursor:pointer;font-size:.88rem;width:100%;margin-bottom:12px;margin-top:-8px">
       <span style="font-size:1.2rem">⚡</span>
       <div style="text-align:left"><div style="font-weight:600;color:var(--ink)">빠른 체크</div><div style="font-size:.68rem;color:var(--mu)">AI 1개 · 최근 기록 기반 빠른 요약</div></div>
-    </button>
-    ${renderMigraineForecast()}
-    ${renderPatternWarnings()}
-    ${renderDrugInteractionWarning()}
-    ${(()=>{_aiSuggestions=generateAIQuestionSuggestions();return renderAIQuestionSuggestions();})()}
-    ${renderInsightCard()}
-    ${renderWeeklySummaryCard()}
-    ${renderBungrukiTimeline()}
-    <div class="card">
+    </button>`:''}
+    ${_v('forecast')?renderMigraineForecast():''}
+    ${_v('warnings')?renderPatternWarnings():''}
+    ${_v('drugWarn')?renderDrugInteractionWarning():''}
+    ${_v('aiSuggestions')?(()=>{_aiSuggestions=generateAIQuestionSuggestions();return renderAIQuestionSuggestions();})():''}
+    ${_v('insight')?renderInsightCard():''}
+    ${_v('weeklySummary')?renderWeeklySummaryCard():''}
+    ${_v('brkTimeline')?renderBungrukiTimeline():''}
+    ${_v('knowledge')?`<div class="card">
       <div class="card-title">🧠 누적 협진 지식 <span class="badge badge-green">Drive 동기화</span>
         <button onclick="cleanupAccumulated()" style="margin-left:auto;font-size:.65rem;padding:3px 10px;border:1.5px solid var(--ac);border-radius:5px;background:none;color:var(--ac);cursor:pointer;font-weight:600">🤖 AI 정리</button>
       </div>
@@ -295,8 +334,8 @@ function renderHome() {
         <div class="accum-add-row"><input class="accum-add-input" id="add-discarded" placeholder="새 폐기 가설 추가...">
           <button class="btn-accum-add" onclick="addAccum('discarded_hypotheses','add-discarded')">+ 추가</button></div>
       </div>
-    </div>
-    ${sessions.length?`<div class="card"><div class="card-title">📅 최근 세션</div>${recentSessions}
+    </div>`:''}
+    ${_v('recentSessions')&&sessions.length?`<div class="card"><div class="card-title">📅 최근 세션</div>${recentSessions}
       ${sessions.length>3?`<div style="text-align:center;margin-top:8px"><button class="btn-cancel" onclick="switchView('history')" style="font-size:.78rem">전체 ${sessions.length}개 보기</button></div>`:''}</div>`:''}`;
 }
 
@@ -1053,6 +1092,14 @@ function renderStatsView() {
   ${renderTriggerNrsChart(last30)}
   ${renderPressureChart(last30)}
   ${renderTreatmentTracker()}
+  <div class="card">
+    <div class="card-title">🤖 AI 인사이트</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-export" onclick="_aiDailySummary()" style="flex:1">📅 오늘 AI 요약</button>
+      <button class="btn-export" onclick="_aiMonthlyInsight()" style="flex:1;background:#fff;color:#7c3aed;border:2px solid #7c3aed;font-weight:600">📊 월간 패턴 분석</button>
+    </div>
+    <div id="ai-insight-result" style="margin-top:8px"></div>
+  </div>
   <div style="text-align:center;margin-top:8px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
     <button class="btn-export" onclick="exportPDF()">📑 기본 리포트</button>
     <button class="btn-export" onclick="exportMonthlyPDF()" style="background:#fff;color:#1e40af;border:2px solid #1e40af;font-weight:700">📋 월간 리포트 (병원용)</button>
@@ -1613,6 +1660,7 @@ function renderMedComplianceCalendar(logs) {
       <span>🟢 90%+</span><span>🟡 50-89%</span><span>🔴 &lt;50%</span><span>⬜ 미기록</span>
     </div>
     ${unmapped?`<div style="margin-top:8px;text-align:center"><button onclick="_syncMedsToMedCheck()" style="font-size:.68rem;padding:5px 14px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">🔄 기존 투약 기록 ${unmapped}건 → 캘린더 반영</button></div>`:''}
+    <div style="margin-top:4px;text-align:center"><button onclick="_normalizeMedCheckKeys()" style="font-size:.62rem;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:none;color:var(--mu);cursor:pointer;font-family:var(--font)">🔧 medCheck 키 정규화</button></div>
     <div id="mc-cal-detail"></div>
   </div>`;
 }
@@ -1662,6 +1710,107 @@ async function _syncMedsToMedCheck(){
   catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
 }
 
+
+// medCheck 키 정규화 — 약물 변경이력에 따라 키를 현재 기준으로 매핑
+async function _normalizeMedCheckKeys(){
+  if(!confirm('medCheck 키를 약물 변경이력 기준으로 정규화합니다.\n불일치 키가 현재 약물명으로 매핑됩니다.'))return;
+  const ds=D();if(!ds.logData?.length)return showToast('기록 없음');
+  const conditions=(ds.master?.conditions||[]).filter(c=>c.status==='active'||c.status==='remission');
+  if(!conditions.length)return showToast('활성 질환 없음');
+  let count=0;
+  ds.logData.forEach(l=>{
+    if(!l.medCheck||!Object.keys(l.medCheck).length)return;
+    const date=l.datetime?.slice(0,10)||ds.logMonth+'-01';
+    const expectedMeds=new Set();
+    conditions.forEach(c=>(typeof getMedsAtDate==='function'?getMedsAtDate(c,date):c.medsList||[]).forEach(m=>expectedMeds.add(m)));
+    const oldKeys=Object.keys(l.medCheck);
+    const orphans=oldKeys.filter(k=>!expectedMeds.has(k));
+    if(!orphans.length)return;
+    const newMc={...l.medCheck};let changed=false;
+    orphans.forEach(k=>{
+      // 유사도 매칭: 공백/대소문자 무시, 부분 포함
+      const norm=k.replace(/\s+/g,'').toLowerCase();
+      const match=[...expectedMeds].find(m=>{
+        const mn=m.replace(/\s+/g,'').toLowerCase();
+        return mn===norm||mn.includes(norm)||norm.includes(mn);
+      });
+      if(match&&!(match in newMc)){newMc[match]=newMc[k];delete newMc[k];changed=true;}
+    });
+    if(changed){l.medCheck=newMc;count++;}
+  });
+  if(!count)return showToast('정규화 대상 없음');
+  try{await saveLogData();showToast('✅ '+count+'건 medCheck 키 정규화 완료');renderView(S.currentView);}
+  catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AI DAILY SUMMARY & MONTHLY INSIGHT
+// ═══════════════════════════════════════════════════════════════
+async function _aiDailySummary(){
+  const el=document.getElementById('ai-insight-result');if(!el)return;
+  const ds=D();const logs=ds.logData||[];
+  const today=kstToday();
+  const todayLogs=logs.filter(l=>l.datetime?.slice(0,10)===today);
+  if(!todayLogs.length){el.innerHTML='<div style="font-size:.72rem;color:var(--mu)">오늘 기록이 없습니다.</div>';return;}
+  el.innerHTML='<div style="font-size:.72rem;color:var(--ac)">🔄 AI 요약 생성 중...</div>';
+  const dc=DC();
+  const data=todayLogs.map(l=>{
+    const parts=[l.datetime?.slice(11,16)];
+    if(l.nrs>=0)parts.push('NRS:'+l.nrs);
+    if(l.mood)parts.push('기분:'+l.mood);
+    if(l.symptoms?.length)parts.push('증상:'+l.symptoms.join(','));
+    if(l.meds?.length)parts.push('약물:'+l.meds.join(','));
+    if(l.treatments?.length)parts.push('처치:'+l.treatments.join(','));
+    if(l.medCheck)parts.push('복용:'+Object.entries(l.medCheck).map(([k,v])=>k+'='+(v?'O':'X')).join(','));
+    if(l.memo)parts.push('메모:'+l.memo.slice(0,100));
+    if(l.outcome?.rating)parts.push('경과:'+l.outcome.rating);
+    return parts.join(' | ');
+  }).join('\n');
+  const system=`당신은 ${dc.icon} ${dc.label} 건강 기록 요약 도우미입니다. 오늘 하루 기록을 환자 관점에서 간결하게 요약하세요. 2-3문장. 위험 신호가 있으면 알려주세요. 한국어로 답변.`;
+  try{
+    const aiId=S.keys.claude?'claude':S.keys.gpt?'gpt':S.keys.gemini?'gemini':null;
+    if(!aiId){el.innerHTML='<div style="color:var(--re)">AI API 키를 설정하세요.</div>';return;}
+    const result=await callAI(aiId,system,'오늘('+today+') 기록:\n'+data);
+    el.innerHTML='<div style="font-size:.75rem;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd);line-height:1.5">'+renderMD(result)+'</div>';
+  }catch(e){el.innerHTML='<div style="color:var(--re);font-size:.72rem">AI 오류: '+esc(e.message)+'</div>';}
+}
+async function _aiMonthlyInsight(){
+  const el=document.getElementById('ai-insight-result');if(!el)return;
+  const ds=D();const logs=ds.logData||[];const lc=DC().logConfig;const dc=DC();
+  if(logs.length<3){el.innerHTML='<div style="font-size:.72rem;color:var(--mu)">분석하려면 최소 3건 이상의 기록이 필요합니다.</div>';return;}
+  el.innerHTML='<div style="font-size:.72rem;color:var(--ac)">🔄 월간 패턴 분석 중...</div>';
+  // 데이터 요약 구성
+  const byDate={};
+  logs.forEach(l=>{
+    const d=l.datetime?.slice(0,10);if(!d)return;
+    if(!byDate[d])byDate[d]={nrs:[],symptoms:[],meds:[],treatments:[],outcomes:[]};
+    if(l.nrs>=0)byDate[d].nrs.push(l.nrs);
+    (l.symptoms||[]).forEach(s=>byDate[d].symptoms.push(s));
+    (l.meds||[]).forEach(m=>byDate[d].meds.push(m));
+    if(l.outcome?.rating)byDate[d].outcomes.push(l.outcome.rating);
+  });
+  const summary=Object.entries(byDate).sort(([a],[b])=>a.localeCompare(b)).map(([d,v])=>{
+    const parts=[d];
+    if(v.nrs.length)parts.push('NRS:'+Math.round(v.nrs.reduce((a,b)=>a+b,0)/v.nrs.length*10)/10);
+    if(v.symptoms.length)parts.push('증상:'+[...new Set(v.symptoms)].join(','));
+    if(v.meds.length)parts.push('약물:'+[...new Set(v.meds)].join(','));
+    if(v.outcomes.length)parts.push('경과:'+v.outcomes.join(','));
+    return parts.join(' | ');
+  }).join('\n');
+  const system=`당신은 ${dc.icon} ${dc.label} 건강 데이터 분석가입니다.
+월간 기록을 분석하여 다음을 한국어로 답변하세요:
+1. **주요 패턴**: 반복되는 증상/시간대/요일 패턴
+2. **약물 효과**: 약물-증상 상관관계
+3. **주의점**: 악화 경향이나 우려 사항
+4. **제안**: 데이터 기반 관리 제안
+과도한 해석을 피하고 데이터에 근거한 관찰만 기술하세요. 간결하게.`;
+  try{
+    const aiId=S.keys.claude?'claude':S.keys.gpt?'gpt':S.keys.gemini?'gemini':null;
+    if(!aiId){el.innerHTML='<div style="color:var(--re)">AI API 키를 설정하세요.</div>';return;}
+    const result=await callAI(aiId,system,ds.logMonth+' 월간 기록 ('+logs.length+'건):\n'+summary);
+    el.innerHTML='<div style="font-size:.75rem;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd);line-height:1.5">'+renderMD(result)+'</div>';
+  }catch(e){el.innerHTML='<div style="color:var(--re);font-size:.72rem">AI 오류: '+esc(e.message)+'</div>';}
+}
 
 // ═══════════════════════════════════════════════════════════════
 // TREATMENT CYCLE TRACKING

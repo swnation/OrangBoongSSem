@@ -901,10 +901,31 @@ function _setOutcomeTimer(entryId,delayMin){
   if(idx<0) return false;
   const delayMs=delayMin*60000;
   logs[idx].outcomeNotifyAt=Date.now()+delayMs;
+  logs[idx].outcomeNotifySent=false;
   saveQuickLogs(logs);
   cloudSave([logs[idx]]);
-  _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(entryId),delayMs);
+  // ntfy 서버사이드 스케줄링 — 페이지 닫혀도 알림 도착
+  _sendServerScheduledNtfy(logs[idx],delayMin);
+  // UI 갱신용 로컬 타이머 (발송은 서버가 함)
+  _outcomeTimer=setTimeout(()=>_markOutcomeSent(entryId),delayMs);
   return true;
+}
+function _markOutcomeSent(entryId){
+  const logs=getQuickLogs();
+  const idx=logs.findIndex(l=>String(l.id)===String(entryId));
+  if(idx>=0&&!logs[idx].outcomeNotifySent){logs[idx].outcomeNotifySent=true;saveQuickLogs(logs);cloudSave([logs[idx]]);}
+}
+async function _sendServerScheduledNtfy(entry,delayMin){
+  const orangiTopic=localStorage.getItem('om_ntfy_orangi');
+  if(!orangiTopic||entry.outcome) return;
+  const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
+  const meds=(entry.meds||[]).join(', ');
+  const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
+  const rateUrl=baseUrl+'rate.html';
+  const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
+  const actions='view,😊 호전,'+rateUrl+'?r=better&id='+entry.id+';view,😐 비슷,'+rateUrl+'?r=same&id='+entry.id+';view,😣 악화,'+rateUrl+'?r=worse&id='+entry.id;
+  const ntfyUrl='https://ntfy.sh/'+encodeURIComponent(orangiTopic)+'?title='+encodeURIComponent('🤕 두통 경과 확인')+'&actions='+encodeURIComponent(actions)+'&delay='+delayMin+'m';
+  try{await fetch(ntfyUrl,{method:'POST',body:info+' → 지금 어때요?'});}catch(e){console.warn('ntfy scheduled send failed:',e);}
 }
 
 function scheduleOutcomeNtfy(entry,customDelayMin){
@@ -943,16 +964,19 @@ async function sendOutcomeNtfy(entryId){
 
 function checkPendingOutcome(){
   // 기록에 저장된 outcomeNotifyAt을 기준으로 체크
+  // ntfy 서버사이드 스케줄링이므로 재발송 불필요 — 로컬 상태만 업데이트
   const logs=getQuickEntries();
   const now=Date.now();
   for(let i=logs.length-1;i>=0;i--){
     const l=logs[i];
     if(l.outcome||l.outcomeNotifySent||!l.outcomeNotifyAt) continue;
     if(now>=l.outcomeNotifyAt){
-      sendOutcomeNtfy(l.id);
+      // 서버가 이미 발송 — 로컬 상태만 업데이트
+      _markOutcomeSent(l.id);
     } else {
+      // 아직 미도래 — UI 갱신용 타이머
       if(_outcomeTimer) clearTimeout(_outcomeTimer);
-      _outcomeTimer=setTimeout(()=>sendOutcomeNtfy(l.id),l.outcomeNotifyAt-now);
+      _outcomeTimer=setTimeout(()=>_markOutcomeSent(l.id),l.outcomeNotifyAt-now);
     }
     break; // 가장 최근 미발송 1건만
   }

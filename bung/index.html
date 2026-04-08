@@ -127,7 +127,7 @@ function handleToken(resp){
   const isR=!!token;token=resp.access_token;localStorage.setItem('om_auto_login','true');scheduleTokenRefresh(resp.expires_in||3600);
   if(_tokenRefreshResolve){_tokenRefreshResolve(true);_tokenRefreshResolve=null;return;}if(isR)return;
   document.getElementById('status-dot').style.background='#2d8a5a';document.getElementById('tab-bar').style.display='flex';
-  selectedDate=kstToday();loadAllDomains();
+  selectedDate=kstToday();loadAllDomains().then(()=>_syncOfflinePending());
 }
 function checkGSI(n){if(!n)n=0;if(window.google?.accounts?.oauth2){document.getElementById('gsi-status').textContent='✓ 준비됨';document.getElementById('gsi-status').style.color='#2d6a4f';if(localStorage.getItem('om_auto_login')==='true'){try{if(!tokenClient)tokenClient=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:handleToken});tokenClient.requestAccessToken({prompt:''});}catch(e){console.error('Auto-login failed:',e);}}}else if(n<20){setTimeout(()=>checkGSI(n+1),500);}else{document.getElementById('gsi-status').textContent='⚠️ 인증 실패';}}
 checkGSI(0);
@@ -139,6 +139,47 @@ async function driveRead(id){if(isTokenExpired())await ensureValidToken();return
 async function driveCreate(n,data,p){if(isTokenExpired())await ensureValidToken();const b='om_bd_x7',meta=JSON.stringify(p?{name:n,mimeType:'application/json',parents:[p]}:{name:n,mimeType:'application/json'}),body='--'+b+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+meta+'\r\n--'+b+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify(data)+'\r\n--'+b+'--';const r=await fetchWithRetry('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'multipart/related; boundary='+b},body});const d=await r.json();if(d.error)throw new Error(d.error.message);return d.id;}
 async function driveUpdate(id,data){if(isTokenExpired())await ensureValidToken();const r=await fetchWithRetry('https://www.googleapis.com/upload/drive/v3/files/'+id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(data)});const d=await r.json();if(d.error)throw new Error(d.error.message);return d;}
 async function getOrCreateFolder(n){if(isTokenExpired())await ensureValidToken();const q="name='"+n+"' and mimeType='application/vnd.google-apps.folder' and trashed=false";const r=await fetchWithRetry('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&fields=files(id,name)',{headers:{Authorization:'Bearer '+token}});const d=await r.json();if(d.error)throw new Error(d.error.message);if(d.files?.length>0)return d.files[0].id;const cr=await fetchWithRetry('https://www.googleapis.com/drive/v3/files?fields=id',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({name:n,mimeType:'application/vnd.google-apps.folder'})});const cd=await cr.json();if(cd.error)throw new Error(cd.error.message);return cd.id;}
+
+// ── 오프라인 임시저장 + 온라인 동기화 ──
+function _offlineSave(domId,month,entry){
+  const key='om_bung_offline';
+  const pending=JSON.parse(localStorage.getItem(key)||'[]');
+  pending.push({domId,month,entry,savedAt:Date.now()});
+  localStorage.setItem(key,JSON.stringify(pending));
+}
+function _getOfflinePending(){return JSON.parse(localStorage.getItem('om_bung_offline')||'[]');}
+async function _syncOfflinePending(){
+  const pending=_getOfflinePending();
+  if(!pending.length||!token)return;
+  let synced=0;
+  for(const p of pending){
+    try{
+      const dc=BUNG_DOMAINS[p.domId];if(!dc)continue;
+      const ds=domainData[p.domId];if(!ds?.folderId)continue;
+      await loadLogMonth(p.domId,p.month);
+      const ml=ds.logs[p.month];if(!ml)continue;
+      const existing=ml.data.find(l=>l.datetime===p.entry.datetime&&l.id===p.entry.id);
+      if(!existing)ml.data.push(p.entry);
+      ml.data.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
+      const logName=dc.logPrefix+'_'+p.month+'.json';
+      if(ml.fileId)await driveUpdate(ml.fileId,ml.data);else ml.fileId=await driveCreate(logName,ml.data,ds.folderId);
+      synced++;
+    }catch(e){console.error('Offline sync error:',e);}
+  }
+  if(synced>0){localStorage.setItem('om_bung_offline','[]');showToast('☁️ 오프라인 '+synced+'건 동기화 완료');}
+}
+window.addEventListener('online',()=>{if(token)_syncOfflinePending();});
+
+// 탭 전환 시 자동 동기화 (메인앱↔데일리체크 양방향)
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&token){
+    const month=selectedDate.slice(0,7);
+    for(const id of Object.keys(BUNG_DOMAINS)){if(domainData[id]?.logs?.[month])delete domainData[id].logs[month];}
+    Promise.all(Object.keys(BUNG_DOMAINS).map(id=>loadLogMonth(id,month))).then(()=>{
+      if(currentTab===0)renderCheckTab();else renderCalendarTab();
+    }).catch(e=>console.error('Sync:',e));
+  }
+});
 
 // DATA LOADING (multi-month cache)
 async function loadAllDomains(){
@@ -164,7 +205,8 @@ async function loadLogMonth(id,month){
     else ds.logs[month]={fileId:null,data:[]};
   }catch(e){ds.logs[month]={fileId:null,data:[]};}
 }
-function findEntry(id,date){const ml=domainData[id]?.logs?.[date.slice(0,7)];return ml?.data?.find(l=>l.datetime?.slice(0,10)===date)||null;}
+function _isBungEntry(domId,e){return domId!=='bungruki'||!e.who||e.who==='붕쌤'||e.who==='함께';}
+function findEntry(id,date){const ml=domainData[id]?.logs?.[date.slice(0,7)];return ml?.data?.find(l=>l.datetime?.slice(0,10)===date&&_isBungEntry(id,l))||null;}
 
 // 날짜별 활성 약물 (medHistory 반영 — 메인앱 getMedsAtDate 동일)
 function _medsAtDate(condition,date){
@@ -207,7 +249,7 @@ function getDateEntries(date){
   for(const domId of Object.keys(BUNG_DOMAINS)){
     const ml=domainData[domId]?.logs?.[date.slice(0,7)];
     if(!ml?.data)continue;
-    ml.data.filter(l=>l.datetime?.slice(0,10)===date).forEach(e=>{
+    ml.data.filter(l=>l.datetime?.slice(0,10)===date&&_isBungEntry(domId,l)).forEach(e=>{
       const key=e.datetime||'';
       if(!byTime[key])byTime[key]={...e,_domains:[domId]};
       else byTime[key]._domains.push(domId);
@@ -389,11 +431,23 @@ async function saveAll(){
       const logName=dc.logPrefix+'_'+month+'.json';
       if(ml.fileId)await driveUpdate(ml.fileId,ml.data);else ml.fileId=await driveCreate(logName,ml.data,ds.folderId);
       results.push({domId,status:'ok'});
-    }catch(e){console.error('Save '+domId+':',e);results.push({domId,status:'error',msg:e.message});}
+    }catch(e){
+      console.error('Save '+domId+':',e);
+      // 오프라인 폴백: localStorage에 임시 저장
+      const mc=domChecks[domId]||{};
+      if(Object.keys(mc).length||nrs>=0||memo){
+        const offEntry={id:_sharedId,datetime:selectedDate+'T'+timeVal,nrs,medCheck:Object.keys(mc).length?mc:undefined,symptoms:symptoms.length?symptoms:undefined,dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined,memo:memo||''};
+        _offlineSave(domId,selectedDate.slice(0,7),offEntry);
+        results.push({domId,status:'offline'});
+      }else{results.push({domId,status:'error',msg:e.message});}
+    }
   }
-  let sh='';results.forEach(r=>{const dc=BUNG_DOMAINS[r.domId];if(!dc||r.status==='skip')return;sh+=dc.icon+' '+dc.label+(r.status==='ok'?' ✅':' ❌ '+esc(r.msg))+'<br>';});
+  let sh='';results.forEach(r=>{const dc=BUNG_DOMAINS[r.domId];if(!dc||r.status==='skip')return;sh+=dc.icon+' '+dc.label+(r.status==='ok'?' ✅':r.status==='offline'?' 📴 오프라인 저장':' ❌ '+esc(r.msg))+'<br>';});
   statusEl.innerHTML=sh;
-  const ok=results.every(r=>r.status==='ok'||r.status==='skip');
+  const hasOffline=results.some(r=>r.status==='offline');
+  if(hasOffline)sh+='<div style="font-size:.65rem;color:#b45309;margin-top:4px">📴 온라인 복구 시 자동 동기화됩니다</div>';
+  statusEl.innerHTML=sh;
+  const ok=results.every(r=>r.status==='ok'||r.status==='skip'||r.status==='offline');
   btn.disabled=false;btn.textContent=ok?'✅ 저장 완료':'⚠️ 일부 실패';
   if(ok){showToast('✅ 저장 완료');editingEntryId=selectedDate+'T'+timeVal;setTimeout(()=>renderCheckTab(),500);}
   setTimeout(()=>{if(btn)btn.textContent='💾 저장';},3000);

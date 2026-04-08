@@ -204,10 +204,23 @@ async function pollCloudQuickLogs() {
 // 로컬 체크: 10초, 클라우드 체크: 3분
 setInterval(checkQuickLogUpdates, 10000);
 setInterval(pollCloudQuickLogs, 60000); // 1분마다 클라우드 확인
-// 앱이 포그라운드로 돌아올 때 즉시 체크
+// 앱이 포그라운드로 돌아올 때 즉시 체크 + 데일리체크↔메인앱 양방향 동기화
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) pollCloudQuickLogs();
+  if (!document.hidden) {
+    pollCloudQuickLogs();
+    _syncReloadCurrentMonth();
+  }
 });
+async function _syncReloadCurrentMonth(){
+  if(!S.token||!S.currentDomain) return;
+  const ds=D(); if(!ds.folderId||!ds.logMonth) return;
+  try{
+    const files=await driveSearch(logFileName(ds.logMonth),ds.folderId);
+    if(files.length>0){ds.logFileId=files[0].id;const d=await driveRead(ds.logFileId);ds.logData=Array.isArray(d)?d:[];}
+    else{ds.logData=[];ds.logFileId=null;}
+    if(document.querySelector('.log-month')||document.querySelector('.cal-grid')) renderView(S.currentView||'log');
+  }catch(e){console.error('Sync reload:',e);}
+}
 
 function renderQuickLogBanner() {
   if (S.currentDomain !== 'orangi-migraine') return '';
