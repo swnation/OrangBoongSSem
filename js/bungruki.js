@@ -125,6 +125,8 @@ const _DEFAULT_MILESTONES = [
 
 let _brkDashTab = 'cycle'; // cycle | daily | lab | milestone | safety
 let _brkDailyCat = 'suppl'; // suppl | exercise | treatment | memo
+let _brkCalShowOrangi = true;
+let _brkCalShowBung = true;
 
 function getBrkMaster() {
   var ds = S.domainState['bungruki'];
@@ -197,18 +199,28 @@ function buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDay
     else if (isFertile === true) { bg = '#ede9fe'; color = '#8b5cf6'; }
     else if (isFertile === 'predicted') { bg = '#f5f3ff'; color = '#a78bfa'; }
     if (isToday) border = '2px solid var(--ac)';
-    // 일일 기록 아이콘
+    // 일일 기록 아이콘 (오랑이/붕쌤 필터 적용)
     var dayIcons = '';
     var dc = dailyChecks && dailyChecks[ds];
     if (dc) {
       var ic = [];
+      var oShow = typeof _brkCalShowOrangi!=='undefined'?_brkCalShowOrangi:true;
+      var bShow = typeof _brkCalShowBung!=='undefined'?_brkCalShowBung:true;
+      var oData = oShow&&dc.orangi?dc.orangi:{};
+      var bData = bShow&&dc.bung?dc.bung:{};
       var allKeys = BRK_SUPPL_ORANGI.concat(BRK_SUPPL_BUNG);
-      var hasSuppl = allKeys.some(function(k){return (dc.orangi && dc.orangi[k]) || (dc.bung && dc.bung[k]);});
-      if (hasSuppl) ic.push('💊');
-      if ((dc.orangi && dc.orangi.exercise) || (dc.bung && dc.bung.exercise)) ic.push('🏃');
-      if ((dc.orangi && dc.orangi.treatment) || (dc.bung && dc.bung.treatment)) ic.push('🏥');
-      if ((dc.orangi && dc.orangi.memo) || (dc.bung && dc.bung.memo)) ic.push('📝');
-      if (ic.length) dayIcons = '<div style="font-size:.4rem;line-height:1;margin-top:1px">'+ic.join('')+'</div>';
+      if (allKeys.some(function(k){return oData[k]||bData[k];})) ic.push('💊');
+      if (oData.exercise||bData.exercise) ic.push('🏃');
+      if (oData.treatment||bData.treatment) ic.push('🏥');
+      if (oData.memo||bData.memo) ic.push('📝');
+      // 누구 기록인지 표시
+      var whoMark='';
+      var hasO=BRK_SUPPL_ORANGI.some(function(k){return oData[k];})||oData.exercise||oData.treatment||oData.memo;
+      var hasB=BRK_SUPPL_BUNG.some(function(k){return bData[k];})||bData.exercise||bData.treatment||bData.memo;
+      if(hasO&&hasB)whoMark='<span style="font-size:.35rem">🧡🩵</span>';
+      else if(hasO)whoMark='<span style="font-size:.35rem">🧡</span>';
+      else if(hasB)whoMark='<span style="font-size:.35rem">🩵</span>';
+      if (ic.length) dayIcons = '<div style="font-size:.4rem;line-height:1;margin-top:1px">'+ic.join('')+whoMark+'</div>';
     }
     var ovIcon = isOv ? '<div style="font-size:.5rem">🟣</div>' : '';
     cells += '<div onclick="brkTogglePeriodDay(\''+ds+'\')" style="text-align:center;padding:2px 0;font-size:.78rem;border-radius:6px;cursor:pointer;background:'+bg+';color:'+color+';border:'+border+';font-weight:'+(isToday?'700':'400')+'">'+day+ovIcon+dayIcons+'</div>';
@@ -435,6 +447,10 @@ function renderCycleTracker() {
     + '<span>🔴 생리일</span><span>🟣 배란 추정</span><span>🟪 가임기</span><span style="border:1px dashed #ccc;padding:0 4px;border-radius:4px">점선=예측</span>'
     + '</div><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;font-size:.65rem;color:var(--mu)">'
     + '<span>💊 영양제</span><span>🏃 운동</span><span>🏥 치료</span><span>📝 메모</span>'
+    + '</div><div style="display:flex;gap:10px;margin-top:6px;align-items:center;font-size:.65rem;color:var(--mu)">'
+    + '<span>필터:</span>'
+    + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" '+(_brkCalShowOrangi?'checked':'')+' onchange="_brkCalShowOrangi=this.checked;renderView(\'meds\')" style="accent-color:#f97316"> 🧡 오랑이</label>'
+    + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" '+(_brkCalShowBung?'checked':'')+' onchange="_brkCalShowBung=this.checked;renderView(\'meds\')" style="accent-color:#06b6d4"> 🩵 붕쌤</label>'
     + '</div>'
     + nextInfo
     + '<div style="margin-top:12px">'
@@ -658,7 +674,7 @@ function renderCrossSyncStatus(date, who) {
 }
 
 var BRK_SUPPL_ORANGI = ['folicAcid','iron','vitaminD','multivitamin','magnesium'];
-var BRK_SUPPL_BUNG = ['arginine','coq10','silymarin','multivitamin','febuxostat'];
+var BRK_SUPPL_BUNG = ['arginine','coq10','silymarin','multivitamin'];
 
 function _getBrkWhoData(m) {
   if (!m) m = getBrkMaster(); if (!m) return null;
@@ -693,17 +709,26 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
     { key: 'coq10', label: 'CoQ10', icon: '⚡' },
     { key: 'silymarin', label: '실리마린', icon: '🌿' },
     { key: 'multivitamin', label: '멀티비타민', icon: '💊' },
-    { key: 'febuxostat', label: 'Febuxostat', icon: '💉' },
   ];
+  // 사용자 추가 영양제 (localStorage)
+  var customKey='om_brk_suppl_'+(isOrangi?'orangi':'bung');
+  var customs=JSON.parse(localStorage.getItem(customKey)||'[]');
+  if(isOrangi) customs.forEach(function(c){orangiItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
+  else customs.forEach(function(c){bungItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
   var items = isOrangi ? orangiItems : bungItems;
 
   var checkHtml = items.map(function(it) {
     var checked = whoData[it.key] ? true : false;
-    return '<div onclick="brkToggleCheck(\''+it.key+'\')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:'+(checked?'#f0fdf4':'var(--sf2)')+';border:1.5px solid '+(checked?'#86efac':'var(--bd)')+';border-radius:8px;cursor:pointer;transition:all .2s">'
+    return '<div style="display:flex;align-items:center;gap:0">'
+      + '<div onclick="brkToggleCheck(\''+it.key+'\')" style="flex:1;display:flex;align-items:center;gap:10px;padding:10px 12px;background:'+(checked?'#f0fdf4':'var(--sf2)')+';border:1.5px solid '+(checked?'#86efac':'var(--bd)')+';border-radius:8px;cursor:pointer;transition:all .2s">'
       + '<span style="font-size:1.2rem">'+(checked?'✅':it.icon)+'</span>'
       + '<span style="font-size:.82rem;font-weight:'+(checked?'600':'400')+';color:'+(checked?'#16a34a':'var(--tx)')+'">'+it.label+'</span>'
+      + '</div>'
+      + (it.custom?'<button onclick="_brkRemoveSuppl(\''+esc(it.key)+'\')" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:.8rem;padding:4px 8px" title="삭제">✕</button>':'')
       + '</div>';
   }).join('');
+  // 추가 버튼
+  checkHtml += '<div style="display:flex;gap:6px;margin-top:8px"><input id="brk-suppl-add" class="dx-form-input" placeholder="영양제/약물 이름" style="flex:1;font-size:.78rem;padding:6px 10px"><button onclick="_brkAddSuppl()" style="font-size:.72rem;padding:6px 12px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font);white-space:nowrap">+ 추가</button></div>';
 
   // 주간 요약
   var weekDays = [];
@@ -791,6 +816,32 @@ function _brkRenderMemo(whoData) {
     + '<textarea id="brk-memo" class="dx-form-input" rows="4" placeholder="컨디션, 증상, 특이사항 등 자유롭게 기록" onchange="brkSetMemo(this.value)" style="width:100%;resize:vertical">'+esc(memo)+'</textarea></div>';
 }
 
+function _brkAddSuppl(){
+  const input=document.getElementById('brk-suppl-add');if(!input)return;
+  const label=input.value.trim();if(!label){showToast('이름을 입력하세요');return;}
+  const key=label.toLowerCase().replace(/[^a-z0-9가-힣]/g,'');
+  const who=_brkCheckWho==='orangi'?'orangi':'bung';
+  const storageKey='om_brk_suppl_'+who;
+  const customs=JSON.parse(localStorage.getItem(storageKey)||'[]');
+  if(customs.find(c=>c.key===key)){showToast('이미 존재합니다');return;}
+  customs.push({key,label});
+  localStorage.setItem(storageKey,JSON.stringify(customs));
+  showToast('✅ '+label+' 추가됨');
+  renderView('meds');
+}
+
+function _brkRemoveSuppl(key){
+  const who=_brkCheckWho==='orangi'?'orangi':'bung';
+  const storageKey='om_brk_suppl_'+who;
+  const customs=JSON.parse(localStorage.getItem(storageKey)||'[]');
+  const item=customs.find(c=>c.key===key);
+  if(!item)return;
+  if(!confirm(item.label+' 항목을 삭제하시겠습니까?'))return;
+  localStorage.setItem(storageKey,JSON.stringify(customs.filter(c=>c.key!==key)));
+  showToast('🗑 '+item.label+' 삭제됨');
+  renderView('meds');
+}
+
 async function brkToggleCheck(key) {
   var r = _getBrkWhoData(); if (!r) return;
   r.whoData[key] = !r.whoData[key];
@@ -812,7 +863,11 @@ function syncBrkToHealth(date, who) {
   const supplKeys = who==='orangi' ? BRK_SUPPL_ORANGI : BRK_SUPPL_BUNG;
   const supplItems = who==='orangi'
     ? [{key:'folicAcid',label:'엽산'},{key:'iron',label:'철분'},{key:'vitaminD',label:'비타민D'},{key:'multivitamin',label:'멀티비타민'},{key:'magnesium',label:'마그네슘'}]
-    : [{key:'arginine',label:'아르기닌'},{key:'coq10',label:'CoQ10'},{key:'silymarin',label:'실리마린'},{key:'multivitamin',label:'멀티비타민'},{key:'febuxostat',label:'Febuxostat'}];
+    : [{key:'arginine',label:'아르기닌'},{key:'coq10',label:'CoQ10'},{key:'silymarin',label:'실리마린'},{key:'multivitamin',label:'멀티비타민'}];
+  // 사용자 추가 영양제도 동기화에 포함
+  var syncCustomKey='om_brk_suppl_'+who;
+  var syncCustoms=JSON.parse(localStorage.getItem(syncCustomKey)||'[]');
+  syncCustoms.forEach(function(c){supplItems.push({key:c.key,label:c.label});});
   const takenSuppl = supplItems.filter(it=>dayData[it.key]).map(it=>it.label);
   const exercise = dayData.exercise || '';
   const memo = dayData.memo || '';
@@ -834,7 +889,7 @@ function syncBrkToHealth(date, who) {
     datetime: date+'T00:00',
     categories: takenSuppl.length ? ['투약'] : [],
     memo: '[🍼 임신준비 연동] '+parts.join(' | '),
-    who: '',
+    who: who==='orangi'?'오랑이':'붕쌤',
   };
   if(exercise) entry.categories.push('운동');
   if(existing) {
@@ -1278,9 +1333,17 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
     <div style="font-size:.7rem;color:var(--tx);margin-top:3px">${summary}</div>
     ${interpret?`<div style="font-size:.65rem;color:#0369a1;margin-top:2px">💡 ${esc(interpret)}</div>`:''}
     ${l.memo?`<div style="margin-top:3px">
-      <div style="font-size:.6rem;color:var(--ac);cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 상세</div>
+      <div style="font-size:.6rem;color:var(--ac);cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 상세/메모</div>
       <div style="display:none;font-size:.65rem;color:var(--mu);margin-top:3px;padding:5px;background:var(--sf);border-radius:5px;white-space:pre-wrap">${esc(l.memo)}</div>
     </div>`:''}
+    ${l.imgSrc?`<div style="margin-top:3px">
+      <div style="font-size:.6rem;color:#7c3aed;cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 원본 이미지</div>
+      <div style="display:none;margin-top:4px"><img src="${l.imgSrc}" style="max-width:100%;border-radius:6px;border:1px solid var(--bd)"></div>
+    </div>`:''}
+    <div style="display:flex;gap:4px;margin-top:4px">
+      <button onclick="_brkEditLabValues(${globalIdx})" style="font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">✏️ 수치 수정</button>
+      ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${globalIdx})" style="font-size:.58rem;padding:2px 8px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>`:''}
+    </div>
   </div>`;
 }
 
@@ -1356,6 +1419,102 @@ async function brkSaveLab() {
 }
 
 // 📷 검사결과 사진 AI 분석
+// 수치 직접 수정
+function _brkEditLabValues(idx){
+  const m=getBrkMaster();if(!m)return;
+  const l=m.labResults?.[idx];if(!l)return;
+  const vals=l.values||{};
+  const fieldsHtml=Object.entries(vals).map(([k,v])=>
+    `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:.72rem;min-width:80px;color:var(--mu)">${esc(k)}</span><input type="text" id="brk-lab-edit-${esc(k)}" value="${esc(String(v))}" class="dx-form-input" style="flex:1;font-size:.78rem;padding:4px 8px"></div>`
+  ).join('');
+  const addFieldHtml=`<div style="display:flex;gap:4px;margin-top:6px"><input id="brk-lab-add-key" class="dx-form-input" placeholder="항목명" style="flex:1;font-size:.72rem;padding:4px 6px"><input id="brk-lab-add-val" class="dx-form-input" placeholder="수치" style="flex:1;font-size:.72rem;padding:4px 6px"><button onclick="_brkAddLabField()" style="font-size:.65rem;padding:3px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;white-space:nowrap">+</button></div>`;
+  window._brkEditLabIdx=idx;
+  showConfirmModal('✏️ 수치 수정 — '+l.date,
+    `<div id="brk-lab-edit-fields">${fieldsHtml}</div>${addFieldHtml}`,
+    [{label:'💾 저장',action:_brkSaveEditLabValues,primary:true},{label:'취소',action:closeConfirmModal}]);
+}
+
+function _brkAddLabField(){
+  const key=document.getElementById('brk-lab-add-key')?.value.trim();
+  const val=document.getElementById('brk-lab-add-val')?.value.trim();
+  if(!key||!val)return;
+  const container=document.getElementById('brk-lab-edit-fields');
+  container.insertAdjacentHTML('beforeend',
+    `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:.72rem;min-width:80px;color:var(--mu)">${esc(key)}</span><input type="text" id="brk-lab-edit-${esc(key)}" value="${esc(val)}" class="dx-form-input" style="flex:1;font-size:.78rem;padding:4px 8px"></div>`);
+  document.getElementById('brk-lab-add-key').value='';
+  document.getElementById('brk-lab-add-val').value='';
+}
+
+async function _brkSaveEditLabValues(){
+  const m=getBrkMaster();if(!m)return;
+  const idx=window._brkEditLabIdx;
+  const l=m.labResults?.[idx];if(!l)return;
+  const newVals={};
+  document.querySelectorAll('#brk-lab-edit-fields input').forEach(inp=>{
+    const key=inp.id.replace('brk-lab-edit-','');
+    const raw=inp.value.trim();
+    const num=parseFloat(raw);
+    newVals[key]=isNaN(num)?raw:num;
+  });
+  l.values=newVals;
+  await saveBrkMaster();
+  closeConfirmModal();
+  showToast('✅ 수치 수정됨');
+  renderView('meds');
+}
+
+// 재분석 (Vision 유리 모델 선택)
+async function _brkReanalyzeLab(idx){
+  const m=getBrkMaster();if(!m)return;
+  const l=m.labResults?.[idx];if(!l?.imgSrc)return;
+  // Vision 유리 모델 우선순위: gemini > gpt > claude
+  const aiId=S.keys?.gemini?'gemini':(S.keys?.gpt?'gpt':(S.keys?.claude?'claude':null));
+  if(!aiId){showToast('⚠️ AI API 키 필요 (Gemini/GPT/Claude)');return;}
+  showToast('🔄 '+AI_DEFS[aiId].name+'으로 재분석 중...',8000);
+  const base64=l.imgSrc.split(',')[1];
+  const mediaType=l.imgSrc.split(';')[0].split(':')[1]||'image/jpeg';
+  const prompt=`이 의료 검사 결과 이미지에서 모든 수치를 정확히 추출하세요.
+항목명과 수치를 빠짐없이 읽어주세요. 정상 범위도 함께 표기해 주세요.
+반드시 JSON으로 응답: {"type":"semen","date":"YYYY-MM-DD","who":"붕쌤","values":{"항목":수치},"abnormal":["이상소견"],"opinion":"소견"}`;
+  try{
+    let result='';
+    if(aiId==='gemini'){
+      const resp=await fetchWithRetry('https://generativelanguage.googleapis.com/v1beta/models/'+(S.models?.gemini||DEFAULT_MODELS.gemini)+':generateContent?key='+S.keys.gemini,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mediaType,data:base64}},{text:prompt}]}]})});
+      const d=await resp.json();result=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    }else if(aiId==='gpt'){
+      const resp=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.keys.gpt},
+        body:JSON.stringify({model:S.models?.gpt||DEFAULT_MODELS.gpt,max_tokens:1500,messages:[{role:'user',content:[
+          {type:'image_url',image_url:{url:l.imgSrc}},{type:'text',text:prompt}]}]})});
+      const d=await resp.json();result=d.choices?.[0]?.message?.content||'';
+    }else{
+      const resp=await fetchWithRetry('https://api.anthropic.com/v1/messages',{method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':S.keys.claude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:S.models?.claude||DEFAULT_MODELS.claude,max_tokens:1500,messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},{type:'text',text:prompt}]}]})});
+      const d=await resp.json();result=d.content?.[0]?.text||'';
+    }
+    const jsonMatch=result.match(/\{[\s\S]*\}/);
+    if(!jsonMatch){showToast('⚠️ 인식 실패',3000);return;}
+    const parsed=JSON.parse(jsonMatch[0]);
+    // 기존 값과 비교
+    const oldVals=l.values||{};
+    const newVals=parsed.values||{};
+    const diffHtml=Object.keys({...oldVals,...newVals}).map(k=>{
+      const o=oldVals[k],n=newVals[k];
+      const changed=String(o)!==String(n);
+      return `<div style="font-size:.7rem;padding:2px 0;${changed?'font-weight:600;color:var(--ac)':''}">${esc(k)}: ${o!==undefined?o:'-'} → ${n!==undefined?n:'-'}${changed?' ✦':''}</div>`;
+    }).join('');
+    showConfirmModal('🔄 재분석 결과 ('+AI_DEFS[aiId].name+')',
+      `<div style="margin-bottom:8px">${diffHtml}</div>${parsed.opinion?'<div style="font-size:.7rem;color:#15803d;padding:6px;background:#f0fdf4;border-radius:6px">💡 '+esc(parsed.opinion)+'</div>':''}
+      <div style="font-size:.65rem;color:var(--mu);margin-top:6px">✦ = 변경된 수치. 적용하시겠습니까?</div>`,
+      [{label:'적용',action:async()=>{l.values=newVals;l.memo=(l.memo||'')+'\n🔄 재분석('+AI_DEFS[aiId].name+'): '+(parsed.opinion||'');await saveBrkMaster();closeConfirmModal();showToast('✅ 재분석 적용');renderView('meds');},primary:true},
+       {label:'취소',action:closeConfirmModal}]);
+  }catch(e){showToast('❌ 재분석 실패: '+e.message,4000);}
+}
+
 async function brkProcessLabPhoto(input) {
   if(!input.files||!input.files[0]) return;
   const file=input.files[0];
@@ -1421,6 +1580,7 @@ async function brkProcessLabPhoto(input) {
         '<button class="btn-cancel" onclick="closeConfirmModal()" style="font-size:.78rem">취소</button>'+
         `<button class="btn-accum-add" onclick="brkSaveLabFromPhoto()">💾 저장</button>`;
       window._brkLabPhotoResult=parsed;
+      window._brkLabPhotoBase64='data:'+mediaType+';base64,'+base64;
       openModal('confirm-modal');
     };
     reader.readAsDataURL(file);
@@ -1442,7 +1602,8 @@ async function brkSaveLabFromPhoto() {
     ...(parsed.abnormal||[]).map(a=>'⚠️ '+a),
     parsed.opinion?'💡 '+parsed.opinion:''
   ].filter(Boolean).join('; ');
-  m.labResults.push({id:Date.now(),date:parsed.date||kstToday(),who:parsed.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo});
+  const imgSrc=window._brkLabPhotoBase64||null;
+  m.labResults.push({id:Date.now(),date:parsed.date||kstToday(),who:parsed.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo,imgSrc});
   await saveBrkMaster();
   closeConfirmModal();
   delete window._brkLabPhotoResult;
