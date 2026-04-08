@@ -493,7 +493,7 @@ async function saveBulk(){
         if(!Object.keys(mc).length)continue;
         await loadLogMonth(domId,month);
         const ml=ds.logs[month];if(!ml)continue;
-        let entry=ml.data.find(l=>l.datetime?.slice(0,10)===date);
+        let entry=ml.data.find(l=>l.datetime?.slice(0,10)===date&&_isBungEntry(domId,l));
         if(entry){entry.medCheck=mc;}
         else{entry={id:crypto.randomUUID(),datetime:date+'T09:00',nrs:-1,medCheck:mc,memo:''};ml.data.push(entry);}
         ml.data.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
