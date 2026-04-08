@@ -2082,65 +2082,79 @@ async function _brkAnalyzeStagedPhotos(selectedAiId){
       closeConfirmModal();renderView('meds');
     },primary:true},{label:'취소',action:closeConfirmModal}]);
 }
-// 이미지 리사이즈 (Claude 5MB 제한 등)
-async function _resizeImageIfNeeded(dataUrl,maxBytes){
-  if(!maxBytes)maxBytes=4500000; // 4.5MB (base64 인코딩 오버헤드 감안)
+// 이미지 전처리 — 5MB 초과 시 분할 (해상도 유지), 이하면 그대로
+const _IMG_MAX_BYTES=4500000;
+async function _prepareImage(dataUrl){
   const base64=dataUrl.split(',')[1]||'';
-  if(base64.length<=maxBytes) return dataUrl;
-  return new Promise((resolve)=>{
+  if(base64.length<=_IMG_MAX_BYTES) return {mode:'single',tiles:[dataUrl]};
+  // 분할 전송: 원본 해상도 유지하면서 2~4등분
+  return new Promise(resolve=>{
     const img=new Image();
     img.onload=function(){
-      const canvas=document.createElement('canvas');
-      let w=img.width,h=img.height;
-      // 단계적 축소: 80% → 60% → 50% 까지
-      for(const scale of [0.8,0.6,0.5,0.35]){
-        canvas.width=Math.round(w*scale);canvas.height=Math.round(h*scale);
-        const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,canvas.width,canvas.height);
-        const result=canvas.toDataURL('image/jpeg',0.85);
-        if(result.split(',')[1].length<=maxBytes) return resolve(result);
+      const w=img.width,h=img.height;
+      // 세로가 길면 상하 분할, 가로가 길면 좌우 분할
+      const isPortrait=h>w;
+      const splits=base64.length>_IMG_MAX_BYTES*3?4:(base64.length>_IMG_MAX_BYTES*1.5?3:2);
+      const tiles=[];
+      for(let i=0;i<splits;i++){
+        const canvas=document.createElement('canvas');
+        if(isPortrait){
+          const tileH=Math.ceil(h/splits);const sy=i*tileH;const sh=Math.min(tileH+20,h-sy);// +20px 겹침
+          canvas.width=w;canvas.height=sh;
+          canvas.getContext('2d').drawImage(img,0,sy,w,sh,0,0,w,sh);
+        }else{
+          const tileW=Math.ceil(w/splits);const sx=i*tileW;const sw=Math.min(tileW+20,w-sx);
+          canvas.width=sw;canvas.height=h;
+          canvas.getContext('2d').drawImage(img,sx,0,sw,h,0,0,sw,h);
+        }
+        tiles.push(canvas.toDataURL('image/jpeg',0.92));
       }
-      // 최소 크기로도 초과 시 그냥 최소 결과 반환
-      resolve(canvas.toDataURL('image/jpeg',0.7));
+      resolve({mode:'tiled',tiles,splits,direction:isPortrait?'vertical':'horizontal'});
     };
-    img.onerror=()=>resolve(dataUrl);
+    img.onerror=()=>resolve({mode:'single',tiles:[dataUrl]});
     img.src=dataUrl;
   });
 }
 async function _analyzeOnePhoto(photo,aiId){
-  const resized=await _resizeImageIfNeeded(photo.dataUrl);
-  const base64=resized.split(',')[1];
-  const mediaType=resized.startsWith('data:image/jpeg')?'image/jpeg':(photo.type||'image/jpeg');
-  const prompt=`이 이미지는 의료 검사 결과지(혈액검사, 호르몬검사, 정액검사, 초음파 등)입니다.
+  const prep=await _prepareImage(photo.dataUrl);
+  const tiles=prep.tiles;
+  const isTiled=prep.mode==='tiled';
+  const tileNote=isTiled?`\n주의: 이 ${tiles.length}개 이미지는 하나의 검사결과지를 ${prep.direction==='vertical'?'상하':'좌우'}로 분할한 것입니다. 모든 이미지의 수치를 합산하여 하나의 JSON으로 응답하세요.`:'';
+  const prompt=`이 이미지는 의료 검사 결과지(혈액검사, 호르몬검사, 정액검사, 초음파 등)입니다.${tileNote}
 다음을 추출하세요:
 1. 검사 종류 (semen/blood/hormone/ultrasound/other)
 2. 검사 날짜 (YYYY-MM-DD)
 3. 검사 대상 (남성이면 "붕쌤", 여성이면 "오랑이")
-4. 수치 결과 (항목명: 수치)
+4. 수치 결과 (항목명: 수치) — 빠짐없이 모두 추출
 5. 정상 범위 대비 이상 여부
 6. 임신 준비 관점에서의 소견
 반드시 JSON으로 응답: {"type":"semen","date":"YYYY-MM-DD","who":"붕쌤","values":{"항목":"수치"},"abnormal":["이상소견"],"opinion":"소견"}`;
   let result='';
   if(aiId==='gemini'){
+    const parts=tiles.map(t=>{const b=t.split(',')[1];const mt=t.startsWith('data:image/jpeg')?'image/jpeg':'image/png';return{inline_data:{mime_type:mt,data:b}};});
+    parts.push({text:prompt});
     const resp=await fetchWithRetry('https://generativelanguage.googleapis.com/v1beta/models/'+(S.models?.gemini||DEFAULT_MODELS.gemini)+':generateContent?key='+S.keys.gemini,{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mediaType,data:base64}},{text:prompt}]}]})});
+      body:JSON.stringify({contents:[{parts}]})});
     const d=await resp.json();
     if(d.error)throw new Error('Gemini: '+(d.error.message||d.error.status||JSON.stringify(d.error)));
     result=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
     if(!result)throw new Error('Gemini: 빈 응답'+(d.candidates?.[0]?.finishReason?' ('+d.candidates[0].finishReason+')':''));
   }else if(aiId==='claude'){
+    const content=tiles.map(t=>{const b=t.split(',')[1];const mt=t.startsWith('data:image/jpeg')?'image/jpeg':'image/png';return{type:'image',source:{type:'base64',media_type:mt,data:b}};});
+    content.push({type:'text',text:prompt});
     const resp=await fetchWithRetry('https://api.anthropic.com/v1/messages',{method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':S.keys.claude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:S.models?.claude||DEFAULT_MODELS.claude,max_tokens:1500,messages:[{role:'user',content:[
-        {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},{type:'text',text:prompt}]}]})});
+      body:JSON.stringify({model:S.models?.claude||DEFAULT_MODELS.claude,max_tokens:2000,messages:[{role:'user',content}]})});
     const d=await resp.json();
     if(d.error)throw new Error('Claude: '+(d.error.message||JSON.stringify(d.error)));
     result=d.content?.[0]?.text||'';
     if(!result)throw new Error('Claude: 빈 응답');
   }else{
     const gptModel=S.models?.gpt||DEFAULT_MODELS.gpt;
-    const body={model:gptModel,max_completion_tokens:4000,messages:[{role:'user',content:[
-      {type:'image_url',image_url:{url:resized,detail:'high'}},{type:'text',text:prompt}]}]};
+    const content=tiles.map(t=>({type:'image_url',image_url:{url:t,detail:'high'}}));
+    content.push({type:'text',text:prompt});
+    const body={model:gptModel,max_completion_tokens:4000,messages:[{role:'user',content}]};
     const resp=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.keys.gpt},
       body:JSON.stringify(body)});
