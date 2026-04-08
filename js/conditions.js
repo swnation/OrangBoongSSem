@@ -139,7 +139,7 @@ function renderMedsView() {
   if (S.currentDomain==='bungruki') {
     return renderBungrukiDashboard() + renderMedsViewLegacy();
   }
-  return renderMedsViewLegacy();
+  return renderVaccinationSection() + renderMedsViewLegacy();
 }
 
 function renderMedsViewLegacy() {
@@ -1878,4 +1878,125 @@ function renderDrugInteractionWarning() {
     ${items}
     <div style="font-size:.65rem;color:var(--mu);margin-top:8px;padding:4px 8px;background:var(--sf2);border-radius:4px">※ 참고용입니다. 실제 투약 변경은 반드시 담당 의사와 상의하세요.</div>
   </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 💉 VACCINATION TRACKING
+// ═══════════════════════════════════════════════════════════════
+
+const _VACCINE_DB = {
+  // 임신 관련 (pregnancy: true)
+  'MMR': {label:'MMR (홍역·유행성이하선염·풍진)',doses:2,interval:'4주',pregnancy:true,note:'임신 전 최소 1개월 전 접종. 임신 중 금기 (생백신)'},
+  'Varicella': {label:'수두',doses:2,interval:'4주',pregnancy:true,note:'항체 없으면 2회. 임신 중 금기 (생백신)'},
+  'Tdap': {label:'Tdap (파상풍·디프테리아·백일해)',doses:1,interval:'매 임신 27-36주',pregnancy:true,note:'매 임신마다 1회. 신생아 백일해 예방'},
+  'HepB': {label:'B형간염',doses:3,interval:'0-1-6개월',pregnancy:true,note:'항체 없으면 3회. 임신 중 접종 가능'},
+  'Flu': {label:'인플루엔자',doses:1,interval:'매년',pregnancy:true,note:'매년 접종. 임신 중 안전 (불활성화 백신)'},
+  'COVID19': {label:'COVID-19',doses:2,interval:'제조사별',pregnancy:true,note:'mRNA 백신 권장. 임신 중 접종 가능'},
+  'HPV': {label:'HPV (자궁경부암)',doses:2,interval:'6-12개월',pregnancy:true,note:'임신 전 완료 권장. 임신 중 접종 연기'},
+  // 일반 성인
+  'HepA': {label:'A형간염',doses:2,interval:'6-12개월',pregnancy:false,note:'항체 없으면 2회'},
+  'Zoster': {label:'대상포진 (Shingrix)',doses:2,interval:'2-6개월',pregnancy:false,note:'50세 이상 권장'},
+  'PCV13': {label:'폐렴구균 (PCV13)',doses:1,interval:'-',pregnancy:false,note:'65세 이상 또는 고위험군'},
+  'PPSV23': {label:'폐렴구균 (PPSV23)',doses:1,interval:'PCV13 후 1년',pregnancy:false,note:'65세 이상 또는 고위험군'},
+  'JapEnc': {label:'일본뇌염',doses:2,interval:'7-30일',pregnancy:false,note:'위험지역 거주/여행 시'},
+};
+
+function renderVaccinationSection(){
+  const dc=DC();const domId=S.currentDomain;
+  if(!domId.includes('health'))return '';
+  const m=DM();if(!m)return '';
+  if(!m.vaccinations)m.vaccinations=[];
+  const recs=m.vaccinations;
+  const who=dc.user;
+
+  const byVax={};
+  recs.forEach(r=>{if(!byVax[r.vaccine])byVax[r.vaccine]=[];byVax[r.vaccine].push(r);});
+
+  const vaxList=Object.entries(_VACCINE_DB).map(([key,vax])=>{
+    const doses=byVax[key]||[];
+    const complete=doses.length>=vax.doses;
+    const pregTag=vax.pregnancy?'<span style="font-size:.55rem;background:#fdf2f8;color:#be185d;padding:1px 5px;border-radius:8px;margin-left:4px">임신</span>':'';
+    const doseHtml=doses.map((d,i)=>`<div style="font-size:.65rem;color:var(--mu);padding:1px 0 1px 28px">${i+1}차: ${d.date}${d.memo?' — '+esc(d.memo):''} <button onclick="_deleteVax(${d.id})" style="font-size:.55rem;background:none;border:none;color:var(--re);cursor:pointer">✕</button></div>`).join('');
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--bd)">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:.8rem">${complete?'✅':'💉'}</span>
+        <span style="font-size:.75rem;font-weight:${complete?'400':'600'};color:${complete?'var(--mu)':'var(--ink)'}">${vax.label}</span>
+        ${pregTag}
+        <span style="font-size:.6rem;color:var(--mu);margin-left:auto">${doses.length}/${vax.doses}회</span>
+        <button onclick="_openVaxForm('${key}')" style="font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 기록</button>
+      </div>
+      <div style="font-size:.6rem;color:var(--mu2);padding:2px 0 2px 28px">${esc(vax.note)}</div>
+      ${doseHtml}
+    </div>`;
+  }).join('');
+
+  const customVax=recs.filter(r=>!_VACCINE_DB[r.vaccine]);
+  const customByName={};
+  customVax.forEach(r=>{if(!customByName[r.vaccine])customByName[r.vaccine]=[];customByName[r.vaccine].push(r);});
+  const customHtml=Object.entries(customByName).map(([name,doses])=>`<div style="padding:6px 0;border-bottom:1px solid var(--bd)">
+    <div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:.8rem">💉</span>
+      <span style="font-size:.75rem;font-weight:600">${esc(name)}</span>
+      <span style="font-size:.6rem;color:var(--mu);margin-left:auto">${doses.length}회</span>
+      <button onclick="_openVaxForm('','${esc(name)}')" style="font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 기록</button>
+    </div>
+    ${doses.map((d,i)=>`<div style="font-size:.65rem;color:var(--mu);padding:1px 0 1px 28px">${i+1}차: ${d.date}${d.memo?' — '+esc(d.memo):''} <button onclick="_deleteVax(${d.id})" style="font-size:.55rem;background:none;border:none;color:var(--re);cursor:pointer">✕</button></div>`).join('')}
+  </div>`).join('');
+
+  const doneCount=Object.keys(byVax).filter(k=>_VACCINE_DB[k]&&(byVax[k]||[]).length>=_VACCINE_DB[k].doses).length;
+
+  return `<div class="card">
+    <div class="card-title">💉 예방접종 — ${esc(who)} <span class="badge badge-green">${doneCount}/${Object.keys(_VACCINE_DB).length} 완료</span></div>
+    ${vaxList}${customHtml}
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <input id="vax-custom-name" class="dx-form-input" placeholder="기타 접종명" style="flex:1;font-size:.78rem">
+      <button onclick="_addCustomVax()" style="font-size:.72rem;padding:5px 12px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 추가</button>
+    </div>
+  </div>`;
+}
+
+function _openVaxForm(vaxKey,customName){
+  const vax=_VACCINE_DB[vaxKey];
+  const name=vax?vax.label:(customName||vaxKey);
+  showConfirmModal('💉 접종 기록 — '+name,
+    `<div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div><div class="dx-form-label">접종일 *</div><input type="date" id="vax-date" class="dx-form-input" value="${kstToday()}" style="width:150px"></div>
+      <div><div class="dx-form-label">메모</div><input type="text" id="vax-memo" class="dx-form-input" placeholder="병원, 로트번호 등" style="width:200px"></div>
+    </div>`,
+    [{label:'💾 저장',action:async()=>{
+      const date=document.getElementById('vax-date')?.value;
+      if(!date){showToast('날짜를 입력하세요');return;}
+      const memo=document.getElementById('vax-memo')?.value?.trim()||'';
+      const m=DM();if(!m)return;
+      if(!m.vaccinations)m.vaccinations=[];
+      m.vaccinations.push({id:Date.now(),vaccine:vaxKey||customName,label:name,date,memo,who:DC().user,pregnancy:vax?.pregnancy||false});
+      await saveMaster();closeConfirmModal();showToast('✅ 접종 기록 저장');renderView('meds');
+    },primary:true},{label:'취소',action:closeConfirmModal}]);
+}
+
+async function _deleteVax(vaxId){
+  if(!confirm('이 접종 기록을 삭제하시겠습니까?'))return;
+  const m=DM();if(!m)return;
+  m.vaccinations=(m.vaccinations||[]).filter(v=>v.id!==vaxId);
+  await saveMaster();renderView('meds');showToast('🗑 삭제됨');
+}
+
+function _addCustomVax(){
+  const input=document.getElementById('vax-custom-name');
+  const name=input?.value?.trim();
+  if(!name){showToast('접종명을 입력하세요');return;}
+  _openVaxForm('',name);input.value='';
+}
+
+// 임신 관련 접종 — bungruki에서 호출 (양쪽 건강관리 도메인 통합)
+function getPregnancyVaccinations(){
+  const result=[];
+  ['orangi-health','bung-health'].forEach(domId=>{
+    const ds=S.domainState[domId];
+    if(!ds?.master?.vaccinations)return;
+    ds.master.vaccinations.filter(v=>v.pregnancy||(_VACCINE_DB[v.vaccine]?.pregnancy)).forEach(v=>{
+      result.push({...v,_domain:domId,_domainLabel:DOMAINS[domId]?.label||domId});
+    });
+  });
+  return result;
 }

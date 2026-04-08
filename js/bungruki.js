@@ -123,7 +123,7 @@ const _DEFAULT_MILESTONES = [
   { id: 14, who: '공통', label: '보험/출산 준비 계획', done: false, doneDate: null },
 ];
 
-let _brkDashTab = 'cycle'; // cycle | daily | lab | milestone | safety
+let _brkDashTab = 'cycle'; // cycle | daily | lab | vaccine | milestone | safety
 let _brkDailyCat = 'suppl'; // suppl | exercise | treatment | memo
 let _brkCalShowOrangi = true;
 let _brkCalShowBung = true;
@@ -2245,6 +2245,51 @@ async function refreshDrugSafety(drugName) {
   else showToast('⚠️ 검색 실패');
 }
 
+// ── 임신 관련 접종 탭 (bungruki) ──
+function _renderBrkVaccineTab(){
+  const pregVaxKeys=Object.entries(_VACCINE_DB).filter(([k,v])=>v.pregnancy).map(([k])=>k);
+  const allRecs=typeof getPregnancyVaccinations==='function'?getPregnancyVaccinations():[];
+  // 도메인별로 그룹
+  const byWho={오랑이:[],붕쌤:[]};
+  allRecs.forEach(r=>{const w=r.who||'';if(byWho[w])byWho[w].push(r);});
+
+  function renderPersonVax(who,recs,color,icon){
+    const byVax={};
+    recs.forEach(r=>{if(!byVax[r.vaccine])byVax[r.vaccine]=[];byVax[r.vaccine].push(r);});
+    const rows=pregVaxKeys.map(key=>{
+      const vax=_VACCINE_DB[key];const doses=byVax[key]||[];
+      const complete=doses.length>=vax.doses;
+      return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">
+        <span style="font-size:.75rem">${complete?'✅':'⬜'}</span>
+        <span style="font-size:.72rem;flex:1;color:${complete?'var(--mu)':'var(--ink)'}">${vax.label}</span>
+        <span style="font-size:.6rem;color:var(--mu)">${doses.length}/${vax.doses}</span>
+        ${doses.length?'<span style="font-size:.58rem;color:var(--mu2)">'+doses.map(d=>d.date).join(', ')+'</span>':''}
+      </div>`;
+    }).join('');
+    const done=pregVaxKeys.filter(k=>(byVax[k]||[]).length>=_VACCINE_DB[k].doses).length;
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <span style="font-size:.85rem">${icon}</span>
+        <span style="font-size:.78rem;font-weight:700;color:${color}">${who}</span>
+        <span style="font-size:.62rem;color:var(--mu)">${done}/${pregVaxKeys.length} 완료</span>
+      </div>${rows}</div>`;
+  }
+  const orangiHtml=renderPersonVax('오랑이',byWho['오랑이'],'#ec4899','🧡');
+  const bungHtml=renderPersonVax('붕쌤',byWho['붕쌤'],'#06b6d4','🩵');
+
+  return `<div>
+    <div style="font-size:.72rem;color:var(--mu);margin-bottom:8px;padding:6px 8px;background:#fdf2f8;border-radius:6px;border:1px solid #fbcfe8">
+      💡 임신 관련 접종은 각 건강관리 도메인(오랑이/붕쌤)에서 기록하면 여기에 자동 표시됩니다.
+    </div>
+    ${orangiHtml}${bungHtml}
+    <div style="font-size:.62rem;color:var(--mu2);padding:6px;background:var(--sf2);border-radius:6px">
+      ※ MMR·수두는 <b>생백신</b>이므로 임신 중 접종 불가 → 임신 전 완료 필수<br>
+      ※ Tdap은 <b>매 임신</b> 27-36주에 1회 접종 권장 (신생아 백일해 예방)<br>
+      ※ 인플루엔자는 임신 중 접종 안전 (불활성화 백신)
+    </div>
+  </div>`;
+}
+
 function renderDrugSafety() {
   // Collect meds from ALL domains (붕룩이는 두 유저 모두의 약물을 봄)
   var allMeds = {};
@@ -2337,6 +2382,7 @@ function renderBungrukiDashboard() {
     {id:'cycle',label:'🩸 생리주기',color:'#dc2626'},
     {id:'daily',label:'✅ 일일체크',color:'#16a34a'},
     {id:'lab',label:'🔬 검사결과',color:'#2563eb'},
+    {id:'vaccine',label:'💉 접종',color:'#0891b2'},
     {id:'milestone',label:'🏁 마일스톤',color:'#7c3aed'},
     {id:'safety',label:'💊 약물안전',color:'#ea580c'},
   ];
@@ -2350,6 +2396,7 @@ function renderBungrukiDashboard() {
   if (_brkDashTab === 'cycle') contentHtml = renderCycleTracker();
   else if (_brkDashTab === 'daily') contentHtml = renderDailyChecks();
   else if (_brkDashTab === 'lab') contentHtml = renderLabResults();
+  else if (_brkDashTab === 'vaccine') contentHtml = _renderBrkVaccineTab();
   else if (_brkDashTab === 'milestone') contentHtml = renderMilestones();
   else if (_brkDashTab === 'safety') contentHtml = renderDrugSafety();
 
