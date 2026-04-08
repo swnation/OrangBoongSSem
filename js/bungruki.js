@@ -1333,9 +1333,17 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
     <div style="font-size:.7rem;color:var(--tx);margin-top:3px">${summary}</div>
     ${interpret?`<div style="font-size:.65rem;color:#0369a1;margin-top:2px">💡 ${esc(interpret)}</div>`:''}
     ${l.memo?`<div style="margin-top:3px">
-      <div style="font-size:.6rem;color:var(--ac);cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 상세</div>
+      <div style="font-size:.6rem;color:var(--ac);cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 상세/메모</div>
       <div style="display:none;font-size:.65rem;color:var(--mu);margin-top:3px;padding:5px;background:var(--sf);border-radius:5px;white-space:pre-wrap">${esc(l.memo)}</div>
     </div>`:''}
+    ${l.imgSrc?`<div style="margin-top:3px">
+      <div style="font-size:.6rem;color:#7c3aed;cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 원본 이미지</div>
+      <div style="display:none;margin-top:4px"><img src="${l.imgSrc}" style="max-width:100%;border-radius:6px;border:1px solid var(--bd)"></div>
+    </div>`:''}
+    <div style="display:flex;gap:4px;margin-top:4px">
+      <button onclick="_brkEditLabValues(${globalIdx})" style="font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">✏️ 수치 수정</button>
+      ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${globalIdx})" style="font-size:.58rem;padding:2px 8px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>`:''}
+    </div>
   </div>`;
 }
 
@@ -1411,6 +1419,102 @@ async function brkSaveLab() {
 }
 
 // 📷 검사결과 사진 AI 분석
+// 수치 직접 수정
+function _brkEditLabValues(idx){
+  const m=getBrkMaster();if(!m)return;
+  const l=m.labResults?.[idx];if(!l)return;
+  const vals=l.values||{};
+  const fieldsHtml=Object.entries(vals).map(([k,v])=>
+    `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:.72rem;min-width:80px;color:var(--mu)">${esc(k)}</span><input type="text" id="brk-lab-edit-${esc(k)}" value="${esc(String(v))}" class="dx-form-input" style="flex:1;font-size:.78rem;padding:4px 8px"></div>`
+  ).join('');
+  const addFieldHtml=`<div style="display:flex;gap:4px;margin-top:6px"><input id="brk-lab-add-key" class="dx-form-input" placeholder="항목명" style="flex:1;font-size:.72rem;padding:4px 6px"><input id="brk-lab-add-val" class="dx-form-input" placeholder="수치" style="flex:1;font-size:.72rem;padding:4px 6px"><button onclick="_brkAddLabField()" style="font-size:.65rem;padding:3px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;white-space:nowrap">+</button></div>`;
+  window._brkEditLabIdx=idx;
+  showConfirmModal('✏️ 수치 수정 — '+l.date,
+    `<div id="brk-lab-edit-fields">${fieldsHtml}</div>${addFieldHtml}`,
+    [{label:'💾 저장',action:_brkSaveEditLabValues,primary:true},{label:'취소',action:closeConfirmModal}]);
+}
+
+function _brkAddLabField(){
+  const key=document.getElementById('brk-lab-add-key')?.value.trim();
+  const val=document.getElementById('brk-lab-add-val')?.value.trim();
+  if(!key||!val)return;
+  const container=document.getElementById('brk-lab-edit-fields');
+  container.insertAdjacentHTML('beforeend',
+    `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:.72rem;min-width:80px;color:var(--mu)">${esc(key)}</span><input type="text" id="brk-lab-edit-${esc(key)}" value="${esc(val)}" class="dx-form-input" style="flex:1;font-size:.78rem;padding:4px 8px"></div>`);
+  document.getElementById('brk-lab-add-key').value='';
+  document.getElementById('brk-lab-add-val').value='';
+}
+
+async function _brkSaveEditLabValues(){
+  const m=getBrkMaster();if(!m)return;
+  const idx=window._brkEditLabIdx;
+  const l=m.labResults?.[idx];if(!l)return;
+  const newVals={};
+  document.querySelectorAll('#brk-lab-edit-fields input').forEach(inp=>{
+    const key=inp.id.replace('brk-lab-edit-','');
+    const raw=inp.value.trim();
+    const num=parseFloat(raw);
+    newVals[key]=isNaN(num)?raw:num;
+  });
+  l.values=newVals;
+  await saveBrkMaster();
+  closeConfirmModal();
+  showToast('✅ 수치 수정됨');
+  renderView('meds');
+}
+
+// 재분석 (Vision 유리 모델 선택)
+async function _brkReanalyzeLab(idx){
+  const m=getBrkMaster();if(!m)return;
+  const l=m.labResults?.[idx];if(!l?.imgSrc)return;
+  // Vision 유리 모델 우선순위: gemini > gpt > claude
+  const aiId=S.keys?.gemini?'gemini':(S.keys?.gpt?'gpt':(S.keys?.claude?'claude':null));
+  if(!aiId){showToast('⚠️ AI API 키 필요 (Gemini/GPT/Claude)');return;}
+  showToast('🔄 '+AI_DEFS[aiId].name+'으로 재분석 중...',8000);
+  const base64=l.imgSrc.split(',')[1];
+  const mediaType=l.imgSrc.split(';')[0].split(':')[1]||'image/jpeg';
+  const prompt=`이 의료 검사 결과 이미지에서 모든 수치를 정확히 추출하세요.
+항목명과 수치를 빠짐없이 읽어주세요. 정상 범위도 함께 표기해 주세요.
+반드시 JSON으로 응답: {"type":"semen","date":"YYYY-MM-DD","who":"붕쌤","values":{"항목":수치},"abnormal":["이상소견"],"opinion":"소견"}`;
+  try{
+    let result='';
+    if(aiId==='gemini'){
+      const resp=await fetchWithRetry('https://generativelanguage.googleapis.com/v1beta/models/'+(S.models?.gemini||DEFAULT_MODELS.gemini)+':generateContent?key='+S.keys.gemini,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mediaType,data:base64}},{text:prompt}]}]})});
+      const d=await resp.json();result=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    }else if(aiId==='gpt'){
+      const resp=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+S.keys.gpt},
+        body:JSON.stringify({model:S.models?.gpt||DEFAULT_MODELS.gpt,max_tokens:1500,messages:[{role:'user',content:[
+          {type:'image_url',image_url:{url:l.imgSrc}},{type:'text',text:prompt}]}]})});
+      const d=await resp.json();result=d.choices?.[0]?.message?.content||'';
+    }else{
+      const resp=await fetchWithRetry('https://api.anthropic.com/v1/messages',{method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':S.keys.claude,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:S.models?.claude||DEFAULT_MODELS.claude,max_tokens:1500,messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},{type:'text',text:prompt}]}]})});
+      const d=await resp.json();result=d.content?.[0]?.text||'';
+    }
+    const jsonMatch=result.match(/\{[\s\S]*\}/);
+    if(!jsonMatch){showToast('⚠️ 인식 실패',3000);return;}
+    const parsed=JSON.parse(jsonMatch[0]);
+    // 기존 값과 비교
+    const oldVals=l.values||{};
+    const newVals=parsed.values||{};
+    const diffHtml=Object.keys({...oldVals,...newVals}).map(k=>{
+      const o=oldVals[k],n=newVals[k];
+      const changed=String(o)!==String(n);
+      return `<div style="font-size:.7rem;padding:2px 0;${changed?'font-weight:600;color:var(--ac)':''}">${esc(k)}: ${o!==undefined?o:'-'} → ${n!==undefined?n:'-'}${changed?' ✦':''}</div>`;
+    }).join('');
+    showConfirmModal('🔄 재분석 결과 ('+AI_DEFS[aiId].name+')',
+      `<div style="margin-bottom:8px">${diffHtml}</div>${parsed.opinion?'<div style="font-size:.7rem;color:#15803d;padding:6px;background:#f0fdf4;border-radius:6px">💡 '+esc(parsed.opinion)+'</div>':''}
+      <div style="font-size:.65rem;color:var(--mu);margin-top:6px">✦ = 변경된 수치. 적용하시겠습니까?</div>`,
+      [{label:'적용',action:async()=>{l.values=newVals;l.memo=(l.memo||'')+'\n🔄 재분석('+AI_DEFS[aiId].name+'): '+(parsed.opinion||'');await saveBrkMaster();closeConfirmModal();showToast('✅ 재분석 적용');renderView('meds');},primary:true},
+       {label:'취소',action:closeConfirmModal}]);
+  }catch(e){showToast('❌ 재분석 실패: '+e.message,4000);}
+}
+
 async function brkProcessLabPhoto(input) {
   if(!input.files||!input.files[0]) return;
   const file=input.files[0];
@@ -1476,6 +1580,7 @@ async function brkProcessLabPhoto(input) {
         '<button class="btn-cancel" onclick="closeConfirmModal()" style="font-size:.78rem">취소</button>'+
         `<button class="btn-accum-add" onclick="brkSaveLabFromPhoto()">💾 저장</button>`;
       window._brkLabPhotoResult=parsed;
+      window._brkLabPhotoBase64='data:'+mediaType+';base64,'+base64;
       openModal('confirm-modal');
     };
     reader.readAsDataURL(file);
@@ -1497,7 +1602,8 @@ async function brkSaveLabFromPhoto() {
     ...(parsed.abnormal||[]).map(a=>'⚠️ '+a),
     parsed.opinion?'💡 '+parsed.opinion:''
   ].filter(Boolean).join('; ');
-  m.labResults.push({id:Date.now(),date:parsed.date||kstToday(),who:parsed.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo});
+  const imgSrc=window._brkLabPhotoBase64||null;
+  m.labResults.push({id:Date.now(),date:parsed.date||kstToday(),who:parsed.who||'붕쌤',type,values,memo:'📷 사진분석: '+memo,imgSrc});
   await saveBrkMaster();
   closeConfirmModal();
   delete window._brkLabPhotoResult;
