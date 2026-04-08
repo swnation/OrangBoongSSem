@@ -1520,10 +1520,18 @@ function renderLabResults() {
     + '</div>';
 }
 
+var _labBulkMode=false;
+var _labBulkSet=new Set();
 function _renderLabsByPerson(labs, typeLabels, typeIcons) {
   const bung=labs.filter(l=>(l.who||'')==='붕쌤');
   const orangi=labs.filter(l=>(l.who||'')==='오랑이');
   const other=labs.filter(l=>l.who!=='붕쌤'&&l.who!=='오랑이');
+  // 관리 도구바
+  const toolbar=`<div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+    <button onclick="_labBulkMode=!_labBulkMode;_labBulkSet.clear();renderView('meds')" style="font-size:.65rem;padding:3px 10px;border:1px solid ${_labBulkMode?'#dc2626':'var(--bd)'};border-radius:5px;background:${_labBulkMode?'#fee2e2':'var(--sf)'};color:${_labBulkMode?'#dc2626':'var(--mu)'};cursor:pointer;font-family:var(--font)">${_labBulkMode?'✕ 선택 모드 끄기':'☑️ 선택 삭제'}</button>
+    ${_labBulkMode&&_labBulkSet.size?`<button onclick="_brkBulkDeleteLabs()" style="font-size:.65rem;padding:3px 10px;border:1px solid #dc2626;border-radius:5px;background:#dc2626;color:#fff;cursor:pointer;font-family:var(--font)">🗑 ${_labBulkSet.size}건 삭제</button>`:''}
+    <button onclick="_toggleAllLabFold()" style="font-size:.65rem;padding:3px 10px;border:1px solid var(--bd);border-radius:5px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">📂 전체 접기/펼치기</button>
+  </div>`;
   const renderGroup=(title,icon,color,items)=>{
     if(!items.length) return '';
     return `<div style="margin-bottom:10px">
@@ -1535,13 +1543,54 @@ function _renderLabsByPerson(labs, typeLabels, typeIcons) {
       ${items.map((l,i)=>_renderLabCard(l,labs.indexOf(l),typeLabels,typeIcons)).join('')}
     </div>`;
   };
-  return renderGroup('붕쌤','🩵','#06b6d4',bung)
+  return toolbar + renderGroup('붕쌤','🩵','#06b6d4',bung)
     + renderGroup('오랑이','🧡','#f97316',orangi)
     + (other.length?renderGroup('기타','📋','var(--mu)',other):'');
+}
+async function _brkBulkDeleteLabs(){
+  if(!_labBulkSet.size)return;
+  if(!confirm(_labBulkSet.size+'건의 검사결과를 삭제하시겠습니까?'))return;
+  const m=getBrkMaster();if(!m)return;
+  m.labResults=m.labResults.filter(l=>!_labBulkSet.has(l.id));
+  _labBulkSet.clear();_labBulkMode=false;
+  await saveBrkMaster();renderView('meds');showToast('🗑 삭제됨');
+}
+function _toggleLabBulk(labId){
+  if(_labBulkSet.has(labId))_labBulkSet.delete(labId);else _labBulkSet.add(labId);
+  renderView('meds');
+}
+var _labFoldAll=false;
+function _toggleAllLabFold(){_labFoldAll=!_labFoldAll;document.querySelectorAll('.brk-lab-body').forEach(el=>el.style.display=_labFoldAll?'none':'');}
+function _labFoldToggleJS(){return "var b=this.nextElementSibling;b.style.display=b.style.display==='none'?'':'none'";}
+async function _brkEditLabType(labId){
+  const m=getBrkMaster();if(!m)return;
+  const l=m.labResults.find(x=>x.id===labId);if(!l)return;
+  const typeLabels={semen:'정액검사',blood:'혈액검사',hormone:'호르몬검사',ultrasound:'초음파',other:'기타'};
+  showConfirmModal('📝 검사 종류/이름 수정',
+    `<div style="margin-bottom:8px"><div class="dx-form-label">검사 종류</div>
+      <select id="brk-lt-type" class="dx-form-input" style="width:160px">
+        ${Object.entries(typeLabels).map(([k,v])=>`<option value="${k}"${l.type===k?' selected':''}>${v}</option>`).join('')}
+      </select></div>
+    <div><div class="dx-form-label">표시 이름 (선택)</div>
+      <input id="brk-lt-label" class="dx-form-input" value="${esc(l.customLabel||'')}" placeholder="예: 임신 전 종합검사" style="width:100%"></div>`,
+    [{label:'💾 저장',action:async()=>{
+      l.type=document.getElementById('brk-lt-type')?.value||l.type;
+      const lbl=document.getElementById('brk-lt-label')?.value?.trim();
+      if(lbl)l.customLabel=lbl;else delete l.customLabel;
+      await saveBrkMaster();closeConfirmModal();showToast('✅ 수정됨');renderView('meds');
+    },primary:true}]);
+}
+async function _brkToggleLabLock(labId){
+  const m=getBrkMaster();if(!m)return;
+  const l=m.labResults.find(x=>x.id===labId);if(!l)return;
+  l.locked=!l.locked;
+  await saveBrkMaster();renderView('meds');showToast(l.locked?'🔒 잠금됨':'🔓 잠금 해제');
 }
 
 function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
   const labId=l.id||globalIdx;
+  const isLocked=l.locked;
+  const displayName=l.customLabel||typeLabels[l.type]||l.type;
   let summary='', interpret='';
   if(l.type==='semen'&&l.values) {
     const g=_semenGrade(l.values);
@@ -1573,33 +1622,41 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
   } else if(l.values&&typeof l.values==='object') {
     summary=Object.entries(l.values).slice(0,4).map(([k,v])=>k+':'+v+(l.ref?.[k]?' <span style="font-size:.55rem;color:var(--mu2)">['+l.ref[k]+']</span>':'')).join(' · ');
   }
-  return `<div style="padding:7px 10px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;margin-top:4px">
-    <div style="display:flex;align-items:center;gap:6px">
-      <span style="font-size:.72rem">${typeIcons[l.type]}</span>
-      <span style="font-size:.75rem;font-weight:600">${typeLabels[l.type]}</span>
+  const checked=_labBulkMode&&_labBulkSet.has(labId);
+  return `<div style="padding:7px 10px;background:${isLocked?'#f0fdf4':'var(--sf2)'};border:1.5px solid ${isLocked?'#86efac':'var(--bd)'};border-radius:6px;margin-top:4px;${checked?'outline:2px solid #dc2626':''}">
+    <div style="display:flex;align-items:center;gap:6px;cursor:pointer" onclick="${_labBulkMode?'_toggleLabBulk('+labId+')':_labFoldToggleJS()}">
+      ${_labBulkMode?`<input type="checkbox" ${checked?'checked':''} ${isLocked?'disabled':''} onclick="event.stopPropagation();_toggleLabBulk(${labId})" style="accent-color:#dc2626">`:''}
+      <span style="font-size:.72rem">${typeIcons[l.type]||'📋'}</span>
+      <span style="font-size:.75rem;font-weight:600">${esc(displayName)}</span>
+      ${isLocked?'<span style="font-size:.6rem">🔒</span>':''}
       <span style="font-size:.65rem;color:var(--mu);margin-left:auto">${esc(l.date)}</span>
-      <button class="accum-del" onclick="brkDeleteLab(${labId})" title="삭제">🗑</button>
+      <span style="font-size:.6rem;color:var(--mu2)">▾</span>
     </div>
-    <div style="font-size:.7rem;color:var(--tx);margin-top:3px">${summary}</div>
-    ${interpret?`<div style="font-size:.65rem;color:#0369a1;margin-top:2px">💡 ${esc(interpret)}</div>`:''}
-    ${l.memo?`<div style="margin-top:3px">
-      <div style="font-size:.6rem;color:var(--ac);cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 상세/메모</div>
-      <div style="display:none;font-size:.65rem;color:var(--mu);margin-top:3px;padding:5px;background:var(--sf);border-radius:5px;white-space:pre-wrap">${esc(l.memo)}</div>
-    </div>`:''}
-    ${l.imgSrc?`<div style="margin-top:3px">
-      <div style="font-size:.6rem;color:#7c3aed;cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 원본 이미지</div>
-      <div style="display:none;margin-top:4px"><img src="${l.imgSrc}" style="max-width:100%;border-radius:6px;border:1px solid var(--bd)"></div>
-    </div>`:''}
-    ${_brkMissingFieldsHtml(l)}
-    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-      <button onclick="_brkEditLabValues(${labId})" style="font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">✏️ 수치 수정</button>
-      ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${labId})" style="font-size:.58rem;padding:2px 8px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>
-      <select onchange="if(this.value){_brkReanalyzeLab(${labId},this.value);this.value='';}" style="font-size:.58rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);font-family:var(--font)">
-        <option value="">AI 선택 재분석</option>
-        ${S.keys?.gemini?'<option value="gemini">Gemini</option>':''}
-        ${S.keys?.gpt?'<option value="gpt">GPT</option>':''}
-        ${S.keys?.claude?'<option value="claude">Claude</option>':''}
-      </select>`:''}
+    <div class="brk-lab-body"${_labFoldAll?' style="display:none"':''}>
+      <div style="font-size:.7rem;color:var(--tx);margin-top:3px">${summary}</div>
+      ${interpret?`<div style="font-size:.65rem;color:#0369a1;margin-top:2px">💡 ${esc(interpret)}</div>`:''}
+      ${l.memo?`<div style="margin-top:3px">
+        <div style="font-size:.6rem;color:var(--ac);cursor:pointer" onclick="event.stopPropagation();const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 상세/메모</div>
+        <div style="display:none;font-size:.65rem;color:var(--mu);margin-top:3px;padding:5px;background:var(--sf);border-radius:5px;white-space:pre-wrap">${esc(l.memo)}</div>
+      </div>`:''}
+      ${l.imgSrc?`<div style="margin-top:3px">
+        <div style="font-size:.6rem;color:#7c3aed;cursor:pointer" onclick="event.stopPropagation();const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 원본 이미지</div>
+        <div style="display:none;margin-top:4px"><img src="${l.imgSrc}" style="max-width:100%;border-radius:6px;border:1px solid var(--bd)"></div>
+      </div>`:''}
+      ${_brkMissingFieldsHtml(l)}
+      <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+        <button onclick="_brkEditLabType(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid var(--mu);border-radius:4px;background:none;color:var(--mu);cursor:pointer;font-family:var(--font)">📝 이름 수정</button>
+        <button onclick="_brkEditLabValues(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">✏️ 수치 수정</button>
+        <button onclick="_brkToggleLabLock(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid ${isLocked?'#15803d':'var(--bd)'};border-radius:4px;background:${isLocked?'#dcfce7':'none'};color:${isLocked?'#15803d':'var(--mu)'};cursor:pointer;font-family:var(--font)">${isLocked?'🔓 잠금 해제':'🔒 잠금'}</button>
+        ${!isLocked?`<button onclick="brkDeleteLab(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid #dc2626;border-radius:4px;background:none;color:#dc2626;cursor:pointer;font-family:var(--font)">🗑 삭제</button>`:''}
+        ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>
+        <select onchange="if(this.value){_brkReanalyzeLab(${labId},this.value);this.value='';}" style="font-size:.56rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);font-family:var(--font)">
+          <option value="">AI 선택</option>
+          ${S.keys?.gemini?'<option value="gemini">Gemini</option>':''}
+          ${S.keys?.gpt?'<option value="gpt">GPT</option>':''}
+          ${S.keys?.claude?'<option value="claude">Claude</option>':''}
+        </select>`:''}
+      </div>
     </div>
   </div>`;
 }
@@ -2243,6 +2300,9 @@ async function brkSaveLabFromPhoto() {
 
 async function brkDeleteLab(labId) {
   var m = getBrkMaster(); if (!m) return;
+  var target=m.labResults.find(function(l){return l.id===labId;});
+  if(target?.locked){showToast('🔒 잠금된 항목입니다. 잠금 해제 후 삭제하세요.');return;}
+  if(!confirm('이 검사결과를 삭제하시겠습니까?'))return;
   m.labResults = m.labResults.filter(function(l){return l.id !== labId;});
   await saveBrkMaster();
   renderView('meds');
