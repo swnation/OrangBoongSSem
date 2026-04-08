@@ -1187,21 +1187,29 @@ function _renderConceptionCard(m) {
     </div>
     <div style="font-size:.55rem;color:var(--mu2);text-align:center">D-2~D-1이 가장 높음 (배란 전 1~2일)</div>`;
 
-  // 확률 향상 팁 (현재 데이터 기반 맞춤)
+  // 확률 향상 팁 (현재 데이터 기반 맞춤 — 잘 하고 있는 것 체크)
   const tips=[];
+  // dailyChecks에서 최근 7일 복용 현황 확인
+  const _last7=[];for(let i=0;i<7;i++){const dd=new Date(kstToday()+'T00:00:00');dd.setDate(dd.getDate()-i);_last7.push(dd.toISOString().slice(0,10));}
+  const dc7=_last7.map(d=>m.dailyChecks?.[d]).filter(Boolean);
+  const bungSupplDays=dc7.filter(d=>BRK_SUPPL_BUNG.some(k=>d.bung?.[k])).length;
+  const orangiSupplDays=dc7.filter(d=>BRK_SUPPL_ORANGI.some(k=>d.orangi?.[k])).length;
+  const milestones=m.milestones||[];
+  const alcoholMilestone=milestones.find(x=>x.label?.includes('금주'));
+
   // 타이밍
   tips.push({icon:'🎯',title:'타이밍 최적화',desc:'배란일 D-2~D-1에 집중 (이 시기가 확률 최고). 배란 예측 키트(LH strip) 사용 시 양성 후 24-36시간 내가 가장 유리',ref:'Wilcox 1995, Bull 2019'});
   // 빈도
   tips.push({icon:'📅',title:'관계 빈도',desc:'가임기(배란 전 5일~당일) 중 격일 관계가 최적. 매일도 괜찮지만 정자 농도 유지 관점에서 격일 권장',ref:'NICE 2013, Practice Committee ASRM 2017'});
-  // 영양제
+  // 남성 영양제
   if(r.hasSemen){
-    const n=typeof _normalizeSemenValues==='function'?_normalizeSemenValues(r.factors.find(f=>f.name?.includes('형태'))?.raw||{}):{};
-    tips.push({icon:'💊',title:'남성 영양제',desc:'CoQ10(200-300mg), 아르기닌(2-3g), 비타민E(400IU), 아연(30mg), 셀레늄(200μg) — 정자 질 개선에 3개월 소요',ref:'Salas-Huetos 2017 메타분석'});
+    tips.push({icon:'💊',title:'남성 영양제',desc:'CoQ10(200-300mg), 아르기닌(2-3g), 비타민E(400IU), 아연(30mg), 셀레늄(200μg) — 정자 질 개선에 3개월 소요',ref:'Salas-Huetos 2017 메타분석',doing:bungSupplDays>=5});
   }
-  tips.push({icon:'🥬',title:'여성 영양제',desc:'엽산(0.4-5mg, 필수), 비타민D(1000-4000IU), 철분, 오메가3(DHA 200mg) — 임신 3개월 전부터 시작',ref:'WHO, ACOG 2023'});
+  // 여성 영양제
+  tips.push({icon:'🥬',title:'여성 영양제',desc:'엽산(0.4-5mg, 필수), 비타민D(1000-4000IU), 철분, 오메가3(DHA 200mg) — 임신 3개월 전부터 시작',ref:'WHO, ACOG 2023',doing:orangiSupplDays>=5});
   // 생활습관
-  tips.push({icon:'🚭',title:'생활습관',desc:'금주·금연(남녀 모두), 카페인 <200mg/일, BMI 19-25 유지, 7-8시간 수면, 과도한 운동 피하기',ref:'ASRM Committee 2017'});
-  // 체중 (오랑이 특이)
+  tips.push({icon:'🚭',title:'생활습관',desc:'금주·금연(남녀 모두), 카페인 <200mg/일, BMI 19-25 유지, 7-8시간 수면, 과도한 운동 피하기',ref:'ASRM Committee 2017',doing:alcoholMilestone?.done});
+  // 체중
   tips.push({icon:'⚖️',title:'체중 관리',desc:'저체중(BMI <18.5)은 배란 장애 위험 증가. 목표 BMI 19+ 달성 시 임신율 유의미하게 향상',ref:'Rich-Edwards 2002'});
   // 스트레스
   tips.push({icon:'🧘',title:'스트레스 관리',desc:'만성 스트레스는 시상하부-뇌하수체-난소 축에 영향 → 배란 지연. 명상, 요가 등 권장',ref:'Lynch 2014 PRESTO'});
@@ -1210,9 +1218,9 @@ function _renderConceptionCard(m) {
 
   const tipsHtml=`<div style="margin-top:10px"><div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:6px;cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">💡 확률 향상 팁 ▸</div>
     <div style="display:none">
-    ${tips.map(t=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px dotted var(--bd)">
+    ${tips.map(t=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px dotted var(--bd);${t.doing?'background:#f0fdf408':''}">
       <span style="font-size:1rem">${t.icon}</span>
-      <div><div style="font-size:.72rem;font-weight:600;color:var(--ink)">${t.title}</div>
+      <div><div style="font-size:.72rem;font-weight:600;color:var(--ink)">${t.doing?'✅ ':''}${t.title}${t.doing?' <span style="font-size:.6rem;color:#10b981;font-weight:400">잘 하고 있어요!</span>':''}</div>
       <div style="font-size:.65rem;color:var(--mu);line-height:1.5">${t.desc}</div>
       <div style="font-size:.55rem;color:var(--mu2)">📚 ${t.ref}</div></div>
     </div>`).join('')}
