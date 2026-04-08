@@ -1418,7 +1418,7 @@ function renderLabResults() {
         <span style="font-size:.78rem;font-weight:600">${typeLabels[l.type]}</span>
         <span class="log-tag" style="background:#dbeafe;color:#1d4ed8;font-size:.6rem">${esc(l.who||'')}</span>
         <span style="font-size:.68rem;color:var(--mu);margin-left:auto">${esc(l.date)}</span>
-        <button class="accum-del" onclick="brkDeleteLab(${i})" title="삭제">🗑</button>
+        <button class="accum-del" onclick="brkDeleteLab(${l.id})" title="삭제">🗑</button>
       </div>
       <div style="font-size:.72rem;color:var(--tx);margin-top:4px">${summary}</div>
       ${l.memo?`<div style="margin-top:4px">
@@ -1530,6 +1530,7 @@ function _renderLabsByPerson(labs, typeLabels, typeIcons) {
 }
 
 function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
+  const labId=l.id||globalIdx;
   let summary='', interpret='';
   if(l.type==='semen'&&l.values) {
     const g=_semenGrade(l.values);
@@ -1566,7 +1567,7 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
       <span style="font-size:.72rem">${typeIcons[l.type]}</span>
       <span style="font-size:.75rem;font-weight:600">${typeLabels[l.type]}</span>
       <span style="font-size:.65rem;color:var(--mu);margin-left:auto">${esc(l.date)}</span>
-      <button class="accum-del" onclick="brkDeleteLab(${globalIdx})" title="삭제">🗑</button>
+      <button class="accum-del" onclick="brkDeleteLab(${labId})" title="삭제">🗑</button>
     </div>
     <div style="font-size:.7rem;color:var(--tx);margin-top:3px">${summary}</div>
     ${interpret?`<div style="font-size:.65rem;color:#0369a1;margin-top:2px">💡 ${esc(interpret)}</div>`:''}
@@ -1580,9 +1581,9 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
     </div>`:''}
     ${_brkMissingFieldsHtml(l)}
     <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-      <button onclick="_brkEditLabValues(${globalIdx})" style="font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">✏️ 수치 수정</button>
-      ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${globalIdx})" style="font-size:.58rem;padding:2px 8px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>
-      <select onchange="if(this.value){_brkReanalyzeLab(${globalIdx},this.value);this.value='';}" style="font-size:.58rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);font-family:var(--font)">
+      <button onclick="_brkEditLabValues(${labId})" style="font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">✏️ 수치 수정</button>
+      ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${labId})" style="font-size:.58rem;padding:2px 8px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>
+      <select onchange="if(this.value){_brkReanalyzeLab(${labId},this.value);this.value='';}" style="font-size:.58rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);font-family:var(--font)">
         <option value="">AI 선택 재분석</option>
         ${S.keys?.gemini?'<option value="gemini">Gemini</option>':''}
         ${S.keys?.gpt?'<option value="gpt">GPT</option>':''}
@@ -1665,15 +1666,15 @@ async function brkSaveLab() {
 
 // 📷 검사결과 사진 AI 분석
 // 수치 직접 수정
-function _brkEditLabValues(idx){
+function _brkEditLabValues(labId){
   const m=getBrkMaster();if(!m)return;
-  const l=m.labResults?.[idx];if(!l)return;
+  const l=m.labResults.find(x=>x.id===labId);if(!l)return;
   const vals=l.values||{};
   const fieldsHtml=Object.entries(vals).map(([k,v])=>
     `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="font-size:.72rem;min-width:80px;color:var(--mu)">${esc(k)}</span><input type="text" id="brk-lab-edit-${esc(k)}" value="${esc(String(v))}" class="dx-form-input" style="flex:1;font-size:.78rem;padding:4px 8px"></div>`
   ).join('');
   const addFieldHtml=`<div style="display:flex;gap:4px;margin-top:6px"><input id="brk-lab-add-key" class="dx-form-input" placeholder="항목명" style="flex:1;font-size:.72rem;padding:4px 6px"><input id="brk-lab-add-val" class="dx-form-input" placeholder="수치" style="flex:1;font-size:.72rem;padding:4px 6px"><button onclick="_brkAddLabField()" style="font-size:.65rem;padding:3px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;white-space:nowrap">+</button></div>`;
-  window._brkEditLabIdx=idx;
+  window._brkEditLabId=labId;
   showConfirmModal('✏️ 수치 수정 — '+l.date,
     `<div id="brk-lab-edit-fields">${fieldsHtml}</div>${addFieldHtml}`,
     [{label:'💾 저장',action:_brkSaveEditLabValues,primary:true},{label:'취소',action:closeConfirmModal}]);
@@ -1692,8 +1693,7 @@ function _brkAddLabField(){
 
 async function _brkSaveEditLabValues(){
   const m=getBrkMaster();if(!m)return;
-  const idx=window._brkEditLabIdx;
-  const l=m.labResults?.[idx];if(!l)return;
+  const l=m.labResults.find(x=>x.id===window._brkEditLabId);if(!l)return;
   const newVals={};
   document.querySelectorAll('#brk-lab-edit-fields input').forEach(inp=>{
     const key=inp.id.replace('brk-lab-edit-','');
@@ -1718,9 +1718,9 @@ function _brkMissingFieldsHtml(l){
   if(!missing.length)return '';
   return `<div style="font-size:.6rem;color:#b45309;margin-top:3px;padding:3px 6px;background:#fef3c7;border-radius:4px">⚠️ 누락: ${missing.join(', ')}</div>`;
 }
-async function _brkReanalyzeLab(idx,forceAiId){
+async function _brkReanalyzeLab(labId,forceAiId){
   const m=getBrkMaster();if(!m)return;
-  const l=m.labResults?.[idx];if(!l?.imgSrc)return;
+  const l=m.labResults.find(x=>x.id===labId);if(!l?.imgSrc)return;
   // Vision 유리 모델 우선순위: gemini > gpt > claude (또는 강제 지정)
   const aiId=forceAiId||(S.keys?.gemini?'gemini':(S.keys?.gpt?'gpt':(S.keys?.claude?'claude':null)));
   if(!aiId){showToast('⚠️ AI API 키 필요 (Gemini/GPT/Claude)');return;}
@@ -1799,8 +1799,20 @@ function _showStagedPhotos(){
       <button onclick="document.getElementById('brk-lab-photo-add').click()" style="font-size:.72rem;padding:5px 12px;border:1.5px dashed var(--bd);border-radius:6px;background:none;color:var(--mu);cursor:pointer">+ 사진 추가</button>
       <input type="file" id="brk-lab-photo-add" accept="image/*" multiple style="display:none" onchange="_addMorePhotos(this)">
     </div>
-    <div style="font-size:.7rem;color:var(--mu)">AI가 각 사진을 순서대로 분석합니다. 분석을 시작하시겠습니까?</div>`,
-    [{label:'🔬 분석 시작',action:()=>{closeConfirmModal();_brkAnalyzeStagedPhotos();},primary:true},
+    <div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">🤖 AI 모델 선택</div>
+    <div id="brk-photo-ai-select" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">
+    ${_brkVisionAiOptions().map(a=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 10px;border:1.5px solid ${a.available?'var(--bd)':'var(--bd)'};border-radius:8px;cursor:${a.available?'pointer':'default'};opacity:${a.available?1:.4};background:var(--sf)">
+      <input type="radio" name="brk-photo-ai" value="${a.id}" ${a.available?'':'disabled'} ${a.default?'checked':''} style="accent-color:var(--ac)">
+      <div style="flex:1"><span style="font-size:.75rem;font-weight:600;color:${a.color}">${a.name}</span>
+      <span style="font-size:.6rem;color:var(--mu);margin-left:4px">${a.tag}</span>
+      <div style="font-size:.6rem;color:var(--mu2)">${a.desc}</div></div>
+    </label>`).join('')}
+    </div>
+    <div style="font-size:.65rem;color:var(--mu2)">사진 ${_stagedLabPhotos.length}장을 순서대로 분석합니다.</div>`,
+    [{label:'🔬 분석 시작',action:()=>{
+      const sel=document.querySelector('input[name="brk-photo-ai"]:checked');
+      closeConfirmModal();_brkAnalyzeStagedPhotos(sel?.value);
+    },primary:true},
      {label:'취소',action:()=>{_stagedLabPhotos=[];closeConfirmModal();}}]);
 }
 function _addMorePhotos(input){
@@ -1816,10 +1828,17 @@ function _addMorePhotos(input){
   });
   input.value='';
 }
-async function _brkAnalyzeStagedPhotos(){
+function _brkVisionAiOptions(){
+  return [
+    {id:'gemini',name:'Gemini',color:'#4285f4',tag:'⭐ 추천',desc:'Vision 최적화, 표/수치 인식 우수, 빠름',available:!!S.keys?.gemini,default:!!S.keys?.gemini},
+    {id:'claude',name:'Claude',color:'#c96442',tag:'정밀',desc:'복잡한 레이아웃/손글씨 판독 우수',available:!!S.keys?.claude,default:!S.keys?.gemini&&!!S.keys?.claude},
+    {id:'gpt',name:'GPT',color:'#10a37f',tag:'범용',desc:'범용 Vision, 안정적 JSON 출력',available:!!S.keys?.gpt,default:!S.keys?.gemini&&!S.keys?.claude&&!!S.keys?.gpt},
+  ];
+}
+async function _brkAnalyzeStagedPhotos(selectedAiId){
   if(!_stagedLabPhotos.length)return;
-  const aiId=S.keys?.gemini?'gemini':(S.keys?.claude?'claude':(S.keys?.gpt?'gpt':null));
-  if(!aiId){showToast('⚠️ AI API 키 필요');return;}
+  const aiId=selectedAiId||(S.keys?.gemini?'gemini':(S.keys?.claude?'claude':(S.keys?.gpt?'gpt':null)));
+  if(!aiId||!S.keys?.[aiId]){showToast('⚠️ AI API 키 필요');return;}
   const results=[];
   for(let i=0;i<_stagedLabPhotos.length;i++){
     showToast('📷 분석 중... ('+(i+1)+'/'+_stagedLabPhotos.length+')',8000);
@@ -1917,12 +1936,9 @@ async function brkSaveLabFromPhoto() {
   showToast('✅ 검사결과 저장됨');
 }
 
-async function brkDeleteLab(idx) {
+async function brkDeleteLab(labId) {
   var m = getBrkMaster(); if (!m) return;
-  var sorted = m.labResults.slice().sort(function(a,b){return b.date.localeCompare(a.date);});
-  var target = sorted[idx];
-  if (!target) return;
-  m.labResults = m.labResults.filter(function(l){return l.id !== target.id;});
+  m.labResults = m.labResults.filter(function(l){return l.id !== labId;});
   await saveBrkMaster();
   renderView('meds');
   showToast('삭제됨');
