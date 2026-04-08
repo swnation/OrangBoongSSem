@@ -2339,17 +2339,20 @@ function _renderBrkVaccineTab(){
   function renderPersonVax(who,recs,color,icon){
     const byVax={};
     recs.forEach(r=>{if(!byVax[r.vaccine])byVax[r.vaccine]=[];byVax[r.vaccine].push(r);});
-    const done=pregVaxKeys.filter(k=>(byVax[k]||[]).length>=_VACCINE_DB[k].doses).length;
+    const done=pregVaxKeys.filter(k=>{const d=byVax[k]||[];return d.length>=_VACCINE_DB[k].doses||d.some(r=>r.status==='antibody'||r.status==='childhood');}).length;
     const pct=Math.round(done/pregVaxKeys.length*100);
     const rows=pregVaxKeys.map(key=>{
       const vax=_VACCINE_DB[key];const doses=byVax[key]||[];
-      const complete=doses.length>=vax.doses;
+      const hasAb=doses.some(d=>d.status==='antibody');
+      const hasCh=doses.some(d=>d.status==='childhood');
+      const complete=doses.length>=vax.doses||hasAb||hasCh;
+      const icon2=hasAb?'🛡️':hasCh?'👶':complete?'✅':'⬜';
       const liveTag=vax.live?'<span style="font-size:.48rem;background:#fef2f2;color:#dc2626;padding:1px 3px;border-radius:3px">생백신</span>':'';
+      const statusInfo=hasAb?'항체 확인':hasCh?'어릴 때 접종':doses.length?doses.map(d=>d.date!=='미상'?d.date:'').filter(Boolean).join(', '):'';
       return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">
-        <span style="font-size:.72rem;width:20px;text-align:center">${complete?'✅':'⬜'}</span>
+        <span style="font-size:.72rem;width:20px;text-align:center">${icon2}</span>
         <div style="flex:1;min-width:0"><span style="font-size:.7rem;color:${complete?'var(--mu)':'var(--ink)'};${complete?'text-decoration:line-through':''}">${vax.label}</span> ${liveTag}</div>
-        <span style="font-size:.58rem;color:var(--mu);font-family:var(--mono)">${doses.length}/${vax.doses}</span>
-        ${doses.length?'<span style="font-size:.55rem;color:var(--mu2)">'+doses.map(d=>d.date).join(', ')+'</span>':''}
+        <span style="font-size:.55rem;color:var(--mu2)">${statusInfo}</span>
       </div>`;
     }).join('');
     return `<div style="margin-bottom:14px">
