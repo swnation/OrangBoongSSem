@@ -1592,6 +1592,13 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
   const isLocked=l.locked;
   const displayName=l.customLabel||typeLabels[l.type]||l.type;
   let summary='', interpret='';
+  // 참고치 범위 벗어남 체크 (예: "0.35-5.50" → min=0.35, max=5.50)
+  const _isOutOfRange=(num,refStr)=>{
+    if(isNaN(num)||!refStr)return false;
+    const m=String(refStr).match(/([\d.]+)\s*[-~]\s*([\d.]+)/);
+    if(!m)return false;
+    return num<parseFloat(m[1])||num>parseFloat(m[2]);
+  };
   if(l.type==='semen'&&l.values) {
     const g=_semenGrade(l.values);
     const n=g.norm||{};
@@ -1604,23 +1611,41 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
     else if(g.issues.includes('농도↓')&&g.issues.length===1) interpret='정자 농도 저하 — 비뇨기과 정밀검사 권장';
     else interpret='복합 이상 소견 — 비뇨기과 상담 및 IUI/ICSI 등 보조생식술 검토 권장';
   } else if(l.type==='hormone'&&l.values) {
+    const _v=(name)=>{for(const[k,v]of Object.entries(l.values)){if(k.toLowerCase().includes(name.toLowerCase()))return parseFloat(v);}return undefined;};
+    const _k=(name)=>{for(const k of Object.keys(l.values)){if(k.toLowerCase().includes(name.toLowerCase()))return k;}return null;};
     const parts=[];
-    if(l.values.AMH!==undefined) parts.push(l.values.AMH>=1.0?'AMH 정상':'AMH 저하→난소 예비력 감소');
-    if(l.values.FSH!==undefined) parts.push(l.values.FSH<=10?'FSH 정상':'FSH 상승→난소기능 확인 필요');
-    if(l.values.TSH!==undefined) parts.push(l.values.TSH<=4.0?'TSH 정상':'TSH 이상→갑상선 확인');
-    summary=Object.entries(l.values).map(([k,v])=>k+':'+v+(l.ref?.[k]?' <span style="font-size:.55rem;color:var(--mu2)">['+l.ref[k]+']</span>':'')).join(' · ');
+    const amh=_v('AMH');if(amh!==undefined)parts.push(amh>=1.0?'AMH 정상':'AMH 저하→난소 예비력 감소');
+    const fsh=_v('FSH');if(fsh!==undefined)parts.push(fsh<=10?'FSH 정상':'FSH 상승→난소기능 확인 필요');
+    const tsh=_v('TSH');if(tsh!==undefined)parts.push(tsh<=4.0&&tsh>=0.35?'TSH 정상':'TSH 이상→갑상선 확인');
+    const prl=_v('Prolactin');if(prl!==undefined)parts.push(prl<=25?'Prolactin 정상':'Prolactin 상승→고프로락틴혈증 확인');
+    summary=Object.entries(l.values).map(([k,v])=>{
+      const num=parseFloat(v);const ref=l.ref?.[k];
+      const outOfRange=ref?_isOutOfRange(num,ref):false;
+      return `<span style="${outOfRange?'color:#dc2626;font-weight:600':''}">${k}:${v}</span>${ref?' <span style="font-size:.55rem;color:var(--mu2)">['+ref+']</span>':''}`;
+    }).join(' · ');
     interpret=parts.join(' · ')||'수치 확인 필요';
   } else if(l.type==='blood'&&l.values) {
+    const _v=(name)=>{for(const[k,v]of Object.entries(l.values)){if(k.toLowerCase().includes(name.toLowerCase()))return parseFloat(v);}return undefined;};
     const parts=[];
-    if(l.values.Hb!==undefined||l.values['Hemoglobin(Hb)(g/dL)']!==undefined){const hb=l.values.Hb||l.values['Hemoglobin(Hb)(g/dL)'];parts.push(hb>=12?'Hb 정상':'Hb 저하→빈혈');}
-    if(l.values.AST!==undefined||l.values.ALT!==undefined) {
-      const ast=l.values.AST||0,alt=l.values.ALT||0;
-      parts.push(ast<=40&&alt<=40?'간기능 정상':'간수치 상승→확인 필요');
-    }
-    summary=Object.entries(l.values).map(([k,v])=>k+':'+v+(l.ref?.[k]?' <span style="font-size:.55rem;color:var(--mu2)">['+l.ref[k]+']</span>':'')).join(' · ');
+    const hb=_v('hb')||_v('hemoglobin');if(hb!==undefined)parts.push(hb>=12?'Hb 정상':'Hb 저하→빈혈');
+    const ast=_v('ast')||_v('got');const alt=_v('alt')||_v('gpt');
+    if(ast!==undefined||alt!==undefined)parts.push((ast||0)<=40&&(alt||0)<=40?'간기능 정상':'간수치 상승→확인 필요');
+    const wbc=_v('wbc');if(wbc!==undefined)parts.push(wbc>=4&&wbc<=10?'WBC 정상':wbc<4?'WBC 저하→백혈구 감소':'WBC 상승→감염/염증');
+    const plt=_v('platelet')||_v('plt');if(plt!==undefined)parts.push(plt>=150&&plt<=400?'혈소판 정상':plt<150?'혈소판 저하':'혈소판 증가');
+    const cr=_v('creatinine');if(cr!==undefined)parts.push(cr<=1.2?'Cr 정상':'Cr 상승→신장기능 확인');
+    const vitD=_v('vitamin d')||_v('25-oh');if(vitD!==undefined)parts.push(vitD>=20?'비타민D 정상':'비타민D 부족→보충 권장');
+    summary=Object.entries(l.values).map(([k,v])=>{
+      const num=parseFloat(v);const ref=l.ref?.[k];
+      const outOfRange=ref?_isOutOfRange(num,ref):false;
+      return `<span style="${outOfRange?'color:#dc2626;font-weight:600':''}">${k}:${v}</span>${ref?' <span style="font-size:.55rem;color:var(--mu2)">['+ref+']</span>':''}`;
+    }).join(' · ');
     interpret=parts.join(' · ')||'';
   } else if(l.values&&typeof l.values==='object') {
-    summary=Object.entries(l.values).slice(0,4).map(([k,v])=>k+':'+v+(l.ref?.[k]?' <span style="font-size:.55rem;color:var(--mu2)">['+l.ref[k]+']</span>':'')).join(' · ');
+    summary=Object.entries(l.values).slice(0,6).map(([k,v])=>{
+      const ref=l.ref?.[k];const num=parseFloat(v);
+      const outOfRange=ref?_isOutOfRange(num,ref):false;
+      return `<span style="${outOfRange?'color:#dc2626;font-weight:600':''}">${k}:${v}</span>${ref?' <span style="font-size:.55rem;color:var(--mu2)">['+ref+']</span>':''}`;
+    }).join(' · ');
   }
   const checked=_labBulkMode&&_labBulkSet.has(labId);
   return `<div style="padding:7px 10px;background:${isLocked?'#f0fdf4':'var(--sf2)'};border:1.5px solid ${isLocked?'#86efac':'var(--bd)'};border-radius:6px;margin-top:4px;${checked?'outline:2px solid #dc2626':''}">
