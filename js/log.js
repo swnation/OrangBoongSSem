@@ -506,6 +506,16 @@ function renderLog() {
       </div>
       <div class="log-section-title">내용</div>
       <textarea class="log-memo" id="log-memo" rows="4" placeholder="자유롭게 기록하세요..."></textarea>
+      <div class="log-section-title" style="margin-top:12px">${lc.nrsLabel||'컨디션 (0=최악 10=최상)'}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin:4px 0">
+        <span style="font-size:1.3rem;font-weight:700;min-width:28px;text-align:center" id="journal-nrs-val">-</span>
+        <input type="range" id="journal-nrs" min="0" max="10" value="5" disabled style="flex:1;accent-color:var(--ac);height:24px"
+          oninput="document.getElementById('journal-nrs-val').textContent=this.value;document.getElementById('journal-nrs-skip').checked=false">
+      </div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:.73rem;color:var(--mu);cursor:pointer">
+        <input type="checkbox" id="journal-nrs-skip" checked onchange="const r=document.getElementById('journal-nrs');r.disabled=this.checked;document.getElementById('journal-nrs-val').textContent=this.checked?'-':r.value"> 기록 안 함
+      </label>
+      <div id="journal-medcheck-container" style="margin-top:12px"></div>
       <input type="hidden" id="log-edit-idx" value="-1">
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
         <button class="btn-cancel" id="log-cancel-edit" style="display:none;font-size:.78rem" onclick="cancelLogEdit()">편집 취소</button>
@@ -535,7 +545,16 @@ function renderLog() {
         ${visMoodOpts.map(({s,i})=>`<div class="log-chip" data-group="mood" data-val="${s}" onclick="selectMood(this,${i})">${s}</div>`).join('')}
       </div>
     </div>
-    ${skipNrsHtml}` : `
+    ${skipNrsHtml}
+    <div class="log-section-title" style="margin-top:12px">컨디션 점수 (0=최악 10=최상)</div>
+    <div style="display:flex;align-items:center;gap:10px;margin:4px 0">
+      <span style="font-size:1.3rem;font-weight:700;min-width:28px;text-align:center" id="mood-nrs-val">-</span>
+      <input type="range" id="mood-nrs" min="0" max="10" value="5" disabled style="flex:1;accent-color:var(--ac);height:24px"
+        oninput="document.getElementById('mood-nrs-val').textContent=this.value;document.getElementById('mood-nrs-skip').checked=false">
+    </div>
+    <label style="display:flex;align-items:center;gap:5px;font-size:.73rem;color:var(--mu);cursor:pointer">
+      <input type="checkbox" id="mood-nrs-skip" checked onchange="const r=document.getElementById('mood-nrs');r.disabled=this.checked;document.getElementById('mood-nrs-val').textContent=this.checked?'-':r.value"> 기록 안 함
+    </label>` : `
     <div class="log-section-title">${lc.nrsLabel}</div>
     <div id="nrs-area">
       <div class="log-nrs">
@@ -781,7 +800,9 @@ function renderLogList() {
             ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
-          ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
+          ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px;white-space:pre-line">${esc(l.memo)}</div>`:''}
+          ${l.nrsRange?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">NRS 변화: ${l.nrsRange.min}→${l.nrsRange.max}</div>`:''}
+          ${l.timeline?`<div style="font-size:.62rem;color:var(--ac);margin-top:2px;cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
         <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
@@ -795,6 +816,7 @@ function renderLogList() {
         <span style="font-size:.78rem;font-weight:700;color:var(--ink)">${esc(dateLabel)}</span>
         <span style="font-size:.65rem;color:var(--mu)">${logs.length}건</span>
         ${avgNrs!==null&&!lc.moodMode?`<span style="font-size:.65rem;font-weight:600;color:${nc}">평균 ${avgNrs}</span>`:''}
+        ${logs.length>=2?`<button onclick="event.stopPropagation();mergeDayEntries('${date}')" style="margin-left:auto;font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">🔗 병합</button>`:''}
       </div>
       ${collapsed?'':`<div style="padding:0 4px">${logsHtml}</div>`}
     </div>`;
@@ -807,9 +829,9 @@ function renderLogList() {
     <button onclick="changeLogMonth(1)" ${isCurrentMonth?'disabled style="font-size:.8rem;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf2);color:var(--mu);cursor:not-allowed;opacity:.4"':'style="font-size:.8rem;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf2);color:var(--ink);cursor:pointer"'}>다음 달 ▶</button>
   </div>`;
 
-  return renderLogFilter(ds.logData)+monthNav+`<div class="card"><div class="card-title" style="display:flex;align-items:center;gap:8px">📋 ${ds.logMonth} ${hasFilter?`필터 결과 (${filtered.length}/${ds.logData.length}건)`:`전체 (${ds.logData.length}건)`}
+  return renderLogFilter(ds.logData)+monthNav+(typeof renderMedComplianceCalendar==='function'?renderMedComplianceCalendar(ds.logData):'')+`<div class="card"><div class="card-title" style="display:flex;align-items:center;gap:8px">📋 ${ds.logMonth} ${hasFilter?`필터 결과 (${filtered.length}/${ds.logData.length}건)`:`전체 (${ds.logData.length}건)`}
     <button onclick="toggleAllLogDates()" style="margin-left:auto;font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf2);color:var(--mu);cursor:pointer">전체 접기/펼치기</button>
-  </div><div data-log-list>${groupsHtml}</div></div>`;
+  </div><div id="undo-redo-bar" style="display:flex;gap:4px;margin-bottom:6px"></div><div data-log-list>${groupsHtml}</div></div>`;
 }
 
 function renderLogListInner() {
@@ -846,7 +868,9 @@ function renderLogListInner() {
             ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
-          ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
+          ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px;white-space:pre-line">${esc(l.memo)}</div>`:''}
+          ${l.nrsRange?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">NRS 변화: ${l.nrsRange.min}→${l.nrsRange.max}</div>`:''}
+          ${l.timeline?`<div style="font-size:.62rem;color:var(--ac);margin-top:2px;cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
         <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
@@ -859,6 +883,7 @@ function renderLogListInner() {
         <span style="font-size:.78rem;font-weight:700;color:var(--ink)">${esc(dateLabel)}</span>
         <span style="font-size:.65rem;color:var(--mu)">${logs.length}건</span>
         ${avgNrs!==null&&!lc.moodMode?`<span style="font-size:.65rem;font-weight:600;color:${nc}">평균 ${avgNrs}</span>`:''}
+        ${logs.length>=2?`<button onclick="event.stopPropagation();mergeDayEntries('${date}')" style="margin-left:auto;font-size:.58rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">🔗 병합</button>`:''}
       </div>
       ${collapsed?'':`<div style="padding:0 4px">${logsHtml}</div>`}
     </div>`;
@@ -872,6 +897,156 @@ function toggleAllLogDates() {
   dates.forEach(d=>{ _logCollapsed[d]=!allCollapsed; });
   const el=document.getElementById('content').querySelector('[data-log-list]');
   if(el) el.innerHTML=renderLogListInner();
+}
+
+// timeline 상세 보기
+function _showTimeline(idx){
+  const entry=D()?.logData?.[idx];if(!entry?.timeline)return;
+  const html=entry.timeline.map(t=>{
+    const parts=[`<b>${t.time||'--:--'}</b>`];
+    if(t.nrs>=0)parts.push(`NRS:${t.nrs}`);
+    if(t.mood)parts.push(t.mood);
+    if(t.sites?.length)parts.push(t.sites.join('+'));
+    if(t.meds?.length)parts.push('💊'+t.meds.join(', '));
+    if(t.treatments?.length)parts.push('🏥'+t.treatments.join(', '));
+    if(t.outcome)parts.push(t.outcome.rating==='better'?'🟢호전':t.outcome.rating==='same'?'🟡비슷':'🔴악화');
+    if(t.memo)parts.push('"'+esc(t.memo)+'"');
+    return `<div style="font-size:.72rem;padding:4px 0;border-bottom:1px dotted var(--bd)">${parts.join(' · ')}</div>`;
+  }).join('');
+  showConfirmModal('📊 Timeline — '+entry.datetime?.slice(0,10),
+    `<div style="max-height:300px;overflow-y:auto">${html}</div>`,
+    [{label:'닫기',action:closeConfirmModal,primary:true}]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UNDO / REDO (logData 스냅샷 기반)
+// ═══════════════════════════════════════════════════════════════
+const _undoStack=[];
+const _redoStack=[];
+const _MAX_UNDO=10;
+
+function _pushUndo(label){
+  const ds=D();if(!ds?.logData)return;
+  _undoStack.push({label,snapshot:JSON.stringify(ds.logData),domain:S.currentDomain,month:ds.logMonth});
+  if(_undoStack.length>_MAX_UNDO)_undoStack.shift();
+  _redoStack.length=0; // redo 초기화
+  _updateUndoUI();
+}
+
+async function undoLogChange(){
+  if(!_undoStack.length){showToast('되돌릴 변경이 없습니다.');return;}
+  const ds=D();if(!ds)return;
+  // 현재 상태를 redo에 저장
+  _redoStack.push({label:'redo',snapshot:JSON.stringify(ds.logData),domain:S.currentDomain,month:ds.logMonth});
+  const prev=_undoStack.pop();
+  ds.logData=JSON.parse(prev.snapshot);
+  try{await saveLogData();showToast('↩ 되돌림: '+prev.label);renderView('log');}
+  catch(e){showToast('❌ 되돌리기 실패',3000);}
+  _updateUndoUI();
+}
+
+async function redoLogChange(){
+  if(!_redoStack.length){showToast('다시 실행할 변경이 없습니다.');return;}
+  const ds=D();if(!ds)return;
+  _undoStack.push({label:'undo',snapshot:JSON.stringify(ds.logData),domain:S.currentDomain,month:ds.logMonth});
+  const next=_redoStack.pop();
+  ds.logData=JSON.parse(next.snapshot);
+  try{await saveLogData();showToast('↪ 다시 실행');renderView('log');}
+  catch(e){showToast('❌ 다시 실행 실패',3000);}
+  _updateUndoUI();
+}
+
+function _updateUndoUI(){
+  const el=document.getElementById('undo-redo-bar');
+  if(!el)return;
+  el.innerHTML=(_undoStack.length?`<button onclick="undoLogChange()" style="font-size:.68rem;padding:3px 10px;border:1px solid var(--ac);border-radius:5px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">↩ 되돌리기 (${_undoStack[_undoStack.length-1].label})</button>`:'')+
+    (_redoStack.length?`<button onclick="redoLogChange()" style="font-size:.68rem;padding:3px 10px;border:1px solid var(--mu);border-radius:5px;background:none;color:var(--mu);cursor:pointer;font-family:var(--font);margin-left:4px">↪ 다시 실행</button>`:'');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 같은 날 기록 병합 (timeline 구조 + 전후비교 + undo)
+// ═══════════════════════════════════════════════════════════════
+function mergeDayEntries(date) {
+  const ds=D();if(!ds.logData?.length)return;
+  const entries=ds.logData.filter(l=>l.datetime?.slice(0,10)===date);
+  if(entries.length<2){showToast('병합할 기록이 없습니다.');return;}
+
+  // timeline 생성 — 원본 데이터 완전 보존
+  const timeline=entries.map(e=>({
+    time:e.datetime?.slice(11,16)||'',
+    nrs:e.nrs,
+    mood:e.mood||undefined,
+    sites:[...(e.sites||[])],
+    symptoms:[...(e.symptoms||[])],
+    meds:[...(e.meds||[])],
+    treatments:[...(e.treatments||[])],
+    medCheck:e.medCheck?{...e.medCheck}:undefined,
+    dailyChecks:e.dailyChecks?{...e.dailyChecks}:undefined,
+    outcome:e.outcome?{...e.outcome}:undefined,
+    memo:e.memo||'',
+    weather:e.weather?{...e.weather}:undefined,
+  }));
+
+  // 병합 엔트리 생성
+  const merged={...entries[entries.length-1]};
+  merged.id=merged.id||Date.now();
+  merged.timeline=timeline;
+  // NRS: 마지막 유효값 + 범위
+  const nrsVals=entries.filter(e=>e.nrs>=0).map(e=>e.nrs);
+  if(nrsVals.length){merged.nrs=nrsVals[nrsVals.length-1];merged.nrsRange={min:Math.min(...nrsVals),max:Math.max(...nrsVals)};}
+  // 통합 (합집합)
+  merged.sites=[...new Set(entries.flatMap(e=>e.sites||[]))];
+  merged.symptoms=[...new Set(entries.flatMap(e=>e.symptoms||[]))];
+  merged.meds=[...new Set(entries.flatMap(e=>e.meds||[]))];
+  merged.treatments=[...new Set(entries.flatMap(e=>e.treatments||[]))];
+  const mc={};entries.forEach(e=>{if(e.medCheck)Object.assign(mc,e.medCheck);});
+  if(Object.keys(mc).length)merged.medCheck=mc;
+  const dc={};entries.forEach(e=>{if(e.dailyChecks)Object.assign(dc,e.dailyChecks);});
+  if(Object.keys(dc).length)merged.dailyChecks=dc;
+  const lastMood=entries.filter(e=>e.mood).pop();
+  if(lastMood)merged.mood=lastMood.mood;
+  // 메모: 시간별 분리 보존
+  const memos=entries.filter(e=>e.memo).map(e=>(e.datetime?.slice(11,16)||'')+' '+e.memo);
+  merged.memo=memos.join('\n');
+
+  // 전후비교 모달 표시
+  const beforeHtml=entries.map(e=>{
+    const t=e.datetime?.slice(11,16)||'';
+    const parts=[t];
+    if(e.nrs>=0)parts.push('NRS:'+e.nrs);
+    if(e.sites?.length)parts.push(e.sites.join('+'));
+    if(e.meds?.length)parts.push('💊'+e.meds.join(','));
+    if(e.treatments?.length)parts.push('🏥'+e.treatments.join(','));
+    if(e.outcome)parts.push(e.outcome.rating==='better'?'🟢호전':e.outcome.rating==='same'?'🟡비슷':'🔴악화');
+    if(e.memo)parts.push('"'+e.memo.slice(0,30)+'"');
+    return `<div style="font-size:.7rem;padding:2px 0;color:var(--mu)">${esc(parts.join(' · '))}</div>`;
+  }).join('');
+
+  const afterParts=[`NRS ${merged.nrs>=0?merged.nrs:'-'}`];
+  if(merged.nrsRange)afterParts[0]+=` (${merged.nrsRange.min}→${merged.nrsRange.max})`;
+  if(merged.sites?.length)afterParts.push(merged.sites.join('+'));
+  if(merged.meds?.length)afterParts.push('💊'+merged.meds.join(', '));
+  if(merged.treatments?.length)afterParts.push('🏥'+merged.treatments.join(', '));
+  afterParts.push(`timeline: ${timeline.length}건`);
+  const afterHtml=`<div style="font-size:.7rem;color:var(--ink)">${esc(afterParts.join(' · '))}</div>`;
+
+  showConfirmModal(`🔗 ${date} 병합 (${entries.length}건 → 1건)`,
+    `<div style="margin-bottom:8px"><div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">병합 전 (${entries.length}건)</div>${beforeHtml}</div>
+     <div style="border-top:1px solid var(--bd);padding-top:8px"><div style="font-size:.68rem;font-weight:600;color:var(--ac);margin-bottom:4px">병합 후 (1건 + timeline)</div>${afterHtml}
+     <div style="font-size:.62rem;color:var(--mu);margin-top:4px">※ timeline에 원본 데이터가 완전 보존됩니다. 되돌리기 가능.</div></div>`,
+    [{label:'병합 실행',action:()=>_executeMerge(date,merged),primary:true},{label:'취소',action:closeConfirmModal}]
+  );
+}
+
+async function _executeMerge(date,merged){
+  closeConfirmModal();
+  _pushUndo('병합: '+date);
+  const ds=D();
+  ds.logData=ds.logData.filter(l=>l.datetime?.slice(0,10)!==date);
+  ds.logData.push(merged);
+  ds.logData.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
+  try{await saveLogData();showToast('✅ 병합 완료 (되돌리기 가능)');renderView('log');}
+  catch(e){showToast('❌ 병합 저장 실패: '+e.message,4000);}
 }
 
 // ── ntfy 푸시 알림 ──
@@ -1032,7 +1207,9 @@ async function saveLogEntry() {
   } else if(lc.moodMode) {
     const sel=document.querySelector('#mood-chips .log-chip.sel');
     mood=sel?.dataset.val||'';
-    nrs=-1;
+    // moodMode 컨디션 점수 (별도 슬라이더)
+    const moodNrsSkip=document.getElementById('mood-nrs-skip')?.checked;
+    nrs=moodNrsSkip?-1:parseInt(document.getElementById('mood-nrs')?.value??-1);
   } else {
     nrs=parseInt(document.getElementById('log-nrs')?.value??-1);
   }
@@ -1104,8 +1281,9 @@ async function saveLogEntry() {
 
 async function deleteLogEntry(idx) {
   if(!confirm('삭제할까요?'))return;
+  _pushUndo('삭제');
   const ds=D();ds.logData.splice(idx,1);
-  try{await saveLogData();showToast('🗑 삭제됨');renderView('log');}
+  try{await saveLogData();showToast('🗑 삭제됨 (되돌리기 가능)');renderView('log');}
   catch(e){showToast('삭제 실패',3000);}
 }
 
@@ -1447,7 +1625,14 @@ async function saveJournalLog() {
   const memo=document.getElementById('log-memo')?.value.trim();
   if(!memo){showToast('내용을 입력해 주세요.');if(btn)btn.disabled=false;if(sp)sp.style.display='none';return;}
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
-  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:-1,sites:[],symptoms:[],meds:[],treatments:[]};
+  const jNrsSkip=document.getElementById('journal-nrs-skip')?.checked;
+  const jNrs=jNrsSkip?-1:parseInt(document.getElementById('journal-nrs')?.value||'5');
+  // medCheck 수집 (저널 모드에서도 복용 체크 포함)
+  const jMedCheck={};
+  document.querySelectorAll('.med-check-cb').forEach(cb=>{jMedCheck[cb.dataset.med]=cb.checked;});
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T00:00`,who,categories:cats,memo,nrs:jNrs,
+    medCheck:Object.keys(jMedCheck).length?jMedCheck:undefined,
+    sites:[],symptoms:[],meds:[],treatments:[]};
   await ensureLogLoaded();
   const ds=D();
   if(editIdx>=0 && ds.logData[editIdx]) {

@@ -99,6 +99,7 @@ function handleToken(resp) {
   if (_tokenRefreshResolve) { _tokenRefreshResolve(true); _tokenRefreshResolve = null; return; }
   if (isRefresh) return; // silent refresh from timer — no UI reload needed
   setDriveStatus(true);
+  _initAutoLoginToggle();
   const dc = document.getElementById('default-connect'); if(dc) dc.style.display='none';
   const locked = document.getElementById('sb-locked'); if(locked) locked.style.display='none';
   const unlocked = document.getElementById('sb-unlocked');
@@ -112,6 +113,30 @@ function handleToken(resp) {
 function requireLogin() {
   if (!S.token) { showToast('🔒 Google Drive 로그인 후 사용할 수 있습니다.', 3000); return false; }
   return true;
+}
+
+function signOut() {
+  if(S.token&&window.google?.accounts?.oauth2) {
+    google.accounts.oauth2.revoke(S.token,()=>{});
+  }
+  S.token=null;
+  localStorage.removeItem('om_auto_login');
+  if(_tokenRefreshTimer)clearTimeout(_tokenRefreshTimer);
+  _tokenExpiresAt=0;
+  setDriveStatus(false);
+  showToast('🚪 로그아웃됨',2000);
+  setTimeout(()=>location.reload(),500);
+}
+
+function toggleAutoLogin(enabled) {
+  if(enabled) localStorage.setItem('om_auto_login','true');
+  else localStorage.removeItem('om_auto_login');
+  showToast(enabled?'✅ 자동 로그인 켜짐':'⬜ 자동 로그인 꺼짐');
+}
+
+function _initAutoLoginToggle() {
+  const cb=document.getElementById('auto-login-toggle');
+  if(cb) cb.checked=localStorage.getItem('om_auto_login')==='true';
 }
 
 function setDriveStatus(ok) {
