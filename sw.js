@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orangi-health-v97q';
+const CACHE_NAME = 'orangi-health-v97r';
 const PRECACHE = [
   './index.html',
   './style.css',

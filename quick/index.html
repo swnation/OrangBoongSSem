@@ -890,6 +890,8 @@ async function sendQuickNtfy(entry) {
   // 경과 알림 예약 (클라이언트 타이머 — 새 기록 시 이전 예약 자동 취소)
   const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||'0');
   if(outcomeDelay>0) scheduleOutcomeNtfy(entry,outcomeDelay);
+  // 약물 미입력 시 30분 후 복용 확인 알림 (서버사이드)
+  if(!(entry.meds||[]).length&&!entry._medReminderSent) _sendMedReminder(entry, 30);
 }
 
 let _outcomeTimer=null;
@@ -980,6 +982,54 @@ function checkPendingOutcome(){
     }
     break; // 가장 최근 미발송 1건만
   }
+}
+
+// ── 약물 복용 확인 알림 (서버사이드 스케줄링) ──
+async function _sendMedReminder(entry, delayMin){
+  const orangiTopic=localStorage.getItem('om_ntfy_orangi');
+  if(!orangiTopic) return;
+  const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
+  const baseUrl=location.href.split('#')[0].split('?')[0];
+  const info=[(entry.datetime||'').slice(11,16),nrs].filter(Boolean).join(' ');
+  const ntfyUrl='https://ntfy.sh/'+encodeURIComponent(orangiTopic)
+    +'?title='+encodeURIComponent('💊 약 먹었나요?')
+    +'&actions='+encodeURIComponent('view,💊 복용 추가,'+baseUrl+'#addmeds-'+entry.id)
+    +'&delay='+delayMin+'m';
+  try{await fetch(ntfyUrl,{method:'POST',body:info+' → 약 먹었으면 추가해주세요'});}catch(e){}
+  // 플래그 저장
+  const logs=getQuickLogs();
+  const idx=logs.findIndex(l=>String(l.id)===String(entry.id));
+  if(idx>=0){logs[idx]._medReminderSent=true;saveQuickLogs(logs);}
+}
+
+// 빠른 복용 추가 (목록/알림에서 호출)
+function quickAddMeds(entryId){
+  const logs=getQuickLogs();
+  const idx=logs.findIndex(l=>String(l.id)===String(entryId));
+  if(idx<0){showToast('기록을 찾을 수 없습니다');return;}
+  const entry=logs[idx];
+  const existing=(entry.meds||[]);
+  // 자주 쓰는 약물 목록
+  const allMeds=[...new Set([...MEDS,...(JSON.parse(localStorage.getItem('om_custom_meds_orangi-migraine')||'[]'))])];
+  const chips=allMeds.map(m=>{
+    const sel=existing.includes(m);
+    return '<span class="chip'+(sel?' sel':'')+'" data-val="'+esc(m)+'" onclick="this.classList.toggle(\'sel\')" style="font-size:.72rem;padding:4px 10px;border:1.5px solid var(--bd);border-radius:16px;cursor:pointer;background:'+(sel?'var(--ac)':'var(--sf)')+';color:'+(sel?'#fff':'var(--ink)')+'">'+esc(m)+'</span>';
+  }).join('');
+  showConfirmModal('💊 복용 추가 — '+(entry.datetime||'').slice(11,16),
+    '<div style="font-size:.72rem;color:var(--mu);margin-bottom:8px">'+(entry.datetime||'').slice(0,10)+' 기록에 약물을 추가합니다</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+chips+'</div>'
+    +'<div style="display:flex;gap:6px"><input id="qam-other" placeholder="기타 약물" style="flex:1;border:1.5px solid var(--bd);border-radius:6px;padding:6px 10px;font-size:.78rem;font-family:var(--font);background:var(--sf);color:var(--ink)"><button onclick="const i=document.getElementById(\'qam-other\');if(i.value.trim()){const c=document.createElement(\'span\');c.className=\'chip sel\';c.dataset.val=i.value.trim();c.textContent=i.value.trim();c.style.cssText=\'font-size:.72rem;padding:4px 10px;border:1.5px solid var(--ac);border-radius:16px;cursor:pointer;background:var(--ac);color:#fff\';c.onclick=function(){this.classList.toggle(\'sel\');this.style.background=this.classList.contains(\'sel\')?\'var(--ac)\':\'var(--sf)\';this.style.color=this.classList.contains(\'sel\')?\'#fff\':\'var(--ink)\'};document.querySelector(\'#confirm-body .chips\')?.appendChild(c)||this.parentElement.previousElementSibling.appendChild(c);i.value=\'\'}" style="padding:4px 10px;border:1.5px solid var(--ac);border-radius:6px;background:var(--ac);color:#fff;cursor:pointer;font-size:.72rem">+</button></div>',
+    [{label:'💾 저장',action:async()=>{
+      const sel=[];document.querySelectorAll('#confirm-body .chip.sel').forEach(c=>sel.push(c.dataset.val));
+      if(!sel.length){showToast('약물을 선택하세요');return;}
+      logs[idx].meds=sel;
+      saveQuickLogs(logs);
+      await cloudSave([logs[idx]]);
+      closeConfirmModal();
+      showToast('💊 복용 '+sel.length+'개 저장됨');
+      if(currentTab==='list')renderList();
+      else if(currentTab==='outcome')renderOutcomeTab();
+    },primary:true},{label:'취소',action:closeConfirmModal}]);
 }
 
 // ── 경과(Outcome) 탭 ──
@@ -1159,6 +1209,7 @@ function renderList() {
       </div>
       <div class="log-item-actions"><span style="font-size:.68rem;color:var(--ac);cursor:pointer">탭하여 상세 보기</span></div>`
       :`<div class="log-item-actions">
+        ${!(l.meds||[]).length?`<button class="btn-sm" onclick="event.stopPropagation();quickAddMeds(${l.id})" style="background:#7c3aed;color:#fff;border-color:#7c3aed">💊 복용 추가</button>`:''}
         <button class="btn-sm" onclick="editEntry(${l.id})">수정</button>
         <button class="btn-sm del" onclick="deleteEntry(${l.id})">삭제</button>
       </div>`}
@@ -1374,6 +1425,14 @@ const _handleHash=()=>{
     rateQuickOutcomeById(id,rating);
     history.replaceState(null,null,location.pathname+location.search); // 해시 제거 (hashchange 이벤트 방지)
     switchTab('outcome');
+    return;
+  }
+  // #addmeds-{id} → 복용 추가 모달
+  const medMatch=h.match(/^#addmeds-(\d+)$/);
+  if(medMatch){
+    history.replaceState(null,null,location.pathname+location.search);
+    switchTab('list');
+    setTimeout(()=>quickAddMeds(parseInt(medMatch[1])),300);
     return;
   }
   if(h==='#outcome') switchTab('outcome');
