@@ -1940,33 +1940,71 @@ function _updateProgress(i,total,text){
   const pctEl=document.getElementById('brk-ap-pct');if(pctEl)pctEl.textContent=pct+'%';
   const statusEl=document.getElementById('brk-ap-status');if(statusEl)statusEl.textContent=text;
 }
+var _consensusResults=[];
 function _showConsensusResults(allResults){
+  _consensusResults=allResults;
+  const hasDivergent=allResults.some(r=>r._confidence&&Object.values(r._confidence).includes('divergent'));
   const html=allResults.map((r,i)=>{
     if(r.error)return `<div style="padding:6px;background:#fef2f2;border-radius:6px;margin-bottom:6px;font-size:.72rem">사진 ${i+1}: ❌ ${esc(r.error)}</div>`;
     const aiCount=r._usedAis?.length||0;
-    const vals=r.values?Object.entries(r.values).map(([k,v])=>{
-      const conf=r._confidence?.[k];
-      const confBadge=conf==='unanimous'?'<span style="font-size:.45rem;color:#10b981">✓일치</span>'
-        :conf==='majority'?'<span style="font-size:.45rem;color:#f59e0b">△다수</span>'
-        :conf==='single'?'<span style="font-size:.45rem;color:#6366f1">◆단독</span>'
-        :'<span style="font-size:.45rem;color:#dc2626">?확인</span>';
-      return '<span class="log-tag" style="background:#eff6ff;color:#1d4ed8;font-size:.6rem">'+esc(k)+':'+esc(String(v))+' '+confBadge+'</span>';
-    }).join(' '):'';
-    const aiLabel=aiCount>=2?r._usedAis.join(' + ')+' 교차 검증':r._usedAis[0]+' 단독 분석';
+    const aiLabel=aiCount>=2?r._usedAis.join('+')+' 교차 검증':r._usedAis[0]+' 단독';
     const aiColor=aiCount>=2?'#8b5cf6':'#f59e0b';
-    return `<div style="padding:8px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;margin-bottom:6px">
-      <div style="display:flex;gap:6px;align-items:center"><img src="${r._imgSrc}" style="width:40px;height:40px;object-fit:cover;border-radius:4px">
-      <div><div style="font-size:.72rem;font-weight:600">사진 ${i+1}: ${esc(r.type||'기타')} · ${esc(r.date||'')} · ${esc(r.who||'')}</div>
-      <div style="font-size:.6rem;color:${aiColor}">${aiLabel}${r._failedAis?.length?' <span style="color:#dc2626">('+r._failedAis.join(',')+' 실패)</span>':''}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:2px">${vals}</div></div></div>
-      ${r.opinion?'<div style="font-size:.65rem;color:#15803d;margin-top:4px">💡 '+esc(r.opinion)+'</div>':''}
+    // 값 렌더: 일치=태그, 불일치=AI별 비교 + 수동입력
+    const valsHtml=r.values?Object.entries(r.values).map(([k,v])=>{
+      const conf=r._confidence?.[k]||'';
+      if(conf==='divergent'){
+        const perAi=r._perAi?.[k]||[];
+        const aiCompare=perAi.map(av=>`<span style="font-size:.58rem;padding:1px 5px;border-radius:4px;background:${String(av.val)===String(v)?'#dbeafe':'#fef2f2'};color:${String(av.val)===String(v)?'#1d4ed8':'#dc2626'}">${av.ai}: ${esc(String(av.val))}</span>`).join(' ');
+        return `<div style="padding:4px 6px;margin:2px 0;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px">
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+            <span style="font-size:.65rem;font-weight:600;color:#dc2626;min-width:60px">${esc(k)}</span>
+            ${aiCompare}
+            <span style="font-size:.45rem;color:#dc2626">?불일치</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;margin-top:3px">
+            <span style="font-size:.58rem;color:var(--mu)">직접 입력:</span>
+            <input type="text" data-fix-photo="${i}" data-fix-key="${esc(k)}" value="${esc(String(v))}"
+              style="width:80px;font-size:.72rem;padding:2px 6px;border:1.5px solid #f59e0b;border-radius:4px;background:#fffbeb;font-family:var(--mono);color:var(--ink)">
+          </div>
+        </div>`;
+      }
+      const confBadge=conf==='unanimous'?'<span style="font-size:.45rem;color:#10b981">✓</span>'
+        :conf==='majority'?'<span style="font-size:.45rem;color:#f59e0b">△</span>'
+        :conf==='single'?'<span style="font-size:.45rem;color:#6366f1">◆</span>':'';
+      return '<span class="log-tag" style="background:#eff6ff;color:#1d4ed8;font-size:.6rem">'+esc(k)+':'+esc(String(v))+' '+confBadge+'</span>';
+    }).join(''):'';
+    // 원본 이미지 토글 (불일치 있을 때)
+    const divKeys=Object.entries(r._confidence||{}).filter(([,c])=>c==='divergent');
+    const imgToggle=divKeys.length?`<div style="margin-top:4px">
+      <div style="font-size:.6rem;color:#7c3aed;cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">📷 원본 이미지 보기 (${divKeys.length}건 불일치 — 직접 확인)</div>
+      <div style="display:none;margin-top:4px"><img src="${r._imgSrc}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--bd)"></div>
+    </div>`:'';
+    return `<div style="padding:8px;background:var(--sf2);border:1px solid ${divKeys.length?'#fca5a5':'var(--bd)'};border-radius:6px;margin-bottom:6px">
+      <div style="display:flex;gap:6px;align-items:center">
+        <img src="${r._imgSrc}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;cursor:pointer" onclick="this.parentElement.parentElement.querySelector('.brk-img-full')?.click()">
+        <div style="flex:1"><div style="font-size:.72rem;font-weight:600">사진 ${i+1}: ${esc(r.type||'기타')} · ${esc(r.date||'')} · ${esc(r.who||'')}</div>
+        <div style="font-size:.58rem;color:${aiColor}">${aiLabel}${r._failedAis?.length?' <span style="color:#dc2626">('+r._failedAis.join(',')+' 실패)</span>':''}</div></div>
+      </div>
+      <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:2px">${valsHtml}</div>
+      ${r.opinion?'<div style="font-size:.62rem;color:#15803d;margin-top:3px">💡 '+esc(r.opinion)+'</div>':''}
+      ${imgToggle}
     </div>`;
   }).join('');
+  const legend=`<div style="font-size:.58rem;color:var(--mu);margin-top:4px;padding:4px 6px;background:var(--sf2);border-radius:4px">
+    ✓일치 △다수결 ◆단독 <span style="color:#dc2626">?불일치→직접 입력 후 저장</span></div>`;
   showConfirmModal('🏆 멀티 AI 분석 완료 ('+allResults.filter(r=>!r.error).length+'/'+allResults.length+')',
-    html+'<div style="font-size:.6rem;color:var(--mu);margin-top:4px;padding:4px 6px;background:var(--sf2);border-radius:4px">✓일치=모든AI 동일 △다수=다수결 ◆단독=1개AI만 성공 ?확인=불일치(수동 확인 권장)</div>',
-    [{label:'💾 전체 저장',action:async()=>{
+    html+legend,
+    [{label:'💾 전체 저장'+(hasDivergent?' (수정 반영)':''),action:async()=>{
+      // 수동 입력 반영
+      document.querySelectorAll('#confirm-body input[data-fix-photo]').forEach(inp=>{
+        const pi=parseInt(inp.dataset.fixPhoto);const k=inp.dataset.fixKey;
+        if(_consensusResults[pi]?.values){
+          const raw=inp.value.trim();const num=parseFloat(raw);
+          _consensusResults[pi].values[k]=isNaN(num)?raw:num;
+        }
+      });
       const m=getBrkMaster();if(!m)return;let saved=0;
-      allResults.forEach(r=>{
+      _consensusResults.forEach(r=>{
         if(r.error)return;
         const typeMap={semen:'semen',blood:'blood',hormone:'hormone',ultrasound:'ultrasound'};
         const type=typeMap[r.type]||'other';
@@ -1974,8 +2012,8 @@ function _showConsensusResults(allResults){
         m.labResults.push({id:Date.now()+saved,date:r.date||kstToday(),who:r.who||'붕쌤',type,values:r.values||{},memo,imgSrc:r._imgSrc});
         saved++;
       });
-      if(saved){await saveBrkMaster();showToast('✅ '+saved+'건 저장됨');}
-      closeConfirmModal();renderView('meds');
+      if(saved){await saveBrkMaster();showToast('✅ '+saved+'건 저장됨 (수정 반영)');}
+      closeConfirmModal();_consensusResults=[];renderView('meds');
     },primary:true}]);
 }
 function _mergeConsensus(results,imgSrc){
@@ -1985,7 +2023,7 @@ function _mergeConsensus(results,imgSrc){
   if(!successes.length)return{error:'모든 AI 실패: '+results.map(r=>r.ai+':'+r.error).join(', '),_imgSrc:imgSrc};
   if(successes.length===1){const r=successes[0].result;r._imgSrc=imgSrc;r._usedAis=[successes[0].ai];r._failedAis=failedAis;r._confidence={};Object.keys(r.values||{}).forEach(k=>r._confidence[k]='single');return r;}
   // 다수결 병합
-  const base={...successes[0].result};base._imgSrc=imgSrc;base._usedAis=successes.map(s=>s.ai);base._failedAis=failedAis;base._confidence={};
+  const base={...successes[0].result};base._imgSrc=imgSrc;base._usedAis=successes.map(s=>s.ai);base._failedAis=failedAis;base._confidence={};base._perAi={};
   // type/date/who — 다수결
   const types=successes.map(s=>s.result.type).filter(Boolean);base.type=_majority(types)||base.type;
   const dates=successes.map(s=>s.result.date).filter(Boolean);base.date=_majority(dates)||base.date;
@@ -1995,15 +2033,14 @@ function _mergeConsensus(results,imgSrc){
   successes.forEach(s=>Object.keys(s.result.values||{}).forEach(k=>allKeys.add(k)));
   const mergedVals={};
   allKeys.forEach(k=>{
-    const vals=successes.map(s=>(s.result.values||{})[k]).filter(v=>v!==undefined);
-    if(!vals.length)return;
+    const aiVals=successes.map(s=>({ai:s.ai,val:(s.result.values||{})[k]})).filter(av=>av.val!==undefined);
+    if(!aiVals.length)return;
+    const vals=aiVals.map(av=>av.val);
     const nums=vals.map(v=>parseFloat(v)).filter(v=>!isNaN(v));
     if(nums.length===vals.length&&nums.length>1){
-      // 수치: 일치 여부 확인
       const allSame=nums.every(n=>Math.abs(n-nums[0])<0.01);
       if(allSame){mergedVals[k]=nums[0];base._confidence[k]='unanimous';}
       else{
-        // 가장 많이 나온 값 또는 중간값
         const sorted=[...nums].sort((a,b)=>a-b);
         mergedVals[k]=sorted[Math.floor(sorted.length/2)];
         const spread=Math.max(...nums)-Math.min(...nums);
@@ -2014,6 +2051,10 @@ function _mergeConsensus(results,imgSrc){
       mergedVals[k]=_majority(strVals)||vals[0];
       const allSame=strVals.every(v=>v===strVals[0]);
       base._confidence[k]=allSame?'unanimous':(strVals.filter(v=>v===mergedVals[k]).length>1?'majority':'divergent');
+    }
+    // 불일치 시 AI별 값 저장
+    if(base._confidence[k]==='divergent'||base._confidence[k]==='majority'){
+      base._perAi[k]=aiVals;
     }
   });
   base.values=mergedVals;
