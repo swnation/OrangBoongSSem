@@ -125,6 +125,8 @@ const _DEFAULT_MILESTONES = [
 
 let _brkDashTab = 'cycle'; // cycle | daily | lab | milestone | safety
 let _brkDailyCat = 'suppl'; // suppl | exercise | treatment | memo
+let _brkCalShowOrangi = true;
+let _brkCalShowBung = true;
 
 function getBrkMaster() {
   var ds = S.domainState['bungruki'];
@@ -197,18 +199,28 @@ function buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDay
     else if (isFertile === true) { bg = '#ede9fe'; color = '#8b5cf6'; }
     else if (isFertile === 'predicted') { bg = '#f5f3ff'; color = '#a78bfa'; }
     if (isToday) border = '2px solid var(--ac)';
-    // 일일 기록 아이콘
+    // 일일 기록 아이콘 (오랑이/붕쌤 필터 적용)
     var dayIcons = '';
     var dc = dailyChecks && dailyChecks[ds];
     if (dc) {
       var ic = [];
+      var oShow = typeof _brkCalShowOrangi!=='undefined'?_brkCalShowOrangi:true;
+      var bShow = typeof _brkCalShowBung!=='undefined'?_brkCalShowBung:true;
+      var oData = oShow&&dc.orangi?dc.orangi:{};
+      var bData = bShow&&dc.bung?dc.bung:{};
       var allKeys = BRK_SUPPL_ORANGI.concat(BRK_SUPPL_BUNG);
-      var hasSuppl = allKeys.some(function(k){return (dc.orangi && dc.orangi[k]) || (dc.bung && dc.bung[k]);});
-      if (hasSuppl) ic.push('💊');
-      if ((dc.orangi && dc.orangi.exercise) || (dc.bung && dc.bung.exercise)) ic.push('🏃');
-      if ((dc.orangi && dc.orangi.treatment) || (dc.bung && dc.bung.treatment)) ic.push('🏥');
-      if ((dc.orangi && dc.orangi.memo) || (dc.bung && dc.bung.memo)) ic.push('📝');
-      if (ic.length) dayIcons = '<div style="font-size:.4rem;line-height:1;margin-top:1px">'+ic.join('')+'</div>';
+      if (allKeys.some(function(k){return oData[k]||bData[k];})) ic.push('💊');
+      if (oData.exercise||bData.exercise) ic.push('🏃');
+      if (oData.treatment||bData.treatment) ic.push('🏥');
+      if (oData.memo||bData.memo) ic.push('📝');
+      // 누구 기록인지 표시
+      var whoMark='';
+      var hasO=BRK_SUPPL_ORANGI.some(function(k){return oData[k];})||oData.exercise||oData.treatment||oData.memo;
+      var hasB=BRK_SUPPL_BUNG.some(function(k){return bData[k];})||bData.exercise||bData.treatment||bData.memo;
+      if(hasO&&hasB)whoMark='<span style="font-size:.35rem">🧡🩵</span>';
+      else if(hasO)whoMark='<span style="font-size:.35rem">🧡</span>';
+      else if(hasB)whoMark='<span style="font-size:.35rem">🩵</span>';
+      if (ic.length) dayIcons = '<div style="font-size:.4rem;line-height:1;margin-top:1px">'+ic.join('')+whoMark+'</div>';
     }
     var ovIcon = isOv ? '<div style="font-size:.5rem">🟣</div>' : '';
     cells += '<div onclick="brkTogglePeriodDay(\''+ds+'\')" style="text-align:center;padding:2px 0;font-size:.78rem;border-radius:6px;cursor:pointer;background:'+bg+';color:'+color+';border:'+border+';font-weight:'+(isToday?'700':'400')+'">'+day+ovIcon+dayIcons+'</div>';
@@ -435,6 +447,10 @@ function renderCycleTracker() {
     + '<span>🔴 생리일</span><span>🟣 배란 추정</span><span>🟪 가임기</span><span style="border:1px dashed #ccc;padding:0 4px;border-radius:4px">점선=예측</span>'
     + '</div><div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;font-size:.65rem;color:var(--mu)">'
     + '<span>💊 영양제</span><span>🏃 운동</span><span>🏥 치료</span><span>📝 메모</span>'
+    + '</div><div style="display:flex;gap:10px;margin-top:6px;align-items:center;font-size:.65rem;color:var(--mu)">'
+    + '<span>필터:</span>'
+    + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" '+(_brkCalShowOrangi?'checked':'')+' onchange="_brkCalShowOrangi=this.checked;renderView(\'meds\')" style="accent-color:#f97316"> 🧡 오랑이</label>'
+    + '<label style="display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" '+(_brkCalShowBung?'checked':'')+' onchange="_brkCalShowBung=this.checked;renderView(\'meds\')" style="accent-color:#06b6d4"> 🩵 붕쌤</label>'
     + '</div>'
     + nextInfo
     + '<div style="margin-top:12px">'
@@ -873,7 +889,7 @@ function syncBrkToHealth(date, who) {
     datetime: date+'T00:00',
     categories: takenSuppl.length ? ['투약'] : [],
     memo: '[🍼 임신준비 연동] '+parts.join(' | '),
-    who: '',
+    who: who==='orangi'?'오랑이':'붕쌤',
   };
   if(exercise) entry.categories.push('운동');
   if(existing) {
