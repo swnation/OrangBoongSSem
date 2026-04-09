@@ -1210,7 +1210,7 @@ function estimateConceptionRate(m) {
   else if(r1>=5) timeline='생식의학과 조기 상담 권장 — IUI 또는 IVF 병행 검토';
   else timeline='생식의학과 즉시 상담 — IVF/ICSI 적극 검토';
 
-  return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,femaleAge,ageMult,factors,dailyRates:adjDaily,cumulative,cycleStd,avgCycle,hasSemen:!!sv,hasHormone:!!hv,timeline};
+  return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,femaleAge,ageMult,factors,dailyRates:adjDaily,cumulative,cycleStd,avgCycle,hasSemen:!!sv,hasHormone:!!hormoneLabs.length,timeline};
 }
 
 function _showModelInfo(model){
@@ -2452,18 +2452,54 @@ function _kfdaColor(k){
   return '#6b7280';
 }
 
+// 한국 약품명에서 브랜드명·성분명 후보를 추출
+function _extractDrugCandidates(rawName) {
+  var s = rawName.replace(/\s*\(PRN\)\s*/i,'').replace(/\s*\(정규\)\s*/i,'').trim();
+  var candidates = [s];
+  // 괄호 안 성분명 추출: "타이레놀정500밀리그람(아세트아미노펜)" → 아세트아미노펜
+  var m = s.match(/^([^(]+)\(([^)]+)\)$/);
+  if (m) {
+    candidates.push(m[1].trim()); // 브랜드+제형
+    candidates.push(m[2].trim()); // 성분명
+  }
+  // 제형·용량 제거: 정, 캡슐, 밀리그람, 시럽, 정제 등
+  candidates = candidates.concat(candidates.map(function(c){
+    return c.replace(/[정캡슐]+\d*.*$/,'').replace(/\d+(밀리그람|mg|mcg|ug).*/i,'').trim();
+  }).filter(Boolean));
+  // 성분명에서 "나트륨수화물","나트륨","수화물","염산염" 등 접미사 제거하여 추가
+  candidates = candidates.concat(candidates.map(function(c){
+    return c.replace(/(나트륨|수화물|염산염|칼슘|마그네슘|칼륨|염|산$)+/g,'').trim();
+  }).filter(Boolean));
+  // 중복 제거
+  var seen = {};
+  return candidates.filter(function(c){ if(!c||seen[c])return false; seen[c]=true; return true; });
+}
+
 function _lookupDrugSafety(name) {
-  // 1) 내장 DB 직접 매칭
-  var safety=_PREGNANCY_SAFETY[name];
-  if(safety) return {...safety,source:'내장DB'};
-  // 2) 한영 매핑 후 내장 DB
-  var eng=_DRUG_NAMES[name];
-  if(eng) { safety=_PREGNANCY_SAFETY[eng]; if(safety) return {...safety,source:'내장DB'}; }
-  // 3) localStorage 캐시
+  var candidates = _extractDrugCandidates(name);
+  // 1) 내장 DB 직접 매칭 + 한영 매핑
+  for (var i=0; i<candidates.length; i++) {
+    var c = candidates[i];
+    var safety = _PREGNANCY_SAFETY[c];
+    if (safety) return {...safety, source:'내장DB'};
+    var eng = _DRUG_NAMES[c];
+    if (eng) { safety = _PREGNANCY_SAFETY[eng]; if (safety) return {...safety, source:'내장DB'}; }
+    // 부분 매칭: _DRUG_NAMES 키에 후보가 포함되어 있는지
+    for (var ko in _DRUG_NAMES) {
+      if (ko === c || c.indexOf(ko) >= 0 || ko.indexOf(c) >= 0) {
+        safety = _PREGNANCY_SAFETY[_DRUG_NAMES[ko]];
+        if (safety) return {...safety, source:'내장DB'};
+      }
+    }
+  }
+  // 2) localStorage 캐시
   try {
-    var cache=JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
-    if(cache[name]) return {...cache[name],source:'AI검색'};
-    if(eng&&cache[eng]) return {...cache[eng],source:'AI검색'};
+    var cache = JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
+    for (var j=0; j<candidates.length; j++) {
+      if (cache[candidates[j]]) return {...cache[candidates[j]], source:'AI검색'};
+      var eng2 = _DRUG_NAMES[candidates[j]];
+      if (eng2 && cache[eng2]) return {...cache[eng2], source:'AI검색'};
+    }
   } catch(e){}
   return null;
 }
@@ -2516,7 +2552,19 @@ async function fetchDrugSafetyDUR(drugName) {
 async function refreshDrugSafety(drugName) {
   const el=document.getElementById('ds-loading-'+CSS.escape(drugName));
   if(el) el.style.display='inline';
-  const result=await fetchDrugSafetyPerplexity(drugName);
+  // 정규화된 성분명으로 검색 시도
+  var candidates=_extractDrugCandidates(drugName);
+  var searchName=drugName;
+  for(var i=0;i<candidates.length;i++){
+    var eng=_DRUG_NAMES[candidates[i]];
+    if(eng){searchName=eng;break;}
+  }
+  const result=await fetchDrugSafetyPerplexity(searchName);
+  if(result){
+    // 원본명과 영문명 모두 캐시
+    _cacheDrugSafety(drugName,result);
+    if(searchName!==drugName) _cacheDrugSafety(searchName,result);
+  }
   if(el) el.style.display='none';
   if(result){showToast('✅ '+drugName+' 안전 정보 갱신');renderView('meds');}
   else showToast('⚠️ 검색 실패');
@@ -2577,6 +2625,20 @@ function _renderBrkVaccineTab(){
   </div>`;
 }
 
+function _isDrugNotTreatment(med) {
+  // 시술/치료/검사/설명은 약물 안전성 탭에서 제외
+  var clean = med.replace(/\s*\(PRN\)\s*/i,'').replace(/\s*\(정규\)\s*/i,'').trim();
+  // _AC_TREATMENTS 목록에 있는 시술/검사
+  if (typeof _AC_TREATMENTS!=='undefined' && _AC_TREATMENTS.indexOf(clean)>=0) return false;
+  // block/치료/검사/시술 패턴
+  if (/\bblock\b/i.test(clean)) return false;
+  if (/^(물리치료|도수치료|운동치료|CBT|EMDR|DBT|MRI|CT|X-ray|초음파|심전도|EEG|수술|시술)/i.test(clean)) return false;
+  // 문장형 설명 (마침표 포함 또는 20자 이상+공백 3개 이상)
+  if (clean.indexOf('.') >= 0 && clean.length > 15) return false;
+  if (clean.length > 20 && (clean.split(/\s+/).length >= 4)) return false;
+  return true;
+}
+
 function renderDrugSafety() {
   // Collect meds from ALL domains (붕룩이는 두 유저 모두의 약물을 봄)
   var allMeds = {};
@@ -2587,10 +2649,18 @@ function renderDrugSafety() {
     ds.master.conditions.forEach(function(c){
       if (!c.medsList?.length || c.status === 'resolved') return;
       c.medsList.forEach(function(med){
-        var baseName = med.replace(/\s*\d+\s*mg.*/i,'').replace(/\s*\(.*\)/,'').trim();
-        if (!allMeds[baseName]) allMeds[baseName] = { domains: [], originalNames: [] };
-        if (allMeds[baseName].domains.indexOf(dd.label) < 0) allMeds[baseName].domains.push(dd.label);
-        if (allMeds[baseName].originalNames.indexOf(med) < 0) allMeds[baseName].originalNames.push(med);
+        if (!_isDrugNotTreatment(med)) return; // 시술/설명 제외
+        // 정규화된 키로 중복 병합
+        var candidates = _extractDrugCandidates(med);
+        var key = med;
+        for (var ci=0; ci<candidates.length; ci++) {
+          var eng = _DRUG_NAMES[candidates[ci]];
+          if (eng) { key = eng; break; }
+          if (_PREGNANCY_SAFETY[candidates[ci]]) { key = candidates[ci]; break; }
+        }
+        if (!allMeds[key]) allMeds[key] = { domains: [], originalNames: [] };
+        if (allMeds[key].domains.indexOf(dd.label) < 0) allMeds[key].domains.push(dd.label);
+        if (allMeds[key].originalNames.indexOf(med) < 0) allMeds[key].originalNames.push(med);
       });
     });
   });
@@ -2625,7 +2695,8 @@ function renderDrugSafety() {
       + '<div style="display:flex;align-items:center;gap:8px">'
       + '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:'+fc+';color:white;font-size:.72rem;font-weight:700">'+fda.charAt(0)+'</span>'
       + '<div style="flex:1">'
-      + '<div style="font-size:.82rem;font-weight:600">'+esc(info.originalNames[0])+'</div>'
+      + '<div style="font-size:.82rem;font-weight:600">'+esc(info.originalNames[0].replace(/\s*\(PRN\)/i,' (PRN)').replace(/\s*\(정규\)/i,' (정규)'))+'</div>'
+      + (name!==info.originalNames[0]?'<div style="font-size:.62rem;color:var(--ac)">'+esc(name)+'</div>':'')
       + '<div style="font-size:.68rem;color:var(--mu)">'+info.domains.join(', ')+'</div>'
       + '</div>'
       + srcLabel + refreshBtn
