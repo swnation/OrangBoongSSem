@@ -1150,33 +1150,36 @@ function estimateConceptionRate(m) {
 
   // === 모델 1: 종합 모델 (연령+정액+주기+호르몬) ===
   const factors=[];
+  const waterfall=[]; // {name, mult, before, after} — 요인별 누적 감소 추적
   let r1=25*ageMult; // 연령 보정 기저율
-  factors.push({name:`여성 ${femaleAge}세`,impact:ageMult<1?Math.round((ageMult-1)*100):0,tip:ageMult>=0.75?'양호한 연령대':'난소 예비력 검사(AMH) 권장'});
+  waterfall.push({name:'기저율 (25%×연령)',mult:ageMult,before:25,after:Math.round(r1)});
+  factors.push({name:`여성 ${femaleAge}세`,impact:ageMult<1?Math.round((ageMult-1)*100):0,tip:ageMult>=0.75?'양호한 연령대':'난소 예비력 검사(AMH) 권장',solo:Math.round(25*ageMult)});
   // 남성 연령 보정
   let maleMult=1.0;
-  if(maleAge>=45){maleMult=0.8;r1*=0.8;factors.push({name:`남성 ${maleAge}세 (≥45)`,impact:-20,tip:'정자 DNA 분절 증가 가능 — 항산화제 권장'});}
-  else if(maleAge>=40){maleMult=0.9;r1*=0.9;factors.push({name:`남성 ${maleAge}세 (≥40)`,impact:-10,tip:'정자 질 경미 감소 가능'});}
-  else{factors.push({name:`남성 ${maleAge}세`,impact:0,tip:'양호한 연령대'});}
+  if(maleAge>=45){maleMult=0.8;const bf=Math.round(r1);r1*=0.8;waterfall.push({name:`남성 ${maleAge}세`,mult:0.8,before:bf,after:Math.round(r1)});factors.push({name:`남성 ${maleAge}세 (≥45)`,impact:-20,tip:'정자 DNA 분절 증가 가능 — 항산화제 권장',solo:Math.round(25*ageMult*0.8)});}
+  else if(maleAge>=40){maleMult=0.9;const bf=Math.round(r1);r1*=0.9;waterfall.push({name:`남성 ${maleAge}세`,mult:0.9,before:bf,after:Math.round(r1)});factors.push({name:`남성 ${maleAge}세 (≥40)`,impact:-10,tip:'정자 질 경미 감소 가능',solo:Math.round(25*ageMult*0.9)});}
+  else{factors.push({name:`남성 ${maleAge}세`,impact:0,tip:'양호한 연령대',solo:Math.round(25*ageMult)});}
   // 정액검사
+  const baseAfterAge=Math.round(r1);
   if(sv){
-    if(sv.morphology!==undefined&&sv.morphology<4){r1*=0.55;factors.push({name:'형태<4% (기형정자증)',impact:-45,tip:'항산화제(CoQ10 200mg, 비타민E, 아연) 3개월 복용 후 재검'});}
-    if(sv.motility!==undefined&&sv.motility<42){r1*=0.65;factors.push({name:'운동성<42%',impact:-35,tip:'금주·금연, 규칙적 유산소 운동, 꽉 끼는 속옷·사우나 회피'});}
-    if(sv.count!==undefined&&sv.count<15){r1*=0.45;factors.push({name:'농도<15M/mL',impact:-55,tip:'비뇨기과 정밀검사(정계정맥류 등) 권장'});}
-    if(sv.count!==undefined&&sv.count>=15&&sv.motility!==undefined&&sv.motility>=42&&(sv.morphology===undefined||sv.morphology>=4)){factors.push({name:'정액검사 정상',impact:0,tip:'양호'});}
+    if(sv.morphology!==undefined&&sv.morphology<4){const bf=Math.round(r1);r1*=0.55;waterfall.push({name:'형태 <4%',mult:0.55,before:bf,after:Math.round(r1)});factors.push({name:'형태<4% (기형정자증)',impact:-45,tip:'항산화제(CoQ10 200mg, 비타민E, 아연) 3개월 복용 후 재검',solo:Math.round(baseAfterAge*0.55)});}
+    if(sv.motility!==undefined&&sv.motility<42){const bf=Math.round(r1);r1*=0.65;waterfall.push({name:'운동성 <42%',mult:0.65,before:bf,after:Math.round(r1)});factors.push({name:'운동성<42%',impact:-35,tip:'금주·금연, 규칙적 유산소 운동, 꽉 끼는 속옷·사우나 회피',solo:Math.round(baseAfterAge*0.65)});}
+    if(sv.count!==undefined&&sv.count<15){const bf=Math.round(r1);r1*=0.45;waterfall.push({name:'농도 <15M',mult:0.45,before:bf,after:Math.round(r1)});factors.push({name:'농도<15M/mL',impact:-55,tip:'비뇨기과 정밀검사(정계정맥류 등) 권장',solo:Math.round(baseAfterAge*0.45)});}
+    if(sv.count!==undefined&&sv.count>=15&&sv.motility!==undefined&&sv.motility>=42&&(sv.morphology===undefined||sv.morphology>=4)){factors.push({name:'정액검사 정상',impact:0,tip:'양호',solo:baseAfterAge});}
   } else {factors.push({name:'정액검사 미실시',impact:0,tip:'검사 추가 시 정확도 크게 향상'});}
   // 주기 규칙성
-  if(cycleStd>7){r1*=0.7;factors.push({name:'주기 불규칙(±'+cycleStd.toFixed(1)+'일)',impact:-30,tip:'배란테스트기(LH strip) 필수 + 배란 앱 연동'});}
-  else if(lens.length>=3){factors.push({name:'주기 규칙적(±'+cycleStd.toFixed(1)+'일)',impact:0,tip:'배란 예측 유리 — 주기 중간 2일 전후 집중'});}
+  if(cycleStd>7){const bf=Math.round(r1);r1*=0.7;waterfall.push({name:'주기 불규칙',mult:0.7,before:bf,after:Math.round(r1)});factors.push({name:'주기 불규칙(±'+cycleStd.toFixed(1)+'일)',impact:-30,tip:'배란테스트기(LH strip) 필수 + 배란 앱 연동',solo:Math.round(baseAfterAge*0.7)});}
+  else if(lens.length>=3){factors.push({name:'주기 규칙적(±'+cycleStd.toFixed(1)+'일)',impact:0,tip:'배란 예측 유리 — 주기 중간 2일 전후 집중',solo:baseAfterAge});}
   // AMH 반영 (있으면)
   const _amh=_hv('amh');
   if(_amh!==undefined){
-    if(_amh<0.5){r1*=0.5;factors.push({name:'AMH<0.5 (난소예비력 저하)',impact:-50,tip:'생식의학과 상담 — IVF 조기 검토'});}
-    else if(_amh<1.0){r1*=0.8;factors.push({name:'AMH 0.5-1.0 (경계)',impact:-20,tip:'난소기능 추적 관찰 권장'});}
-    else{factors.push({name:'AMH≥1.0 (정상)',impact:0,tip:'난소 예비력 양호'});}
+    if(_amh<0.5){const bf=Math.round(r1);r1*=0.5;waterfall.push({name:'AMH<0.5',mult:0.5,before:bf,after:Math.round(r1)});factors.push({name:'AMH<0.5 (난소예비력 저하)',impact:-50,tip:'생식의학과 상담 — IVF 조기 검토',solo:Math.round(baseAfterAge*0.5)});}
+    else if(_amh<1.0){const bf=Math.round(r1);r1*=0.8;waterfall.push({name:'AMH 경계',mult:0.8,before:bf,after:Math.round(r1)});factors.push({name:'AMH 0.5-1.0 (경계)',impact:-20,tip:'난소기능 추적 관찰 권장',solo:Math.round(baseAfterAge*0.8)});}
+    else{factors.push({name:'AMH≥1.0 (정상)',impact:0,tip:'난소 예비력 양호',solo:baseAfterAge});}
   }
   // FSH
   const _fsh=_hv('fsh');
-  if(_fsh!==undefined&&_fsh>10){r1*=0.7;factors.push({name:'FSH>10 (상승)',impact:-30,tip:'난소기능 저하 가능 — 생식의학과 상담'});}
+  if(_fsh!==undefined&&_fsh>10){const bf=Math.round(r1);r1*=0.7;waterfall.push({name:'FSH>10',mult:0.7,before:bf,after:Math.round(r1)});factors.push({name:'FSH>10 (상승)',impact:-30,tip:'난소기능 저하 가능 — 생식의학과 상담',solo:Math.round(baseAfterAge*0.7)});}
   r1=Math.round(Math.max(2,Math.min(r1,30)));
 
   // === 모델 2: TMSC 기반 ===
@@ -1210,7 +1213,7 @@ function estimateConceptionRate(m) {
   else if(r1>=5) timeline='생식의학과 조기 상담 권장 — IUI 또는 IVF 병행 검토';
   else timeline='생식의학과 즉시 상담 — IVF/ICSI 적극 검토';
 
-  return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,femaleAge,ageMult,factors,dailyRates:adjDaily,cumulative,cycleStd,avgCycle,hasSemen:!!sv,hasHormone:!!hormoneLabs.length,timeline};
+  return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,femaleAge,maleAge,ageMult,factors,waterfall,dailyRates:adjDaily,cumulative,cycleStd,avgCycle,hasSemen:!!sv,hasHormone:!!hormoneLabs.length,timeline};
 }
 
 function _showModelInfo(model){
@@ -1256,17 +1259,20 @@ function _renderConceptionCard(m) {
   const rateColor=rate>=20?'#10b981':rate>=12?'#f59e0b':'#dc2626';
 
   // 비교 모델 표 (클릭 시 설명)
+  const acColor=r.ageRate>=20?'#10b981':r.ageRate>=12?'#f59e0b':'#dc2626';
   let modelRows=`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-top:8px;margin-bottom:4px">📊 추정 모델 비교 <span style="font-weight:400;font-size:.58rem">(클릭하면 설명)</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:4px">
-      <div style="background:${rateColor}10;border:1px solid ${rateColor}40;border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('who')">
-        <div style="font-size:.55rem;color:var(--mu)">WHO/Hunault</div>
-        <div style="font-size:.88rem;font-weight:700;color:${rateColor}">${rate}%</div>
+      <div style="background:${acColor}10;border:1px solid ${acColor}40;border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('age')">
+        <div style="font-size:.55rem;color:var(--mu)">연령 기저율</div>
+        <div style="font-size:.88rem;font-weight:700;color:${acColor}">${r.ageRate}%</div>
+        <div style="font-size:.48rem;color:var(--mu2)">여${r.femaleAge}·남${r.maleAge}세</div>
       </div>`;
   if(r.tmscRate!==null){
     const tc=r.tmscRate>=20?'#10b981':r.tmscRate>=10?'#f59e0b':'#dc2626';
     modelRows+=`<div style="background:${tc}10;border:1px solid ${tc}40;border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('tmsc')">
       <div style="font-size:.55rem;color:var(--mu)">TMSC(${r.tmsc}M)</div>
       <div style="font-size:.88rem;font-weight:700;color:${tc}">${r.tmscRate}%</div>
+      <div style="font-size:.48rem;color:var(--mu2)">연령+정자총수</div>
     </div>`;
   } else {
     modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('tmsc')">
@@ -1274,22 +1280,68 @@ function _renderConceptionCard(m) {
       <div style="font-size:.75rem;color:var(--mu2)">검사 필요</div>
     </div>`;
   }
-  modelRows+=`<div style="background:var(--sf2);border:1px solid var(--bd);border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('age')">
-    <div style="font-size:.55rem;color:var(--mu)">연령 기저율</div>
-    <div style="font-size:.88rem;font-weight:700">${r.ageRate}%</div>
+  modelRows+=`<div style="background:${rateColor}10;border:2px solid ${rateColor}60;border-radius:6px;padding:6px;text-align:center;cursor:pointer" onclick="_showModelInfo('who')">
+    <div style="font-size:.55rem;color:var(--mu)">종합(WHO)</div>
+    <div style="font-size:.88rem;font-weight:700;color:${rateColor}">${rate}%</div>
+    <div style="font-size:.48rem;color:var(--mu2)">전체 반영</div>
   </div></div>`;
+
+  // 모델 차이 해석
+  let diffNote='';
+  if(r.tmscRate!==null && Math.abs(rate-r.tmscRate)>=5){
+    if(rate<r.tmscRate) diffNote=`<div style="font-size:.65rem;color:#ea580c;background:#fff7ed;padding:6px 8px;border-radius:6px;margin:4px 0;border:1px solid #fed7aa">💡 <b>종합(${rate}%) &lt; TMSC(${r.tmscRate}%)</b> — 정자 총 운동수는 양호하지만 형태/운동성 등 세부 항목이나 주기·호르몬 요인이 확률을 낮추고 있습니다. 아래 워터폴에서 어떤 요인이 얼마나 감소시키는지 확인하세요.</div>`;
+    else diffNote=`<div style="font-size:.65rem;color:#0369a1;background:#f0f9ff;padding:6px 8px;border-radius:6px;margin:4px 0;border:1px solid #bae6fd">💡 <b>종합(${rate}%) &gt; TMSC(${r.tmscRate}%)</b> — TMSC가 낮아 단순 계산상 불리하지만, 주기 규칙성·호르몬 등 다른 요인이 양호하여 종합 확률이 더 높게 산출됩니다.</div>`;
+  }
+  if(r.ageRate>0 && rate<r.ageRate){
+    diffNote+=`<div style="font-size:.65rem;color:var(--mu);background:var(--sf2);padding:6px 8px;border-radius:6px;margin:4px 0;border:1px solid var(--bd)">📉 연령 기저율(${r.ageRate}%)에서 <b>${r.ageRate-rate}%p 감소</b> — 검사 결과·주기 등 추가 요인 반영 결과입니다.</div>`;
+  }
+  modelRows+=diffNote;
   // 모델 설명 표시 영역
   modelRows+=`<div id="model-info-box"></div>`;
 
-  // 영향 요소
-  const factorsHtml=r.factors.length?`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">📋 영향 요소</div>
+  // 워터폴 차트 (요인별 누적 감소)
+  let waterfallHtml='';
+  if(r.waterfall.length>1){
+    const maxVal=Math.max(...r.waterfall.map(w=>Math.max(w.before,w.after)),1);
+    waterfallHtml=`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-top:8px;margin-bottom:6px">📉 요인별 확률 변화 (워터폴)</div>
+    <div style="padding:4px 0">
+      ${r.waterfall.map((w,i)=>{
+        const bw=Math.round(w.before/maxVal*100);
+        const aw=Math.round(w.after/maxVal*100);
+        const isFirst=i===0;
+        const drop=w.before-w.after;
+        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:.65rem">
+          <span style="width:65px;text-align:right;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</span>
+          <div style="flex:1;position:relative;height:18px;background:var(--sf2);border-radius:4px;overflow:hidden">
+            ${isFirst?`<div style="height:100%;width:${aw}%;background:#10b981;border-radius:4px"></div>`
+            :`<div style="height:100%;width:${bw}%;background:#fca5a5;border-radius:4px;position:absolute"></div>
+              <div style="height:100%;width:${aw}%;background:#3b82f6;border-radius:4px;position:absolute"></div>`}
+          </div>
+          <span style="width:52px;text-align:right;font-weight:600;color:${w.after<w.before?'#dc2626':'#10b981'}">${isFirst?w.after+'%':w.before+'→'+w.after+'%'}</span>
+          ${!isFirst?`<span style="width:28px;font-size:.55rem;color:#dc2626">-${drop}%p</span>`:'<span style="width:28px"></span>'}
+        </div>`;
+      }).join('')}
+      <div style="display:flex;align-items:center;gap:6px;margin-top:2px;font-size:.65rem;border-top:1px solid var(--bd);padding-top:4px">
+        <span style="width:65px;text-align:right;font-weight:700;color:var(--ink)">종합 결과</span>
+        <div style="flex:1;position:relative;height:18px;background:var(--sf2);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${Math.round(rate/maxVal*100)}%;background:${rateColor};border-radius:4px"></div>
+        </div>
+        <span style="width:52px;text-align:right;font-weight:700;color:${rateColor}">${rate}%</span>
+        <span style="width:28px"></span>
+      </div>
+    </div>`;
+  }
+
+  // 영향 요소 (요인만 적용 시 solo 확률 포함)
+  const factorsHtml=r.factors.length?`<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">📋 영향 요소 <span style="font-weight:400;font-size:.55rem">(이 항목만 반영 시 확률)</span></div>
     ${r.factors.map(f=>{
       const ic=f.impact<0?'🔻':'✅';
       const col=f.impact<0?'#dc2626':'#10b981';
-      return `<div style="display:flex;align-items:start;gap:6px;padding:3px 0;font-size:.68rem">
+      return `<div style="display:flex;align-items:start;gap:6px;padding:4px 0;border-bottom:1px dotted var(--bd);font-size:.68rem">
         <span>${ic}</span>
-        <div><span style="font-weight:600;color:${col}">${f.name}</span>${f.impact?` (${f.impact}%)`:''}<br>
+        <div style="flex:1"><span style="font-weight:600;color:${col}">${f.name}</span>${f.impact?` (${f.impact}%)`:''}<br>
         <span style="color:var(--mu)">→ ${f.tip}</span></div>
+        ${f.solo!==undefined&&f.impact!==0?`<span style="font-size:.65rem;font-weight:700;color:${f.solo>=20?'#10b981':f.solo>=12?'#f59e0b':'#dc2626'};white-space:nowrap">${f.solo}%</span>`:''}
       </div>`;
     }).join('')}`:'';
 
@@ -1381,6 +1433,7 @@ function _renderConceptionCard(m) {
       </div>
     </div>
     ${modelRows}
+    ${waterfallHtml}
     ${factorsHtml}
     <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-top:8px;margin-bottom:4px">📈 누적 임신 확률 <span style="font-weight:400;font-size:.6rem">(시도 기간별)</span></div>
     <div style="display:flex;align-items:flex-end;gap:4px;height:55px;margin-bottom:2px">
@@ -2639,18 +2692,56 @@ function _isDrugNotTreatment(med) {
   return true;
 }
 
+function _renderDrugCard(name, info) {
+  var safety = _lookupDrugSafety(name);
+  var fda = safety?.fda || '?';
+  var pllr = safety?.pllr || '';
+  var kfda = safety?.kfda || '정보없음';
+  var note = safety?.note || '';
+  var source = safety?.source || '';
+  var fc = _fdaColor(fda), fb = _fdaBg(fda), kc = _kfdaColor(kfda);
+
+  var badges = '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">'
+    + '<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:700;background:'+fc+'18;color:'+fc+';border:1px solid '+fc+'40">FDA: '+esc(fda)+'</span>'
+    + '<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:600;background:'+kc+'18;color:'+kc+';border:1px solid '+kc+'40">식약처: '+esc(kfda)+'</span>'
+    + (pllr?'<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd">PLLR</span>':'')
+    + '</div>';
+  var detail = (pllr?'<div style="font-size:.72rem;color:#0369a1;margin-top:4px"><b>PLLR:</b> '+esc(pllr)+'</div>':'')
+    + (note?'<div style="font-size:.72rem;color:var(--mu);margin-top:2px">'+esc(note)+'</div>':'');
+  var srcLabel = source==='내장DB'?'<span style="font-size:.58rem;color:var(--mu2)">✓ 공식</span>'
+    :source==='AI검색'?'<span style="font-size:.58rem;color:#f59e0b">🔍 AI검색</span>'
+    :'<span style="font-size:.58rem;color:var(--mu2)">데이터 없음</span>';
+  var refreshBtn = !safety?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--ac)" title="Perplexity로 검색">🔍 검색</button>`
+    :(source==='AI검색'?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--mu)" title="재검색">🔄</button>`:'');
+
+  return '<div style="padding:10px 12px;background:'+fb+';border:1.5px solid '+fc+'30;border-radius:8px;margin-bottom:5px">'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + '<span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:'+fc+';color:white;font-size:.68rem;font-weight:700">'+fda.charAt(0)+'</span>'
+    + '<div style="flex:1">'
+    + '<div style="font-size:.78rem;font-weight:600">'+esc(info.originalNames[0].replace(/\s*\(PRN\)/i,' (PRN)').replace(/\s*\(정규\)/i,' (정규)'))+'</div>'
+    + (name!==info.originalNames[0]?'<div style="font-size:.6rem;color:var(--ac)">'+esc(name)+'</div>':'')
+    + '<div style="font-size:.62rem;color:var(--mu)">'+info.conditions.join(', ')+'</div>'
+    + '</div>'
+    + srcLabel + refreshBtn
+    + '<span id="ds-loading-'+esc(name)+'" style="display:none;font-size:.6rem;color:var(--ac)">검색중...</span>'
+    + '</div>'
+    + badges + detail
+    + '</div>';
+}
+
 function renderDrugSafety() {
-  // Collect meds from ALL domains (붕룩이는 두 유저 모두의 약물을 봄)
-  var allMeds = {};
+  // 유저별로 약물 수집
+  var byUser = {'오랑이':{}, '붕쌤':{}};
   Object.entries(S.domainState).forEach(function(entry){
     var domainId = entry[0], ds = entry[1];
     var dd = DOMAINS[domainId];
     if (!dd || domainId === 'bungruki' || !ds.master?.conditions) return;
+    var user = dd.user;
+    if (!byUser[user]) byUser[user] = {};
     ds.master.conditions.forEach(function(c){
       if (!c.medsList?.length || c.status === 'resolved') return;
       c.medsList.forEach(function(med){
-        if (!_isDrugNotTreatment(med)) return; // 시술/설명 제외
-        // 정규화된 키로 중복 병합
+        if (!_isDrugNotTreatment(med)) return;
         var candidates = _extractDrugCandidates(med);
         var key = med;
         for (var ci=0; ci<candidates.length; ci++) {
@@ -2658,55 +2749,36 @@ function renderDrugSafety() {
           if (eng) { key = eng; break; }
           if (_PREGNANCY_SAFETY[candidates[ci]]) { key = candidates[ci]; break; }
         }
-        if (!allMeds[key]) allMeds[key] = { domains: [], originalNames: [] };
-        if (allMeds[key].domains.indexOf(dd.label) < 0) allMeds[key].domains.push(dd.label);
-        if (allMeds[key].originalNames.indexOf(med) < 0) allMeds[key].originalNames.push(med);
+        if (!byUser[user][key]) byUser[user][key] = { conditions: [], originalNames: [] };
+        var condLabel = c.name || dd.label;
+        if (byUser[user][key].conditions.indexOf(condLabel) < 0) byUser[user][key].conditions.push(condLabel);
+        if (byUser[user][key].originalNames.indexOf(med) < 0) byUser[user][key].originalNames.push(med);
       });
     });
   });
 
-  var cards = Object.entries(allMeds).map(function(entry){
-    var name = entry[0], info = entry[1];
-    var safety = _lookupDrugSafety(name);
-    var fda = safety?.fda || '?';
-    var pllr = safety?.pllr || '';
-    var kfda = safety?.kfda || '정보없음';
-    var note = safety?.note || '';
-    var source = safety?.source || '';
-    var fc = _fdaColor(fda), fb = _fdaBg(fda), kc = _kfdaColor(kfda);
+  // 유저별 섹션 렌더링
+  function renderUserSection(userName, userIcon, userColor, meds) {
+    var entries = Object.entries(meds);
+    if (!entries.length) return '<div style="font-size:.72rem;color:var(--mu2);padding:8px;text-align:center">등록된 약물이 없습니다.</div>';
+    // 위험도 순 정렬: X > D > C > B > A > ?
+    var order = {'X':0,'D':1,'C':2,'B':3,'A':4,'?':5,'N/A':5};
+    entries.sort(function(a,b){
+      var sa = _lookupDrugSafety(a[0]), sb = _lookupDrugSafety(b[0]);
+      var fa = sa?.fda||'?', fb2 = sb?.fda||'?';
+      return (order[fa.charAt(0)]||5) - (order[fb2.charAt(0)]||5);
+    });
+    return entries.map(function(e){ return _renderDrugCard(e[0], e[1]); }).join('');
+  }
 
-    var badges = '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">'
-      + '<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:700;background:'+fc+'18;color:'+fc+';border:1px solid '+fc+'40">FDA: '+esc(fda)+'</span>'
-      + '<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:600;background:'+kc+'18;color:'+kc+';border:1px solid '+kc+'40">식약처: '+esc(kfda)+'</span>'
-      + (pllr?'<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd">PLLR</span>':'')
-      + '</div>';
+  var orangiCards = renderUserSection('오랑이','🧡','#f97316',byUser['오랑이']);
+  var bungCards = renderUserSection('붕쌤','🩵','#06b6d4',byUser['붕쌤']);
+  var totalCount = Object.keys(byUser['오랑이']).length + Object.keys(byUser['붕쌤']).length;
 
-    var detail = (pllr?'<div style="font-size:.72rem;color:#0369a1;margin-top:4px"><b>PLLR:</b> '+esc(pllr)+'</div>':'')
-      + (note?'<div style="font-size:.72rem;color:var(--mu);margin-top:2px">'+esc(note)+'</div>':'');
-
-    var srcLabel = source==='내장DB'?'<span style="font-size:.58rem;color:var(--mu2)">✓ 공식</span>'
-      :source==='AI검색'?'<span style="font-size:.58rem;color:#f59e0b">🔍 AI검색 (확인 권장)</span>'
-      :'<span style="font-size:.58rem;color:var(--mu2)">데이터 없음</span>';
-
-    var refreshBtn = !safety?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--ac)" title="Perplexity로 검색">🔍 검색</button>`
-      :(source==='AI검색'?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--mu)" title="재검색">🔄</button>`:'');
-
-    return '<div style="padding:10px 12px;background:'+fb+';border:1.5px solid '+fc+'30;border-radius:8px;margin-bottom:6px">'
-      + '<div style="display:flex;align-items:center;gap:8px">'
-      + '<span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:'+fc+';color:white;font-size:.72rem;font-weight:700">'+fda.charAt(0)+'</span>'
-      + '<div style="flex:1">'
-      + '<div style="font-size:.82rem;font-weight:600">'+esc(info.originalNames[0].replace(/\s*\(PRN\)/i,' (PRN)').replace(/\s*\(정규\)/i,' (정규)'))+'</div>'
-      + (name!==info.originalNames[0]?'<div style="font-size:.62rem;color:var(--ac)">'+esc(name)+'</div>':'')
-      + '<div style="font-size:.68rem;color:var(--mu)">'+info.domains.join(', ')+'</div>'
-      + '</div>'
-      + srcLabel + refreshBtn
-      + '<span id="ds-loading-'+esc(name)+'" style="display:none;font-size:.6rem;color:var(--ac)">검색중...</span>'
-      + '</div>'
-      + badges + detail
-      + '</div>';
-  }).join('');
-
-  if (!cards) cards = '<div class="hint">교차 도메인에서 활성 약물이 없습니다.<br>다른 도메인에서 질환/투약을 등록하면 여기에 자동 표시됩니다.</div>';
+  if (!totalCount) {
+    orangiCards = '<div class="hint">교차 도메인에서 활성 약물이 없습니다.<br>다른 도메인에서 질환/투약을 등록하면 여기에 자동 표시됩니다.</div>';
+    bungCards = '';
+  }
 
   // Cache stats
   var cacheStats='';
@@ -2728,7 +2800,12 @@ function renderDrugSafety() {
     + '<span>📊 3소스:</span> <span style="color:#16a34a">FDA</span> · <span style="color:#0369a1">PLLR</span> · <span style="color:#f59e0b">식약처</span>'
     + ' | <span>✓ 공식 = 내장DB</span> · <span>🔍 = AI검색(Perplexity)</span>'
     + '</div>'
-    + cards
+    + (totalCount ? '<div style="margin-bottom:12px">'
+      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="font-size:.88rem">🧡</span><span style="font-size:.78rem;font-weight:700;color:#f97316">오랑이</span><span style="font-size:.6rem;color:var(--mu)">'+Object.keys(byUser['오랑이']).length+'개</span></div>'
+      + orangiCards
+      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;margin-top:14px"><span style="font-size:.88rem">🩵</span><span style="font-size:.78rem;font-weight:700;color:#06b6d4">붕쌤</span><span style="font-size:.6rem;color:var(--mu)">'+Object.keys(byUser['붕쌤']).length+'개</span></div>'
+      + bungCards
+      + '</div>' : orangiCards)
     + cacheStats
     + '</div>';
 }
