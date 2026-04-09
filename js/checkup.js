@@ -736,13 +736,20 @@ function renderCheckupArchive() {
     background:${_checkupViewTab === t.id ? 'var(--ac)' : 'var(--sf2)'};color:${_checkupViewTab === t.id ? '#fff' : 'var(--ink)'};
     cursor:pointer;font-family:var(--font);font-weight:${_checkupViewTab === t.id ? '600' : '400'}">${t.label}</button>`).join('');
 
-  // 업로드 영역
-  const uploadArea = `<div style="margin:8px 0;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
-    onclick="document.getElementById('ck-file-input').click()">
-    <span style="font-size:1.2rem">📤</span>
-    <div style="font-size:.75rem;color:var(--mu);margin-top:4px">검진 결과 사진 업로드 (PDF 스크린샷/촬영본)</div>
-    <div style="font-size:.6rem;color:var(--mu2)">AI Vision으로 수치 자동 추출 → 표준화 저장</div>
-    <input type="file" id="ck-file-input" multiple accept="image/*" onchange="stageCheckupPhotos(this)" style="display:none">
+  // 업로드 + 수동 입력 영역
+  const uploadArea = `<div style="display:flex;gap:6px;margin:8px 0">
+    <div style="flex:1;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
+      onclick="document.getElementById('ck-file-input').click()">
+      <span style="font-size:1.2rem">📤</span>
+      <div style="font-size:.72rem;color:var(--mu);margin-top:4px">사진 업로드</div>
+      <div style="font-size:.55rem;color:var(--mu2)">AI Vision 자동 추출</div>
+      <input type="file" id="ck-file-input" multiple accept="image/*" onchange="stageCheckupPhotos(this)" style="display:none">
+    </div>
+    <div style="width:80px;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
+      onclick="openManualCheckupEntry()">
+      <span style="font-size:1.2rem">📝</span>
+      <div style="font-size:.72rem;color:var(--mu);margin-top:4px">수동 입력</div>
+    </div>
   </div>
   <div id="checkup-staged-area"></div>`;
 
@@ -1064,6 +1071,37 @@ function _updateManualTestList() {
       <span style="font-size:.58rem;color:var(--mu);min-width:40px">${esc(def.unit)}</span>
     </div>`;
   }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MIGRATION — 기존 붕룩이 labResults에 표준 참고치 일괄 적용
+// ═══════════════════════════════════════════════════════════════
+async function migrateLabResultsStdRef() {
+  const m = typeof getBrkMaster === 'function' ? getBrkMaster() : null;
+  if (!m || !m.labResults?.length) { showToast('⚠️ 붕룩이 데이터 없음'); return; }
+  // _pushUndo (되돌리기용 스냅샷)
+  if (typeof _pushUndo === 'function') _pushUndo();
+  let totalAdded = 0, labsUpdated = 0;
+  m.labResults.forEach(l => {
+    if (!l.values || typeof l.values !== 'object') return;
+    if (!l.ref) l.ref = {};
+    let added = 0;
+    Object.keys(l.values).forEach(rawKey => {
+      if (l.ref[rawKey]) return; // 이미 참고치 있으면 건드리지 않음
+      const parsed = _parseTestKey(rawKey);
+      const stdCode = _matchStdTest(parsed.name);
+      if (!stdCode) return;
+      const def = _CHECKUP_STD_TESTS[stdCode];
+      if (!def) return;
+      const ref = def.ref.male ? (l.who === '붕쌤' ? def.ref.male : def.ref.female) : def.ref;
+      if (ref) { l.ref[rawKey] = ref.low + '-' + ref.high; added++; }
+    });
+    if (added) { totalAdded += added; labsUpdated++; }
+  });
+  if (!totalAdded) { showToast('추가할 참고치 없음 (이미 완료됨)'); return; }
+  await (typeof saveBrkMaster === 'function' ? saveBrkMaster() : saveMaster());
+  showToast(`📏 ${labsUpdated}건 검사에 표준 참고치 ${totalAdded}개 추가 (검사실 기준과 다를 수 있음)`);
+  renderView('meds');
 }
 
 async function _saveManualCheckup() {
