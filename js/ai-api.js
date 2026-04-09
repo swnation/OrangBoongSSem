@@ -252,7 +252,9 @@ function getFullContext(question) {
   let patientCtx=m.patient_context||'';
   patientCtx=_replaceDynamicAge(patientCtx);
   const sharedProfile=typeof getSharedProfileText==='function'?`\n\n[공유 환자 프로필]\n${getSharedProfileText()}`:'';
-  const contextSection=`[컨텍스트 / SSOT]\n${patientCtx}${sharedProfile}${condContext}${crossCtx}${fileCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`;
+  // 최근 검진 결과 요약 자동 포함
+  const checkupCtx=typeof _getRecentCheckupContext==='function'?_getRecentCheckupContext():'';
+  const contextSection=`[컨텍스트 / SSOT]\n${patientCtx}${sharedProfile}${condContext}${crossCtx}${fileCtx}${checkupCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`;
   const logSummary=getRecentLogSummary();
   return contextSection+(logSummary?'\n\n'+logSummary:'');
 }
