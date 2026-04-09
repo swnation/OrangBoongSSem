@@ -452,6 +452,126 @@ function normalizeCheckupResults(aiValues, aiRefs, who) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// AI-ASSISTED NORMALIZATION — 하드코딩 사전의 한계를 AI로 보완
+// ═══════════════════════════════════════════════════════════════
+
+// 표준 코드 목록 (AI 프롬프트용 축약)
+function _getStdCodeList() {
+  return Object.entries(_CHECKUP_STD_TESTS).map(([code, def]) =>
+    `${code}: ${def.name.ko}(${def.name.en}) [${def.unit}]`
+  ).join('\n');
+}
+
+// AI에게 매핑 검증 요청 — 미매칭/의심 항목만 전송 (비용 최소화)
+async function aiVerifyNormalization(rawResults, who, aiId) {
+  // 검증 필요 항목: 미매칭 또는 suspicious
+  const needVerify = rawResults.filter(r => !r.stdCode || r.suspicious);
+  if (!needVerify.length) return rawResults; // 전부 매칭됨 → 패스
+
+  const selectedAi = aiId || (S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null)));
+  if (!selectedAi || !S.keys?.[selectedAi]) return rawResults; // AI 키 없으면 원본 반환
+
+  const prompt = `의료 검사 결과 표준화를 검증해주세요.
+아래 항목들의 rawName을 표준 검사 코드에 매핑하세요.
+검사 결과가 아닌 항목(AI 예측값, 소견, BMI 등)은 stdCode: null로 설정.
+값이 해당 검사의 정상 범위와 크게 다르면 suspicious: true로 설정.
+대상: ${who} (${who === '붕쌤' ? '남성' : '여성'})
+
+[매핑할 항목]
+${needVerify.map((r, i) => `${i}. rawName="${r.rawName}" value=${r.rawValue} unit=${r.rawUnit || '없음'}`).join('\n')}
+
+[표준 코드 목록]
+${_getStdCodeList()}
+
+반드시 JSON 배열로 응답:
+[{"idx":0,"stdCode":"TSH","displayName":"갑상선자극호르몬","unit":"mIU/L","suspicious":false},...]
+stdCode가 목록에 없거나 검사 결과가 아니면: {"idx":0,"stdCode":null,"reason":"AI 예측값"}`;
+
+  try {
+    const response = await callAI(selectedAi, '의료 검사 표준화 전문가. JSON만 응답.', prompt);
+    const jsonMatch = response.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return rawResults;
+    const aiMappings = JSON.parse(jsonMatch[0]);
+
+    // AI 매핑 적용
+    aiMappings.forEach(m => {
+      if (m.idx === undefined || m.idx < 0 || m.idx >= needVerify.length) return;
+      const target = needVerify[m.idx];
+      // 원본 results 배열에서 찾기
+      const origIdx = rawResults.findIndex(r => r.rawName === target.rawName && r.rawValue === target.rawValue);
+      if (origIdx < 0) return;
+
+      if (m.stdCode === null) {
+        // AI가 비-검사 항목으로 판정 → 제거
+        rawResults[origIdx]._aiRemoved = true;
+      } else if (m.stdCode && _CHECKUP_STD_TESTS[m.stdCode]) {
+        // AI가 표준 코드 매핑 제안
+        const def = _CHECKUP_STD_TESTS[m.stdCode];
+        rawResults[origIdx].stdCode = m.stdCode;
+        rawResults[origIdx].displayName = m.displayName || def.name.ko;
+        rawResults[origIdx].category = def.category;
+        rawResults[origIdx].related = def.related;
+        rawResults[origIdx].pregnancyRelevant = def.pregnancyRelevant;
+        if (m.unit && m.unit !== rawResults[origIdx].unit) {
+          // AI가 단위 교정 제안
+          rawResults[origIdx].unit = m.unit;
+        }
+        rawResults[origIdx].suspicious = m.suspicious || false;
+        rawResults[origIdx]._aiVerified = true;
+      }
+    });
+
+    // AI가 비-검사로 판정한 항목 제거
+    return rawResults.filter(r => !r._aiRemoved);
+  } catch (e) {
+    console.warn('AI verify failed:', e.message);
+    return rawResults; // 실패 시 원본 유지
+  }
+}
+
+// 매핑 캐시: 기관+원시키 → stdCode (동일 기관 동일 포맷 재활용)
+var _mappingCache = {};
+function _getCachedMapping(institution, rawName) {
+  return _mappingCache[institution + '::' + rawName];
+}
+function _setCachedMapping(institution, rawName, stdCode) {
+  _mappingCache[institution + '::' + rawName] = stdCode;
+}
+
+// 캐시 적용 정규화: 이전에 AI 검증된 매핑 재사용
+function normalizeWithCache(aiValues, aiRefs, who, institution) {
+  const results = normalizeCheckupResults(aiValues, aiRefs, who);
+  if (!institution) return results;
+  // 캐시된 매핑 적용
+  results.forEach(r => {
+    if (r.stdCode) return; // 이미 매칭됨
+    const cached = _getCachedMapping(institution, r.rawName);
+    if (cached && _CHECKUP_STD_TESTS[cached]) {
+      const def = _CHECKUP_STD_TESTS[cached];
+      r.stdCode = cached;
+      r.displayName = def.name.ko;
+      r.category = def.category;
+      r.related = def.related;
+      r.pregnancyRelevant = def.pregnancyRelevant;
+      r._cached = true;
+    } else if (cached === '_skip') {
+      r._aiRemoved = true;
+    }
+  });
+  return results.filter(r => !r._aiRemoved);
+}
+
+// AI 검증 후 캐시에 저장
+function _cacheVerifiedMappings(results, institution) {
+  if (!institution) return;
+  results.forEach(r => {
+    if (r._aiVerified || r.stdCode) {
+      _setCachedMapping(institution, r.rawName, r.stdCode || '_skip');
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
 // CROSS-DOMAIN DATA ACCESS
 // ═══════════════════════════════════════════════════════════════
 
@@ -732,10 +852,41 @@ function _showCheckupAnalysisResults(allResults) {
   const legend = `<div style="font-size:.58rem;color:var(--mu);padding:4px 6px;background:var(--sf2);border-radius:4px;margin-bottom:6px">
     <span style="color:#10b981">✓정상</span> <span style="color:#dc2626">↑높음</span> <span style="color:#2563eb">↓낮음</span> · <span style="color:#8b5cf6">⚙표준매칭</span> <span style="color:#f59e0b">⚠미매칭</span></div>`;
 
-  showConfirmModal('📋 검진 결과 분석 완료', legend + resultsHtml,
-    [{
-      label: '💾 표준화 저장', primary: true,
+  // AI 검증 가능한 AI 판별
+  const verifyAiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+  const hasUnmatched = allResults.some(r => !r.error && normalizeCheckupResults(r.values || {}, r.ref || {}, r.who || who).some(n => !n.stdCode || n.suspicious));
+
+  const buttons = [];
+  if (hasUnmatched && verifyAiId) {
+    buttons.push({
+      label: '🤖 AI 검증 후 저장', primary: true,
       action: async () => {
+        showToast('🤖 AI 표준화 검증 중...', 8000);
+        let saved = 0;
+        for (let i = 0; i < allResults.length; i++) {
+          const r = allResults[i]; if (r.error) continue;
+          const inst = document.querySelector(`input[data-ck-inst="${i}"]`)?.value || '';
+          let normalized = normalizeWithCache(r.values || {}, r.ref || {}, r.who || who, inst);
+          // AI 검증: 미매칭/의심 항목만
+          normalized = await aiVerifyNormalization(normalized, r.who || who, verifyAiId);
+          _cacheVerifiedMappings(normalized, inst);
+          const checkup = {
+            id: Date.now() + saved, date: r.date || kstToday(), who: r.who || who,
+            institution: inst, type: r.type || 'general', sourceType: 'image',
+            results: normalized, aiUsed: (r._usedAis || []).join('+') + '+verify:' + verifyAiId,
+            memo: [...(r.abnormal || []).map(a => '⚠️ ' + a), r.opinion ? '💡 ' + r.opinion : ''].filter(Boolean).join('; '),
+          };
+          await saveHealthCheckup(checkup); saved++;
+        }
+        closeConfirmModal();
+        if (saved) showToast('✅ ' + saved + '건 AI 검증 + 저장 완료');
+        renderView('meds');
+      }
+    });
+  }
+  buttons.push({
+    label: hasUnmatched ? '💾 바로 저장 (검증 생략)' : '💾 표준화 저장', primary: !hasUnmatched,
+    action: async () => {
         let saved = 0;
         for (let i = 0; i < allResults.length; i++) {
           const r = allResults[i];
@@ -763,7 +914,10 @@ function _showCheckupAnalysisResults(allResults) {
         if (saved) showToast('✅ ' + saved + '건 표준화 저장 완료');
         renderView('meds');
       }
-    }, { label: '취소', action: closeConfirmModal }]);
+  });
+  buttons.push({ label: '취소', action: closeConfirmModal });
+
+  showConfirmModal('📋 검진 결과 분석 완료', legend + resultsHtml, buttons);
 }
 
 // ═══════════════════════════════════════════════════════════════
