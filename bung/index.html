@@ -334,7 +334,7 @@ function renderCheckTab(){
       html+='<div class="condition-name">'+esc(g.condition)+'</div>';
       g.meds.forEach(m=>{
         const isPrn=m.includes('(PRN)')||m.includes('PRN');
-        let checked=(m in existingMc)?existingMc[m]:!isPrn;
+        let checked=(m in existingMc)?existingMc[m]:false;
         html+='<div class="med-row" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
         html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(checked?' checked':'')+'>';
         html+='<label>'+esc(m)+'</label>';if(isPrn)html+='<span class="prn">PRN</span>';html+='</div>';
@@ -507,7 +507,7 @@ function _renderBrkDailySection(date){
 
   const alcHtml=`<div class="med-row" onclick="this.querySelector('input').checked=!this.querySelector('input').checked" style="margin-top:6px">
     <input type="checkbox" id="brk-alcohol"${alcohol?' checked':''}>
-    <label>${alcohol?'🍺 음주':'🚫 금주'}</label>
+    <label>🍺 오늘 음주함</label>
   </div>`;
 
   return `<div class="card">
@@ -522,7 +522,7 @@ function _renderBrkDailySection(date){
     ${supplHtml}
     <div class="condition-name">운동</div>
     <div style="display:flex;gap:4px;margin-bottom:4px">${exHtml}</div>
-    <div class="condition-name">음주</div>
+    <div class="condition-name">음주 여부</div>
     ${alcHtml}
   </div>`;
 }

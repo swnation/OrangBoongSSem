@@ -1029,9 +1029,9 @@ function _brkRenderExercise(isOrangi, whoData) {
   } else {
     var alcohol = whoData.alcohol || false;
     html += '<div style="margin-top:10px"><div class="dx-form-label">음주 여부</div>'
-      + '<div onclick="brkToggleAlcohol()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:'+(alcohol?'#fef2f2':'#f0fdf4')+';border:1.5px solid '+(alcohol?'#fca5a5':'#86efac')+';border-radius:8px;cursor:pointer">'
-      + '<span style="font-size:1.2rem">'+(alcohol?'🍺':'🚫')+'</span>'
-      + '<span style="font-size:.82rem;font-weight:600;color:'+(alcohol?'#dc2626':'#16a34a')+'">'+(alcohol?'음주':'금주')+'</span>'
+      + '<div onclick="brkToggleAlcohol()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:'+(alcohol?'#fef2f2':'var(--sf2)')+';border:1.5px solid '+(alcohol?'#fca5a5':'var(--bd)')+';border-radius:8px;cursor:pointer">'
+      + '<span style="font-size:1.2rem">'+(alcohol?'🍺':'⬜')+'</span>'
+      + '<span style="font-size:.82rem;font-weight:'+(alcohol?'600':'400')+';color:'+(alcohol?'#dc2626':'var(--tx)')+'">오늘 음주함</span>'
       + '</div></div>';
   }
   return html;
@@ -3429,7 +3429,6 @@ function renderBrkDailySyncCard() {
   if(who==='bung'){
     const alcohol=dayData.alcohol;
     if(alcohol) extraHtml+=`<span style="display:inline-flex;padding:2px 8px;border-radius:12px;font-size:.68rem;background:#fef2f2;color:#dc2626;font-weight:500">🍺 음주</span>`;
-    else extraHtml+=`<span style="display:inline-flex;padding:2px 8px;border-radius:12px;font-size:.68rem;background:#dcfce7;color:#16a34a;font-weight:500">🚫 금주</span>`;
   }
 
   const takenCount=visibleItems.filter(it=>dayData[it.key]).length;
@@ -3498,10 +3497,10 @@ function renderHealthDailyCheck() {
   let alcoholHtml = '';
   if(who === 'bung') {
     const alcohol = dayData.alcohol || false;
-    alcoholHtml = `<div style="margin-top:6px"><span style="font-size:.68rem;font-weight:600;color:var(--mu)">🍺 음주</span>
-      <div onclick="_toggleHealthAlcohol()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:${alcohol?'#fef2f2':'#f0fdf4'};border:1.5px solid ${alcohol?'#fca5a5':'#86efac'};border-radius:8px;cursor:pointer;margin-left:8px">
-        <span style="font-size:.9rem">${alcohol?'🍺':'🚫'}</span>
-        <span style="font-size:.72rem;font-weight:600;color:${alcohol?'#dc2626':'#16a34a'}">${alcohol?'음주':'금주'}</span>
+    alcoholHtml = `<div style="margin-top:6px"><span style="font-size:.68rem;font-weight:600;color:var(--mu)">🍺 음주 여부</span>
+      <div onclick="_toggleHealthAlcohol()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:${alcohol?'#fef2f2':'var(--sf2)'};border:1.5px solid ${alcohol?'#fca5a5':'var(--bd)'};border-radius:8px;cursor:pointer;margin-left:8px">
+        <span style="font-size:.9rem">${alcohol?'🍺':'⬜'}</span>
+        <span style="font-size:.72rem;font-weight:${alcohol?'600':'400'};color:${alcohol?'#dc2626':'var(--tx)'}">오늘 음주함</span>
       </div>
     </div>`;
   }
