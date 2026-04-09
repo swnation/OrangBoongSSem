@@ -2824,11 +2824,92 @@ function _lookupDrugSafety(name) {
 }
 
 function _cacheDrugSafety(name, data) {
+  // 클라우드 우선 저장 (규칙 #22)
+  try {
+    const m = getBrkMaster();
+    if (m) {
+      if (!m.settings) m.settings = {};
+      if (!m.settings.drugSafetyCache) m.settings.drugSafetyCache = {};
+      m.settings.drugSafetyCache[name] = { ...data, searchedAt: new Date().toISOString() };
+      saveBrkMaster(); // 비동기, fire-and-forget
+    }
+  } catch(e){}
+  // localStorage 폴백
   try {
     var cache=JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
     cache[name]={...data,searchedAt:new Date().toISOString()};
     localStorage.setItem('om_preg_drug_db',JSON.stringify(cache));
   } catch(e){}
+}
+
+// ── AI 약품명 정규화: 상품명 → 성분명 매핑 + 동적 사전 확장 (규칙 #37) ──
+var _drugNameDisplayMode = 'brand'; // 'brand' | 'generic'
+function toggleDrugNameMode() {
+  _drugNameDisplayMode = _drugNameDisplayMode === 'brand' ? 'generic' : 'brand';
+  renderView('meds');
+}
+// 동적 약품명 사전: settings.customDrugNames에 클라우드 저장
+function _getCustomDrugNames() {
+  const m = getBrkMaster();
+  return m?.settings?.customDrugNames || {};
+}
+function _saveCustomDrugName(brand, generic) {
+  const m = getBrkMaster(); if (!m) return;
+  if (!m.settings) m.settings = {};
+  if (!m.settings.customDrugNames) m.settings.customDrugNames = {};
+  m.settings.customDrugNames[brand] = generic;
+  // 런타임 _DRUG_NAMES에도 추가
+  _DRUG_NAMES[brand] = generic;
+  saveBrkMaster();
+}
+// 약품명 표시: 모드에 따라 상품명/성분명 전환
+function getDrugDisplayName(rawName) {
+  const candidates = _extractDrugCandidates(rawName);
+  const customMap = _getCustomDrugNames();
+  let brand = rawName, generic = null;
+  // 성분명 찾기
+  for (const c of candidates) {
+    if (_DRUG_NAMES[c]) { generic = _DRUG_NAMES[c]; brand = c; break; }
+    if (customMap[c]) { generic = customMap[c]; brand = c; break; }
+    // 영문명 자체가 입력된 경우
+    if (/^[A-Za-z]/.test(c) && Object.values(_DRUG_NAMES).includes(c)) { generic = c; break; }
+    if (/^[A-Za-z]/.test(c) && Object.values(customMap).includes(c)) { generic = c; break; }
+  }
+  if (!generic) return { display: rawName, brand: rawName, generic: null, matched: false };
+  return {
+    display: _drugNameDisplayMode === 'generic' ? generic : brand,
+    brand, generic, matched: true,
+  };
+}
+// AI 일괄 약품명 매핑 (미매칭 약물만)
+async function aiVerifyDrugNames(drugList) {
+  const unmatched = drugList.filter(d => !getDrugDisplayName(d).matched);
+  if (!unmatched.length) return;
+  const aiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+  if (!aiId) return;
+  const prompt = `아래 약품명들의 영문 성분명(generic name)을 매핑하세요.
+상품명이면 성분명을, 성분명이면 그대로, 약물이 아니면 null을 반환.
+
+${unmatched.map((d, i) => `${i}. "${d}"`).join('\n')}
+
+JSON 배열로 응답:
+[{"idx":0,"brand":"타이레놀","generic":"Acetaminophen"},...]
+약물이 아닌 항목: {"idx":0,"brand":"...","generic":null}`;
+  try {
+    const resp = await callAI(aiId, '약학 전문가. JSON만 응답.', prompt);
+    const match = resp.match(/\[[\s\S]*\]/);
+    if (!match) return;
+    const mappings = JSON.parse(match[0]);
+    let added = 0;
+    mappings.forEach(m => {
+      if (m.idx === undefined || m.idx < 0 || m.idx >= unmatched.length) return;
+      if (m.generic && m.generic !== 'null') {
+        _saveCustomDrugName(unmatched[m.idx], m.generic);
+        added++;
+      }
+    });
+    if (added) showToast(`🆕 ${added}개 약품 성분명 매핑 추가됨`);
+  } catch(e) { console.warn('AI drug name verify failed:', e); }
 }
 
 async function fetchDrugSafetyPerplexity(drugName) {
@@ -2966,6 +3047,13 @@ function _renderDrugCard(name, info, isMale) {
   var note = safety?.note || '';
   var source = safety?.source || '';
   var fc = _fdaColor(fda), fb = _fdaBg(fda), kc = _kfdaColor(kfda);
+  // 상품명/성분명 표시
+  var dn = getDrugDisplayName(info.originalNames[0]);
+  var nameHtml = '<span style="font-size:.78rem;font-weight:600">' + esc(dn.display.replace(/\s*\(PRN\)/i,' (PRN)').replace(/\s*\(정규\)/i,' (정규)')) + '</span>';
+  if (dn.matched && dn.brand !== dn.generic) {
+    var sub = _drugNameDisplayMode === 'generic' ? dn.brand : dn.generic;
+    nameHtml += ' <span style="font-size:.58rem;color:var(--mu2)">(' + esc(sub) + ')</span>';
+  }
 
   var badges = '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">'
     + '<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:700;background:'+fc+'18;color:'+fc+';border:1px solid '+fc+'40">FDA: '+esc(fda)+'</span>'
@@ -3008,7 +3096,7 @@ function _renderDrugCard(name, info, isMale) {
     return '<div style="padding:10px 12px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;margin-bottom:5px">'
       + '<div style="display:flex;align-items:center;gap:8px">'
       + '<div style="flex:1">'
-      + '<div style="font-size:.78rem;font-weight:600">'+esc(info.originalNames[0].replace(/\s*\(PRN\)/i,' (PRN)').replace(/\s*\(정규\)/i,' (정규)'))+'</div>'
+      + '<div>'+nameHtml+'</div>'
       + (name!==info.originalNames[0]?'<div style="font-size:.6rem;color:var(--ac)">'+esc(name)+'</div>':'')
       + '<div style="font-size:.62rem;color:var(--mu)">'+info.conditions.join(', ')+'</div>'
       + '</div>'
@@ -3105,8 +3193,18 @@ function renderDrugSafety() {
     if(cacheCount) cacheStats='<div style="font-size:.62rem;color:var(--mu2);margin-top:8px;text-align:right">💾 캐시: '+cacheCount+'개 약물 · '+Math.round(cacheSize/1024)+'KB</div>';
   } catch(e){}
 
+  // 상품명/성분명 토글 + AI 매핑 버튼
+  var allDrugs = [].concat(Object.keys(byUser['오랑이']), Object.keys(byUser['붕쌤']));
+  var unmatchedCount = allDrugs.filter(d => !getDrugDisplayName(d).matched).length;
+  var toggleBtn = '<button onclick="toggleDrugNameMode()" style="font-size:.65rem;padding:3px 10px;border:1.5px solid var(--ac);border-radius:6px;background:var(--ac)15;color:var(--ac);cursor:pointer;font-family:var(--font);font-weight:600">'
+    + (_drugNameDisplayMode === 'brand' ? '🏷 성분명으로 보기' : '🏪 상품명으로 보기') + '</button>';
+  var aiBtn = unmatchedCount ? '<button onclick="aiVerifyDrugNames([' + allDrugs.filter(d => !getDrugDisplayName(d).matched).map(d => "'" + esc(d).replace(/'/g,"\\'") + "'").join(',') + '])" style="font-size:.65rem;padding:3px 10px;border:1.5px solid #8b5cf6;border-radius:6px;background:#8b5cf615;color:#8b5cf6;cursor:pointer;font-family:var(--font)">🤖 미매칭 ' + unmatchedCount + '건 AI 매핑</button>' : '';
+
   return '<div>'
-    + '<div style="font-size:.78rem;color:var(--mu);margin-bottom:10px">복용 중인 약물의 임신 안전성을 3개 소스로 교차 비교합니다.</div>'
+    + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
+    + '<span style="font-size:.78rem;color:var(--mu)">약물 임신 안전성 3소스 교차 비교</span>'
+    + toggleBtn + aiBtn
+    + '</div>'
     + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;font-size:.65rem">'
     + [['A','안전','#16a34a'],['B','대체로 안전','#65a30d'],['C','위험-이익','#f59e0b'],['D','위험','#ea580c'],['X','금기','#dc2626']].map(function(g){
       return '<span style="padding:2px 8px;border-radius:10px;background:'+g[2]+'15;color:'+g[2]+';border:1px solid '+g[2]+'30">'+g[0]+': '+g[1]+'</span>';
