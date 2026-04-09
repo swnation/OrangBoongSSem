@@ -108,31 +108,31 @@ const _PREGNANCY_SAFETY = {
 
 // 남성 복용 시 임신·정자에 미치는 영향 DB
 const _MALE_FERTILITY_IMPACT = {
-  'Lithium': {impact:'주의',note:'정자 운동성 감소 보고. 임신 시도 전 감량/중단 검토',ref:'Koren 2020'},
-  'Valproate': {impact:'위험',note:'정자 운동성·형태 이상, DNA 분절 증가. 가급적 중단',ref:'Engeland 2019'},
-  'Carbamazepine': {impact:'주의',note:'정자 농도·운동성 감소 가능',ref:'Isojärvi 2004'},
-  'Topiramate': {impact:'주의',note:'정자 형태 이상 보고',ref:'Hamed 2015'},
-  'Lamotrigine': {impact:'안전',note:'정자에 유의미한 영향 미보고',ref:''},
-  'Escitalopram': {impact:'주의',note:'SSRI 계열 — 정자 DNA 분절 증가, 운동성 감소 보고. 3개월 전 감량 검토',ref:'Tanrikut 2010'},
-  'Sertraline': {impact:'주의',note:'SSRI — 정자 DNA 손상 보고, 수정 능력에 미미한 영향',ref:'Tanrikut 2010'},
-  'Fluoxetine': {impact:'주의',note:'SSRI — 정자 DNA 분절·운동성 감소',ref:'Safarinejad 2008'},
-  'Paroxetine': {impact:'주의',note:'SSRI — 정자 DNA 손상이 가장 많이 보고된 SSRI',ref:'Tanrikut 2010'},
-  'Venlafaxine': {impact:'경미',note:'SNRI — 일부 정자 영향 보고, SSRI보다 적음',ref:''},
-  'Bupropion': {impact:'안전',note:'정자에 유의미한 영향 미보고',ref:''},
-  'Quetiapine': {impact:'경미',note:'프로락틴 상승 → 성기능 영향 가능, 정자 직접 영향 미보고',ref:''},
-  'Aripiprazole': {impact:'안전',note:'프로락틴 상승 적어 성기능 영향 최소',ref:''},
-  'Concerta': {impact:'안전',note:'Methylphenidate — 정자에 유의미한 영향 미보고',ref:''},
-  'Atomoxetine': {impact:'경미',note:'동물실험에서 정자 생성 감소 보고, 인체 데이터 부족',ref:''},
-  'Metformin': {impact:'안전',note:'남성 사용 시 정자 질 개선 보고도 있음',ref:''},
-  'Finasteride': {impact:'위험',note:'5α-환원효소 억제 → 정자 농도 감소, 정액량 감소. 최소 3개월 전 중단',ref:'Samplaski 2013'},
-  'Dutasteride': {impact:'위험',note:'Finasteride보다 반감기 길어 6개월 전 중단 권장',ref:''},
-  'Testosterone': {impact:'위험',note:'외부 테스토스테론 → FSH/LH 억제 → 무정자증. 임신 시도 시 절대 금기',ref:'ASRM 2020'},
-  'Sulfasalazine': {impact:'위험',note:'정자 농도·운동성 급감. 중단 후 2-3개월 회복',ref:'Hoeltzenbein 2014'},
-  'Colchicine': {impact:'주의',note:'정자 형성 방해 가능, 임신 시도 3개월 전 중단 검토',ref:''},
-  'Methotrexate': {impact:'위험',note:'정자 DNA 독성, 최소 3개월 전 중단 필수',ref:'Weber-Schoendorfer 2014'},
-  'Propranolol': {impact:'안전',note:'정자에 유의미한 영향 미보고',ref:''},
-  'Losartan': {impact:'안전',note:'남성에서는 안전, 여성은 금기',ref:''},
-  'Enalapril': {impact:'안전',note:'남성에서는 안전, 여성은 금기',ref:''},
+  'Lithium': {impact:'주의',note:'정자 운동성 20-30% 감소 보고. 혈중 농도 0.6-0.8 유지 시 영향 최소화 가능. 임신 시도 3개월 전 감량 검토. 대안: Lamotrigine',ref:'Koren 2020, Ghosh 2014',washout:'중단 후 약 3개월 회복'},
+  'Valproate': {impact:'위험',note:'정자 운동성 25-40% 감소, 형태 이상 증가, DNA 분절 2배. 용량 의존적(>1000mg/일 시 심함). 대안: Lamotrigine, Lithium 저용량',ref:'Engeland 2019, Røste 2003',washout:'중단 후 3-6개월 회복'},
+  'Carbamazepine': {impact:'주의',note:'정자 농도 15-20% 감소, 운동성 저하. Valproate보다 영향 적음. 대안: Lamotrigine',ref:'Isojärvi 2004, Röste 2003',washout:'중단 후 약 3개월 회복'},
+  'Topiramate': {impact:'주의',note:'정자 형태 이상 보고(비정상 형태 증가). 체중 감소로 인한 간접 영향도 가능. 편두통 예방 대안: 마그네슘, 프로프라놀롤',ref:'Hamed 2015',washout:'중단 후 약 3개월'},
+  'Lamotrigine': {impact:'안전',note:'정자 수·운동성·형태에 유의미한 영향 없음. 남성 기분안정제 중 가임력에 가장 안전한 선택',ref:'Rønning 2019',washout:''},
+  'Escitalopram': {impact:'주의',note:'SSRI 계열 — 정자 DNA 분절 30-40% 증가, 운동성 10-15% 감소. 세로토닌이 고환 혈류·정자 성숙에 관여. 임신 시도 3개월 전 감량/전환 검토. 대안: Bupropion',ref:'Tanrikut 2010, Akasheh 2014',washout:'중단 후 2-3개월 회복'},
+  'Sertraline': {impact:'주의',note:'SSRI — 정자 DNA 분절 증가, 정액량 감소 보고. SSRI 중에서는 비교적 영향 적은 편. 장기 복용(>3개월)이 더 영향',ref:'Tanrikut 2010',washout:'중단 후 2-3개월 회복'},
+  'Fluoxetine': {impact:'주의',note:'SSRI — 정자 DNA 분절·운동성 감소. 긴 반감기(4-6일)로 중단 후에도 수주간 영향. 대안: Bupropion',ref:'Safarinejad 2008',washout:'중단 후 3개월 이상 필요'},
+  'Paroxetine': {impact:'주의',note:'SSRI 중 정자 DNA 손상이 가장 많이 보고됨. 중단 시 금단 증상 심해 점진 감량 필수. 대안: Bupropion, Mirtazapine',ref:'Tanrikut 2010',washout:'점진 감량 1개월 + 회복 2-3개월'},
+  'Venlafaxine': {impact:'경미',note:'SNRI — SSRI보다 정자 영향 적음. 노르에피네프린 효과가 정자에 미치는 영향은 미미. 고용량(>150mg)에서 주의',ref:'Koyuncu 2012',washout:'중단 후 약 2개월 회복'},
+  'Bupropion': {impact:'안전',note:'세로토닌 비관여 → 정자에 유의미한 영향 없음. SSRI에서 전환 시 가장 많이 추천되는 대안',ref:'Tanrikut 2010',washout:''},
+  'Quetiapine': {impact:'경미',note:'프로락틴 경미 상승 → 성욕·발기 기능 일부 영향 가능. 정자 직접 영향은 미보고. 비정형 항정신병약 중에서는 양호',ref:'Montejo 2020',washout:''},
+  'Aripiprazole': {impact:'안전',note:'프로락틴 상승 최소(오히려 감소시킬 수 있음) → 성기능·정자 영향 거의 없음. 항정신병약 중 가장 가임력 친화적',ref:'Montejo 2020',washout:''},
+  'Concerta': {impact:'안전',note:'Methylphenidate — 정자 수·운동성·형태에 유의미한 영향 없음. 교감신경 자극이 사정에 영향줄 수 있으나 임상적으로 미미',ref:'Ramasamy 2014',washout:''},
+  'Atomoxetine': {impact:'경미',note:'동물실험에서 고용량 시 정자 생성 감소 보고. 인체에서는 데이터 부족. 임신 시도 시 필요성 재평가 권장',ref:'Eli Lilly PI',washout:'중단 후 약 3개월'},
+  'Metformin': {impact:'안전',note:'정자 질 개선 보고도 있음(항산화 효과). 비만 남성에서 테스토스테론 개선. 가임력에 긍정적',ref:'Morgante 2011',washout:''},
+  'Finasteride': {impact:'위험',note:'5α-환원효소 억제 → DHT 감소 → 정자 농도 평균 34% 감소, 정액량 감소. 1mg(탈모)도 5mg(전립선)과 유사한 영향. 반드시 중단',ref:'Samplaski 2013, Amory 2007',washout:'중단 후 3-6개월 회복'},
+  'Dutasteride': {impact:'위험',note:'Finasteride보다 더 강력(type 1+2 억제). 반감기 매우 김(5주). 정자 농도·정액량 심각 감소',ref:'Amory 2007',washout:'중단 후 6개월 이상 필요'},
+  'Testosterone': {impact:'위험',note:'외부 테스토스테론 → 시상하부 피드백으로 FSH/LH 완전 억제 → 정자 생성 중단(무정자증). 임신 시도 시 절대 금기. 남성 피임 수준의 효과',ref:'ASRM 2020, Patel 2019',washout:'중단 후 3-12개월 회복(개인차 큼)'},
+  'Sulfasalazine': {impact:'위험',note:'정자 농도 60-80% 감소, 운동성 급감, 형태 이상. 엽산 대사 방해 메커니즘. 대안: Mesalazine(5-ASA, 정자 무영향)',ref:'Hoeltzenbein 2014, O\'Morain 1984',washout:'중단 후 2-3개월 회복'},
+  'Colchicine': {impact:'주의',note:'미세소관 억제 → 정자 형성(감수분열) 방해. 장기 저용량은 비교적 안전하나 임신 시도 시 중단 권장',ref:'Merlin 1972, Ben-Chetrit 2003',washout:'중단 후 약 3개월'},
+  'Methotrexate': {impact:'위험',note:'엽산 길항 → 정자 DNA 합성 직접 독성. 기형 유발 가능(동물). 반드시 중단 후 충분한 세척 기간 필요. 중단 중 엽산 5mg/일 보충',ref:'Weber-Schoendorfer 2014',washout:'중단 후 최소 3개월(권장 6개월)'},
+  'Propranolol': {impact:'안전',note:'정자에 유의미한 영향 없음. 편두통 예방 목적 사용 시 가임력 우려 없음',ref:'Burnett 2011',washout:''},
+  'Losartan': {impact:'안전',note:'남성에서는 정자·가임력에 영향 없음. (여성은 2-3분기 금기이나 남성 복용은 무관)',ref:'',washout:''},
+  'Enalapril': {impact:'안전',note:'남성에서는 정자·가임력에 영향 없음. (여성은 2-3분기 금기이나 남성 복용은 무관)',ref:'',washout:''},
 };
 
 const _DEFAULT_MILESTONES = [
@@ -2773,19 +2773,21 @@ function _renderDrugCard(name, info, isMale) {
   var detail = (pllr?'<div style="font-size:.72rem;color:#0369a1;margin-top:4px"><b>PLLR:</b> '+esc(pllr)+'</div>':'')
     + (note?'<div style="font-size:.72rem;color:var(--mu);margin-top:2px">'+esc(note)+'</div>':'');
 
-  // 남성: 정자/가임력 영향 추가
+  // 남성: 가임력 영향을 메인으로
   var maleHtml = '';
   if (isMale) {
     var mi = _MALE_FERTILITY_IMPACT[name];
     if (mi) {
       var mic = mi.impact==='위험'?'#dc2626':mi.impact==='주의'?'#ea580c':mi.impact==='경미'?'#f59e0b':'#10b981';
-      maleHtml = '<div style="margin-top:5px;padding:6px 8px;background:'+mic+'08;border:1px solid '+mic+'30;border-radius:6px">'
-        + '<div style="font-size:.65rem;font-weight:600;color:'+mic+'">🧬 남성 가임력: '+mi.impact+'</div>'
-        + '<div style="font-size:.65rem;color:var(--mu);margin-top:2px">'+esc(mi.note)+'</div>'
-        + (mi.ref?'<div style="font-size:.55rem;color:var(--mu2)">📚 '+esc(mi.ref)+'</div>':'')
+      maleHtml = '<div style="margin-top:5px;padding:8px 10px;background:'+mic+'08;border:1.5px solid '+mic+'30;border-radius:8px">'
+        + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:700;background:'+mic+'18;color:'+mic+';border:1px solid '+mic+'40">🧬 '+mi.impact+'</span>'
+        + (mi.washout?'<span style="font-size:.6rem;color:var(--mu)">⏱ '+esc(mi.washout)+'</span>':'')
+        + '</div>'
+        + '<div style="font-size:.7rem;color:var(--tx);line-height:1.5">'+esc(mi.note)+'</div>'
+        + (mi.ref?'<div style="font-size:.55rem;color:var(--mu2);margin-top:3px">📚 '+esc(mi.ref)+'</div>':'')
         + '</div>';
     } else {
-      maleHtml = '<div style="margin-top:5px;font-size:.62rem;color:var(--mu2)">🧬 남성 가임력 영향: 데이터 미확보</div>';
+      maleHtml = '<div style="margin-top:5px;padding:6px 8px;background:#f9fafb;border:1px dashed var(--bd);border-radius:6px;font-size:.65rem;color:var(--mu2)">🧬 남성 가임력 영향: 데이터 미확보 — 주치의 상담 권장</div>';
     }
   }
 
@@ -2794,6 +2796,24 @@ function _renderDrugCard(name, info, isMale) {
     :'<span style="font-size:.58rem;color:var(--mu2)">데이터 없음</span>';
   var refreshBtn = !safety?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--ac)" title="Perplexity로 검색">🔍 검색</button>`
     :(source==='AI검색'?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--mu)" title="재검색">🔄</button>`:'');
+
+  // 붕쌤(남성): 가임력 메인 + 임신위험도(FDA)는 접기
+  if (isMale) {
+    var foldedPreg = '<div style="margin-top:5px"><div style="font-size:.58rem;color:var(--mu2);cursor:pointer" onclick="var d=this.nextElementSibling;d.style.display=d.style.display===\'none\'?\'block\':\'none\'">▸ 여성 임신 위험도 (FDA '+esc(fda)+')</div>'
+      + '<div style="display:none">' + badges + detail + '</div></div>';
+    return '<div style="padding:10px 12px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;margin-bottom:5px">'
+      + '<div style="display:flex;align-items:center;gap:8px">'
+      + '<div style="flex:1">'
+      + '<div style="font-size:.78rem;font-weight:600">'+esc(info.originalNames[0].replace(/\s*\(PRN\)/i,' (PRN)').replace(/\s*\(정규\)/i,' (정규)'))+'</div>'
+      + (name!==info.originalNames[0]?'<div style="font-size:.6rem;color:var(--ac)">'+esc(name)+'</div>':'')
+      + '<div style="font-size:.62rem;color:var(--mu)">'+info.conditions.join(', ')+'</div>'
+      + '</div>'
+      + srcLabel + refreshBtn
+      + '<span id="ds-loading-'+esc(name)+'" style="display:none;font-size:.6rem;color:var(--ac)">검색중...</span>'
+      + '</div>'
+      + maleHtml + foldedPreg
+      + '</div>';
+  }
 
   return '<div style="padding:10px 12px;background:'+fb+';border:1.5px solid '+fc+'30;border-radius:8px;margin-bottom:5px">'
     + '<div style="display:flex;align-items:center;gap:8px">'
@@ -2806,7 +2826,7 @@ function _renderDrugCard(name, info, isMale) {
     + srcLabel + refreshBtn
     + '<span id="ds-loading-'+esc(name)+'" style="display:none;font-size:.6rem;color:var(--ac)">검색중...</span>'
     + '</div>'
-    + badges + detail + maleHtml
+    + badges + detail
     + '</div>';
 }
 
