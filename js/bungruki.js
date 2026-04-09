@@ -3517,10 +3517,12 @@ function renderHealthDailyCheck() {
 
   // 날짜 네비게이션
   const isToday = date === today;
+  const prevDateStr = _prevDay(date);
+  const nextDateStr = _nextDay(date);
   const dateNav = `<div style="display:flex;align-items:center;gap:6px;justify-content:center;margin-bottom:8px">
-    <button onclick="_healthDailyDate='${_prevDay(date)}';renderView('meds')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--ink);font-family:var(--font)">◀</button>
+    <button onclick="_healthDailyDate='${prevDateStr}';renderView('meds')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--ink);font-family:var(--font)">◀</button>
     <span style="font-size:.78rem;font-weight:600">${date}${isToday?' (오늘)':''}</span>
-    <button onclick="_healthDailyDate=${isToday?'null':'\\''+_nextDay(date)+'\\''};renderView('meds')" ${isToday?'disabled':''} style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--ink);font-family:var(--font)">▶</button>
+    <button onclick="_healthDailyDate=${isToday ? 'null' : "'" + nextDateStr + "'"};renderView('meds')" ${isToday?'disabled':''} style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--ink);font-family:var(--font)">▶</button>
     ${!isToday?`<button onclick="_healthDailyDate=null;renderView('meds')" style="background:none;border:1px solid var(--ac);border-radius:4px;padding:2px 8px;font-size:.62rem;cursor:pointer;color:var(--ac);font-family:var(--font)">오늘</button>`:''}
   </div>`;
 

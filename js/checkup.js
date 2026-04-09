@@ -708,8 +708,10 @@ function getAllHealthCheckups(who, includeLegacy, opts) {
     if (brkDs?.master?.labResults) {
       brkDs.master.labResults.forEach(l => {
         if (who && l.who !== who) return;
+        // 건강관리 도메인: 정액검사/호르몬 type 자체를 제외 (미매칭 항목이 'other'로 통과하는 문제 방지)
+        if (!includePregnancy && (l.type === 'semen' || l.type === 'hormone')) return;
         let normalized = normalizeCheckupResults(l.values || {}, l.ref || {}, l.who);
-        // 건강관리 도메인: 임신 특화 카테고리(생식호르몬, 정액검사) 제외
+        // 건강관리 도메인: 임신 특화 카테고리(생식호르몬, 정액검사) 추가 필터
         if (!includePregnancy) {
           normalized = normalized.filter(r => r.category !== 'reproductive' && r.category !== 'semen');
         }
