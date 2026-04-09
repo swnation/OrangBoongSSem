@@ -492,16 +492,18 @@ async function aiSearchMeds() {
   if(result){result.style.display='block';result.innerHTML='<span style="color:var(--ac)">검색 중...</span>';}
   try {
     const answer=await callAI('perp',
-      '한국 의료 기준으로 답변. 약품명은 성분명(영문)으로.',
-      `"${name}" 질환의 현재 표준 치료약물 목록을 간결하게 나열해줘. 1차/2차/3차 치료로 분류. 최신 가이드라인 기준.`
+      '한국 의료 기준으로 답변. 약품명은 반드시 영문 성분명(generic name)만 사용. 시술/치료법은 별도 구분. 출처 표기.',
+      `"${name}" 질환의 현재 한국 표준 치료약물을 나열해줘.\n\n형식:\n## 약물 치료\n### 1차 치료\n- 성분명 (용량, 빈도)\n### 2차 치료\n- ...\n\n## 비약물 치료/시술\n- ...\n\n최신 한국 가이드라인 기준. 각 약물은 영문 성분명(generic name)만 사용.`
     );
     if(result){
       result.innerHTML=DOMPurify.sanitize(marked.parse(answer||'결과 없음'));
-      // 약물명 추출하여 클릭 가능 칩으로 변환
-      const medNames=answer.match(/[A-Z][a-z]+(?:\/[A-Z][a-z]+)*/g);
+      // 약물명 추출: 영문 성분명 (대문자 시작, 소문자/하이픈 포함, 4자 이상)
+      const medNames=(answer||'').match(/\b[A-Z][a-z]{2,}(?:[-\/][A-Za-z]+)*(?:\s[A-Z][a-z]+)?\b/g);
       if(medNames?.length){
-        const unique=[...new Set(medNames)].filter(m=>m.length>3).slice(0,15);
-        result.innerHTML+=`<div style="margin-top:6px;border-top:1px solid var(--bd);padding-top:6px"><div style="font-size:.6rem;color:var(--mu);margin-bottom:4px">클릭하여 추가:</div><div style="display:flex;flex-wrap:wrap;gap:3px">${unique.map(m=>`<span class="log-chip" style="padding:2px 8px;font-size:.72rem;cursor:pointer" onclick="addDxMedFromSuggest('${esc(m)}')">${esc(m)}</span>`).join('')}</div></div>`;
+        // 일반 영어 단어 제외
+        const stopWords=new Set(['The','This','That','These','Those','With','From','Into','About','After','Before','During','Between','Through','However','Although','Because','Therefore','Also','Very','Most','Some','Other','Each','Every','Such','Both','Either','Neither','While','Since','Until','Unless','Where','When','Which','What','Korean','Korea','Guidelines','Treatment','Therapy','Line','First','Second','Third','Step','Oral','Intranasal','Daily','Chronic','Acute','Mild','Moderate','Severe','Standard','Recommended','Alternative','Combination','Monotherapy','Maintenance','Initial','Response','Refractory','Persistent','Intermittent','Available']);
+        const unique=[...new Set(medNames)].filter(m=>m.length>3&&!stopWords.has(m)).slice(0,20);
+        if(unique.length) result.innerHTML+=`<div style="margin-top:6px;border-top:1px solid var(--bd);padding-top:6px"><div style="font-size:.6rem;color:var(--mu);margin-bottom:4px">클릭하여 추가:</div><div style="display:flex;flex-wrap:wrap;gap:3px">${unique.map(m=>`<span class="log-chip" style="padding:2px 8px;font-size:.72rem;cursor:pointer" onclick="addDxMedFromSuggest('${esc(m)}')">${esc(m)}</span>`).join('')}</div></div>`;
       }
     }
   } catch(e) {
@@ -630,6 +632,13 @@ let _dxTrackList=[]; // [{med, until}] — until: 'change'|'YYYY-MM-DD'
 function _getTrackItem(med){return _dxTrackList.find(t=>t.med===med);}
 function _isTracked(med){return !!_getTrackItem(med);}
 
+function _toggleDxPrn(idx){
+  const m=_dxMedsList[idx];if(!m)return;
+  if(m.includes('(PRN)')){_dxMedsList[idx]=m.replace(/\s*\(PRN\)/,'');}
+  else{_dxMedsList[idx]=m+' (PRN)';}
+  renderDxMedChips();
+}
+
 function renderDxMedChips() {
   const el=document.getElementById('dx-med-chips');
   if(!el) return;
@@ -639,7 +648,8 @@ function renderDxMedChips() {
     const tracked=!!ti;
     const untilLabel=ti?(ti.until==='change'?'변경시까지':ti.until):'';
     return `<span class="file-chip" style="${isPrn?'border:1.5px dashed #f59e0b;background:#fff7ed':''}">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span>
-      <button onclick="_toggleTrack(${i})" style="font-size:.55rem;padding:1px 4px;border:1px solid ${tracked?'#10b981':'var(--bd)'};border-radius:3px;background:${tracked?'#f0fdf4':'none'};color:${tracked?'#10b981':'var(--mu)'};cursor:pointer;margin-left:4px;font-family:var(--font)" title="순응도 추적">${tracked?'📊'+untilLabel:'추적'}</button></span>`;
+      <button onclick="_toggleDxPrn(${i})" style="font-size:.55rem;padding:1px 4px;border:1px solid ${isPrn?'#f59e0b':'var(--bd)'};border-radius:3px;background:${isPrn?'#fef3c7':'none'};color:${isPrn?'#92400e':'var(--mu)'};cursor:pointer;margin-left:2px;font-family:var(--font)" title="PRN 토글">${isPrn?'PRN':'매일'}</button>
+      <button onclick="_toggleTrack(${i})" style="font-size:.55rem;padding:1px 4px;border:1px solid ${tracked?'#10b981':'var(--bd)'};border-radius:3px;background:${tracked?'#f0fdf4':'none'};color:${tracked?'#10b981':'var(--mu)'};cursor:pointer;margin-left:2px;font-family:var(--font)" title="순응도 추적">${tracked?'📊'+untilLabel:'추적'}</button></span>`;
   }).join('');
 }
 
