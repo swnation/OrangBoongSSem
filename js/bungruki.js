@@ -243,10 +243,12 @@ function buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDay
       if (oData.exercise||bData.exercise) ic.push('🏃');
       if (oData.treatment||bData.treatment) ic.push('🏥');
       if (oData.memo||bData.memo) ic.push('📝');
+      // 복용 순응도 체크 여부
+      if (bData.mc && Object.values(bData.mc).some(function(v){return v;})) ic.push('🏥');
       // 누구 기록인지 표시
       var whoMark='';
       var hasO=BRK_SUPPL_ORANGI.some(function(k){return oData[k];})||oData.exercise||oData.treatment||oData.memo;
-      var hasB=BRK_SUPPL_BUNG.some(function(k){return bData[k];})||bData.exercise||bData.treatment||bData.memo;
+      var hasB=BRK_SUPPL_BUNG.some(function(k){return bData[k];})||bData.exercise||bData.treatment||bData.memo||bData.mc;
       if(hasO&&hasB)whoMark='<span style="font-size:.35rem">🧡🩵</span>';
       else if(hasO)whoMark='<span style="font-size:.35rem">🧡</span>';
       else if(hasB)whoMark='<span style="font-size:.35rem">🩵</span>';
@@ -522,7 +524,13 @@ function brkOpenCycleForm() {
 function brkTogglePeriodDay(ds) {
   var el = document.getElementById('brk-cyc-start');
   if (el && document.getElementById('brk-cycle-form').style.display !== 'none') {
+    // 생리 기록 폼이 열려있으면 시작일 설정
     el.value = ds;
+  } else {
+    // 폼이 닫혀있으면 해당 날짜의 데일리체크로 이동
+    _brkCheckDate = ds;
+    _brkDashTab = 'daily';
+    renderView('meds');
   }
 }
 
@@ -948,10 +956,50 @@ function _brkRenderMedCompliance(m, selDate) {
     + '</div>'
     + selectorHtml
     + compHtml
-    + (weekCompHtml ? '<div style="margin-top:8px;padding:8px;background:var(--sf);border-radius:6px;border:1px solid var(--bd)">'
-      + '<div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">📊 복용 순응도 (7일)</div>'
-      + weekCompHtml + '</div>' : '')
+    + (weekCompHtml || anyTracked ? '<div style="margin-top:8px;padding:8px;background:var(--sf);border-radius:6px;border:1px solid var(--bd)">'
+      + '<div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">📊 종합 순응도 (7일)</div>'
+      + weekCompHtml
+      + _brkWeekSupplExercise(m)
+      + '</div>' : '')
     + '</div>';
+}
+
+function _brkWeekSupplExercise(m) {
+  var today2 = kstToday();
+  var html = '';
+  // 붕쌤 영양제 순응도
+  var supplKeys = BRK_SUPPL_BUNG;
+  var customs = _getBrkCustomSuppl('bung');
+  var hidden = _getBrkHiddenSuppl('bung');
+  var hiddenSet = new Set(hidden);
+  var allSuppl = supplKeys.concat(customs.map(function(c){return c.key;})).filter(function(k){return !hiddenSet.has(k);});
+  if (allSuppl.length) {
+    var supplCount = 0;
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(new Date(today2+'T00:00:00').getTime() - i*86400000);
+      var ds = _localDateStr(d);
+      var dd = m.dailyChecks[ds]?.bung || {};
+      if (allSuppl.some(function(k){return dd[k];})) supplCount++;
+    }
+    var supplPct = Math.round(supplCount/7*100);
+    html += '<div style="display:flex;align-items:center;gap:6px;font-size:.72rem">'
+      + '<span style="width:80px">💊 영양제</span>'
+      + '<span style="flex:1;height:5px;background:var(--bd);border-radius:3px;overflow:hidden"><span style="display:block;height:100%;width:'+supplPct+'%;background:'+(supplPct>=80?'#16a34a':supplPct>=50?'#f59e0b':'#ef4444')+';border-radius:3px"></span></span>'
+      + '<span style="font-weight:600;color:'+(supplPct>=80?'#16a34a':supplPct>=50?'#f59e0b':'#ef4444')+'">'+supplCount+'/7</span></div>';
+  }
+  // 운동 순응도
+  var exCount = 0;
+  for (var j = 0; j < 7; j++) {
+    var d2 = new Date(new Date(today2+'T00:00:00').getTime() - j*86400000);
+    var ds2 = _localDateStr(d2);
+    if (m.dailyChecks[ds2]?.bung?.exercise) exCount++;
+  }
+  var exPct = Math.round(exCount/7*100);
+  html += '<div style="display:flex;align-items:center;gap:6px;font-size:.72rem">'
+    + '<span style="width:80px">🏃 운동</span>'
+    + '<span style="flex:1;height:5px;background:var(--bd);border-radius:3px;overflow:hidden"><span style="display:block;height:100%;width:'+exPct+'%;background:'+(exPct>=80?'#16a34a':exPct>=50?'#f59e0b':'#ef4444')+';border-radius:3px"></span></span>'
+    + '<span style="font-weight:600;color:'+(exPct>=80?'#16a34a':exPct>=50?'#f59e0b':'#ef4444')+'">'+exCount+'/7</span></div>';
+  return html;
 }
 
 function _brkRenderExercise(isOrangi, whoData) {
