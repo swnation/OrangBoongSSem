@@ -1337,7 +1337,6 @@ function _renderConceptionCard(m) {
     ${r.factors.map(f=>{
       const ic=f.impact<0?'🔻':'✅';
       const col=f.impact<0?'#dc2626':'#10b981';
-      const soloTxt=f.solo!==undefined&&f.impact!==0?` → 단독 시 <b>${f.solo}%</b>`:'';
       return `<div style="display:flex;align-items:start;gap:6px;padding:4px 0;border-bottom:1px dotted var(--bd);font-size:.68rem">
         <span>${ic}</span>
         <div style="flex:1"><span style="font-weight:600;color:${col}">${f.name}</span>${f.impact?` (${f.impact}%)`:''}<br>
