@@ -139,10 +139,12 @@ function renderMedsView() {
   if (S.currentDomain==='bungruki') {
     return renderBungrukiDashboard() + renderMedsViewLegacy();
   }
-  // 건강관리 도메인: 검사 아카이브 + 예방접종 + 질환 관리
+  // 건강관리 도메인: 검사 아카이브 + 데일리체크 + 예방접종 + 질환 관리
   const checkupHtml = (typeof renderCheckupArchive === 'function' && S.currentDomain.endsWith('-health'))
     ? renderCheckupArchive() : '';
-  return checkupHtml + renderVaccinationSection() + renderMedsViewLegacy();
+  const dailyHtml = (typeof renderHealthDailyCheck === 'function' && S.currentDomain.endsWith('-health'))
+    ? renderHealthDailyCheck() : '';
+  return checkupHtml + dailyHtml + renderVaccinationSection() + renderMedsViewLegacy();
 }
 
 function renderMedsViewLegacy() {

@@ -3452,6 +3452,137 @@ function renderBrkDailySyncCard() {
   </div>`;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 건강관리 도메인 — 영양제/운동 데일리체크 (붕룩이 연동)
+// ═══════════════════════════════════════════════════════════════
+var _healthDailyDate = null; // null=오늘
+
+function renderHealthDailyCheck() {
+  if(!S.currentDomain?.endsWith('-health')) return '';
+  const brkDs = S.domainState['bungruki'];
+  if(!brkDs?.master) return '';
+  const m = brkDs.master;
+  if(!m.dailyChecks) m.dailyChecks = {};
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const today = kstToday();
+  const date = _healthDailyDate || today;
+  if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if(!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
+  const dayData = m.dailyChecks[date][who];
+
+  const supplItems = who === 'orangi'
+    ? [{key:'folicAcid',label:'엽산',icon:'💊'},{key:'iron',label:'철분',icon:'🩸'},{key:'vitaminD',label:'비타민D',icon:'☀️'},{key:'multivitamin',label:'멀티비타민',icon:'💊'},{key:'magnesium',label:'마그네슘',icon:'🧲'}]
+    : [{key:'arginine',label:'아르기닌',icon:'💪'},{key:'coq10',label:'CoQ10',icon:'⚡'},{key:'silymarin',label:'실리마린',icon:'🌿'},{key:'multivitamin',label:'멀티비타민',icon:'💊'}];
+  // 커스텀 영양제 추가
+  if(m.customSuppl?.[who]) m.customSuppl[who].forEach(c => { if(!supplItems.find(x=>x.key===c.key)) supplItems.push({key:c.key,label:c.label,icon:'💊'}); });
+  const hidden = m.hiddenSuppl?.[who] || [];
+  const visibleItems = supplItems.filter(it => hidden.indexOf(it.key) < 0);
+
+  const supplHtml = visibleItems.map(it => {
+    const checked = dayData[it.key] ? true : false;
+    return `<div onclick="_toggleHealthSuppl('${esc(it.key)}')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:${checked?'#f0fdf4':'var(--sf2)'};border:1.5px solid ${checked?'#86efac':'var(--bd)'};border-radius:8px;cursor:pointer;transition:all .15s">
+      <span style="font-size:1rem">${checked?'✅':it.icon}</span>
+      <span style="font-size:.78rem;font-weight:${checked?'600':'400'};color:${checked?'#16a34a':'var(--tx)'}">${esc(it.label)}</span>
+    </div>`;
+  }).join('');
+
+  const exerciseLabel = {cardio:'유산소',strength:'근력',stretch:'스트레칭'};
+  const exOpts = [{v:null,l:'안함',c:''},{v:'cardio',l:'유산소',c:'🏃'},{v:'strength',l:'근력',c:'🏋️'},{v:'stretch',l:'스트레칭',c:'🧘'}];
+  const exercise = dayData.exercise || null;
+  const exHtml = exOpts.map(o => {
+    const sel = exercise === o.v;
+    return `<button onclick="_setHealthExercise(${o.v?'\''+o.v+'\'':'null'})" style="flex:1;padding:6px 4px;font-size:.72rem;border:1.5px solid ${sel?'var(--ac)':'var(--bd)'};border-radius:6px;background:${sel?'var(--ac)':'var(--sf2)'};color:${sel?'#fff':'var(--ink)'};cursor:pointer;font-family:var(--font)">${o.c?o.c+' ':''}${o.l}</button>`;
+  }).join('');
+
+  // 붕쌤 전용: 음주
+  let alcoholHtml = '';
+  if(who === 'bung') {
+    const alcohol = dayData.alcohol || false;
+    alcoholHtml = `<div style="margin-top:6px"><span style="font-size:.68rem;font-weight:600;color:var(--mu)">🍺 음주</span>
+      <div onclick="_toggleHealthAlcohol()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:${alcohol?'#fef2f2':'#f0fdf4'};border:1.5px solid ${alcohol?'#fca5a5':'#86efac'};border-radius:8px;cursor:pointer;margin-left:8px">
+        <span style="font-size:.9rem">${alcohol?'🍺':'🚫'}</span>
+        <span style="font-size:.72rem;font-weight:600;color:${alcohol?'#dc2626':'#16a34a'}">${alcohol?'음주':'금주'}</span>
+      </div>
+    </div>`;
+  }
+
+  // 주간 순응도
+  const weekDays = [];
+  for(let i = 6; i >= 0; i--) {
+    const d = new Date(new Date(today+'T00:00:00').getTime() - i*86400000);
+    weekDays.push(_localDateStr(d));
+  }
+  const takenCount = visibleItems.filter(it => dayData[it.key]).length;
+  const totalCount = visibleItems.length;
+  const pct = totalCount ? Math.round(takenCount/totalCount*100) : 0;
+
+  // 날짜 네비게이션
+  const isToday = date === today;
+  const dateNav = `<div style="display:flex;align-items:center;gap:6px;justify-content:center;margin-bottom:8px">
+    <button onclick="_healthDailyDate='${_prevDay(date)}';renderView('meds')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--ink);font-family:var(--font)">◀</button>
+    <span style="font-size:.78rem;font-weight:600">${date}${isToday?' (오늘)':''}</span>
+    <button onclick="_healthDailyDate=${isToday?'null':'\\''+_nextDay(date)+'\\''};renderView('meds')" ${isToday?'disabled':''} style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--ink);font-family:var(--font)">▶</button>
+    ${!isToday?`<button onclick="_healthDailyDate=null;renderView('meds')" style="background:none;border:1px solid var(--ac);border-radius:4px;padding:2px 8px;font-size:.62rem;cursor:pointer;color:var(--ac);font-family:var(--font)">오늘</button>`:''}
+  </div>`;
+
+  return `<div style="padding:12px;background:var(--sf2);border:1.5px solid #a855f730;border-radius:10px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:1.1rem">🍼</span>
+      <span style="font-size:.88rem;font-weight:700;color:#a855f7">임신준비 데일리체크</span>
+      <span style="font-size:.62rem;color:var(--mu);margin-left:auto">${takenCount}/${totalCount} (${pct}%)</span>
+    </div>
+    ${dateNav}
+    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">💊 영양제</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px;margin-bottom:8px">${supplHtml}</div>
+    <div style="margin-top:4px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:${pct}%;background:${pct>=80?'#16a34a':pct>=50?'#f59e0b':'#ef4444'};border-radius:2px"></div></div>
+    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">🏃 운동</div>
+    <div style="display:flex;gap:4px;margin-bottom:4px">${exHtml}</div>
+    ${alcoholHtml}
+  </div>`;
+}
+
+function _prevDay(d){const dt=new Date(d+'T00:00:00');dt.setDate(dt.getDate()-1);return _localDateStr(dt);}
+function _nextDay(d){const dt=new Date(d+'T00:00:00');dt.setDate(dt.getDate()+1);return _localDateStr(dt);}
+
+async function _toggleHealthSuppl(key) {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const date = _healthDailyDate || kstToday();
+  const m = brkDs.master;
+  if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if(!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
+  m.dailyChecks[date][who][key] = !m.dailyChecks[date][who][key];
+  await saveBrkMaster();
+  syncBrkToHealth(date, who);
+  renderView('meds');
+}
+
+async function _setHealthExercise(val) {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const date = _healthDailyDate || kstToday();
+  const m = brkDs.master;
+  if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if(!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
+  m.dailyChecks[date][who].exercise = val;
+  await saveBrkMaster();
+  syncBrkToHealth(date, who);
+  renderView('meds');
+}
+
+async function _toggleHealthAlcohol() {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
+  const who = 'bung';
+  const date = _healthDailyDate || kstToday();
+  const m = brkDs.master;
+  if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if(!m.dailyChecks[date].bung) m.dailyChecks[date].bung = {};
+  m.dailyChecks[date].bung.alcohol = !m.dailyChecks[date].bung.alcohol;
+  await saveBrkMaster();
+  syncBrkToHealth(date, who);
+  renderView('meds');
+}
+
 // BUNGRUKI TIMELINE (임신 준비 타임라인)
 // ═══════════════════════════════════════════════════════════════
 function renderBungrukiTimeline() {

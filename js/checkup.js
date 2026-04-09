@@ -212,13 +212,23 @@ const _CHECKUP_STD_TESTS = {
   CA199:{ name:{ko:'CA19-9',en:'CA19-9'}, unit:'U/mL', category:'tumor', ref:{low:0,high:37},
     aliases:['ca19-9','ca199','ca 19-9','ca19 9'], related:['CA125','CEA'], pregnancyRelevant:false },
 
-  // ── 감염 ──
-  HBSAG:{ name:{ko:'B형간염표면항원',en:'HBsAg'}, unit:'qualitative', category:'infection', ref:{low:0,high:0},
-    aliases:['hbsag','b형간염표면항원','hepatitis b surface antigen','b형간염 표면항원','hbs ag'], related:['HBSAB'], pregnancyRelevant:true },
-  HBSAB:{ name:{ko:'B형간염표면항체',en:'HBsAb'}, unit:'mIU/mL', category:'infection', ref:{low:10,high:999},
-    aliases:['hbsab','b형간염표면항체','hepatitis b surface antibody','b형간염 표면항체','hbs ab','anti-hbs'], related:['HBSAG'], pregnancyRelevant:true },
-  HCVAB:{ name:{ko:'C형간염항체',en:'HCV Ab'}, unit:'qualitative', category:'infection', ref:{low:0,high:0},
-    aliases:['hcv ab','hcvab','c형간염항체','hepatitis c antibody','c형간염 항체','anti-hcv'], related:[], pregnancyRelevant:true },
+  // ── 감염 / 면역 ──
+  HBSAG:{ name:{ko:'B형간염표면항원',en:'HBsAg'}, unit:'Index', category:'infection', ref:{low:0,high:1},
+    aliases:['hbsag','b형간염표면항원','hepatitis b surface antigen','b형간염 표면항원','hbs ag','hbs-ag'], related:['HBSAB'], pregnancyRelevant:true },
+  HBSAB:{ name:{ko:'B형간염표면항체',en:'HBs Ab'}, unit:'IU/L', category:'infection', ref:{low:10,high:999},
+    aliases:['hbsab','b형간염표면항체','hepatitis b surface antibody','b형간염 표면항체','hbs ab','anti-hbs','hbs-ab','hbs_ab'], related:['HBSAG'], pregnancyRelevant:true, higherIsBetter:true },
+  HAVIGG:{ name:{ko:'A형간염항체(IgG)',en:'HAV IgG'}, unit:'Index', category:'infection', ref:{low:1,high:999},
+    aliases:['hav igg','a형간염항체','hepatitis a igg','a형간염 igg','hav-igg','hav_igg','a형간염igg'], related:[], pregnancyRelevant:true, higherIsBetter:true },
+  HAVIGM:{ name:{ko:'A형간염항체(IgM)',en:'HAV IgM'}, unit:'Index', category:'infection', ref:{low:0,high:1},
+    aliases:['hav igm','a형간염igm','hepatitis a igm','hav-igm','hav_igm'], related:['HAVIGG'], pregnancyRelevant:true },
+  RUBELLAIGG:{ name:{ko:'풍진항체(IgG)',en:'Rubella IgG'}, unit:'IU/mL', category:'infection', ref:{low:10,high:999},
+    aliases:['rubella igg','풍진igg','풍진 igg','rubella-igg','rubella_igg','풍진항체'], related:['RUBELLAIGM'], pregnancyRelevant:true, higherIsBetter:true },
+  RUBELLAIGM:{ name:{ko:'풍진항체(IgM)',en:'Rubella IgM'}, unit:'Index', category:'infection', ref:{low:0,high:0.8},
+    aliases:['rubella igm','풍진igm','풍진 igm','rubella-igm','rubella_igm'], related:['RUBELLAIGG'], pregnancyRelevant:true },
+  HCVAB:{ name:{ko:'C형간염항체',en:'HCV Ab'}, unit:'Index', category:'infection', ref:{low:0,high:1},
+    aliases:['hcv ab','hcvab','c형간염항체','hepatitis c antibody','c형간염 항체','anti-hcv','hcv-ab','hcv_ab'], related:[], pregnancyRelevant:true },
+  HIVAGAB:{ name:{ko:'HIV항원항체',en:'HIV Ag/Ab'}, unit:'Index', category:'infection', ref:{low:0,high:1},
+    aliases:['hiv ag/ab','hiv','hivagab','hiv ag ab','hiv_ag_ab','hiv항원항체','hiv 항원항체'], related:[], pregnancyRelevant:true },
   RPR:  { name:{ko:'매독',en:'RPR'}, unit:'qualitative', category:'infection', ref:{low:0,high:0},
     aliases:['rpr','vdrl','매독','syphilis','rpr/vdrl','매독검사'], related:[], pregnancyRelevant:true },
 
@@ -289,7 +299,8 @@ function _isNonLabValue(rawName) {
 
 function _matchStdTest(rawName) {
   if (!rawName) return null;
-  const lower = rawName.toLowerCase().trim();
+  // 정규화: 언더스코어→공백, 연속 공백 제거
+  const lower = rawName.toLowerCase().trim().replace(/_/g, ' ').replace(/\s+/g, ' ');
   // 비-검사 값은 매칭 시도하지 않음
   if (_isNonLabValue(lower)) return null;
   // 너무 긴 이름은 검사 항목이 아닐 가능성 높음 (설명문/소견 등)
@@ -300,9 +311,9 @@ function _matchStdTest(rawName) {
   for (const code of Object.keys(allTests)) {
     if (lower === code.toLowerCase()) return code;
   }
-  // 2) 별칭 정확 매칭
+  // 2) 별칭 정확 매칭 (별칭도 언더스코어 정규화)
   for (const [code, def] of Object.entries(allTests)) {
-    if (def.aliases?.some(a => a.toLowerCase() === lower)) return code;
+    if (def.aliases?.some(a => a.toLowerCase().replace(/_/g, ' ') === lower)) return code;
   }
   // 3) 별칭 포함 매칭 (안전한 부분 매칭)
   //    - 별칭 최소 길이 3자 이상만 (1~2자 "k", "p" 등 오매칭 방지)
@@ -359,7 +370,8 @@ function _parseRefRange(refStr) {
 }
 
 // 상태 판정: value가 ref 범위 안인지
-function _judgeStatus(value, ref, who) {
+// stdCode 전달 시 higherIsBetter 속성 참조 (항체 검사 등)
+function _judgeStatus(value, ref, who, stdCode) {
   if (value === null || value === undefined || ref === null) return 'unknown';
   const r = (ref.male && ref.female)
     ? (who === '붕쌤' ? ref.male : ref.female)
@@ -367,10 +379,40 @@ function _judgeStatus(value, ref, who) {
   if (!r || r.low === undefined) return 'unknown';
   const v = parseFloat(value);
   if (isNaN(v)) return 'unknown';
+  // higherIsBetter 검사 (항체/면역): 높으면 positive(양성=좋음), 낮으면 low(음성=미면역)
+  const def = stdCode ? _getTestDef(stdCode) : null;
+  if (def?.higherIsBetter) {
+    if (v >= r.low) return 'positive'; // 면역 형성
+    return 'low'; // 미면역
+  }
   if (v < r.low) return 'low';
   if (r.high < 999 && v > r.high) return 'high';
   return 'normal';
 }
+
+// 상태 표시 헬퍼: positive(면역)은 정상과 동일 계열, 별도 아이콘
+function _statusColor(s) {
+  if (s === 'high') return '#dc2626';
+  if (s === 'low') return '#2563eb';
+  if (s === 'normal' || s === 'positive') return '#10b981';
+  return 'var(--mu)';
+}
+function _statusIcon(s) {
+  if (s === 'high') return '▲';
+  if (s === 'low') return '▼';
+  if (s === 'normal') return '●';
+  if (s === 'positive') return '🛡️';
+  return '○';
+}
+function _statusIconSmall(s) {
+  if (s === 'high') return '↑';
+  if (s === 'low') return '↓';
+  if (s === 'normal') return '✓';
+  if (s === 'positive') return '🛡';
+  return '?';
+}
+// 이상 여부: positive(면역)은 이상 아님
+function _isAbnormal(s) { return s === 'high' || s === 'low'; }
 
 // 성별 부적합 검사 필터: 해당 성별에 맞지 않는 항목 제거
 const _MALE_ONLY_TESTS = new Set(['SEM_VOL','SEM_CNT','SEM_MOT','SEM_MOR','PSA','TESTO']);
@@ -427,7 +469,7 @@ function normalizeCheckupResults(aiValues, aiRefs, who) {
     if (stdCode && def && !_isTestApplicable(stdCode, def.category, who)) continue;
 
     // 상태 판정
-    const status = isNum ? _judgeStatus(converted.value, finalRef || (def ? def.ref : null), who) : 'unknown';
+    const status = isNum ? _judgeStatus(converted.value, finalRef || (def ? def.ref : null), who, stdCode) : 'unknown';
 
     // 이상치 플래그 (참고범위 10배 초과)
     const suspicious = isNum && _isSuspiciousValue(converted.value, finalRef || stdRef);
@@ -887,13 +929,12 @@ function _showCheckupAnalysisResults(allResults) {
     const catHtml = Object.entries(grouped).map(([cat, items]) => {
       const catDef = _CHECKUP_CATEGORIES[cat] || _CHECKUP_CATEGORIES.other;
       const itemsHtml = items.map(n => {
-        const statusColor = n.status === 'high' ? '#dc2626' : n.status === 'low' ? '#2563eb' : n.status === 'normal' ? '#10b981' : 'var(--mu)';
-        const statusIcon = n.status === 'high' ? '↑' : n.status === 'low' ? '↓' : n.status === 'normal' ? '✓' : '?';
+        const sc = _statusColor(n.status), si = _statusIconSmall(n.status);
         const matchBadge = n.stdCode
           ? `<span style="font-size:.45rem;color:#8b5cf6" title="표준코드: ${n.stdCode}">⚙</span>`
           : `<span style="font-size:.45rem;color:#f59e0b" title="미매칭">⚠</span>`;
-        return `<span class="log-tag" style="background:${statusColor}15;color:${statusColor};font-size:.6rem;border:1px solid ${statusColor}30">
-          ${matchBadge} ${esc(n.displayName)} ${esc(String(n.value))}${n.unit ? ' ' + esc(n.unit) : ''} ${statusIcon}
+        return `<span class="log-tag" style="background:${sc}15;color:${sc};font-size:.6rem;border:1px solid ${sc}30">
+          ${matchBadge} ${esc(n.displayName)} ${esc(String(n.value))}${n.unit ? ' ' + esc(n.unit) : ''} ${si}
         </span>`;
       }).join('');
       return `<div style="margin-bottom:4px"><span style="font-size:.6rem;font-weight:600;color:var(--mu)">${catDef.icon} ${catDef.name}</span><div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:2px">${itemsHtml}</div></div>`;
@@ -915,7 +956,7 @@ function _showCheckupAnalysisResults(allResults) {
   }).join('');
 
   const legend = `<div style="font-size:.58rem;color:var(--mu);padding:4px 6px;background:var(--sf2);border-radius:4px;margin-bottom:6px">
-    <span style="color:#10b981">✓정상</span> <span style="color:#dc2626">↑높음</span> <span style="color:#2563eb">↓낮음</span> · <span style="color:#8b5cf6">⚙표준매칭</span> <span style="color:#f59e0b">⚠미매칭</span></div>`;
+    <span style="color:#10b981">✓정상</span> <span style="color:#10b981">🛡면역</span> <span style="color:#dc2626">↑높음</span> <span style="color:#2563eb">↓낮음</span> · <span style="color:#8b5cf6">⚙표준매칭</span> <span style="color:#f59e0b">⚠미매칭</span></div>`;
 
   // AI 검증 가능한 AI 판별
   const verifyAiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
@@ -1052,8 +1093,8 @@ function _renderCheckupTimeline(checkups) {
 
   return checkups.map(c => {
     const results = c.results || [];
-    const abnormal = results.filter(r => r.status === 'high' || r.status === 'low');
-    const normal = results.filter(r => r.status === 'normal');
+    const abnormal = results.filter(r => _isAbnormal(r.status));
+    const normal = results.filter(r => r.status === 'normal' || r.status === 'positive');
 
     // 카테고리별 요약
     const cats = {};
@@ -1069,7 +1110,7 @@ function _renderCheckupTimeline(checkups) {
     // 이상 항목 하이라이트 (suspicious 제외)
     const realAbnormal = abnormal.filter(r => !r.suspicious);
     const abnormalTags = realAbnormal.slice(0, 5).map(r => {
-      const color = r.status === 'high' ? '#dc2626' : '#2563eb';
+      const color = _statusColor(r.status);
       const arrow = r.status === 'high' ? '↑' : '↓';
       return `<span style="font-size:.58rem;padding:1px 5px;border-radius:3px;background:${color}15;color:${color};font-weight:600">${esc(r.displayName)} ${esc(String(r.value))} ${arrow}</span>`;
     }).join('');
@@ -1110,8 +1151,8 @@ function _renderCheckupDetail(checkup) {
   }).map(([cat, items]) => {
     const catDef = _CHECKUP_CATEGORIES[cat] || _CHECKUP_CATEGORIES.other;
     const rows = items.map(r => {
-      const statusColor = r.status === 'high' ? '#dc2626' : r.status === 'low' ? '#2563eb' : r.status === 'normal' ? '#10b981' : 'var(--mu)';
-      const statusIcon = r.status === 'high' ? '▲' : r.status === 'low' ? '▼' : r.status === 'normal' ? '●' : '○';
+      const statusColor = _statusColor(r.status);
+      const statusIcon = _statusIcon(r.status);
       const refStr = r.ref ? `${r.ref.low}-${r.ref.high}` : (r.rawRef || '-');
       // 추세 표시
       const who = checkup.who;
@@ -1170,7 +1211,7 @@ function _renderCheckupTrends(who, checkups) {
     const dir = _trendDirection(points);
     const dirIcon = dir === 'up' ? '📈' : dir === 'down' ? '📉' : '➡️';
     const last = points[points.length - 1];
-    const lastColor = last.status === 'high' ? '#dc2626' : last.status === 'low' ? '#2563eb' : '#10b981';
+    const lastColor = _statusColor(last.status);
 
     // 미니 바 차트 (최근 6개)
     const recent = points.slice(-6);
@@ -1182,7 +1223,7 @@ function _renderCheckupTrends(who, checkups) {
 
     const bars = recent.map(p => {
       const h = Math.max(6, Math.round(((p.value - minV) / range) * 36));
-      const pColor = p.status === 'high' ? '#dc2626' : p.status === 'low' ? '#2563eb' : '#10b981';
+      const pColor = _statusColor(p.status);
       return `<div style="flex:1;text-align:center;min-width:20px">
         <div style="font-size:.45rem;color:${pColor};font-weight:600">${p.value}</div>
         <div style="height:${h}px;background:${pColor};border-radius:2px 2px 0 0;margin:0 2px"></div>
@@ -1232,9 +1273,9 @@ function _renderCheckupCategories(who, checkups) {
     .sort((a, b) => (_CHECKUP_CATEGORIES[a[0]]?.order || 99) - (_CHECKUP_CATEGORIES[b[0]]?.order || 99))
     .map(([cat, items]) => {
       const catDef = _CHECKUP_CATEGORIES[cat] || _CHECKUP_CATEGORIES.other;
-      const abnCount = items.filter(r => r.status === 'high' || r.status === 'low').length;
+      const abnCount = items.filter(r => _isAbnormal(r.status)).length;
       const rows = items.map(r => {
-        const statusColor = r.status === 'high' ? '#dc2626' : r.status === 'low' ? '#2563eb' : r.status === 'normal' ? '#10b981' : 'var(--mu)';
+        const statusColor = _statusColor(r.status);
         const trend = getCheckupTrend(who, r.code);
         const dir = _trendDirection(trend);
         const trendIcon = trend.length >= 2 ? (dir === 'up' ? '📈' : dir === 'down' ? '📉' : '➡️') : '';
@@ -1274,7 +1315,7 @@ function _getRecentCheckupContext() {
   const recent = checkups.slice(0, 3);
   const lines = [];
   recent.forEach(c => {
-    const abnormal = (c.results || []).filter(r => r.status === 'high' || r.status === 'low');
+    const abnormal = (c.results || []).filter(r => _isAbnormal(r.status));
     if (!abnormal.length) return;
     const items = abnormal.map(r => {
       const arrow = r.status === 'high' ? '↑' : '↓';
@@ -1414,7 +1455,7 @@ async function _saveManualCheckup() {
     const numVal = parseFloat(val);
     const isNum = !isNaN(numVal);
     const ref = def.ref.male ? (who === '붕쌤' ? def.ref.male : def.ref.female) : def.ref;
-    const status = isNum ? _judgeStatus(numVal, def.ref, who) : 'unknown';
+    const status = isNum ? _judgeStatus(numVal, def.ref, who, code) : 'unknown';
     results.push({
       stdCode: code, rawName: def.name.ko, displayName: def.name.ko,
       value: isNum ? numVal : val, unit: def.unit,
