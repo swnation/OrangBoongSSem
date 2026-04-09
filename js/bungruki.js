@@ -106,6 +106,35 @@ const _PREGNANCY_SAFETY = {
   'Magnesium': { fda:'A', pllr:'안전, 전자간증 예방/치료', kfda:'안전', note:'편두통 예방에도 사용' },
 };
 
+// 남성 복용 시 임신·정자에 미치는 영향 DB
+const _MALE_FERTILITY_IMPACT = {
+  'Lithium': {impact:'주의',note:'정자 운동성 감소 보고. 임신 시도 전 감량/중단 검토',ref:'Koren 2020'},
+  'Valproate': {impact:'위험',note:'정자 운동성·형태 이상, DNA 분절 증가. 가급적 중단',ref:'Engeland 2019'},
+  'Carbamazepine': {impact:'주의',note:'정자 농도·운동성 감소 가능',ref:'Isojärvi 2004'},
+  'Topiramate': {impact:'주의',note:'정자 형태 이상 보고',ref:'Hamed 2015'},
+  'Lamotrigine': {impact:'안전',note:'정자에 유의미한 영향 미보고',ref:''},
+  'Escitalopram': {impact:'주의',note:'SSRI 계열 — 정자 DNA 분절 증가, 운동성 감소 보고. 3개월 전 감량 검토',ref:'Tanrikut 2010'},
+  'Sertraline': {impact:'주의',note:'SSRI — 정자 DNA 손상 보고, 수정 능력에 미미한 영향',ref:'Tanrikut 2010'},
+  'Fluoxetine': {impact:'주의',note:'SSRI — 정자 DNA 분절·운동성 감소',ref:'Safarinejad 2008'},
+  'Paroxetine': {impact:'주의',note:'SSRI — 정자 DNA 손상이 가장 많이 보고된 SSRI',ref:'Tanrikut 2010'},
+  'Venlafaxine': {impact:'경미',note:'SNRI — 일부 정자 영향 보고, SSRI보다 적음',ref:''},
+  'Bupropion': {impact:'안전',note:'정자에 유의미한 영향 미보고',ref:''},
+  'Quetiapine': {impact:'경미',note:'프로락틴 상승 → 성기능 영향 가능, 정자 직접 영향 미보고',ref:''},
+  'Aripiprazole': {impact:'안전',note:'프로락틴 상승 적어 성기능 영향 최소',ref:''},
+  'Concerta': {impact:'안전',note:'Methylphenidate — 정자에 유의미한 영향 미보고',ref:''},
+  'Atomoxetine': {impact:'경미',note:'동물실험에서 정자 생성 감소 보고, 인체 데이터 부족',ref:''},
+  'Metformin': {impact:'안전',note:'남성 사용 시 정자 질 개선 보고도 있음',ref:''},
+  'Finasteride': {impact:'위험',note:'5α-환원효소 억제 → 정자 농도 감소, 정액량 감소. 최소 3개월 전 중단',ref:'Samplaski 2013'},
+  'Dutasteride': {impact:'위험',note:'Finasteride보다 반감기 길어 6개월 전 중단 권장',ref:''},
+  'Testosterone': {impact:'위험',note:'외부 테스토스테론 → FSH/LH 억제 → 무정자증. 임신 시도 시 절대 금기',ref:'ASRM 2020'},
+  'Sulfasalazine': {impact:'위험',note:'정자 농도·운동성 급감. 중단 후 2-3개월 회복',ref:'Hoeltzenbein 2014'},
+  'Colchicine': {impact:'주의',note:'정자 형성 방해 가능, 임신 시도 3개월 전 중단 검토',ref:''},
+  'Methotrexate': {impact:'위험',note:'정자 DNA 독성, 최소 3개월 전 중단 필수',ref:'Weber-Schoendorfer 2014'},
+  'Propranolol': {impact:'안전',note:'정자에 유의미한 영향 미보고',ref:''},
+  'Losartan': {impact:'안전',note:'남성에서는 안전, 여성은 금기',ref:''},
+  'Enalapril': {impact:'안전',note:'남성에서는 안전, 여성은 금기',ref:''},
+};
+
 const _DEFAULT_MILESTONES = [
   { id: 1, who: '오랑이', label: '산부인과 preconception visit', done: false, doneDate: null },
   { id: 2, who: '오랑이', label: '풍진 항체 확인', done: false, doneDate: null },
@@ -2727,7 +2756,7 @@ function _isDrugNotTreatment(med) {
   return true;
 }
 
-function _renderDrugCard(name, info) {
+function _renderDrugCard(name, info, isMale) {
   var safety = _lookupDrugSafety(name);
   var fda = safety?.fda || '?';
   var pllr = safety?.pllr || '';
@@ -2743,6 +2772,23 @@ function _renderDrugCard(name, info) {
     + '</div>';
   var detail = (pllr?'<div style="font-size:.72rem;color:#0369a1;margin-top:4px"><b>PLLR:</b> '+esc(pllr)+'</div>':'')
     + (note?'<div style="font-size:.72rem;color:var(--mu);margin-top:2px">'+esc(note)+'</div>':'');
+
+  // 남성: 정자/가임력 영향 추가
+  var maleHtml = '';
+  if (isMale) {
+    var mi = _MALE_FERTILITY_IMPACT[name];
+    if (mi) {
+      var mic = mi.impact==='위험'?'#dc2626':mi.impact==='주의'?'#ea580c':mi.impact==='경미'?'#f59e0b':'#10b981';
+      maleHtml = '<div style="margin-top:5px;padding:6px 8px;background:'+mic+'08;border:1px solid '+mic+'30;border-radius:6px">'
+        + '<div style="font-size:.65rem;font-weight:600;color:'+mic+'">🧬 남성 가임력: '+mi.impact+'</div>'
+        + '<div style="font-size:.65rem;color:var(--mu);margin-top:2px">'+esc(mi.note)+'</div>'
+        + (mi.ref?'<div style="font-size:.55rem;color:var(--mu2)">📚 '+esc(mi.ref)+'</div>':'')
+        + '</div>';
+    } else {
+      maleHtml = '<div style="margin-top:5px;font-size:.62rem;color:var(--mu2)">🧬 남성 가임력 영향: 데이터 미확보</div>';
+    }
+  }
+
   var srcLabel = source==='내장DB'?'<span style="font-size:.58rem;color:var(--mu2)">✓ 공식</span>'
     :source==='AI검색'?'<span style="font-size:.58rem;color:#f59e0b">🔍 AI검색</span>'
     :'<span style="font-size:.58rem;color:var(--mu2)">데이터 없음</span>';
@@ -2760,7 +2806,7 @@ function _renderDrugCard(name, info) {
     + srcLabel + refreshBtn
     + '<span id="ds-loading-'+esc(name)+'" style="display:none;font-size:.6rem;color:var(--ac)">검색중...</span>'
     + '</div>'
-    + badges + detail
+    + badges + detail + maleHtml
     + '</div>';
 }
 
@@ -2793,7 +2839,7 @@ function renderDrugSafety() {
   });
 
   // 유저별 섹션 렌더링
-  function renderUserSection(userName, userIcon, userColor, meds) {
+  function renderUserSection(userName, userIcon, userColor, meds, isMale) {
     var entries = Object.entries(meds);
     if (!entries.length) return '<div style="font-size:.72rem;color:var(--mu2);padding:8px;text-align:center">등록된 약물이 없습니다.</div>';
     // 위험도 순 정렬: X > D > C > B > A > ?
@@ -2803,11 +2849,11 @@ function renderDrugSafety() {
       var fa = sa?.fda||'?', fb2 = sb?.fda||'?';
       return (order[fa.charAt(0)]||5) - (order[fb2.charAt(0)]||5);
     });
-    return entries.map(function(e){ return _renderDrugCard(e[0], e[1]); }).join('');
+    return entries.map(function(e){ return _renderDrugCard(e[0], e[1], isMale); }).join('');
   }
 
-  var orangiCards = renderUserSection('오랑이','🧡','#f97316',byUser['오랑이']);
-  var bungCards = renderUserSection('붕쌤','🩵','#06b6d4',byUser['붕쌤']);
+  var orangiCards = renderUserSection('오랑이','🧡','#f97316',byUser['오랑이'], false);
+  var bungCards = renderUserSection('붕쌤','🩵','#06b6d4',byUser['붕쌤'], true);
   var totalCount = Object.keys(byUser['오랑이']).length + Object.keys(byUser['붕쌤']).length;
 
   if (!totalCount) {
@@ -2838,7 +2884,7 @@ function renderDrugSafety() {
     + (totalCount ? '<div style="margin-bottom:12px">'
       + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="font-size:.88rem">🧡</span><span style="font-size:.78rem;font-weight:700;color:#f97316">오랑이</span><span style="font-size:.6rem;color:var(--mu)">'+Object.keys(byUser['오랑이']).length+'개</span></div>'
       + orangiCards
-      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;margin-top:14px"><span style="font-size:.88rem">🩵</span><span style="font-size:.78rem;font-weight:700;color:#06b6d4">붕쌤</span><span style="font-size:.6rem;color:var(--mu)">'+Object.keys(byUser['붕쌤']).length+'개</span></div>'
+      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;margin-top:14px"><span style="font-size:.88rem">🩵</span><span style="font-size:.78rem;font-weight:700;color:#06b6d4">붕쌤</span><span style="font-size:.6rem;color:var(--mu)">'+Object.keys(byUser['붕쌤']).length+'개</span><span style="font-size:.55rem;color:#06b6d4;background:#ecfeff;padding:1px 6px;border-radius:8px">🧬 남성 가임력 영향 포함</span></div>'
       + bungCards
       + '</div>' : orangiCards)
     + cacheStats
