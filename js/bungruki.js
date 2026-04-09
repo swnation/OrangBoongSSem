@@ -2521,7 +2521,7 @@ function _extractDrugCandidates(rawName) {
   }).filter(Boolean));
   // 성분명에서 "나트륨수화물","나트륨","수화물","염산염" 등 접미사 제거하여 추가
   candidates = candidates.concat(candidates.map(function(c){
-    return c.replace(/(나트륨|수화물|염산염|칼슘|마그네슘|칼륨|염|산$)+/g,'').trim();
+    return c.replace(/(나트륨|수화물|염산염|칼슘|마그네슘|칼륨)+$/g,'').trim();
   }).filter(Boolean));
   // 중복 제거
   var seen = {};
