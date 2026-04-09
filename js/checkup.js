@@ -500,6 +500,54 @@ function normalizeCheckupResults(aiValues, aiRefs, who) {
   return results;
 }
 
+// AI-first 정규화: AI가 직접 분류/판정한 results 배열을 사전으로 교차검증만
+function normalizeFromAI(aiResults, who) {
+  if (!aiResults || !Array.isArray(aiResults)) return [];
+  const results = [];
+  aiResults.forEach(r => {
+    if (r.value === null || r.value === undefined) return;
+    const isNum = typeof r.value === 'number' || !isNaN(parseFloat(r.value));
+    const numVal = isNum ? parseFloat(r.value) : r.value;
+    // AI가 준 code로 사전 매칭 시도 (보조)
+    let stdCode = r.code ? (r.code.toUpperCase() in _CHECKUP_STD_TESTS ? r.code.toUpperCase() : _matchStdTest(r.code)) : null;
+    if (!stdCode && r.name) stdCode = _matchStdTest(r.name);
+    const def = stdCode ? _getTestDef(stdCode) : null;
+    // 성별 필터
+    if (stdCode && def && !_isTestApplicable(stdCode, def.category, who)) return;
+    // 참고범위: AI 제공값 우선, 없으면 사전
+    let ref = null;
+    if (r.refLow !== undefined || r.refHigh !== undefined) {
+      ref = { low: r.refLow ?? 0, high: r.refHigh ?? 999 };
+    } else if (def) {
+      ref = def.ref.male ? (who === '붕쌤' ? def.ref.male : def.ref.female) : def.ref;
+    }
+    // 상태: AI 판정 신뢰, 없으면 사전 기반 판정
+    let status = r.status || 'unknown';
+    if (status === 'unknown' && isNum && ref) {
+      status = _judgeStatus(numVal, ref, who, stdCode);
+    }
+    // 카테고리: AI 판정 신뢰, 없으면 사전
+    const category = r.category || (def ? def.category : 'other');
+    results.push({
+      stdCode: stdCode || null,
+      rawName: r.code || r.name || '',
+      displayName: r.name || (def ? def.name.ko : (r.code || '?')),
+      value: numVal,
+      unit: r.unit || (def ? def.unit : ''),
+      ref: ref,
+      status: status,
+      category: category,
+      related: def ? def.related : [],
+      pregnancyRelevant: def ? def.pregnancyRelevant : false,
+      suspicious: false,
+      _aiNormalized: true,
+    });
+  });
+  const catOrder = Object.fromEntries(Object.entries(_CHECKUP_CATEGORIES).map(([k, v]) => [k, v.order]));
+  results.sort((a, b) => (catOrder[a.category] || 99) - (catOrder[b.category] || 99));
+  return results;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // AI-ASSISTED NORMALIZATION — 하드코딩 사전의 한계를 AI로 보완
 // ═══════════════════════════════════════════════════════════════
@@ -919,8 +967,10 @@ function _showCheckupAnalysisResults(allResults) {
   const who = DC().user || '오랑이';
   const resultsHtml = allResults.map((r, i) => {
     if (r.error) return `<div style="padding:6px;background:#fef2f2;border-radius:6px;margin-bottom:6px;font-size:.72rem">사진 ${i + 1}: ❌ ${esc(r.error)}</div>`;
-    // 표준화
-    const normalized = normalizeCheckupResults(r.values || {}, r.ref || {}, r.who || who);
+    // 표준화: AI 정규화 결과 우선, 없으면 기존 사전 기반
+    const normalized = (r._aiNormalized && r.results)
+      ? normalizeFromAI(r.results, r.who || who)
+      : normalizeCheckupResults(r.values || {}, r.ref || {}, r.who || who);
     const aiLabel = (r._usedAis || []).join('+');
 
     // 카테고리별 그룹
@@ -965,7 +1015,8 @@ function _showCheckupAnalysisResults(allResults) {
 
   // AI 검증 가능한 AI 판별
   const verifyAiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
-  const hasUnmatched = allResults.some(r => !r.error && normalizeCheckupResults(r.values || {}, r.ref || {}, r.who || who).some(n => !n.stdCode || n.suspicious));
+  const _getNormalized = (r) => (r._aiNormalized && r.results) ? normalizeFromAI(r.results, r.who || who) : normalizeCheckupResults(r.values || {}, r.ref || {}, r.who || who);
+  const hasUnmatched = allResults.some(r => !r.error && _getNormalized(r).some(n => !n.stdCode || n.suspicious));
 
   const buttons = [];
   if (hasUnmatched && verifyAiId) {
@@ -977,9 +1028,13 @@ function _showCheckupAnalysisResults(allResults) {
         for (let i = 0; i < allResults.length; i++) {
           const r = allResults[i]; if (r.error) continue;
           const inst = document.querySelector(`input[data-ck-inst="${i}"]`)?.value || '';
-          let normalized = normalizeWithCache(r.values || {}, r.ref || {}, r.who || who, inst);
-          // AI 검증: 미매칭/의심 항목만
-          normalized = await aiVerifyNormalization(normalized, r.who || who, verifyAiId);
+          let normalized = (r._aiNormalized && r.results)
+            ? normalizeFromAI(r.results, r.who || who)
+            : normalizeWithCache(r.values || {}, r.ref || {}, r.who || who, inst);
+          // 미매칭 항목만 AI 추가 검증
+          if (normalized.some(n => !n.stdCode)) {
+            normalized = await aiVerifyNormalization(normalized, r.who || who, verifyAiId);
+          }
           _cacheVerifiedMappings(normalized, inst);
           const checkup = {
             id: Date.now() + saved, date: r.date || kstToday(), who: r.who || who,
@@ -1003,7 +1058,7 @@ function _showCheckupAnalysisResults(allResults) {
           const r = allResults[i];
           if (r.error) continue;
           const inst = document.querySelector(`input[data-ck-inst="${i}"]`)?.value || '';
-          const normalized = normalizeCheckupResults(r.values || {}, r.ref || {}, r.who || who);
+          const normalized = _getNormalized(r);
           const checkup = {
             id: Date.now() + saved,
             date: r.date || kstToday(),

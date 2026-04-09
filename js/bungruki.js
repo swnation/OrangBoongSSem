@@ -2587,21 +2587,30 @@ async function _analyzeOnePhoto(photo,aiId){
   const tiles=prep.tiles;
   const isTiled=prep.mode==='tiled';
   const tileNote=isTiled?`\n주의: 이 ${tiles.length}개 이미지는 하나의 검사결과지를 ${prep.direction==='vertical'?'상하':'좌우'}로 분할한 것입니다. 모든 이미지의 수치를 합산하여 하나의 JSON으로 응답하세요.`:'';
-  const prompt=`이 이미지는 의료 검사 결과지(혈액검사, 호르몬검사, 정액검사, 초음파 등)입니다.${tileNote}
-다음을 추출하세요:
-1. 검사 종류 (semen/blood/hormone/ultrasound/other)
-2. 검사 날짜 (YYYY-MM-DD)
-3. 검사 대상 (남성이면 "붕쌤", 여성이면 "오랑이", 아기/태아이면 "붕룩이")
-4. 모든 수치 결과 — 항목명에 단위를 포함 (예: "TSH(mIU/L)": 3.63). 빠짐없이 전부 추출
-5. 정상 범위 (참고치가 보이면 ref에 기록)
-6. 이상 소견 + 임신 준비 관점 소견
-반드시 JSON으로 응답:
-{"type":"blood","date":"YYYY-MM-DD","who":"오랑이","values":{"WBC(10^3/uL)":6.78,"TSH(mIU/L)":3.63},"ref":{"WBC(10^3/uL)":"4.0-10.0","TSH(mIU/L)":"0.35-5.50"},"abnormal":["이상소견"],"opinion":"소견"}
-중요 규칙:
-1. values 키에 반드시 단위를 괄호로 포함 (예: "TSH(mIU/L)")
-2. ref는 검사지에 인쇄된 참고치(정상범위)를 그대로 기록 — 검사실마다 다를 수 있으므로 검사지의 값을 우선
-3. 검사지에 참고치가 없는 항목은 ref에서 제외 (임의로 넣지 말 것)
-4. abnormal은 참고치 범위를 벗어난 항목만 기록`;
+  const prompt=`이 이미지는 의료 검사 결과지입니다.${tileNote}
+실제 검사된 항목만 추출하여 정규화된 JSON으로 응답하세요.
+
+반드시 아래 JSON 형식:
+{"type":"blood","date":"YYYY-MM-DD","who":"오랑이",
+ "results":[
+  {"code":"WBC","name":"백혈구","value":6.78,"unit":"10^3/μL","refLow":4.0,"refHigh":10.0,"status":"normal","category":"cbc"},
+  {"code":"HBsAb","name":"B형간염표면항체","value":67.69,"unit":"IU/L","refLow":10,"status":"positive","category":"infection"}
+ ],
+ "opinion":"종합 소견"}
+
+규칙:
+1. type: semen/blood/hormone/ultrasound/other
+2. who: 남성="붕쌤", 여성="오랑이", 아기/태아="붕룩이"
+3. results 배열 — 실제 검사된 항목만. 미실시/빈값/텍스트만 있는 항목은 반드시 제외
+4. code: 표준 약어 (WBC, RBC, HGB, AST, ALT, TSH, FSH 등). 모르면 null
+5. value: 반드시 숫자. 정성검사(Positive/Negative)는 value에 숫자 넣고 status로 판정
+   - 항원(HBsAg 등): Negative→0, Positive→1
+   - 항체(HBsAb, HAV IgG, Rubella IgG): 수치 그대로. 높으면 면역 형성
+6. status: "normal"(정상), "high"(높음), "low"(낮음), "positive"(항체 면역 형성)
+7. category: cbc/liver/kidney/thyroid/lipid/glucose/electrolyte/inflammation/reproductive/semen/vitamin/iron/tumor/infection/coagulation/urine/other
+8. refLow/refHigh: 검사지에 인쇄된 참고치만. 없으면 생략
+9. 중복 항목 제거 (같은 검사가 두 번 있으면 하나만)
+10. 혈액형/Rh 등 정성 결과: value에 null, unit에 결과값("A", "Positive" 등) 기재`;
   let result='';
   if(aiId==='gemini'){
     const gemModel=S.models?.gemini||DEFAULT_MODELS.gemini;
@@ -2646,7 +2655,23 @@ async function _analyzeOnePhoto(photo,aiId){
   }
   const jsonMatch=result.match(/\{[\s\S]*\}/);
   if(!jsonMatch)throw new Error('인식 실패');
-  return JSON.parse(jsonMatch[0]);
+  const parsed=JSON.parse(jsonMatch[0]);
+  // 새 포맷(results 배열) → 기존 포맷(values/ref)으로도 변환 (하위호환)
+  if(parsed.results&&Array.isArray(parsed.results)&&!parsed.values){
+    parsed._aiNormalized=true; // AI가 직접 정규화한 결과 플래그
+    const values={},ref={};
+    parsed.results.forEach(r=>{
+      if(r.value===null||r.value===undefined)return;
+      const key=r.code||(r.name+(r.unit?'('+r.unit+')':''));
+      values[key]=r.value;
+      if(r.refLow!==undefined||r.refHigh!==undefined){
+        ref[key]=(r.refLow!==undefined?r.refLow:'')+(r.refHigh!==undefined?'-'+r.refHigh:'');
+      }
+    });
+    parsed.values=values;
+    parsed.ref=ref;
+  }
+  return parsed;
 }
 
 async function brkSaveLabFromPhoto() {
