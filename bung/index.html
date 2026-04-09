@@ -344,6 +344,9 @@ function renderCheckTab(){
   }
   if(!hasMeds)html+='<div class="card" style="text-align:center;padding:20px;color:var(--mu)">등록된 약물 없음</div>';
 
+  // 임신준비 영양제 + 운동 (bungruki dailyChecks 연동)
+  html+=_renderBrkDailySection(selectedDate,anyEntry);
+
   // Symptoms
   const allSyms=[...new Set(Object.values(BUNG_DOMAINS).flatMap(d=>d.symptoms||[]))];
   const existingSyms=anyEntry?.symptoms||[];
@@ -451,6 +454,166 @@ async function saveAll(){
   btn.disabled=false;btn.textContent=ok?'✅ 저장 완료':'⚠️ 일부 실패';
   if(ok){showToast('✅ 저장 완료');editingEntryId=selectedDate+'T'+timeVal;setTimeout(()=>renderCheckTab(),500);}
   setTimeout(()=>{if(btn)btn.textContent='💾 저장';},3000);
+
+  // 붕룩이 영양제/운동 저장 + bung-health 동기화
+  await _saveBrkDaily(selectedDate);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 임신준비(붕룩이) 영양제 + 운동 연동
+// ═══════════════════════════════════════════════════════════════
+const _BRK_SUPPL_BUNG=[
+  {key:'arginine',label:'아르기닌',icon:'💪'},
+  {key:'coq10',label:'CoQ10',icon:'⚡'},
+  {key:'silymarin',label:'실리마린',icon:'🌿'},
+  {key:'multivitamin',label:'멀티비타민',icon:'💊'},
+];
+const _BRK_EXERCISE_OPTS=[
+  {v:'',l:'안함',c:''},
+  {v:'cardio',l:'유산소',c:'🏃'},
+  {v:'strength',l:'근력',c:'🏋️'},
+  {v:'stretch',l:'스트레칭',c:'🧘'},
+];
+
+function _getBrkSupplItems(){
+  const items=[..._BRK_SUPPL_BUNG];
+  const m=domainData['bungruki']?.master;
+  if(m?.customSuppl?.bung) m.customSuppl.bung.forEach(c=>{if(!items.find(x=>x.key===c.key))items.push({key:c.key,label:c.label,icon:'💊'});});
+  const hidden=m?.hiddenSuppl?.bung||[];
+  return items.filter(it=>hidden.indexOf(it.key)<0);
+}
+
+function _renderBrkDailySection(date){
+  const m=domainData['bungruki']?.master;
+  if(!m)return '';
+  if(!m.dailyChecks)m.dailyChecks={};
+  const dayData=m.dailyChecks[date]?.bung||{};
+  const items=_getBrkSupplItems();
+  const exercise=dayData.exercise||'';
+  const alcohol=dayData.alcohol||false;
+
+  const supplHtml=items.map(it=>{
+    const checked=dayData[it.key]?true:false;
+    return `<div class="med-row" onclick="this.querySelector('input').checked=!this.querySelector('input').checked">
+      <input type="checkbox" data-brk-suppl="${esc(it.key)}"${checked?' checked':''}>
+      <label>${it.icon} ${esc(it.label)}</label>
+    </div>`;
+  }).join('');
+
+  const exHtml=_BRK_EXERCISE_OPTS.map(o=>{
+    const sel=exercise===(o.v||null)||(!exercise&&!o.v);
+    return `<button class="dc-btn${sel?' sel':''}" data-brk-ex="${o.v}" onclick="_selectBrkEx(this)" style="width:auto;padding:6px 12px;font-size:.72rem">${o.c?o.c+' ':''}${o.l}</button>`;
+  }).join('');
+
+  const alcHtml=`<div class="med-row" onclick="this.querySelector('input').checked=!this.querySelector('input').checked" style="margin-top:6px">
+    <input type="checkbox" id="brk-alcohol"${alcohol?' checked':''}>
+    <label>${alcohol?'🍺 음주':'🚫 금주'}</label>
+  </div>`;
+
+  return `<div class="card">
+    <div class="domain-header" style="background:#ec489915;border:1px solid #ec489930">
+      <span style="color:#ec4899">🍼 임신준비</span>
+      <span style="margin-left:auto;display:flex;gap:4px">
+        <button class="btn-toggle" onclick="_toggleAllBrkSuppl(true)">전체 ✓</button>
+        <button class="btn-toggle" onclick="_toggleAllBrkSuppl(false)">전체 ✗</button>
+      </span>
+    </div>
+    <div class="condition-name">영양제</div>
+    ${supplHtml}
+    <div class="condition-name">운동</div>
+    <div style="display:flex;gap:4px;margin-bottom:4px">${exHtml}</div>
+    <div class="condition-name">음주</div>
+    ${alcHtml}
+  </div>`;
+}
+
+function _selectBrkEx(btn){
+  document.querySelectorAll('[data-brk-ex]').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+function _toggleAllBrkSuppl(checked){
+  document.querySelectorAll('[data-brk-suppl]').forEach(cb=>cb.checked=checked);
+}
+
+async function _saveBrkDaily(date){
+  const ds=domainData['bungruki'];if(!ds?.master)return;
+  const m=ds.master;
+  if(!m.dailyChecks)m.dailyChecks={};
+  if(!m.dailyChecks[date])m.dailyChecks[date]={};
+  if(!m.dailyChecks[date].bung)m.dailyChecks[date].bung={};
+  const bung=m.dailyChecks[date].bung;
+
+  // 영양제 체크 상태 수집
+  document.querySelectorAll('[data-brk-suppl]').forEach(cb=>{
+    bung[cb.dataset.brkSuppl]=cb.checked;
+  });
+  // 운동
+  const exBtn=document.querySelector('[data-brk-ex].sel');
+  bung.exercise=exBtn?.dataset?.brkEx||null;
+  // 음주
+  bung.alcohol=document.getElementById('brk-alcohol')?.checked||false;
+
+  // bungruki 마스터 저장
+  try{
+    if(ds.masterFileId)await driveUpdate(ds.masterFileId,m);
+    else{
+      const folderId=ds.folderId||await getOrCreateFolder('Bungruki Pregnancy');
+      ds.masterFileId=await driveCreate('bungruki_master.json',m,folderId);
+    }
+  }catch(e){console.error('Save bungruki daily:',e);}
+
+  // bung-health 동기화 (syncBrkToHealth 동등)
+  _syncBrkToHealthLocal(date);
+}
+
+function _syncBrkToHealthLocal(date){
+  const brkM=domainData['bungruki']?.master;if(!brkM)return;
+  const dayData=brkM.dailyChecks?.[date]?.bung;if(!dayData)return;
+  const ds=domainData['bung-health'];if(!ds)return;
+
+  const items=_getBrkSupplItems();
+  const takenSuppl=items.filter(it=>dayData[it.key]).map(it=>it.label);
+  const notTakenSuppl=items.filter(it=>!dayData[it.key]).map(it=>it.label);
+  const exerciseLabel={cardio:'유산소',strength:'근력',stretch:'스트레칭'};
+  const exercise=dayData.exercise||'';
+  const alcohol=dayData.alcohol||false;
+
+  const month=date.slice(0,7);
+  const ml=ds.logs?.[month];if(!ml)return;
+
+  const syncId='brk-sync-'+date;
+  let existing=ml.data.find(l=>l._syncId===syncId);
+
+  const parts=[];
+  if(takenSuppl.length)parts.push('💊 영양제: '+takenSuppl.join(', '));
+  if(notTakenSuppl.length)parts.push('⬜ 미복용: '+notTakenSuppl.join(', '));
+  if(exercise)parts.push('🏃 운동: '+(exerciseLabel[exercise]||exercise));
+  if(alcohol)parts.push('🍺 음주');
+
+  if(!parts.length){
+    if(existing){ml.data=ml.data.filter(l=>l._syncId!==syncId);}
+    return;
+  }
+
+  const categories=[];
+  if(takenSuppl.length)categories.push('투약');
+  if(exercise)categories.push('운동');
+
+  const entry={
+    _syncId:syncId,datetime:date+'T00:00',
+    categories:categories,
+    memo:'[🍼 임신준비 연동] '+parts.join(' | '),
+    who:'붕쌤',
+    _brkSync:{supplements:takenSuppl,exercise:exercise||null,alcohol:alcohol},
+  };
+
+  if(existing)Object.assign(existing,entry);
+  else{entry.id=Date.now();ml.data.push(entry);ml.data.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));}
+
+  // bung-health 로그 Drive 저장
+  const logName=BUNG_DOMAINS['bung-health'].logPrefix+'_'+month+'.json';
+  if(ml.fileId)driveUpdate(ml.fileId,ml.data).catch(e=>console.error('Sync save:',e));
+  else driveCreate(logName,ml.data,ds.folderId).then(id=>{ml.fileId=id;}).catch(e=>console.error('Sync create:',e));
 }
 
 // ═══════════════════════════════════════════════════════════════
