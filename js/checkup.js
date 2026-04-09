@@ -453,6 +453,9 @@ function normalizeCheckupResults(aiValues, aiRefs, who) {
     const isNum = !isNaN(numVal);
     // 숫자가 아닌 긴 문자열은 소견/텍스트 → 스킵
     if (!isNum && typeof rawVal === 'string' && rawVal.length > 20) continue;
+    // 숫자 단위 검사에 비숫자 값(Negative/Positive 등)은 미실시/오류 → 스킵
+    // (qualitative 검사는 허용: HBsAg 등)
+    if (!isNum && def && def.unit !== 'qualitative') continue;
 
     // 단위 변환
     const converted = (stdCode && isNum && parsed.unit)
