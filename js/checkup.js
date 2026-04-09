@@ -837,6 +837,116 @@ async function deleteHealthCheckup(checkupId) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// AI 재분류 — 기존 검사결과를 AI에게 다시 보내서 정규화
+// ═══════════════════════════════════════════════════════════════
+
+async function aiReclassifyCheckup(source, id, isLegacy) {
+  const aiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+  if (!aiId) { showToast('⚠️ AI API 키 필요'); return; }
+
+  // 원본 데이터 찾기
+  let rawValues, rawRef, who, date, origEntry;
+  if (isLegacy) {
+    const brkDs = S.domainState['bungruki'];
+    origEntry = brkDs?.master?.labResults?.find(l => l.id === id);
+    if (!origEntry) { showToast('⚠️ 원본 데이터 없음'); return; }
+    rawValues = origEntry.values; rawRef = origEntry.ref; who = origEntry.who; date = origEntry.date;
+  } else {
+    const ds = S.domainState[source];
+    origEntry = ds?.master?.healthCheckups?.find(c => c.id === id);
+    if (!origEntry) { showToast('⚠️ 원본 데이터 없음'); return; }
+    // 이미 results가 있으면 values로 역변환
+    rawValues = {};
+    (origEntry.results || []).forEach(r => { rawValues[r.displayName || r.rawName] = r.value; });
+    rawRef = {};
+    (origEntry.results || []).forEach(r => { if (r.ref) rawRef[r.displayName || r.rawName] = r.ref.low + '-' + r.ref.high; });
+    who = origEntry.who; date = origEntry.date;
+  }
+
+  showToast('🤖 AI 재분류 중...', 8000);
+  try {
+    const newResults = await _aiReclassify(rawValues, rawRef, who, aiId);
+    if (!newResults.length) { showToast('⚠️ AI 재분류 결과 없음'); return; }
+
+    if (isLegacy) {
+      // 붕룩이 labResult: 값은 유지, 건강관리에서 보이는 결과만 변경됨
+      // healthCheckups에 새로 저장
+      const checkup = {
+        id: Date.now(), date, who, institution: origEntry.institution || '',
+        type: origEntry.type || 'general', sourceType: 'reclassified',
+        results: newResults, aiUsed: 'reclassify:' + aiId,
+        memo: (origEntry.memo || '') + ' [AI 재분류]',
+        _reclassifiedFrom: id,
+      };
+      await saveHealthCheckup(checkup);
+    } else {
+      // healthCheckup: 직접 교체
+      origEntry.results = newResults;
+      origEntry.aiUsed = (origEntry.aiUsed || '') + '+reclassify:' + aiId;
+      await saveMaster();
+    }
+    showToast('✅ AI 재분류 완료');
+    renderView('meds');
+  } catch (e) {
+    showToast('❌ 재분류 실패: ' + e.message, 4000);
+  }
+}
+
+async function aiReclassifyAll() {
+  const aiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+  if (!aiId) { showToast('⚠️ AI API 키 필요'); return; }
+  const who = DC().user;
+  const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
+  if (!allCheckups.length) { showToast('재분류할 데이터 없음'); return; }
+
+  if (!confirm(allCheckups.length + '건의 검사결과를 AI로 재분류합니다.\n비용이 발생할 수 있습니다. 계속?')) return;
+
+  showToast('🤖 전체 AI 재분류 시작...', 15000);
+  let done = 0, failed = 0;
+  for (const c of allCheckups) {
+    try {
+      await aiReclassifyCheckup(c._source, c.id, c._legacyLab || false);
+      done++;
+    } catch (e) { failed++; }
+  }
+  showToast('✅ 재분류 완료: ' + done + '건 성공' + (failed ? ', ' + failed + '건 실패' : ''));
+  renderView('meds');
+}
+
+// AI에게 기존 values/ref를 보내서 results[] 배열로 재분류
+async function _aiReclassify(values, refs, who, aiId) {
+  if (!values || !Object.keys(values).length) return [];
+  const prompt = `다음은 의료 검사 결과입니다. 정규화된 JSON results 배열로 재분류하세요.
+
+대상: ${who} (${who === '붕쌤' ? '남성' : '여성'})
+
+원본 데이터:
+${JSON.stringify(values, null, 1)}
+
+참고범위:
+${refs ? JSON.stringify(refs, null, 1) : '없음'}
+
+반드시 아래 JSON 형식으로 응답:
+{"results":[
+  {"code":"WBC","name":"백혈구","value":6.78,"unit":"10^3/μL","refLow":4.0,"refHigh":10.0,"status":"normal","category":"cbc"}
+]}
+
+규칙:
+1. 실제 검사된 항목만 포함. 미실시/빈값/텍스트만 있는 항목 제외
+2. value가 숫자가 아닌 항목(Negative/Positive 등)은 제외 (단, 항원/항체는 숫자 변환)
+3. 중복 항목 하나만 유지
+4. status: normal/high/low/positive(항체 면역 형성)
+5. category: cbc/liver/kidney/thyroid/lipid/glucose/electrolyte/inflammation/reproductive/semen/vitamin/iron/tumor/infection/coagulation/urine/other
+6. code: 표준 약어 (WBC, RBC, HGB, AST, ALT, TSH 등). 모르면 null`;
+
+  const result = await callAI(aiId, '의료 검사 데이터 표준화 전문가', prompt);
+  const jsonMatch = result.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error('JSON 파싱 실패');
+  const parsed = JSON.parse(jsonMatch[0]);
+  return normalizeFromAI(parsed.results || [], who);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // AI VISION ANALYSIS (검진 결과 사진/PDF → 표준화)
 // ═══════════════════════════════════════════════════════════════
 
@@ -1139,7 +1249,8 @@ function renderCheckupArchive() {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:1.1rem">📋</span>
       <span style="font-size:.88rem;font-weight:700;color:var(--domain-color)">검사 아카이브</span>
-      <span style="font-size:.62rem;color:var(--mu);margin-left:auto">${allCheckups.length}건 · ${totalItems}항목</span>
+      <button onclick="aiReclassifyAll()" style="margin-left:auto;background:none;border:1px solid #8b5cf6;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#8b5cf6;cursor:pointer;font-family:var(--font)">🤖 전체 AI 재분류</button>
+      <span style="font-size:.62rem;color:var(--mu)">${allCheckups.length}건 · ${totalItems}항목</span>
     </div>
     <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${tabBar}</div>
     ${uploadArea}
@@ -1185,6 +1296,7 @@ function _renderCheckupTimeline(checkups) {
         ${c.institution ? `<span style="font-size:.6rem;color:var(--ac)">${esc(c.institution)}</span>` : ''}
         ${sourceTag}
         <span style="font-size:.6rem;color:var(--mu);margin-left:auto">${results.length}항목</span>
+        <button onclick="aiReclassifyCheckup('${c._source}',${c.id},${c._legacyLab||false})" style="background:none;border:1px solid #8b5cf6;border-radius:4px;padding:1px 6px;font-size:.55rem;color:#8b5cf6;cursor:pointer;font-family:var(--font)" title="AI 재분류">🤖</button>
         ${c._legacyLab ? '' : `<button class="accum-del" onclick="if(confirm('삭제?'))deleteHealthCheckup(${c.id})" title="삭제">🗑</button>`}
       </div>
       <div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap">${catSummary}</div>
