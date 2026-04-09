@@ -2797,10 +2797,11 @@ function _renderDrugCard(name, info, isMale) {
   var refreshBtn = !safety?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--ac)" title="Perplexity로 검색">🔍 검색</button>`
     :(source==='AI검색'?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--mu)" title="재검색">🔄</button>`:'');
 
-  // 붕쌤(남성): 가임력 메인 + 임신위험도(FDA)는 접기
+  // 붕쌤(남성): 가임력 메인 + PLLR 표시 + FDA 등급만 접기
   if (isMale) {
-    var foldedPreg = '<div style="margin-top:5px"><div style="font-size:.58rem;color:var(--mu2);cursor:pointer" onclick="var d=this.nextElementSibling;d.style.display=d.style.display===\'none\'?\'block\':\'none\'">▸ 여성 임신 위험도 (FDA '+esc(fda)+')</div>'
-      + '<div style="display:none">' + badges + detail + '</div></div>';
+    var pllrHtml = pllr ? '<div style="margin-top:5px;font-size:.7rem;color:#0369a1;line-height:1.5"><b>PLLR</b> <span style="font-size:.55rem;color:var(--mu2)">(Pregnancy &amp; Lactation Labeling Rule — 임신·수유 약물 표시 기준)</span><br>'+esc(pllr)+'</div>' : '';
+    var foldedFda = '<div style="margin-top:5px"><div style="font-size:.58rem;color:var(--mu2);cursor:pointer" onclick="var d=this.nextElementSibling;d.style.display=d.style.display===\'none\'?\'block\':\'none\'">▸ FDA 등급: '+esc(fda)+' / 식약처: '+esc(kfda)+'</div>'
+      + '<div style="display:none;margin-top:4px">' + badges + (note?'<div style="font-size:.72rem;color:var(--mu);margin-top:2px">'+esc(note)+'</div>':'') + '</div></div>';
     return '<div style="padding:10px 12px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;margin-bottom:5px">'
       + '<div style="display:flex;align-items:center;gap:8px">'
       + '<div style="flex:1">'
@@ -2811,7 +2812,7 @@ function _renderDrugCard(name, info, isMale) {
       + srcLabel + refreshBtn
       + '<span id="ds-loading-'+esc(name)+'" style="display:none;font-size:.6rem;color:var(--ac)">검색중...</span>'
       + '</div>'
-      + maleHtml + foldedPreg
+      + maleHtml + pllrHtml + foldedFda
       + '</div>';
   }
 
@@ -2862,13 +2863,24 @@ function renderDrugSafety() {
   function renderUserSection(userName, userIcon, userColor, meds, isMale) {
     var entries = Object.entries(meds);
     if (!entries.length) return '<div style="font-size:.72rem;color:var(--mu2);padding:8px;text-align:center">등록된 약물이 없습니다.</div>';
-    // 위험도 순 정렬: X > D > C > B > A > ?
-    var order = {'X':0,'D':1,'C':2,'B':3,'A':4,'?':5,'N/A':5};
-    entries.sort(function(a,b){
-      var sa = _lookupDrugSafety(a[0]), sb = _lookupDrugSafety(b[0]);
-      var fa = sa?.fda||'?', fb2 = sb?.fda||'?';
-      return (order[fa.charAt(0)]||5) - (order[fb2.charAt(0)]||5);
-    });
+    if (isMale) {
+      // 남성: 가임력 영향 순 (위험→주의→경미→안전→미확보)
+      var maleOrder = {'위험':0,'주의':1,'경미':2,'안전':3};
+      entries.sort(function(a,b){
+        var ma = _MALE_FERTILITY_IMPACT[a[0]], mb = _MALE_FERTILITY_IMPACT[b[0]];
+        var ia = ma ? (maleOrder[ma.impact]??4) : 4;
+        var ib = mb ? (maleOrder[mb.impact]??4) : 4;
+        return ia - ib;
+      });
+    } else {
+      // 여성: FDA 위험도 순 X > D > C > B > A > ?
+      var order = {'X':0,'D':1,'C':2,'B':3,'A':4,'?':5,'N/A':5};
+      entries.sort(function(a,b){
+        var sa = _lookupDrugSafety(a[0]), sb = _lookupDrugSafety(b[0]);
+        var fa = sa?.fda||'?', fb2 = sb?.fda||'?';
+        return (order[fa.charAt(0)]||5) - (order[fb2.charAt(0)]||5);
+      });
+    }
     return entries.map(function(e){ return _renderDrugCard(e[0], e[1], isMale); }).join('');
   }
 
