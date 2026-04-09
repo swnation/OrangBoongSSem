@@ -255,6 +255,7 @@ const _HOME_CARDS=[
   {id:'aiSuggestions',label:'🤖 AI 질문 추천',default:true},
   {id:'insight',label:'💡 인사이트',default:true},
   {id:'weeklySummary',label:'📊 주간 요약',default:true},
+  {id:'brkDailySync',label:'🍼 임신준비 데일리체크',default:true},
   {id:'brkTimeline',label:'🍼 붕룩이 타임라인',default:true},
   {id:'knowledge',label:'🧠 누적 협진 지식',default:true},
   {id:'recentSessions',label:'📅 최근 세션',default:true},
@@ -321,6 +322,7 @@ function renderHome() {
     ${_v('aiSuggestions')?(()=>{_aiSuggestions=generateAIQuestionSuggestions();return renderAIQuestionSuggestions();})():''}
     ${_v('insight')?renderInsightCard():''}
     ${_v('weeklySummary')?renderWeeklySummaryCard():''}
+    ${_v('brkDailySync')?renderBrkDailySyncCard():''}
     ${_v('brkTimeline')?renderBungrukiTimeline():''}
     ${_v('knowledge')?`<div class="card">
       <div class="card-title">🧠 누적 협진 지식 <span class="badge badge-green">Drive 동기화</span>

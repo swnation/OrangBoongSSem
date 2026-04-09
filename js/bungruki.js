@@ -1242,16 +1242,24 @@ function syncBrkToHealth(date, who) {
   const dayData = m.dailyChecks?.[date]?.[who];
   if(!dayData) return;
   // 영양제 목록 수집
-  const supplKeys = who==='orangi' ? BRK_SUPPL_ORANGI : BRK_SUPPL_BUNG;
   const supplItems = who==='orangi'
     ? [{key:'folicAcid',label:'엽산'},{key:'iron',label:'철분'},{key:'vitaminD',label:'비타민D'},{key:'multivitamin',label:'멀티비타민'},{key:'magnesium',label:'마그네슘'}]
     : [{key:'arginine',label:'아르기닌'},{key:'coq10',label:'CoQ10'},{key:'silymarin',label:'실리마린'},{key:'multivitamin',label:'멀티비타민'}];
   // 사용자 추가 영양제도 동기화에 포함
   var syncCustomKey='om_brk_suppl_'+who;
   var syncCustoms=JSON.parse(localStorage.getItem(syncCustomKey)||'[]');
+  // 클라우드 커스텀도 포함
+  if(m.customSuppl?.[who==='orangi'?'orangi':'bung']) {
+    m.customSuppl[who==='orangi'?'orangi':'bung'].forEach(function(c){
+      if(!syncCustoms.find(x=>x.key===c.key)) syncCustoms.push(c);
+    });
+  }
   syncCustoms.forEach(function(c){supplItems.push({key:c.key,label:c.label});});
   const takenSuppl = supplItems.filter(it=>dayData[it.key]).map(it=>it.label);
+  const notTakenSuppl = supplItems.filter(it=>!dayData[it.key]).map(it=>it.label);
+  const exerciseLabel = {cardio:'유산소',strength:'근력',stretch:'스트레칭'};
   const exercise = dayData.exercise || '';
+  const alcohol = dayData.alcohol || false;
   const memo = dayData.memo || '';
   // 건강관리 로그에 동기화 기록 찾기/생성
   if(!ds.logData) ds.logData=[];
@@ -1259,21 +1267,31 @@ function syncBrkToHealth(date, who) {
   let existing = ds.logData.find(l=>l._syncId===syncId);
   const parts = [];
   if(takenSuppl.length) parts.push('💊 영양제: '+takenSuppl.join(', '));
-  if(exercise) parts.push('🏃 운동: '+exercise);
+  if(notTakenSuppl.length) parts.push('⬜ 미복용: '+notTakenSuppl.join(', '));
+  if(exercise) parts.push('🏃 운동: '+(exerciseLabel[exercise]||exercise));
+  if(who==='bung' && alcohol) parts.push('🍺 음주');
   if(memo) parts.push('📝 '+memo);
   if(!parts.length) {
     // 모두 해제됨 → 동기화 기록 제거
     if(existing) { ds.logData=ds.logData.filter(l=>l._syncId!==syncId); }
     return;
   }
+  const categories = [];
+  if(takenSuppl.length) categories.push('투약');
+  if(exercise) categories.push('운동');
   const entry = {
     _syncId: syncId,
     datetime: date+'T00:00',
-    categories: takenSuppl.length ? ['투약'] : [],
+    categories: categories,
     memo: '[🍼 임신준비 연동] '+parts.join(' | '),
     who: who==='orangi'?'오랑이':'붕쌤',
+    // 구조화된 데이터: 건강관리 도메인에서 직접 참조 가능
+    _brkSync: {
+      supplements: takenSuppl,
+      exercise: exercise || null,
+      alcohol: who==='bung' ? alcohol : undefined,
+    },
   };
-  if(exercise) entry.categories.push('운동');
   if(existing) {
     Object.assign(existing, entry);
   } else {
@@ -1304,6 +1322,7 @@ async function brkSetExercise(val) {
   var r = _getBrkWhoData(); if (!r) return;
   r.whoData.exercise = val;
   await saveBrkMaster();
+  syncBrkToHealth(r.selDate, _brkCheckWho);
   renderView('meds');
 }
 
@@ -1313,6 +1332,7 @@ async function brkToggleAlcohol() {
   if (!r.m.dailyChecks[r.selDate].bung) r.m.dailyChecks[r.selDate].bung = {};
   r.m.dailyChecks[r.selDate].bung.alcohol = !r.m.dailyChecks[r.selDate].bung.alcohol;
   await saveBrkMaster();
+  syncBrkToHealth(r.selDate, 'bung');
   renderView('meds');
 }
 
@@ -1333,6 +1353,7 @@ async function brkSetMemo(val) {
   var r = _getBrkWhoData(); if (!r) return;
   r.whoData.memo = val || null;
   await saveBrkMaster();
+  syncBrkToHealth(r.selDate, _brkCheckWho);
 }
 
 // ── 7-3: 검사 결과 관리 ──
@@ -3371,6 +3392,66 @@ function getMenstrualTag() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// 건강관리 도메인 홈 카드: 오늘의 임신준비 데일리체크 현황
+// ═══════════════════════════════════════════════════════════════
+function renderBrkDailySyncCard() {
+  // 건강관리 도메인에서만 표시
+  if(!S.currentDomain?.endsWith('-health')) return '';
+  const brkDs=S.domainState['bungruki'];
+  if(!brkDs?.master?.dailyChecks) return '';
+  const who=DC()?.user==='붕쌤'?'bung':'orangi';
+  const today=kstToday();
+  const dayData=brkDs.master.dailyChecks[today]?.[who];
+  if(!dayData) return '';
+
+  const supplItems=who==='orangi'
+    ?[{key:'folicAcid',label:'엽산',icon:'💊'},{key:'iron',label:'철분',icon:'🩸'},{key:'vitaminD',label:'비타민D',icon:'☀️'},{key:'multivitamin',label:'멀티비타민',icon:'💊'},{key:'magnesium',label:'마그네슘',icon:'🧲'}]
+    :[{key:'arginine',label:'아르기닌',icon:'💪'},{key:'coq10',label:'CoQ10',icon:'⚡'},{key:'silymarin',label:'실리마린',icon:'🌿'},{key:'multivitamin',label:'멀티비타민',icon:'💊'}];
+  // 커스텀 영양제
+  if(brkDs.master.customSuppl?.[who]) brkDs.master.customSuppl[who].forEach(c=>supplItems.push({key:c.key,label:c.label,icon:'💊'}));
+  // 숨긴 항목 제외
+  const hidden=brkDs.master.hiddenSuppl?.[who]||[];
+  const visibleItems=supplItems.filter(it=>hidden.indexOf(it.key)<0);
+
+  const supplHtml=visibleItems.map(it=>{
+    const taken=dayData[it.key];
+    return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-size:.68rem;background:${taken?'#dcfce7':'#fef2f2'};color:${taken?'#16a34a':'#dc2626'};font-weight:500">${taken?'✅':'⬜'} ${it.label}</span>`;
+  }).join('');
+
+  const exerciseLabel={cardio:'🏃 유산소',strength:'🏋️ 근력',stretch:'🧘 스트레칭'};
+  const exercise=dayData.exercise;
+  const exerciseHtml=exercise
+    ?`<span style="display:inline-flex;padding:2px 8px;border-radius:12px;font-size:.68rem;background:#dcfce7;color:#16a34a;font-weight:500">${exerciseLabel[exercise]||exercise}</span>`
+    :`<span style="display:inline-flex;padding:2px 8px;border-radius:12px;font-size:.68rem;background:#fef2f2;color:#dc2626;font-weight:500">⬜ 운동 안함</span>`;
+
+  let extraHtml='';
+  if(who==='bung'){
+    const alcohol=dayData.alcohol;
+    if(alcohol) extraHtml+=`<span style="display:inline-flex;padding:2px 8px;border-radius:12px;font-size:.68rem;background:#fef2f2;color:#dc2626;font-weight:500">🍺 음주</span>`;
+    else extraHtml+=`<span style="display:inline-flex;padding:2px 8px;border-radius:12px;font-size:.68rem;background:#dcfce7;color:#16a34a;font-weight:500">🚫 금주</span>`;
+  }
+
+  const takenCount=visibleItems.filter(it=>dayData[it.key]).length;
+  const totalCount=visibleItems.length;
+  const pct=totalCount?Math.round(takenCount/totalCount*100):0;
+
+  return `<div class="card" style="border-left:3px solid #a855f7">
+    <div class="card-title">🍼 오늘의 임신준비 데일리체크
+      <span style="font-size:.62rem;font-weight:400;color:var(--mu);margin-left:auto">${today}</span>
+    </div>
+    <div style="margin-bottom:8px">
+      <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">💊 영양제 (${takenCount}/${totalCount})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${supplHtml}</div>
+      <div style="margin-top:4px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct>=80?'#16a34a':pct>=50?'#f59e0b':'#ef4444'};border-radius:2px"></div></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">
+      <div style="font-size:.68rem;font-weight:600;color:var(--mu);width:100%;margin-bottom:2px">🏃 운동 / 생활</div>
+      ${exerciseHtml} ${extraHtml}
+    </div>
+  </div>`;
+}
+
 // BUNGRUKI TIMELINE (임신 준비 타임라인)
 // ═══════════════════════════════════════════════════════════════
 function renderBungrukiTimeline() {
