@@ -294,22 +294,24 @@ function _matchStdTest(rawName) {
   if (_isNonLabValue(lower)) return null;
   // 너무 긴 이름은 검사 항목이 아닐 가능성 높음 (설명문/소견 등)
   if (lower.length > 30) return null;
+  // 하드코딩 + 동적 사전 통합 검색
+  const allTests = { ..._CHECKUP_STD_TESTS, ..._getCustomTests() };
   // 1) 코드 직접 매칭
-  for (const code of Object.keys(_CHECKUP_STD_TESTS)) {
+  for (const code of Object.keys(allTests)) {
     if (lower === code.toLowerCase()) return code;
   }
   // 2) 별칭 정확 매칭
-  for (const [code, def] of Object.entries(_CHECKUP_STD_TESTS)) {
-    if (def.aliases.some(a => a.toLowerCase() === lower)) return code;
+  for (const [code, def] of Object.entries(allTests)) {
+    if (def.aliases?.some(a => a.toLowerCase() === lower)) return code;
   }
   // 3) 별칭 포함 매칭 (안전한 부분 매칭)
   //    - 별칭 최소 길이 3자 이상만 (1~2자 "k", "p" 등 오매칭 방지)
   //    - rawName 안에 alias가 포함된 경우만 (역방향 제외 — 오매칭 근원)
   let bestMatch = null, bestLen = 0;
-  for (const [code, def] of Object.entries(_CHECKUP_STD_TESTS)) {
-    for (const alias of def.aliases) {
+  for (const [code, def] of Object.entries(allTests)) {
+    for (const alias of (def.aliases || [])) {
       const al = alias.toLowerCase();
-      if (al.length < 3) continue; // 짧은 별칭은 부분 매칭에서 제외
+      if (al.length < 3) continue;
       if (lower.includes(al) && al.length > bestLen) {
         bestMatch = code; bestLen = al.length;
       }
@@ -402,7 +404,7 @@ function normalizeCheckupResults(aiValues, aiRefs, who) {
     if (_isNonLabValue(rawKey)) continue;
     const parsed = _parseTestKey(rawKey);
     const stdCode = _matchStdTest(parsed.name);
-    const def = stdCode ? _CHECKUP_STD_TESTS[stdCode] : null;
+    const def = stdCode ? _getTestDef(stdCode) : null;
     const numVal = parseFloat(rawVal);
     const isNum = !isNaN(numVal);
     // 숫자가 아닌 긴 문자열은 소견/텍스트 → 스킵
@@ -455,37 +457,65 @@ function normalizeCheckupResults(aiValues, aiRefs, who) {
 // AI-ASSISTED NORMALIZATION — 하드코딩 사전의 한계를 AI로 보완
 // ═══════════════════════════════════════════════════════════════
 
-// 표준 코드 목록 (AI 프롬프트용 축약)
+// 동적 사전: 마스터 settings.customTests에 저장, 하드코딩 사전을 런타임 확장
+function _getCustomTests() {
+  const m = DM();
+  return (m?.settings?.customTests) || {};
+}
+async function _saveCustomTest(code, def) {
+  const m = DM(); if (!m) return;
+  if (!m.settings) m.settings = {};
+  if (!m.settings.customTests) m.settings.customTests = {};
+  m.settings.customTests[code] = def;
+  await saveMaster();
+}
+// 통합 사전 조회: 하드코딩 + 동적
+function _getTestDef(code) {
+  return _CHECKUP_STD_TESTS[code] || _getCustomTests()[code] || null;
+}
+
+// 표준 코드 목록 (AI 프롬프트용 — 하드코딩 + 동적 합산)
 function _getStdCodeList() {
-  return Object.entries(_CHECKUP_STD_TESTS).map(([code, def]) =>
+  const hard = Object.entries(_CHECKUP_STD_TESTS).map(([code, def]) =>
     `${code}: ${def.name.ko}(${def.name.en}) [${def.unit}]`
-  ).join('\n');
+  );
+  const custom = Object.entries(_getCustomTests()).map(([code, def]) =>
+    `${code}: ${def.name.ko}(${def.name.en||''}) [${def.unit}] (사용자정의)`
+  );
+  return hard.concat(custom).join('\n');
 }
 
 // AI에게 매핑 검증 요청 — 미매칭/의심 항목만 전송 (비용 최소화)
 async function aiVerifyNormalization(rawResults, who, aiId) {
-  // 검증 필요 항목: 미매칭 또는 suspicious
   const needVerify = rawResults.filter(r => !r.stdCode || r.suspicious);
-  if (!needVerify.length) return rawResults; // 전부 매칭됨 → 패스
+  if (!needVerify.length) return rawResults;
 
   const selectedAi = aiId || (S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null)));
-  if (!selectedAi || !S.keys?.[selectedAi]) return rawResults; // AI 키 없으면 원본 반환
+  if (!selectedAi || !S.keys?.[selectedAi]) return rawResults;
 
   const prompt = `의료 검사 결과 표준화를 검증해주세요.
 아래 항목들의 rawName을 표준 검사 코드에 매핑하세요.
-검사 결과가 아닌 항목(AI 예측값, 소견, BMI 등)은 stdCode: null로 설정.
-값이 해당 검사의 정상 범위와 크게 다르면 suspicious: true로 설정.
 대상: ${who} (${who === '붕쌤' ? '남성' : '여성'})
+
+규칙:
+1. 기존 코드 목록에 있으면 → 해당 stdCode 사용
+2. 목록에 없지만 실제 의료 검사 항목이면 → 새 코드를 만들어 "isNew":true 로 표기
+   (코드는 영문 대문자 약어, category는 가장 적절한 것 선택)
+3. 검사 결과가 아닌 항목(AI 예측값, 점수, BMI, 소견 등) → stdCode: null
+4. 값이 해당 검사의 정상 범위와 크게 다르면 suspicious: true
 
 [매핑할 항목]
 ${needVerify.map((r, i) => `${i}. rawName="${r.rawName}" value=${r.rawValue} unit=${r.rawUnit || '없음'}`).join('\n')}
 
-[표준 코드 목록]
+[기존 코드 목록]
 ${_getStdCodeList()}
 
+[카테고리]
+${Object.entries(_CHECKUP_CATEGORIES).map(([k,v])=>k+':'+v.name).join(', ')}
+
 반드시 JSON 배열로 응답:
-[{"idx":0,"stdCode":"TSH","displayName":"갑상선자극호르몬","unit":"mIU/L","suspicious":false},...]
-stdCode가 목록에 없거나 검사 결과가 아니면: {"idx":0,"stdCode":null,"reason":"AI 예측값"}`;
+[{"idx":0, "stdCode":"TSH", "displayName":"갑상선자극호르몬", "displayNameEn":"TSH", "unit":"mIU/L", "category":"thyroid", "refLow":0.35, "refHigh":5.50, "suspicious":false, "isNew":false},...]
+비-검사 항목: {"idx":0, "stdCode":null, "reason":"AI 예측값"}`;
 
   try {
     const response = await callAI(selectedAi, '의료 검사 표준화 전문가. JSON만 응답.', prompt);
@@ -493,39 +523,55 @@ stdCode가 목록에 없거나 검사 결과가 아니면: {"idx":0,"stdCode":nu
     if (!jsonMatch) return rawResults;
     const aiMappings = JSON.parse(jsonMatch[0]);
 
-    // AI 매핑 적용
+    let newTestsAdded = 0;
     aiMappings.forEach(m => {
       if (m.idx === undefined || m.idx < 0 || m.idx >= needVerify.length) return;
       const target = needVerify[m.idx];
-      // 원본 results 배열에서 찾기
       const origIdx = rawResults.findIndex(r => r.rawName === target.rawName && r.rawValue === target.rawValue);
       if (origIdx < 0) return;
 
       if (m.stdCode === null) {
-        // AI가 비-검사 항목으로 판정 → 제거
         rawResults[origIdx]._aiRemoved = true;
-      } else if (m.stdCode && _CHECKUP_STD_TESTS[m.stdCode]) {
-        // AI가 표준 코드 매핑 제안
-        const def = _CHECKUP_STD_TESTS[m.stdCode];
-        rawResults[origIdx].stdCode = m.stdCode;
-        rawResults[origIdx].displayName = m.displayName || def.name.ko;
-        rawResults[origIdx].category = def.category;
-        rawResults[origIdx].related = def.related;
-        rawResults[origIdx].pregnancyRelevant = def.pregnancyRelevant;
-        if (m.unit && m.unit !== rawResults[origIdx].unit) {
-          // AI가 단위 교정 제안
-          rawResults[origIdx].unit = m.unit;
+      } else if (m.stdCode) {
+        let def = _getTestDef(m.stdCode);
+
+        // 새 항목: 동적 사전에 추가
+        if (!def && m.isNew) {
+          def = {
+            name: { ko: m.displayName || m.stdCode, en: m.displayNameEn || m.stdCode },
+            unit: m.unit || '', category: m.category || 'other',
+            ref: (m.refLow !== undefined && m.refHigh !== undefined) ? { low: m.refLow, high: m.refHigh } : { low: 0, high: 999 },
+            aliases: [m.displayName?.toLowerCase(), m.stdCode?.toLowerCase()].filter(Boolean),
+            related: [], pregnancyRelevant: false, _aiGenerated: true,
+          };
+          // 런타임 하드코딩 사전에도 추가 (현재 세션 내 즉시 사용)
+          _CHECKUP_STD_TESTS[m.stdCode] = def;
+          // 마스터에 비동기 저장 (다음 세션에서도 유지)
+          _saveCustomTest(m.stdCode, def);
+          newTestsAdded++;
         }
-        rawResults[origIdx].suspicious = m.suspicious || false;
-        rawResults[origIdx]._aiVerified = true;
+
+        if (def) {
+          rawResults[origIdx].stdCode = m.stdCode;
+          rawResults[origIdx].displayName = m.displayName || def.name.ko;
+          rawResults[origIdx].category = def.category;
+          rawResults[origIdx].related = def.related || [];
+          rawResults[origIdx].pregnancyRelevant = def.pregnancyRelevant || false;
+          if (m.unit) rawResults[origIdx].unit = m.unit;
+          if (m.refLow !== undefined && m.refHigh !== undefined) {
+            rawResults[origIdx].ref = { low: m.refLow, high: m.refHigh };
+          }
+          rawResults[origIdx].suspicious = m.suspicious || false;
+          rawResults[origIdx]._aiVerified = true;
+        }
       }
     });
 
-    // AI가 비-검사로 판정한 항목 제거
+    if (newTestsAdded) showToast(`🆕 ${newTestsAdded}개 새 검사항목이 사전에 추가됨`);
     return rawResults.filter(r => !r._aiRemoved);
   } catch (e) {
     console.warn('AI verify failed:', e.message);
-    return rawResults; // 실패 시 원본 유지
+    return rawResults;
   }
 }
 
