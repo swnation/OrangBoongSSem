@@ -1830,7 +1830,7 @@ function renderLabResults() {
     + '<div id="brk-lab-form" style="display:none;margin-bottom:12px;padding:12px;background:var(--sf2);border-radius:8px;border:1.5px solid var(--bd)">'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<div><div class="dx-form-label">날짜 *</div><input type="date" id="brk-lab-date" class="dx-form-input" style="width:140px"></div>'
-    + '<div><div class="dx-form-label">누구</div><select id="brk-lab-who" class="dx-form-input" style="width:90px"><option value="붕쌤">붕쌤</option><option value="오랑이">오랑이</option></select></div>'
+    + '<div><div class="dx-form-label">누구</div><select id="brk-lab-who" class="dx-form-input" style="width:90px"><option value="붕쌤">붕쌤</option><option value="오랑이">오랑이</option><option value="붕룩이">🍼 붕룩이</option></select></div>'
     + '<div><div class="dx-form-label">검사 종류</div><select id="brk-lab-type" class="dx-form-input" style="width:120px" onchange="brkLabTypeChange()">'
     + '<option value="semen">🔬 정액검사</option><option value="blood">🩸 혈액검사</option><option value="hormone">⚗️ 호르몬</option><option value="ultrasound">📷 초음파</option><option value="other">📋 기타</option>'
     + '</select></div></div>'
@@ -1850,7 +1850,8 @@ var _labBulkSet=new Set();
 function _renderLabsByPerson(labs, typeLabels, typeIcons) {
   const bung=labs.filter(l=>(l.who||'')==='붕쌤');
   const orangi=labs.filter(l=>(l.who||'')==='오랑이');
-  const other=labs.filter(l=>l.who!=='붕쌤'&&l.who!=='오랑이');
+  const bungruki=labs.filter(l=>(l.who||'')==='붕룩이');
+  const other=labs.filter(l=>l.who!=='붕쌤'&&l.who!=='오랑이'&&l.who!=='붕룩이');
   // 관리 도구바
   const toolbar=`<div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
     <button onclick="_labBulkMode=!_labBulkMode;_labBulkSet.clear();renderView('meds')" style="font-size:.65rem;padding:3px 10px;border:1px solid ${_labBulkMode?'#dc2626':'var(--bd)'};border-radius:5px;background:${_labBulkMode?'#fee2e2':'var(--sf)'};color:${_labBulkMode?'#dc2626':'var(--mu)'};cursor:pointer;font-family:var(--font)">${_labBulkMode?'✕ 선택 모드 끄기':'☑️ 선택 삭제'}</button>
@@ -1870,6 +1871,7 @@ function _renderLabsByPerson(labs, typeLabels, typeIcons) {
   };
   return toolbar + renderGroup('붕쌤','🩵','#06b6d4',bung)
     + renderGroup('오랑이','🧡','#f97316',orangi)
+    + renderGroup('붕룩이','🍼','#a855f7',bungruki)
     + (other.length?renderGroup('기타','📋','var(--mu)',other):'');
 }
 async function _brkBulkDeleteLabs(){
@@ -2568,7 +2570,7 @@ async function _analyzeOnePhoto(photo,aiId){
 다음을 추출하세요:
 1. 검사 종류 (semen/blood/hormone/ultrasound/other)
 2. 검사 날짜 (YYYY-MM-DD)
-3. 검사 대상 (남성이면 "붕쌤", 여성이면 "오랑이")
+3. 검사 대상 (남성이면 "붕쌤", 여성이면 "오랑이", 아기/태아이면 "붕룩이")
 4. 모든 수치 결과 — 항목명에 단위를 포함 (예: "TSH(mIU/L)": 3.63). 빠짐없이 전부 추출
 5. 정상 범위 (참고치가 보이면 ref에 기록)
 6. 이상 소견 + 임신 준비 관점 소견

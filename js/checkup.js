@@ -378,6 +378,8 @@ const _FEMALE_ONLY_TESTS = new Set(['AMH','PROG','CA125']);
 const _MALE_ONLY_CATEGORIES = new Set(['semen']);
 
 function _isTestApplicable(stdCode, category, who) {
+  // 붕룩이(아기): 성별 미정 → 모든 검사 허용
+  if (who === '붕룩이') return true;
   const isMale = who === '붕쌤';
   if (isMale && _FEMALE_ONLY_TESTS.has(stdCode)) return false;
   if (!isMale && (_MALE_ONLY_TESTS.has(stdCode) || _MALE_ONLY_CATEGORIES.has(category))) return false;
@@ -642,8 +644,10 @@ function _getCheckupMaster() {
 
 // 특정 유저의 모든 건강검진 데이터
 // includeLegacy: true면 붕룩이 labResults도 포함 (AI컨텍스트/추세용), false면 직접 저장분만
-function getAllHealthCheckups(who, includeLegacy) {
+// opts.includePregnancy: false면 임신특화 카테고리(reproductive/semen) 제외 (건강관리 도메인용)
+function getAllHealthCheckups(who, includeLegacy, opts) {
   if (includeLegacy === undefined) includeLegacy = true;
+  const includePregnancy = opts?.includePregnancy !== false; // 기본 true
   const results = [];
   // 1) 각 도메인의 healthCheckups (직접 저장된 데이터)
   Object.entries(S.domainState).forEach(([domainId, ds]) => {
@@ -662,13 +666,17 @@ function getAllHealthCheckups(who, includeLegacy) {
     if (brkDs?.master?.labResults) {
       brkDs.master.labResults.forEach(l => {
         if (who && l.who !== who) return;
-        const normalized = normalizeCheckupResults(l.values || {}, l.ref || {}, l.who);
+        let normalized = normalizeCheckupResults(l.values || {}, l.ref || {}, l.who);
+        // 건강관리 도메인: 임신 특화 카테고리(생식호르몬, 정액검사) 제외
+        if (!includePregnancy) {
+          normalized = normalized.filter(r => r.category !== 'reproductive' && r.category !== 'semen');
+        }
         if (normalized.length) {
           results.push({
             id: l.id, date: l.date, who: l.who,
-            institution: '붕룩이 기록', type: l.type,
+            institution: l.institution || '', type: l.type,
             results: normalized, memo: l.memo || '',
-            _source: 'bungruki', _sourceLabel: '임신 준비',
+            _source: 'bungruki', _sourceLabel: l.who + ' 검사',
             _legacyLab: true,
           });
         }
@@ -988,8 +996,8 @@ function renderCheckupArchive() {
   const isHealth = S.currentDomain.endsWith('-health');
   if (!isHealth) return '';
 
-  // 아카이브 UI: 직접 저장 + 붕룩이 연계 (성별 필터 + 이상치 감지 적용됨)
-  const allCheckups = getAllHealthCheckups(who, true);
+  // 아카이브 UI: 직접 저장 + 붕룩이 연계 (건강관리 도메인: 임신특화 제외)
+  const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
   const totalItems = allCheckups.reduce((s, c) => s + (c.results?.length || 0), 0);
 
   // 탭 바
@@ -1067,11 +1075,12 @@ function _renderCheckupTimeline(checkups) {
     }).join('');
     const moreCount = abnormal.length > 5 ? `<span style="font-size:.55rem;color:#dc2626">+${abnormal.length - 5}</span>` : '';
 
-    const sourceTag = c._legacyLab ? `<span style="font-size:.5rem;padding:1px 4px;border-radius:3px;background:#ede9fe;color:#7c3aed">붕룩이</span>` : '';
+    const sourceTag = c._legacyLab ? `<span style="font-size:.5rem;padding:1px 4px;border-radius:3px;background:#ede9fe;color:#7c3aed">임신준비 연계</span>` : '';
 
     return `<div style="padding:8px 10px;background:var(--sf2);border:1.5px solid ${abnormal.length ? '#fca5a580' : 'var(--bd)'};border-radius:8px;margin-bottom:5px">
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:.78rem;font-weight:600">${esc(c.date || '')}</span>
+        <span style="font-size:.6rem;color:var(--mu)">${esc(c.who || '')}</span>
         ${c.institution ? `<span style="font-size:.6rem;color:var(--ac)">${esc(c.institution)}</span>` : ''}
         ${sourceTag}
         <span style="font-size:.6rem;color:var(--mu);margin-left:auto">${results.length}항목</span>
