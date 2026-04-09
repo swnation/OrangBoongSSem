@@ -759,7 +759,7 @@ function renderCheckupArchive() {
   else if (_checkupViewTab === 'trends') content = _renderCheckupTrends(who, allCheckups);
   else if (_checkupViewTab === 'categories') content = _renderCheckupCategories(who, allCheckups);
 
-  return `<div class="section-card" style="border-color:var(--domain-color)">
+  return `<div style="padding:12px;background:var(--sf2);border:1.5px solid var(--domain-color);border-radius:10px;margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:1.1rem">📋</span>
       <span style="font-size:.88rem;font-weight:700;color:var(--domain-color)">검사 아카이브</span>
@@ -1076,11 +1076,12 @@ function _updateManualTestList() {
 // ═══════════════════════════════════════════════════════════════
 // MIGRATION — 기존 붕룩이 labResults에 표준 참고치 일괄 적용
 // ═══════════════════════════════════════════════════════════════
+var _migrateRefBackup = null; // 마이그레이션 되돌리기용 스냅샷
 async function migrateLabResultsStdRef() {
   const m = typeof getBrkMaster === 'function' ? getBrkMaster() : null;
   if (!m || !m.labResults?.length) { showToast('⚠️ 붕룩이 데이터 없음'); return; }
-  // _pushUndo (되돌리기용 스냅샷)
-  if (typeof _pushUndo === 'function') _pushUndo();
+  // 자체 스냅샷 (master 단위 — _pushUndo는 logData 전용이라 사용 불가)
+  _migrateRefBackup = JSON.parse(JSON.stringify(m.labResults.map(l => ({ id: l.id, ref: l.ref || {} }))));
   let totalAdded = 0, labsUpdated = 0;
   m.labResults.forEach(l => {
     if (!l.values || typeof l.values !== 'object') return;
@@ -1101,6 +1102,19 @@ async function migrateLabResultsStdRef() {
   if (!totalAdded) { showToast('추가할 참고치 없음 (이미 완료됨)'); return; }
   await (typeof saveBrkMaster === 'function' ? saveBrkMaster() : saveMaster());
   showToast(`📏 ${labsUpdated}건 검사에 표준 참고치 ${totalAdded}개 추가 (검사실 기준과 다를 수 있음)`);
+  renderView('meds');
+}
+async function undoMigrateRef() {
+  if (!_migrateRefBackup) { showToast('되돌릴 데이터 없음'); return; }
+  const m = typeof getBrkMaster === 'function' ? getBrkMaster() : null;
+  if (!m) return;
+  _migrateRefBackup.forEach(snap => {
+    const l = m.labResults.find(x => x.id === snap.id);
+    if (l) l.ref = snap.ref;
+  });
+  _migrateRefBackup = null;
+  await (typeof saveBrkMaster === 'function' ? saveBrkMaster() : saveMaster());
+  showToast('↩ 참고치 마이그레이션 되돌림');
   renderView('meds');
 }
 
