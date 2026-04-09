@@ -273,9 +273,27 @@ function _looksLikeUnit(s) {
 }
 
 // 표준 코드 매칭: rawName → stdCode or null
+// 비-검사 값 (AI 예측/계산값) 필터: 정규화에서 제외
+const _NON_LAB_KEYWORDS = [
+  '가능성','확률','비율','예상','잔여','점수','score','rate','probability',
+  'bmi','체질량','percentile','백분위','등급','grade','판정','결과요약',
+  '소견','opinion','임신','conception','분만','delivery','배란','ovulation',
+  '가임','fertile','주기','cycle','기저체온','bbt','권장','추천','recommend',
+];
+
+function _isNonLabValue(rawName) {
+  if (!rawName) return false;
+  const lower = rawName.toLowerCase();
+  return _NON_LAB_KEYWORDS.some(kw => lower.includes(kw));
+}
+
 function _matchStdTest(rawName) {
   if (!rawName) return null;
   const lower = rawName.toLowerCase().trim();
+  // 비-검사 값은 매칭 시도하지 않음
+  if (_isNonLabValue(lower)) return null;
+  // 너무 긴 이름은 검사 항목이 아닐 가능성 높음 (설명문/소견 등)
+  if (lower.length > 30) return null;
   // 1) 코드 직접 매칭
   for (const code of Object.keys(_CHECKUP_STD_TESTS)) {
     if (lower === code.toLowerCase()) return code;
@@ -284,15 +302,16 @@ function _matchStdTest(rawName) {
   for (const [code, def] of Object.entries(_CHECKUP_STD_TESTS)) {
     if (def.aliases.some(a => a.toLowerCase() === lower)) return code;
   }
-  // 3) 별칭 포함 매칭 (alias가 rawName에 포함되거나, rawName이 alias에 포함)
+  // 3) 별칭 포함 매칭 (안전한 부분 매칭)
+  //    - 별칭 최소 길이 3자 이상만 (1~2자 "k", "p" 등 오매칭 방지)
+  //    - rawName 안에 alias가 포함된 경우만 (역방향 제외 — 오매칭 근원)
   let bestMatch = null, bestLen = 0;
   for (const [code, def] of Object.entries(_CHECKUP_STD_TESTS)) {
     for (const alias of def.aliases) {
       const al = alias.toLowerCase();
+      if (al.length < 3) continue; // 짧은 별칭은 부분 매칭에서 제외
       if (lower.includes(al) && al.length > bestLen) {
         bestMatch = code; bestLen = al.length;
-      } else if (al.includes(lower) && lower.length >= 2 && lower.length > bestLen) {
-        bestMatch = code; bestLen = lower.length;
       }
     }
   }
@@ -379,11 +398,15 @@ function normalizeCheckupResults(aiValues, aiRefs, who) {
   const results = [];
   for (const [rawKey, rawVal] of Object.entries(aiValues)) {
     if (rawKey === 'text') continue; // 텍스트 메모 스킵
+    // 비-검사 값 제외 (AI 예측/계산값, 소견 등)
+    if (_isNonLabValue(rawKey)) continue;
     const parsed = _parseTestKey(rawKey);
     const stdCode = _matchStdTest(parsed.name);
     const def = stdCode ? _CHECKUP_STD_TESTS[stdCode] : null;
     const numVal = parseFloat(rawVal);
     const isNum = !isNaN(numVal);
+    // 숫자가 아닌 긴 문자열은 소견/텍스트 → 스킵
+    if (!isNum && typeof rawVal === 'string' && rawVal.length > 20) continue;
 
     // 단위 변환
     const converted = (stdCode && isNum && parsed.unit)
