@@ -2912,6 +2912,94 @@ JSON 배열로 응답:
   } catch(e) { console.warn('AI drug name verify failed:', e); }
 }
 
+// ── AI 동적 사전 확장: 임신안전 + 남성가임력 + 질환→약물 (규칙 #37) ──
+// 새 약물의 임신 안전 등급을 AI로 조회 → _PREGNANCY_SAFETY에 동적 추가
+async function aiExpandPregnancySafety(drugName) {
+  const aiId = S.keys?.perp ? 'perp' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+  if (!aiId) return null;
+  const prompt = `약물 "${drugName}"의 임신 안전성 정보를 JSON으로 반환.
+{"fda":"FDA등급(A/B/C/D/X/N/A)","pllr":"PLLR 요약 1-2문장","kfda":"한국식약처(안전/2등급/금기/정보없음)","note":"핵심 1문장"}
+불확실하면 필드에 "정보부족". JSON만 출력.`;
+  try {
+    const resp = await callAI(aiId, '약학 전문가. JSON만.', prompt);
+    const m = resp.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    // 동적 사전 추가
+    _PREGNANCY_SAFETY[drugName] = parsed;
+    _cacheDrugSafety(drugName, parsed);
+    // 클라우드 저장
+    const master = getBrkMaster();
+    if (master) {
+      if (!master.settings) master.settings = {};
+      if (!master.settings.customPregnancySafety) master.settings.customPregnancySafety = {};
+      master.settings.customPregnancySafety[drugName] = parsed;
+      await saveBrkMaster();
+    }
+    return parsed;
+  } catch(e) { return null; }
+}
+
+// 새 약물의 남성 가임력 영향을 AI로 조회 → _MALE_FERTILITY_IMPACT에 동적 추가
+async function aiExpandMaleFertility(drugName) {
+  const aiId = S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : (S.keys?.gemini ? 'gemini' : null));
+  if (!aiId) return null;
+  const prompt = `약물 "${drugName}"의 남성 가임력 영향을 JSON으로 반환.
+{"impact":"위험/주의/경미/안전 중 택1","note":"영향 메커니즘 1-2문장","washout":"중단 후 회복 기간(예: 3개월)","ref":"참고문헌 1개"}
+데이터 없으면 {"impact":"안전","note":"가임력 영향 보고 없음","washout":"","ref":""}. JSON만.`;
+  try {
+    const resp = await callAI(aiId, '남성 생식의학 전문가. JSON만.', prompt);
+    const m = resp.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    _MALE_FERTILITY_IMPACT[drugName] = parsed;
+    const master = getBrkMaster();
+    if (master) {
+      if (!master.settings) master.settings = {};
+      if (!master.settings.customMaleFertility) master.settings.customMaleFertility = {};
+      master.settings.customMaleFertility[drugName] = parsed;
+      await saveBrkMaster();
+    }
+    return parsed;
+  } catch(e) { return null; }
+}
+
+// 질환→약물 추천을 AI로 확장
+async function aiExpandDiseaseMeds(diseaseName) {
+  const aiId = S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : (S.keys?.gemini ? 'gemini' : null));
+  if (!aiId) return null;
+  const prompt = `질환 "${diseaseName}"의 표준 치료약물 목록을 JSON으로 반환.
+{"meds":["Acetaminophen","Ibuprofen"],"note":"1차/2차 선택 간략 설명"}
+일반적인 처방 약물만 포함. 5-10개. 영문 성분명. JSON만.`;
+  try {
+    const resp = await callAI(aiId, '임상약학 전문가. JSON만.', prompt);
+    const m = resp.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    if (parsed.meds?.length) {
+      _DISEASE_MEDS[diseaseName] = parsed.meds;
+      const master = getBrkMaster();
+      if (master) {
+        if (!master.settings) master.settings = {};
+        if (!master.settings.customDiseaseMeds) master.settings.customDiseaseMeds = {};
+        master.settings.customDiseaseMeds[diseaseName] = parsed.meds;
+        await saveBrkMaster();
+      }
+    }
+    return parsed;
+  } catch(e) { return null; }
+}
+
+// 앱 시작 시 클라우드 동적 사전 로드
+function _loadCustomDrugDicts() {
+  const m = getBrkMaster(); if (!m?.settings) return;
+  const s = m.settings;
+  if (s.customPregnancySafety) Object.assign(_PREGNANCY_SAFETY, s.customPregnancySafety);
+  if (s.customMaleFertility) Object.assign(_MALE_FERTILITY_IMPACT, s.customMaleFertility);
+  if (s.customDiseaseMeds) Object.assign(_DISEASE_MEDS, s.customDiseaseMeds);
+  if (s.customDrugNames) Object.assign(_DRUG_NAMES, s.customDrugNames);
+}
+
 async function fetchDrugSafetyPerplexity(drugName) {
   if(!S.keys?.perp){showToast('Perplexity API 키 필요');return null;}
   const prompt=`약물 '${drugName}'의 임신 안전성 정보를 JSON으로 반환하세요.
@@ -2959,14 +3047,20 @@ async function refreshDrugSafety(drugName) {
     var eng=_DRUG_NAMES[candidates[i]];
     if(eng){searchName=eng;break;}
   }
-  const result=await fetchDrugSafetyPerplexity(searchName);
-  if(result){
-    // 원본명과 영문명 모두 캐시
-    _cacheDrugSafety(drugName,result);
-    if(searchName!==drugName) _cacheDrugSafety(searchName,result);
+  // 임신안전 + 남성가임력 병렬 조회
+  const [safetyResult, maleResult] = await Promise.all([
+    aiExpandPregnancySafety(searchName),
+    aiExpandMaleFertility(searchName),
+  ]);
+  if(safetyResult){
+    _cacheDrugSafety(drugName,safetyResult);
+    if(searchName!==drugName) _cacheDrugSafety(searchName,safetyResult);
   }
   if(el) el.style.display='none';
-  if(result){showToast('✅ '+drugName+' 안전 정보 갱신');renderView('meds');}
+  const msgs=[];
+  if(safetyResult) msgs.push('임신안전');
+  if(maleResult) msgs.push('가임력');
+  if(msgs.length){showToast('✅ '+drugName+' '+msgs.join('+')+' 정보 갱신');renderView('meds');}
   else showToast('⚠️ 검색 실패');
 }
 
