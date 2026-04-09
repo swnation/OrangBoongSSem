@@ -718,7 +718,11 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
   var customs=_getBrkCustomSuppl(who2);
   if(isOrangi) customs.forEach(function(c){orangiItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
   else customs.forEach(function(c){bungItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
-  var items = isOrangi ? orangiItems : bungItems;
+  // 숨긴 항목 필터링
+  var hidden=_getBrkHiddenSuppl(who2);
+  var allItems = isOrangi ? orangiItems : bungItems;
+  var items = allItems.filter(function(it){ return hidden.indexOf(it.key)<0; });
+  var hiddenItems = allItems.filter(function(it){ return hidden.indexOf(it.key)>=0; });
 
   var checkHtml = items.map(function(it) {
     var checked = whoData[it.key] ? true : false;
@@ -727,9 +731,15 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
       + '<span style="font-size:1.2rem">'+(checked?'✅':it.icon)+'</span>'
       + '<span style="font-size:.82rem;font-weight:'+(checked?'600':'400')+';color:'+(checked?'#16a34a':'var(--tx)')+'">'+it.label+'</span>'
       + '</div>'
-      + (it.custom?'<button onclick="_brkRemoveSuppl(\''+esc(it.key)+'\')" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:.8rem;padding:4px 8px" title="삭제">✕</button>':'')
+      + '<button onclick="'+(it.custom?'_brkRemoveSuppl':'_brkHideSuppl')+'(\''+esc(it.key)+'\')" style="background:none;border:none;color:var(--mu2);cursor:pointer;font-size:.7rem;padding:4px 6px" title="'+(it.custom?'삭제':'숨기기')+'">✕</button>'
       + '</div>';
   }).join('');
+  // 숨긴 항목 복원
+  if(hiddenItems.length) {
+    checkHtml += '<div style="margin-top:8px;font-size:.65rem;color:var(--mu)">숨긴 항목: '
+      + hiddenItems.map(function(it){ return '<button onclick="_brkUnhideSuppl(\''+esc(it.key)+'\')" style="background:none;border:1px dashed var(--bd);border-radius:4px;padding:1px 6px;font-size:.62rem;color:var(--mu);cursor:pointer;margin:0 2px" title="다시 표시">'+it.icon+' '+it.label+' ↩</button>'; }).join('')
+      + '</div>';
+  }
   // 추가 버튼
   checkHtml += '<div style="display:flex;gap:6px;margin-top:8px"><input id="brk-suppl-add" class="dx-form-input" placeholder="영양제/약물 이름" style="flex:1;font-size:.78rem;padding:6px 10px"><button onclick="_brkAddSuppl()" style="font-size:.72rem;padding:6px 12px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font);white-space:nowrap">+ 추가</button></div>';
 
@@ -843,7 +853,7 @@ function _brkRenderIntimacy(m, selDate) {
   } else {
     html+='<div style="padding:12px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;margin-bottom:10px">'
       +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
-      +'<input type="time" id="brk-int-time" class="dx-form-input" style="width:120px" value="'+kstTimeStr()+'">'
+      +'<input type="time" id="brk-int-time" class="dx-form-input" style="width:120px" value="'+kstTime()+'">'
       +'<button onclick="brkSaveIntimacy()" class="btn-accum-add" style="font-size:.75rem;padding:6px 16px">❤️ 기록</button>'
       +'</div>'
       +'<input type="text" id="brk-int-note" class="dx-form-input" placeholder="메모 (선택)" style="width:100%;font-size:.78rem">'
@@ -944,6 +954,31 @@ function _brkAddSuppl(){
   customs.push({key,label});
   _saveBrkCustomSuppl(who,customs);
   showToast('✅ '+label+' 추가됨');
+  renderView('meds');
+}
+
+function _getBrkHiddenSuppl(who){
+  var m=getBrkMaster();
+  return m?.hiddenSuppl?.[who]||[];
+}
+async function _saveBrkHiddenSuppl(who,hidden){
+  var m=getBrkMaster();
+  if(m){if(!m.hiddenSuppl)m.hiddenSuppl={};m.hiddenSuppl[who]=hidden;await saveBrkMaster();}
+}
+function _brkHideSuppl(key){
+  var who=_brkCheckWho==='orangi'?'orangi':'bung';
+  var hidden=_getBrkHiddenSuppl(who);
+  if(hidden.indexOf(key)>=0)return;
+  hidden.push(key);
+  _saveBrkHiddenSuppl(who,hidden);
+  showToast('숨김 처리됨 (아래에서 복원 가능)');
+  renderView('meds');
+}
+function _brkUnhideSuppl(key){
+  var who=_brkCheckWho==='orangi'?'orangi':'bung';
+  var hidden=_getBrkHiddenSuppl(who).filter(function(k){return k!==key;});
+  _saveBrkHiddenSuppl(who,hidden);
+  showToast('다시 표시됨');
   renderView('meds');
 }
 
