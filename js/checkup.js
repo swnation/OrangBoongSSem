@@ -351,6 +351,28 @@ function _judgeStatus(value, ref, who) {
   return 'normal';
 }
 
+// 성별 부적합 검사 필터: 해당 성별에 맞지 않는 항목 제거
+const _MALE_ONLY_TESTS = new Set(['SEM_VOL','SEM_CNT','SEM_MOT','SEM_MOR','PSA','TESTO']);
+const _FEMALE_ONLY_TESTS = new Set(['AMH','PROG','CA125']);
+const _MALE_ONLY_CATEGORIES = new Set(['semen']);
+
+function _isTestApplicable(stdCode, category, who) {
+  const isMale = who === '붕쌤';
+  if (isMale && _FEMALE_ONLY_TESTS.has(stdCode)) return false;
+  if (!isMale && (_MALE_ONLY_TESTS.has(stdCode) || _MALE_ONLY_CATEGORIES.has(category))) return false;
+  return true;
+}
+
+// 이상치 감지: 참고범위 대비 극단적 값 플래그
+function _isSuspiciousValue(value, ref) {
+  if (!ref || typeof value !== 'number' || ref.high >= 999) return false;
+  const range = ref.high - ref.low;
+  if (range <= 0) return false;
+  // 참고범위 10배 초과 → 의심
+  if (value > ref.high * 10 || (ref.low > 0 && value > ref.low * 100)) return true;
+  return false;
+}
+
 // AI 파싱 결과를 표준화: {values:{},ref:{}} → [{stdCode, rawName, value, unit, ...}]
 function normalizeCheckupResults(aiValues, aiRefs, who) {
   if (!aiValues || typeof aiValues !== 'object') return [];
@@ -374,8 +396,14 @@ function normalizeCheckupResults(aiValues, aiRefs, who) {
     const stdRef = def ? (def.ref.male ? (who === '붕쌤' ? def.ref.male : def.ref.female) : def.ref) : null;
     const finalRef = parsedRef || stdRef;
 
+    // 성별 부적합 항목 스킵
+    if (stdCode && def && !_isTestApplicable(stdCode, def.category, who)) continue;
+
     // 상태 판정
     const status = isNum ? _judgeStatus(converted.value, finalRef || (def ? def.ref : null), who) : 'unknown';
+
+    // 이상치 플래그 (참고범위 10배 초과)
+    const suspicious = isNum && _isSuspiciousValue(converted.value, finalRef || stdRef);
 
     results.push({
       stdCode: stdCode || null,
@@ -391,6 +419,7 @@ function normalizeCheckupResults(aiValues, aiRefs, who) {
       category: def ? def.category : 'other',
       related: def ? def.related : [],
       pregnancyRelevant: def ? def.pregnancyRelevant : false,
+      suspicious: suspicious || false,
     });
   }
   // 카테고리 순 정렬
@@ -725,8 +754,8 @@ function renderCheckupArchive() {
   const isHealth = S.currentDomain.endsWith('-health');
   if (!isHealth) return '';
 
-  // 아카이브 UI: 직접 저장된 데이터만 표시 (붕룩이 자동 포함 X)
-  const allCheckups = getAllHealthCheckups(who, false);
+  // 아카이브 UI: 직접 저장 + 붕룩이 연계 (성별 필터 + 이상치 감지 적용됨)
+  const allCheckups = getAllHealthCheckups(who, true);
   const totalItems = allCheckups.reduce((s, c) => s + (c.results?.length || 0), 0);
 
   // 탭 바
@@ -792,8 +821,12 @@ function _renderCheckupTimeline(checkups) {
       return `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:var(--sf);color:var(--mu)">${catDef.icon} ${items.length}</span>`;
     }).join('');
 
-    // 이상 항목 하이라이트
-    const abnormalTags = abnormal.slice(0, 5).map(r => {
+    // suspicious 항목은 별도 경고
+    const suspiciousItems = results.filter(r => r.suspicious);
+
+    // 이상 항목 하이라이트 (suspicious 제외)
+    const realAbnormal = abnormal.filter(r => !r.suspicious);
+    const abnormalTags = realAbnormal.slice(0, 5).map(r => {
       const color = r.status === 'high' ? '#dc2626' : '#2563eb';
       const arrow = r.status === 'high' ? '↑' : '↓';
       return `<span style="font-size:.58rem;padding:1px 5px;border-radius:3px;background:${color}15;color:${color};font-weight:600">${esc(r.displayName)} ${esc(String(r.value))} ${arrow}</span>`;
@@ -811,9 +844,10 @@ function _renderCheckupTimeline(checkups) {
         ${c._legacyLab ? '' : `<button class="accum-del" onclick="if(confirm('삭제?'))deleteHealthCheckup(${c.id})" title="삭제">🗑</button>`}
       </div>
       <div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap">${catSummary}</div>
-      ${abnormal.length ? `<div style="margin-top:4px"><span style="font-size:.6rem;color:#dc2626;font-weight:600">⚠ 이상 ${abnormal.length}건:</span>
+      ${realAbnormal.length ? `<div style="margin-top:4px"><span style="font-size:.6rem;color:#dc2626;font-weight:600">⚠ 이상 ${realAbnormal.length}건:</span>
         <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:2px">${abnormalTags}${moreCount}</div></div>` : ''}
-      ${!abnormal.length && normal.length ? `<div style="font-size:.62rem;color:#10b981;margin-top:3px">✅ 전 항목 정상 범위</div>` : ''}
+      ${suspiciousItems.length ? `<div style="margin-top:3px;font-size:.58rem;color:#f59e0b">⚠️ 의심 수치 ${suspiciousItems.length}건 (${suspiciousItems.map(r=>esc(r.displayName)).join(', ')}) — 원본 확인 필요</div>` : ''}
+      ${!realAbnormal.length && !suspiciousItems.length && normal.length ? `<div style="font-size:.62rem;color:#10b981;margin-top:3px">✅ 전 항목 정상 범위</div>` : ''}
       <div style="font-size:.6rem;color:var(--ac);cursor:pointer;margin-top:4px" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 상세 보기 (${results.length}항목)</div>
       <div style="display:none;margin-top:4px">${_renderCheckupDetail(c)}</div>
     </div>`;
