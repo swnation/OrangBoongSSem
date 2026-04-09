@@ -83,20 +83,37 @@
 - [ ] AI 요약 결과 마스터에 저장 (히스토리)
 - [ ] 홈 대시보드 카드 드래그 정렬
 
+### AI 동적 사전 확장 (규칙 #37 적용)
+- 약품명: `aiVerifyDrugNames()` → `settings.customDrugNames` 클라우드 저장
+- 임신안전: `aiExpandPregnancySafety()` → `settings.customPregnancySafety`
+- 남성가임력: `aiExpandMaleFertility()` → `settings.customMaleFertility`
+- 질환→약물: `aiExpandDiseaseMeds()` → `settings.customDiseaseMeds`
+- 검사표준화: `aiVerifyNormalization()` → `settings.customTests` + `settings.mappingCache`
+- 앱 시작 시 `_loadCustomDrugDicts()` 호출하여 동적 사전 로드 필요
+
+### 약물 안전 탭 변경
+- 상품명/성분명 토글: `toggleDrugNameMode()` → 🏷성분명/🏪상품명
+- `getDrugDisplayName()`: 모드에 따라 전환 + 서브 병기
+- 미매칭 약물: "🤖 AI 매핑" 버튼 → `aiVerifyDrugNames()`
+- `refreshDrugSafety()`: 임신안전+남성가임력 병렬 AI 조회
+
+### quick 경과 모달
+- 🤷모르겠어요 (unknown) 선택지 추가
+- 다크모드 가시성: 버튼 배경 transparent + 테두리 색 강조
+
 ## 주의사항
 - sw.js CACHE_NAME 현재 **v98b**
 - 검사 아카이브 데이터: 건강관리 도메인 master의 `healthCheckups` 배열에 저장
-- 붕룩이 `labResults`는 읽기 전용 참조 (기존 구조 변경 없음)
-- `_matchStdTest()` 3단계 매칭: 코드직접 → 별칭정확 → 부분포함 (최장 매치 우선)
-- `_looksLikeUnit()`: 단위/별칭 구분 (괄호 내 /·%·숫자 포함 시 단위로 판별)
-- 단위 변환 실패 시 원본 값/단위 유지 (데이터 손실 방지)
-- `migrateLabResultsStdRef()` 실행 전 반드시 `_pushUndo()` 확인
-- Vision AI 호출은 `_analyzeOnePhoto` 재사용 → `recordUsage` 자동 포함
-- 멀티AI 교차검증: `_brkConsensusAnalyze` 패턴 재사용
+- 붕룩이 `labResults`: 성별 필터 + 비-검사값 필터 적용 후 건강관리에 연계 표시
+- 정규화 3단계: ①캐시(settings.mappingCache) → ②하드코딩사전 → ③AI검증
+- 동적 사전 5종: customTests, customDrugNames, customPregnancySafety, customMaleFertility, customDiseaseMeds → 모두 클라우드(마스터 settings)에 저장
+- `_loadCustomDrugDicts()` 앱 시작 시 호출 필요 (런타임 하드코딩 사전에 머지)
+- 비-검사값 필터: `_NON_LAB_KEYWORDS` 30개 키워드 (예측/확률/점수/소견 등)
+- 퍼지 매칭: 별칭 3자 미만은 부분매칭 제외, 역방향 매칭 제거
+- `migrateLabResultsStdRef()`: 자체 `_migrateRefBackup` 스냅샷 (logData용 `_pushUndo` 아님)
 - ntfy 경과/약물 알림: 서버사이드 `?delay=Xm` + 폴백
 - 예방접종 변경 시 건강관리↔붕룩이 양쪽 반영
-- 관계 탭 무반응 원인 불확실 — kstTime() 수정 + try-catch 추가
-- review/pre-batch 브랜치 정리 필요
+- CLAUDE.md 규칙 #22 강화(클라우드 필수), #37(AI검증), #38(규칙 교차검증) 추가됨
 
 ## 새 채팅 시작 시
 ```
