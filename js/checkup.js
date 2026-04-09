@@ -575,13 +575,21 @@ ${Object.entries(_CHECKUP_CATEGORIES).map(([k,v])=>k+':'+v.name).join(', ')}
   }
 }
 
-// 매핑 캐시: 기관+원시키 → stdCode (동일 기관 동일 포맷 재활용)
-var _mappingCache = {};
+// 매핑 캐시: 기관+원시키 → stdCode (클라우드 저장 — settings.mappingCache)
+function _getMappingCache() {
+  const m = DM();
+  if (!m) return {};
+  if (!m.settings) m.settings = {};
+  if (!m.settings.mappingCache) m.settings.mappingCache = {};
+  return m.settings.mappingCache;
+}
 function _getCachedMapping(institution, rawName) {
-  return _mappingCache[institution + '::' + rawName];
+  return _getMappingCache()[institution + '::' + rawName];
 }
 function _setCachedMapping(institution, rawName, stdCode) {
-  _mappingCache[institution + '::' + rawName] = stdCode;
+  const cache = _getMappingCache();
+  cache[institution + '::' + rawName] = stdCode;
+  // saveMaster는 호출측에서 일괄 처리 (빈번한 저장 방지)
 }
 
 // 캐시 적용 정규화: 이전에 AI 검증된 매핑 재사용
@@ -592,8 +600,8 @@ function normalizeWithCache(aiValues, aiRefs, who, institution) {
   results.forEach(r => {
     if (r.stdCode) return; // 이미 매칭됨
     const cached = _getCachedMapping(institution, r.rawName);
-    if (cached && _CHECKUP_STD_TESTS[cached]) {
-      const def = _CHECKUP_STD_TESTS[cached];
+    if (cached && _getTestDef(cached)) {
+      const def = _getTestDef(cached);
       r.stdCode = cached;
       r.displayName = def.name.ko;
       r.category = def.category;
@@ -607,14 +615,17 @@ function normalizeWithCache(aiValues, aiRefs, who, institution) {
   return results.filter(r => !r._aiRemoved);
 }
 
-// AI 검증 후 캐시에 저장
-function _cacheVerifiedMappings(results, institution) {
+// AI 검증 후 캐시에 저장 (클라우드)
+async function _cacheVerifiedMappings(results, institution) {
   if (!institution) return;
+  let added = 0;
   results.forEach(r => {
     if (r._aiVerified || r.stdCode) {
       _setCachedMapping(institution, r.rawName, r.stdCode || '_skip');
+      added++;
     }
   });
+  if (added) await saveMaster(); // 클라우드에 캐시 영속화
 }
 
 // ═══════════════════════════════════════════════════════════════
