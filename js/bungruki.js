@@ -797,6 +797,160 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
     + '<div style="margin-top:14px;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">'
     + '<div style="font-size:.75rem;font-weight:600;color:var(--mu);margin-bottom:6px">📊 주간 요약 (최근 7일)</div>'
     + '<div style="display:flex;flex-direction:column;gap:4px">'+weekSummary+'</div>'
+    + '</div>'
+    + (isOrangi ? '' : _brkRenderMedCompliance(m, _brkCheckDate || today));
+}
+
+// ── 붕쌤 질환별 복용 순응도 ──
+
+function _getBungConditions() {
+  // 붕쌤의 모든 도메인에서 active 질환 + 약물 수집
+  var result = [];
+  Object.entries(S.domainState).forEach(function(entry) {
+    var domainId = entry[0], ds = entry[1];
+    var dd = DOMAINS[domainId];
+    if (!dd || dd.user !== '붕쌤' || !ds.master?.conditions) return;
+    ds.master.conditions.forEach(function(c) {
+      if (c.status !== 'active' && c.status !== 'remission') return;
+      if (!c.medsList?.length) return;
+      var daily = c.medsList.filter(function(m) { return !m.includes('(PRN)'); });
+      var prn = c.medsList.filter(function(m) { return m.includes('(PRN)'); });
+      result.push({ id: c.id || c.name, name: c.name, domain: dd.label, icon: dd.icon, daily: daily, prn: prn, domainId: domainId });
+    });
+  });
+  return result;
+}
+
+function _getMedComplianceConfig() {
+  var m = getBrkMaster();
+  return m?.medComplianceConfig || {};
+}
+
+async function _saveMedComplianceConfig(config) {
+  var m = getBrkMaster(); if (!m) return;
+  m.medComplianceConfig = config;
+  await saveBrkMaster();
+}
+
+function _brkToggleMedComplianceCondition(condKey) {
+  var config = _getMedComplianceConfig();
+  if (!config.tracked) config.tracked = {};
+  config.tracked[condKey] = !config.tracked[condKey];
+  _saveMedComplianceConfig(config);
+  renderView('meds');
+}
+
+function _brkToggleMedCheck(medKey) {
+  var r = _getBrkWhoData(); if (!r) return;
+  if (!r.whoData.mc) r.whoData.mc = {};
+  r.whoData.mc[medKey] = !r.whoData.mc[medKey];
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _brkRenderMedCompliance(m, selDate) {
+  var conds = _getBungConditions();
+  if (!conds.length) return '';
+  var config = _getMedComplianceConfig();
+  var tracked = config.tracked || {};
+  var anyTracked = Object.keys(tracked).some(function(k) { return tracked[k]; });
+
+  // 질환 선택 패널
+  var selectorId = 'brk-mc-selector';
+  var selectorHtml = '<div id="'+selectorId+'" style="display:none;margin-bottom:10px;padding:8px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:8px">'
+    + '<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:6px">순응도 추적할 질환 선택</div>'
+    + conds.map(function(c) {
+      var key = c.domainId + '_' + (c.id || c.name);
+      var on = tracked[key];
+      return '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:.75rem">'
+        + '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="_brkToggleMedComplianceCondition(\'' + esc(key) + '\')" style="width:16px;height:16px;accent-color:var(--ac)">'
+        + '<span>' + c.icon + ' ' + esc(c.name) + '</span>'
+        + '<span style="font-size:.6rem;color:var(--mu2)">' + esc(c.domain) + ' · 매일 ' + c.daily.length + '개' + (c.prn.length ? ' + PRN ' + c.prn.length + '개' : '') + '</span>'
+        + '</label>';
+    }).join('')
+    + '</div>';
+
+  // 선택된 질환의 복용 체크
+  var dayData = m.dailyChecks[selDate] || {};
+  var bData = dayData.bung || {};
+  var mc = bData.mc || {};
+
+  var compHtml = '';
+  conds.forEach(function(c) {
+    var key = c.domainId + '_' + (c.id || c.name);
+    if (!tracked[key]) return;
+
+    var medsHtml = c.daily.map(function(med) {
+      var mk = key + '_' + med;
+      var checked = mc[mk];
+      return '<div onclick="_brkToggleMedCheck(\'' + esc(mk) + '\')" style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + (checked ? '#f0fdf4' : 'var(--sf2)') + ';border:1.5px solid ' + (checked ? '#86efac' : 'var(--bd)') + ';border-radius:8px;cursor:pointer;margin-bottom:3px">'
+        + '<span style="font-size:1rem">' + (checked ? '✅' : '💊') + '</span>'
+        + '<span style="font-size:.78rem;font-weight:' + (checked ? '600' : '400') + ';color:' + (checked ? '#16a34a' : 'var(--tx)') + '">' + esc(med.replace(/\s*\(PRN\)/i, '')) + '</span>'
+        + '<span style="font-size:.58rem;color:var(--mu2);margin-left:auto">매일</span>'
+        + '</div>';
+    }).join('');
+
+    medsHtml += c.prn.map(function(med) {
+      var mk = key + '_' + med;
+      var checked = mc[mk];
+      return '<div onclick="_brkToggleMedCheck(\'' + esc(mk) + '\')" style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + (checked ? '#fffbeb' : 'var(--sf2)') + ';border:1.5px solid ' + (checked ? '#fde68a' : 'var(--bd)') + ';border-radius:8px;cursor:pointer;margin-bottom:3px;border-style:' + (checked ? 'solid' : 'dashed') + '">'
+        + '<span style="font-size:1rem">' + (checked ? '✅' : '💊') + '</span>'
+        + '<span style="font-size:.78rem;font-weight:' + (checked ? '600' : '400') + ';color:' + (checked ? '#92400e' : 'var(--tx)') + '">' + esc(med.replace(/\s*\(PRN\)/i, '')) + '</span>'
+        + '<span style="font-size:.58rem;color:#f59e0b;margin-left:auto">PRN</span>'
+        + '</div>';
+    }).join('');
+
+    compHtml += '<div style="margin-bottom:8px">'
+      + '<div style="font-size:.72rem;font-weight:600;color:var(--ink);margin-bottom:4px">' + c.icon + ' ' + esc(c.name) + ' <span style="font-size:.58rem;font-weight:400;color:var(--mu2)">' + esc(c.domain) + '</span></div>'
+      + medsHtml
+      + '</div>';
+  });
+
+  if (!anyTracked) {
+    compHtml = '<div style="font-size:.72rem;color:var(--mu2);text-align:center;padding:8px">아래 ⚙️ 버튼으로 추적할 질환을 선택하세요.</div>';
+  }
+
+  // 주간 순응도 (선택된 질환의 daily 약물만)
+  var weekCompHtml = '';
+  if (anyTracked) {
+    var today2 = kstToday();
+    var trackedMeds = [];
+    conds.forEach(function(c) {
+      var ckey = c.domainId + '_' + (c.id || c.name);
+      if (!tracked[ckey]) return;
+      c.daily.forEach(function(med) { trackedMeds.push({ key: ckey + '_' + med, label: med.replace(/\s*\(PRN\)/i, '') }); });
+    });
+    if (trackedMeds.length) {
+      weekCompHtml = '<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">';
+      trackedMeds.forEach(function(tm) {
+        var count = 0;
+        for (var i = 0; i < 7; i++) {
+          var d = new Date(new Date(today2 + 'T00:00:00').getTime() - i * 86400000);
+          var ds2 = _localDateStr(d);
+          var dd2 = m.dailyChecks[ds2];
+          if (dd2?.bung?.mc?.[tm.key]) count++;
+        }
+        var pct = Math.round(count / 7 * 100);
+        weekCompHtml += '<div style="display:flex;align-items:center;gap:6px;font-size:.72rem">'
+          + '<span style="width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💊 ' + esc(tm.label) + '</span>'
+          + '<span style="flex:1;height:5px;background:var(--bd);border-radius:3px;overflow:hidden"><span style="display:block;height:100%;width:' + pct + '%;background:' + (pct >= 80 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#ef4444') + ';border-radius:3px"></span></span>'
+          + '<span style="font-weight:600;color:' + (pct >= 80 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#ef4444') + '">' + count + '/7</span>'
+          + '</div>';
+      });
+      weekCompHtml += '</div>';
+    }
+  }
+
+  return '<div style="margin-top:14px;padding:10px;background:var(--sf2);border-radius:8px;border:1.5px solid var(--bd)">'
+    + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'
+    + '<div style="font-size:.78rem;font-weight:600;color:var(--ink)">🏥 질환별 복용 체크</div>'
+    + '<button onclick="var d=document.getElementById(\'' + selectorId + '\');d.style.display=d.style.display===\'none\'?\'block\':\'none\'" style="margin-left:auto;background:none;border:1px solid var(--bd);border-radius:6px;padding:2px 8px;font-size:.65rem;color:var(--mu);cursor:pointer;font-family:var(--font)">⚙️ 질환 선택</button>'
+    + '</div>'
+    + selectorHtml
+    + compHtml
+    + (weekCompHtml ? '<div style="margin-top:8px;padding:8px;background:var(--sf);border-radius:6px;border:1px solid var(--bd)">'
+      + '<div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">📊 복용 순응도 (7일)</div>'
+      + weekCompHtml + '</div>' : '')
     + '</div>';
 }
 
