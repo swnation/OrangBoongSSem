@@ -1210,7 +1210,7 @@ function estimateConceptionRate(m) {
   else if(r1>=5) timeline='생식의학과 조기 상담 권장 — IUI 또는 IVF 병행 검토';
   else timeline='생식의학과 즉시 상담 — IVF/ICSI 적극 검토';
 
-  return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,femaleAge,ageMult,factors,dailyRates:adjDaily,cumulative,cycleStd,avgCycle,hasSemen:!!sv,hasHormone:!!hv,timeline};
+  return {monthly:r1,tmsc,tmscRate:r2,ageRate:r3,femaleAge,ageMult,factors,dailyRates:adjDaily,cumulative,cycleStd,avgCycle,hasSemen:!!sv,hasHormone:!!hormoneLabs.length,timeline};
 }
 
 function _showModelInfo(model){
