@@ -1095,9 +1095,9 @@ function renderOutcomeTab() {
       +'</div>'
       +'<div style="font-size:.78rem;color:var(--mu);margin-bottom:8px">'+esc(tx)+'</div>'
       +'<div style="display:flex;gap:6px">'
-      +'<button onclick="rateQuickOutcome('+idx+',\'better\')" style="flex:1;padding:8px;border:1.5px solid #16a34a;border-radius:8px;background:'+(rating==='better'?'#16a34a':'#f0fdf4')+';color:'+(rating==='better'?'#fff':'#16a34a')+';font-size:.78rem;font-weight:600;cursor:pointer">🟢 호전</button>'
-      +'<button onclick="rateQuickOutcome('+idx+',\'same\')" style="flex:1;padding:8px;border:1.5px solid #f59e0b;border-radius:8px;background:'+(rating==='same'?'#f59e0b':'#fffbeb')+';color:'+(rating==='same'?'#fff':'#f59e0b')+';font-size:.78rem;font-weight:600;cursor:pointer">🟡 비슷</button>'
-      +'<button onclick="rateQuickOutcome('+idx+',\'worse\')" style="flex:1;padding:8px;border:1.5px solid #dc2626;border-radius:8px;background:'+(rating==='worse'?'#dc2626':'#fef2f2')+';color:'+(rating==='worse'?'#fff':'#dc2626')+';font-size:.78rem;font-weight:600;cursor:pointer">🔴 악화</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'better\')" style="flex:1;padding:8px;border:1.5px solid #16a34a;border-radius:8px;background:'+(rating==='better'?'#16a34a':'transparent')+';color:'+(rating==='better'?'#fff':'#16a34a')+';font-size:.78rem;font-weight:600;cursor:pointer">🟢 호전</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'same\')" style="flex:1;padding:8px;border:1.5px solid #f59e0b;border-radius:8px;background:'+(rating==='same'?'#f59e0b':'transparent')+';color:'+(rating==='same'?'#fff':'#f59e0b')+';font-size:.78rem;font-weight:600;cursor:pointer">🟡 비슷</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'worse\')" style="flex:1;padding:8px;border:1.5px solid #dc2626;border-radius:8px;background:'+(rating==='worse'?'#dc2626':'transparent')+';color:'+(rating==='worse'?'#fff':'#dc2626')+';font-size:.78rem;font-weight:600;cursor:pointer">🔴 악화</button>'
       +'</div>'
       +'<div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">'
       +'<button onclick="rateQuickOutcome('+idx+',\'unknown\')" style="background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:.68rem;color:var(--mu);cursor:pointer;'+(rating==='unknown'?'background:var(--bd);font-weight:600':'')+'">🤷 기억 안남</button>'
@@ -1200,7 +1200,7 @@ function renderList() {
       ...(l.triggers||[]).map(t => `<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`),
     ].join('');
     const outcomeTag = l.outcome
-      ? `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:${l.outcome.rating==='better'?'#dcfce7':l.outcome.rating==='same'?'#fef3c7':'#fee2e2'};color:${l.outcome.rating==='better'?'#15803d':l.outcome.rating==='same'?'#92400e':'#b91c1c'}">${l.outcome.rating==='better'?'🟢호전':l.outcome.rating==='same'?'🟡비슷':'🔴악화'}</span>`
+      ? `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:${l.outcome.rating==='better'?'#dcfce7':l.outcome.rating==='same'?'#fef3c7':l.outcome.rating==='unknown'?'#f3f4f6':'#fee2e2'};color:${l.outcome.rating==='better'?'#15803d':l.outcome.rating==='same'?'#92400e':l.outcome.rating==='unknown'?'#4b5563':'#b91c1c'}">${l.outcome.rating==='better'?'🟢호전':l.outcome.rating==='same'?'🟡비슷':l.outcome.rating==='unknown'?'🤷모름':'🔴악화'}</span>`
       : `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`;
     const nrsHtml = l.nrs >= 0
       ? `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`
@@ -1260,14 +1260,18 @@ function quickEditOutcome(id) {
   const time=dt.slice(11,16);
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
   const current=entry.outcome?.rating;
-  const labels={better:'😊 호전',same:'😐 비슷',worse:'😣 악화'};
+  const labels={better:'😊 호전',same:'😐 비슷',worse:'😣 악화',unknown:'🤷 모르겠어요'};
+  const colors={better:['#16a34a','#dcfce7','#15803d'],same:['#f59e0b','#fef3c7','#92400e'],worse:['#dc2626','#fee2e2','#b91c1c'],unknown:['#6b7280','#f3f4f6','#4b5563']};
 
-  var html=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">
-    <div style="background:var(--sf);border-radius:14px;padding:20px;max-width:320px;width:85vw;box-shadow:0 4px 20px rgba(0,0,0,.2)">
-      <div style="font-size:.82rem;font-weight:600;margin-bottom:4px">📋 경과 기록</div>
+  var html=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">
+    <div style="background:var(--bg,#fff);border:1.5px solid var(--bd);border-radius:14px;padding:20px;max-width:320px;width:85vw;box-shadow:0 4px 20px rgba(0,0,0,.3)">
+      <div style="font-size:.82rem;font-weight:600;margin-bottom:4px;color:var(--ink,#1a1a1a)">📋 경과 기록</div>
       <div style="font-size:.72rem;color:var(--mu);margin-bottom:14px">${dt.slice(0,10)} ${time} ${nrs}</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        ${['better','same','worse'].map(r=>`<button onclick="saveQuickOutcome(${id},'${r}')" style="padding:12px;border:2px solid ${r==='better'?'#86efac':r==='same'?'#fde68a':'#fca5a5'};background:${current===r?(r==='better'?'#dcfce7':r==='same'?'#fef3c7':'#fee2e2'):'var(--sf)'};border-radius:10px;font-size:.92rem;font-weight:${current===r?'700':'400'};cursor:pointer;font-family:inherit">${labels[r]}</button>`).join('')}
+        ${['better','same','worse','unknown'].map(r=>{
+          const c=colors[r];const sel=current===r;
+          return `<button onclick="saveQuickOutcome(${id},'${r}')" style="padding:12px;border:2px solid ${c[0]};background:${sel?c[1]:'transparent'};border-radius:10px;font-size:.92rem;font-weight:${sel?'700':'500'};cursor:pointer;font-family:inherit;color:${sel?c[2]:c[0]}">${labels[r]}</button>`;
+        }).join('')}
       </div>
       ${current?`<button onclick="saveQuickOutcome(${id},null)" style="display:block;margin:12px auto 0;font-size:.72rem;color:var(--mu);background:none;border:none;cursor:pointer;text-decoration:underline">경과 삭제</button>`:''}
     </div></div>`;
