@@ -1001,7 +1001,7 @@ function checkPendingOutcome(){
       if(_outcomeTimer) clearTimeout(_outcomeTimer);
       _outcomeTimer=setTimeout(()=>{sendOutcomeNtfy(l.id);_markOutcomeSent(l.id);},l.outcomeNotifyAt-now);
     }
-    break;
+    break; // 가장 최근 미발송 1건만 처리
   }
 }
 

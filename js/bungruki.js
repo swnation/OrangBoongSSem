@@ -2739,7 +2739,7 @@ function _extractDrugCandidates(rawName) {
   }).filter(Boolean));
   // 성분명에서 "나트륨수화물","나트륨","수화물","염산염" 등 접미사 제거하여 추가
   candidates = candidates.concat(candidates.map(function(c){
-    return c.replace(/(나트륨|수화물|염산염|칼슘|마그네슘|칼륨)+$/g,'').trim();
+    return c.replace(/(나트륨|수화물|염산염|칼슘|마그네슘|칼륨)+$/,'').trim();
   }).filter(Boolean));
   // 중복 제거
   var seen = {};
@@ -2932,7 +2932,8 @@ function _renderDrugCard(name, info, isMale) {
   if (isMale) {
     var mi = _MALE_FERTILITY_IMPACT[name];
     if (mi) {
-      var mic = mi.impact==='위험'?'#dc2626':mi.impact==='주의'?'#ea580c':mi.impact==='경미'?'#f59e0b':'#10b981';
+      var _mic={'위험':'#dc2626','주의':'#ea580c','경미':'#f59e0b','안전':'#10b981'};
+      var mic = _mic[mi.impact]||'#10b981';
       maleHtml = '<div style="margin-top:5px;padding:8px 10px;background:'+mic+'08;border:1.5px solid '+mic+'30;border-radius:8px">'
         + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:700;background:'+mic+'18;color:'+mic+';border:1px solid '+mic+'40">🧬 '+mi.impact+'</span>'
         + (mi.washout?'<span style="font-size:.6rem;color:var(--mu)">⏱ '+esc(mi.washout)+'</span>':'')
