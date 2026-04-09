@@ -411,10 +411,12 @@ function _getCheckupMaster() {
   return dm;
 }
 
-// 특정 유저의 모든 건강검진 데이터 (건강관리 도메인 + 붕룩이 labResults 변환)
-function getAllHealthCheckups(who) {
+// 특정 유저의 모든 건강검진 데이터
+// includeLegacy: true면 붕룩이 labResults도 포함 (AI컨텍스트/추세용), false면 직접 저장분만
+function getAllHealthCheckups(who, includeLegacy) {
+  if (includeLegacy === undefined) includeLegacy = true;
   const results = [];
-  // 1) 건강관리 도메인의 healthCheckups
+  // 1) 각 도메인의 healthCheckups (직접 저장된 데이터)
   Object.entries(S.domainState).forEach(([domainId, ds]) => {
     const dd = DOMAINS[domainId];
     if (!dd || !ds.master) return;
@@ -425,23 +427,24 @@ function getAllHealthCheckups(who) {
       }
     });
   });
-  // 2) 붕룩이 labResults → 표준화 변환
-  const brkDs = S.domainState['bungruki'];
-  if (brkDs?.master?.labResults) {
-    brkDs.master.labResults.forEach(l => {
-      if (who && l.who !== who) return;
-      // labResults → healthCheckup 형식으로 변환
-      const normalized = normalizeCheckupResults(l.values || {}, l.ref || {}, l.who);
-      if (normalized.length) {
-        results.push({
-          id: l.id, date: l.date, who: l.who,
-          institution: '붕룩이 기록', type: l.type,
-          results: normalized, memo: l.memo || '',
-          _source: 'bungruki', _sourceLabel: '임신 준비',
-          _legacyLab: true,
-        });
-      }
-    });
+  // 2) 붕룩이 labResults → 표준화 변환 (옵트인)
+  if (includeLegacy) {
+    const brkDs = S.domainState['bungruki'];
+    if (brkDs?.master?.labResults) {
+      brkDs.master.labResults.forEach(l => {
+        if (who && l.who !== who) return;
+        const normalized = normalizeCheckupResults(l.values || {}, l.ref || {}, l.who);
+        if (normalized.length) {
+          results.push({
+            id: l.id, date: l.date, who: l.who,
+            institution: '붕룩이 기록', type: l.type,
+            results: normalized, memo: l.memo || '',
+            _source: 'bungruki', _sourceLabel: '임신 준비',
+            _legacyLab: true,
+          });
+        }
+      });
+    }
   }
   // 날짜순 정렬 (최신 먼저)
   results.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -722,7 +725,8 @@ function renderCheckupArchive() {
   const isHealth = S.currentDomain.endsWith('-health');
   if (!isHealth) return '';
 
-  const allCheckups = getAllHealthCheckups(who);
+  // 아카이브 UI: 직접 저장된 데이터만 표시 (붕룩이 자동 포함 X)
+  const allCheckups = getAllHealthCheckups(who, false);
   const totalItems = allCheckups.reduce((s, c) => s + (c.results?.length || 0), 0);
 
   // 탭 바
