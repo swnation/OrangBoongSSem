@@ -939,7 +939,7 @@ async function _sendServerScheduledNtfy(entry,delayMin){
   const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   const rateUrl=baseUrl+'rate.html';
   const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
-  const actions='view,😊 호전,'+rateUrl+'?r=better&id='+entry.id+';view,😐 비슷,'+rateUrl+'?r=same&id='+entry.id+';view,😣 악화,'+rateUrl+'?r=worse&id='+entry.id;
+  const actions='view,😊 호전,'+rateUrl+'?r=better&id='+entry.id+';view,😐 비슷,'+rateUrl+'?r=same&id='+entry.id+';view,😣 악화,'+rateUrl+'?r=worse&id='+entry.id+';view,🤷 모름,'+rateUrl+'?r=unknown&id='+entry.id;
   // delay만 쿼리에, title/actions는 URL 길이 최소화를 위해 분리
   const ntfyUrl='https://ntfy.sh/'+encodeURIComponent(orangiTopic)+'?delay='+delayMin+'m&title='+encodeURIComponent('🤕 두통 경과 확인')+'&actions='+encodeURIComponent(actions);
   try{
@@ -981,7 +981,7 @@ async function sendOutcomeNtfy(entryId){
   const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   const rateUrl=baseUrl+'rate.html';
   const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
-  const actions='view,😊 호전,'+rateUrl+'?r=better&id='+entryId+';view,😐 비슷,'+rateUrl+'?r=same&id='+entryId+';view,😣 악화,'+rateUrl+'?r=worse&id='+entryId;
+  const actions='view,😊 호전,'+rateUrl+'?r=better&id='+entryId+';view,😐 비슷,'+rateUrl+'?r=same&id='+entryId+';view,😣 악화,'+rateUrl+'?r=worse&id='+entryId+';view,🤷 모름,'+rateUrl+'?r=unknown&id='+entryId;
   const ntfyUrl='https://ntfy.sh/'+encodeURIComponent(orangiTopic)+'?title='+encodeURIComponent('🤕 두통 경과 확인')+'&actions='+encodeURIComponent(actions);
   try{await fetch(ntfyUrl,{method:'POST',body:info+' → 지금 어때요?'});}catch(e){console.warn('ntfy outcome failed:',e);}
 }
@@ -1167,7 +1167,7 @@ async function testFollowupNtfy() {
   if(!topic){showToast('⚠️ 오랑이 경과 알림 토픽이 설정되지 않았습니다');return;}
   var baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   var rateUrl=baseUrl+'rate.html';
-  var actions='view,😊 호전,'+rateUrl+'?r=better&id=0;view,😐 비슷,'+rateUrl+'?r=same&id=0;view,😣 악화,'+rateUrl+'?r=worse&id=0';
+  var actions='view,😊 호전,'+rateUrl+'?r=better&id=0;view,😐 비슷,'+rateUrl+'?r=same&id=0;view,😣 악화,'+rateUrl+'?r=worse&id=0;view,🤷 모름,'+rateUrl+'?r=unknown&id=0';
   var ntfyUrl='https://ntfy.sh/'+encodeURIComponent(topic)+'?title='+encodeURIComponent('🔔 경과 알림 테스트')+'&actions='+encodeURIComponent(actions);
   try{
     var r=await fetch(ntfyUrl,{method:'POST',body:'이 알림이 보이면 정상 작동합니다!'});
@@ -1445,7 +1445,7 @@ checkPendingOutcome(); // 미발송 경과 알림 체크
 const _handleHash=()=>{
   const h=location.hash;
   // #rate-{rating}-{id} → 경과 바로 기록
-  const rateMatch=h.match(/^#rate-(better|same|worse)-(\d+)$/);
+  const rateMatch=h.match(/^#rate-(better|same|worse|unknown)-(\d+)$/);
   if(rateMatch){
     const [,rating,id]=rateMatch;
     rateQuickOutcomeById(id,rating);

@@ -563,10 +563,10 @@ async function _saveBrkDaily(date){
   }catch(e){console.error('Save bungruki daily:',e);}
 
   // bung-health 동기화 (syncBrkToHealth 동등)
-  _syncBrkToHealthLocal(date);
+  await _syncBrkToHealthLocal(date);
 }
 
-function _syncBrkToHealthLocal(date){
+async function _syncBrkToHealthLocal(date){
   const brkM=domainData['bungruki']?.master;if(!brkM)return;
   const dayData=brkM.dailyChecks?.[date]?.bung;if(!dayData)return;
   const ds=domainData['bung-health'];if(!ds)return;
@@ -579,6 +579,8 @@ function _syncBrkToHealthLocal(date){
   const alcohol=dayData.alcohol||false;
 
   const month=date.slice(0,7);
+  // 해당 월 로그가 미로드면 로드
+  await loadLogMonth('bung-health',month);
   const ml=ds.logs?.[month];if(!ml)return;
 
   const syncId='brk-sync-'+date;
@@ -612,8 +614,10 @@ function _syncBrkToHealthLocal(date){
 
   // bung-health 로그 Drive 저장
   const logName=BUNG_DOMAINS['bung-health'].logPrefix+'_'+month+'.json';
-  if(ml.fileId)driveUpdate(ml.fileId,ml.data).catch(e=>console.error('Sync save:',e));
-  else driveCreate(logName,ml.data,ds.folderId).then(id=>{ml.fileId=id;}).catch(e=>console.error('Sync create:',e));
+  try{
+    if(ml.fileId)await driveUpdate(ml.fileId,ml.data);
+    else ml.fileId=await driveCreate(logName,ml.data,ds.folderId);
+  }catch(e){console.error('Sync save:',e);}
 }
 
 // ═══════════════════════════════════════════════════════════════
