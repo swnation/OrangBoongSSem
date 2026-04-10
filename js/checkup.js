@@ -837,7 +837,82 @@ async function deleteHealthCheckup(checkupId) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// AI 재분류 — 기존 검사결과를 AI에게 다시 보내서 정규화
+// EDIT CHECKUP — 검진 결과 수정/편집
+// ═══════════════════════════════════════════════════════════════
+
+function editHealthCheckup(checkupId) {
+  const m = _getCheckupMaster();
+  if (!m) return;
+  const checkup = m.healthCheckups.find(c => c.id === checkupId);
+  if (!checkup) { showToast('⚠️ 데이터 없음'); return; }
+
+  const results = checkup.results || [];
+  const cats = {};
+  results.forEach((r, i) => { const cat = r.category || 'other'; if (!cats[cat]) cats[cat] = []; cats[cat].push({ ...r, _idx: i }); });
+
+  const catOrder = Object.fromEntries(Object.entries(_CHECKUP_CATEGORIES).map(([k, v]) => [k, v.order]));
+  const sortedCats = Object.entries(cats).sort((a, b) => (catOrder[a[0]] || 99) - (catOrder[b[0]] || 99));
+
+  const rows = sortedCats.map(([cat, items]) => {
+    const catDef = _CHECKUP_CATEGORIES[cat] || _CHECKUP_CATEGORIES.other;
+    const itemRows = items.map(r => {
+      const sc = _statusColor(r.status);
+      return `<div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--sf)">
+        <span style="color:${sc};font-size:.6rem;min-width:14px">${_statusIcon(r.status)}</span>
+        <span style="flex:1;font-size:.7rem">${esc(r.displayName)}</span>
+        <input type="text" data-ck-edit="${r._idx}" value="${esc(String(r.value))}" style="width:65px;font-size:.72rem;padding:2px 6px;border:1px solid var(--bd);border-radius:4px;font-family:var(--mono);text-align:right">
+        <span style="font-size:.58rem;color:var(--mu);min-width:35px">${esc(r.unit || '')}</span>
+        <button onclick="this.closest('[data-ck-edit]')?.remove();document.querySelector('[data-ck-del=${r._idx}]').value='1'" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.6rem;padding:2px" title="삭제">✕</button>
+        <input type="hidden" data-ck-del="${r._idx}" value="0">
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:6px">
+      <div style="font-size:.68rem;font-weight:600;color:var(--mu);padding:2px 0">${catDef.icon} ${catDef.name}</div>
+      ${itemRows}
+    </div>`;
+  }).join('');
+
+  const meta = `<div style="display:flex;gap:8px;margin-bottom:10px;font-size:.72rem">
+    <label>날짜 <input type="date" id="ck-edit-date" value="${checkup.date || ''}" class="dx-form-input" style="width:140px"></label>
+    <label>기관 <input type="text" id="ck-edit-inst" value="${esc(checkup.institution || '')}" placeholder="기관명" class="dx-form-input" style="width:140px"></label>
+  </div>
+  <label style="font-size:.72rem">메모 <input type="text" id="ck-edit-memo" value="${esc(checkup.memo || '')}" class="dx-form-input" style="width:100%"></label>`;
+
+  showConfirmModal('✏️ 검진 결과 편집',
+    `<div style="font-size:.72rem">${meta}<div style="margin-top:10px;max-height:300px;overflow-y:auto">${rows}</div></div>`,
+    [
+      { label: '💾 저장', primary: true, action: async () => {
+        // 값 수집
+        checkup.date = document.getElementById('ck-edit-date')?.value || checkup.date;
+        checkup.institution = document.getElementById('ck-edit-inst')?.value || '';
+        checkup.memo = document.getElementById('ck-edit-memo')?.value || '';
+        // 개별 결과 수정
+        document.querySelectorAll('[data-ck-edit]').forEach(inp => {
+          const idx = parseInt(inp.dataset.ckEdit);
+          const r = checkup.results[idx];
+          if (!r) return;
+          const raw = inp.value.trim();
+          const num = parseFloat(raw);
+          r.value = isNaN(num) ? raw : num;
+          // 상태 재판정
+          if (typeof r.value === 'number' && r.ref) {
+            r.status = _judgeStatus(r.value, r.ref, checkup.who, r.stdCode);
+          }
+        });
+        // 삭제 처리 (역순으로)
+        const delIdxs = [];
+        document.querySelectorAll('[data-ck-del]').forEach(inp => {
+          if (inp.value === '1') delIdxs.push(parseInt(inp.dataset.ckDel));
+        });
+        delIdxs.sort((a, b) => b - a).forEach(i => checkup.results.splice(i, 1));
+        await saveMaster();
+        closeConfirmModal();
+        showToast('✅ 수정 저장됨');
+        renderView('meds');
+      }},
+      { label: '취소', action: closeConfirmModal },
+    ]);
+}
 // ═══════════════════════════════════════════════════════════════
 
 async function aiReclassifyCheckup(source, id, isLegacy) {
@@ -1428,6 +1503,7 @@ function _renderCheckupTimeline(checkups) {
         ${sourceTag}
         <span style="font-size:.6rem;color:var(--mu);margin-left:auto">${results.length}항목</span>
         <button onclick="aiReclassifyCheckup('${c._source}',${c.id},${c._legacyLab||false})" style="background:none;border:1px solid #8b5cf6;border-radius:4px;padding:1px 6px;font-size:.55rem;color:#8b5cf6;cursor:pointer;font-family:var(--font)" title="AI 재분류">🤖</button>
+        ${c._legacyLab ? '' : `<button onclick="editHealthCheckup(${c.id})" style="background:none;border:1px solid var(--ac);border-radius:4px;padding:1px 6px;font-size:.55rem;color:var(--ac);cursor:pointer;font-family:var(--font)" title="편집">✏️</button>`}
         ${c._legacyLab ? '' : `<button class="accum-del" onclick="if(confirm('삭제?'))deleteHealthCheckup(${c.id})" title="삭제">🗑</button>`}
       </div>
       <div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap">${catSummary}</div>
