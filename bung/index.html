@@ -322,6 +322,8 @@ function renderCheckTab(){
   }
 
   // Medication check per domain
+  const _PROC_KW=['block','신경자극술','vns','ons','spg','물리치료','산소요법','cbt','시술','수술','주사'];
+  const _isProc=m=>_PROC_KW.some(kw=>m.toLowerCase().includes(kw));
   let hasMeds=false;
   for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
     const groups=getDomainMeds(domId);if(!groups.length)continue;
@@ -332,13 +334,32 @@ function renderCheckTab(){
     html+='<span style="margin-left:auto;display:flex;gap:4px"><button class="btn-toggle" onclick="toggleAll(\''+domId+'\',true)">전체 ✓</button><button class="btn-toggle" onclick="toggleAll(\''+domId+'\',false)">전체 ✗</button></span></div>';
     groups.forEach(g=>{
       html+='<div class="condition-name">'+esc(g.condition)+'</div>';
-      g.meds.forEach(m=>{
-        const isPrn=m.includes('(PRN)')||m.includes('PRN');
+      const dailyMeds=g.meds.filter(m=>!m.includes('(PRN)')&&!_isProc(m));
+      const prnMeds=g.meds.filter(m=>m.includes('(PRN)')&&!_isProc(m));
+      const procMeds=g.meds.filter(m=>_isProc(m));
+      dailyMeds.forEach(m=>{
         let checked=(m in existingMc)?existingMc[m]:false;
         html+='<div class="med-row" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
         html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(checked?' checked':'')+'>';
-        html+='<label>'+esc(m)+'</label>';if(isPrn)html+='<span class="prn">PRN</span>';html+='</div>';
+        html+='<label>'+esc(m)+'</label></div>';
       });
+      if(prnMeds.length){
+        prnMeds.forEach(m=>{
+          let checked=(m in existingMc)?existingMc[m]:false;
+          html+='<div class="med-row" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
+          html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(checked?' checked':'')+'>';
+          html+='<label>'+esc(m)+'</label><span class="prn">PRN</span></div>';
+        });
+      }
+      if(procMeds.length){
+        html+='<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd);font-size:.6rem;color:#1e40af;font-weight:600;margin-bottom:2px">💉 시술 (시행 시에만)</div>';
+        procMeds.forEach(m=>{
+          let checked=(m in existingMc)?existingMc[m]:false;
+          html+='<div class="med-row" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
+          html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(checked?' checked':'')+'>';
+          html+='<label style="color:#1e40af">'+esc(m)+'</label><span style="font-size:.6rem;font-weight:600;padding:2px 6px;border-radius:4px;background:#dbeafe;color:#1e40af">시술</span></div>';
+        });
+      }
     });
     html+='</div>';
   }

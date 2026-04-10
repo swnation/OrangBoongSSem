@@ -170,7 +170,7 @@ function checkQuickLogUpdates() {
 function sendQuickLogNotification(entry) {
   if (!('Notification' in window)) { console.warn('Notification API not available'); return; }
   if (Notification.permission !== 'granted') { console.warn('Notification permission:', Notification.permission); return; }
-  const nrsText = entry.nrs >= 0 ? `NRS ${entry.nrs}/10` : '기록';
+  const nrsText = entry.nrs >= 0 ? `${_scoreLabel()} ${entry.nrs}/10` : '기록';
   const syms = (entry.symptoms || []).join(', ');
   const meds = (entry.meds || []).join(', ');
   const time = entry.datetime?.slice(11, 16) || '';
@@ -823,7 +823,7 @@ function renderLogList() {
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px;white-space:pre-line">${esc(l.memo)}</div>`:''}
-          ${l.nrsRange?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">NRS 변화: ${l.nrsRange.min}→${l.nrsRange.max}</div>`:''}
+          ${l.nrsRange?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${_scoreLabel()} 변화: ${l.nrsRange.min}→${l.nrsRange.max}</div>`:''}
           ${l.timeline?`<div style="font-size:.62rem;color:var(--ac);margin-top:2px;cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
@@ -891,7 +891,7 @@ function renderLogListInner() {
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px;white-space:pre-line">${esc(l.memo)}</div>`:''}
-          ${l.nrsRange?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">NRS 변화: ${l.nrsRange.min}→${l.nrsRange.max}</div>`:''}
+          ${l.nrsRange?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${_scoreLabel()} 변화: ${l.nrsRange.min}→${l.nrsRange.max}</div>`:''}
           ${l.timeline?`<div style="font-size:.62rem;color:var(--ac);margin-top:2px;cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
