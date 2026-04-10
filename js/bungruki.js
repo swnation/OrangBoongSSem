@@ -2965,9 +2965,10 @@ function getDrugDisplayName(rawName) {
 // AI 일괄 약품명 매핑 (미매칭 약물만)
 async function aiVerifyDrugNames(drugList) {
   const unmatched = drugList.filter(d => !getDrugDisplayName(d).matched);
-  if (!unmatched.length) return;
+  if (!unmatched.length) { showToast('모든 약품 매칭 완료'); return; }
   const aiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
-  if (!aiId) return;
+  if (!aiId) { showToast('⚠️ AI API 키 필요'); return; }
+  showToast('🤖 ' + AI_DEFS[aiId].name + ' 약품명 매핑 중... (' + unmatched.length + '건)', 8000);
   const prompt = `아래 약품명들의 영문 성분명(generic name)을 매핑하세요.
 상품명이면 성분명을, 성분명이면 그대로, 약물이 아니면 null을 반환.
 
@@ -2979,7 +2980,7 @@ JSON 배열로 응답:
   try {
     const resp = await callAI(aiId, '약학 전문가. JSON만 응답.', prompt);
     const match = resp.match(/\[[\s\S]*\]/);
-    if (!match) return;
+    if (!match) { showToast('⚠️ AI 응답 파싱 실패'); return; }
     const mappings = JSON.parse(match[0]);
     let added = 0;
     mappings.forEach(m => {
@@ -2989,8 +2990,9 @@ JSON 배열로 응답:
         added++;
       }
     });
-    if (added) showToast(`🆕 ${added}개 약품 성분명 매핑 추가됨`);
-  } catch(e) { console.warn('AI drug name verify failed:', e); }
+    showToast(added ? `🆕 ${added}개 약품 성분명 매핑 추가됨` : '매핑 가능한 항목 없음');
+    if (added) renderView('meds');
+  } catch(e) { showToast('⚠️ AI 약품명 매핑 실패'); console.warn('AI drug name verify failed:', e); }
 }
 
 // ── AI 동적 사전 확장: 임신안전 + 남성가임력 + 질환→약물 (규칙 #37) ──
@@ -2998,6 +3000,7 @@ JSON 배열로 응답:
 async function aiExpandPregnancySafety(drugName) {
   const aiId = S.keys?.perp ? 'perp' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
   if (!aiId) return null;
+  showToast('🔍 ' + esc(drugName) + ' 임신안전 조회 중...', 5000);
   const prompt = `약물 "${drugName}"의 임신 안전성 정보를 JSON으로 반환.
 {"fda":"FDA등급(A/B/C/D/X/N/A)","pllr":"PLLR 요약 1-2문장","kfda":"한국식약처(안전/2등급/금기/정보없음)","note":"핵심 1문장"}
 불확실하면 필드에 "정보부족". JSON만 출력.`;
@@ -3025,6 +3028,7 @@ async function aiExpandPregnancySafety(drugName) {
 async function aiExpandMaleFertility(drugName) {
   const aiId = S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : (S.keys?.gemini ? 'gemini' : null));
   if (!aiId) return null;
+  showToast('🧬 ' + esc(drugName) + ' 남성가임력 조회 중...', 5000);
   const prompt = `약물 "${drugName}"의 남성 가임력 영향을 JSON으로 반환.
 {"impact":"위험/주의/경미/안전 중 택1","note":"영향 메커니즘 1-2문장","washout":"중단 후 회복 기간(예: 3개월)","ref":"참고문헌 1개"}
 데이터 없으면 {"impact":"안전","note":"가임력 영향 보고 없음","washout":"","ref":""}. JSON만.`;
@@ -3049,6 +3053,7 @@ async function aiExpandMaleFertility(drugName) {
 async function aiExpandDiseaseMeds(diseaseName) {
   const aiId = S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : (S.keys?.gemini ? 'gemini' : null));
   if (!aiId) return null;
+  showToast('💊 ' + esc(diseaseName) + ' 치료약물 조회 중...', 5000);
   const prompt = `질환 "${diseaseName}"의 표준 치료약물 목록을 JSON으로 반환.
 {"meds":["Acetaminophen","Ibuprofen"],"note":"1차/2차 선택 간략 설명"}
 일반적인 처방 약물만 포함. 5-10개. 영문 성분명. JSON만.`;

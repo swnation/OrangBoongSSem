@@ -628,6 +628,7 @@ async function aiVerifyNormalization(rawResults, who, aiId) {
 
   const selectedAi = aiId || (S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null)));
   if (!selectedAi || !S.keys?.[selectedAi]) return rawResults;
+  showToast('🤖 ' + (AI_DEFS[selectedAi]?.name || selectedAi) + ' 검사 표준화 검증 중... (' + needVerify.length + '건)', 8000);
 
   const prompt = `의료 검사 결과 표준화를 검증해주세요.
 아래 항목들의 rawName을 표준 검사 코드에 매핑하세요.
