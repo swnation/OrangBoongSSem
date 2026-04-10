@@ -282,12 +282,40 @@ function _toggleHomeCard(id){
   renderView('home');
 }
 function _renderHomeSettings(){
+  const order = _getHomeCardOrder();
+  const sorted = order.map(id => _HOME_CARDS.find(c => c.id === id)).filter(Boolean);
+  // 새로 추가된 카드는 뒤에
+  _HOME_CARDS.forEach(c => { if (!order.includes(c.id)) sorted.push(c); });
   return `<div style="margin-bottom:10px;padding:10px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px">
-    <div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">📌 대시보드 카드 설정</div>
-    ${_HOME_CARDS.map(c=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.72rem;cursor:pointer">
-      <input type="checkbox" ${_homeCardVisible(c.id)?'checked':''} onchange="_toggleHomeCard('${c.id}')" style="accent-color:var(--ac)"> ${c.label}
-    </label>`).join('')}
+    <div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">📌 대시보드 카드 설정 (순서 변경 가능)</div>
+    ${sorted.map((c, i) => `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;font-size:.72rem">
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <button onclick="_moveHomeCard('${c.id}',-1)" style="background:none;border:none;font-size:.5rem;cursor:pointer;color:var(--mu);padding:0;line-height:1" ${i===0?'disabled':''}>▲</button>
+        <button onclick="_moveHomeCard('${c.id}',1)" style="background:none;border:none;font-size:.5rem;cursor:pointer;color:var(--mu);padding:0;line-height:1" ${i===sorted.length-1?'disabled':''}>▼</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;flex:1;cursor:pointer">
+        <input type="checkbox" ${_homeCardVisible(c.id)?'checked':''} onchange="_toggleHomeCard('${c.id}')" style="accent-color:var(--ac)"> ${c.label}
+      </label>
+    </div>`).join('')}
   </div>`;
+}
+function _getHomeCardOrder() {
+  const m = DM();
+  return m?.settings?.homeCardOrder || JSON.parse(localStorage.getItem('om_home_card_order') || '[]');
+}
+function _moveHomeCard(id, dir) {
+  const order = _getHomeCardOrder();
+  // 현재 순서가 없으면 기본 순서로 초기화
+  if (!order.length) _HOME_CARDS.forEach(c => order.push(c.id));
+  const idx = order.indexOf(id);
+  if (idx < 0) return;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= order.length) return;
+  [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  localStorage.setItem('om_home_card_order', JSON.stringify(order));
+  const m = DM();
+  if (m) { if (!m.settings) m.settings = {}; m.settings.homeCardOrder = order; saveMaster(); }
+  renderView('home');
 }
 var _homeSettingsOpen=false;
 
@@ -305,26 +333,23 @@ function renderHome() {
     </div>`).join('');
 
   const _v=id=>_homeCardVisible(id);
-  return `
-    <div style="display:flex;align-items:center;margin-bottom:8px">
-      <button onclick="_homeSettingsOpen=!_homeSettingsOpen;renderView('home')" style="margin-left:auto;font-size:.65rem;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">⚙️ 카드 설정</button>
-    </div>
-    ${_homeSettingsOpen?_renderHomeSettings():''}
-    ${_v('sessions')?`<button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
-    <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
-    <button onclick="startLightMode()" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,#f0fdf4,#eff6ff);border:1.5px solid var(--bd);border-radius:12px;cursor:pointer;font-size:.88rem;width:100%;margin-bottom:12px;margin-top:-8px">
-      <span style="font-size:1.2rem">⚡</span>
-      <div style="text-align:left"><div style="font-weight:600;color:var(--ink)">빠른 체크</div><div style="font-size:.68rem;color:var(--mu)">AI 1개 · 최근 기록 기반 빠른 요약</div></div>
-    </button>`:''}
-    ${_v('forecast')?renderMigraineForecast():''}
-    ${_v('warnings')?renderPatternWarnings():''}
-    ${_v('drugWarn')?renderDrugInteractionWarning():''}
-    ${_v('aiSuggestions')?(()=>{_aiSuggestions=generateAIQuestionSuggestions();return renderAIQuestionSuggestions();})():''}
-    ${_v('insight')?renderInsightCard():''}
-    ${_v('weeklySummary')?renderWeeklySummaryCard():''}
-    ${_v('brkDailySync')?renderBrkDailySyncCard():''}
-    ${_v('brkTimeline')?renderBungrukiTimeline():''}
-    ${_v('knowledge')?`<div class="card">
+  // 카드 렌더러 맵 (순서 제어 가능)
+  const _cardRenderers = {
+    sessions: () => `<button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
+      <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
+      <button onclick="startLightMode()" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,#f0fdf4,#eff6ff);border:1.5px solid var(--bd);border-radius:12px;cursor:pointer;font-size:.88rem;width:100%;margin-bottom:12px;margin-top:-8px">
+        <span style="font-size:1.2rem">⚡</span>
+        <div style="text-align:left"><div style="font-weight:600;color:var(--ink)">빠른 체크</div><div style="font-size:.68rem;color:var(--mu)">AI 1개 · 최근 기록 기반 빠른 요약</div></div>
+      </button>`,
+    forecast: renderMigraineForecast,
+    warnings: renderPatternWarnings,
+    drugWarn: renderDrugInteractionWarning,
+    aiSuggestions: () => { _aiSuggestions=generateAIQuestionSuggestions(); return renderAIQuestionSuggestions(); },
+    insight: renderInsightCard,
+    weeklySummary: renderWeeklySummaryCard,
+    brkDailySync: typeof renderBrkDailySyncCard==='function' ? renderBrkDailySyncCard : ()=>'',
+    brkTimeline: typeof renderBungrukiTimeline==='function' ? renderBungrukiTimeline : ()=>'',
+    knowledge: () => `<div class="card">
       <div class="card-title">🧠 누적 협진 지식 <span class="badge badge-green">Drive 동기화</span>
         <button onclick="cleanupAccumulated()" style="margin-left:auto;font-size:.65rem;padding:3px 10px;border:1.5px solid var(--ac);border-radius:5px;background:none;color:var(--ac);cursor:pointer;font-weight:600">🤖 AI 정리</button>
       </div>
@@ -346,9 +371,23 @@ function renderHome() {
         <div class="accum-add-row"><input class="accum-add-input" id="add-discarded" placeholder="새 폐기 가설 추가...">
           <button class="btn-accum-add" onclick="addAccum('discarded_hypotheses','add-discarded')">+ 추가</button></div>
       </div>
-    </div>`:''}
-    ${_v('recentSessions')&&sessions.length?`<div class="card"><div class="card-title">📅 최근 세션</div>${recentSessions}
-      ${sessions.length>3?`<div style="text-align:center;margin-top:8px"><button class="btn-cancel" onclick="switchView('history')" style="font-size:.78rem">전체 ${sessions.length}개 보기</button></div>`:''}</div>`:''}`;
+    </div>`,
+    recentSessions: () => sessions.length ? `<div class="card"><div class="card-title">📅 최근 세션</div>${recentSessions}
+      ${sessions.length>3?`<div style="text-align:center;margin-top:8px"><button class="btn-cancel" onclick="switchView('history')" style="font-size:.78rem">전체 ${sessions.length}개 보기</button></div>`:''}</div>` : '',
+  };
+  // 카드 순서 적용
+  const order = _getHomeCardOrder();
+  const orderedIds = order.length ? order : _HOME_CARDS.map(c => c.id);
+  // 새로 추가된 카드도 포함
+  _HOME_CARDS.forEach(c => { if (!orderedIds.includes(c.id)) orderedIds.push(c.id); });
+  const cardsHtml = orderedIds.map(id => _v(id) && _cardRenderers[id] ? _cardRenderers[id]() : '').join('');
+
+  return `
+    <div style="display:flex;align-items:center;margin-bottom:8px">
+      <button onclick="_homeSettingsOpen=!_homeSettingsOpen;renderView('home')" style="margin-left:auto;font-size:.65rem;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">⚙️ 카드 설정</button>
+    </div>
+    ${_homeSettingsOpen?_renderHomeSettings():''}
+    ${cardsHtml}`;
 }
 
 // SESSION VIEW

@@ -1026,6 +1026,77 @@ ${refs ? JSON.stringify(refs, null, 1) : '없음'}
 // ═══════════════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════════════
+// AI 종합 해석 — 전체 검진 패널 기반 소견 생성
+// ═══════════════════════════════════════════════════════════════
+
+async function aiCheckupInterpretation() {
+  const aiId = S.keys?.claude ? 'claude' : (S.keys?.gemini ? 'gemini' : (S.keys?.gpt ? 'gpt' : null));
+  if (!aiId) { showToast('⚠️ AI API 키 필요'); return; }
+  const who = DC().user;
+  const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
+  if (!allCheckups.length) { showToast('검진 데이터 없음'); return; }
+
+  // 최근 검진 데이터를 텍스트로 정리
+  const recent = allCheckups.slice(0, 5); // 최근 5건
+  const dataText = recent.map(c => {
+    const date = c.date || '?';
+    const inst = c.institution || '';
+    const items = (c.results || []).map(r => {
+      const status = r.status === 'high' ? '↑' : r.status === 'low' ? '↓' : r.status === 'positive' ? '🛡' : '';
+      const ref = r.ref ? `(참고: ${r.ref.low}-${r.ref.high})` : '';
+      return `${r.displayName || r.rawName}: ${r.value} ${r.unit || ''} ${status} ${ref}`;
+    }).join('\n  ');
+    return `[${date} ${inst}]\n  ${items}`;
+  }).join('\n\n');
+
+  showToast('💡 AI 종합 해석 중...', 15000);
+
+  const prompt = `다음은 ${who}의 건강검진 결과 ${recent.length}건입니다.
+
+${dataText}
+
+아래 형식으로 종합 해석을 해주세요:
+
+1. **전반적 건강 상태 요약** (1-2문장)
+2. **주의 필요 항목** — 이상 수치와 그 임상적 의미 (각 항목별 구체적으로)
+3. **양호한 항목** — 정상 범위 유지 중인 주요 항목
+4. **추세 분석** — 같은 항목이 여러 번 기록된 경우 변화 추세
+5. **권장 사항** — 추가 검사, 생활습관, 의료 상담 필요 여부
+${who === '오랑이' ? '6. **임신 준비 관점** — 현재 결과가 임신에 미치는 영향' : ''}
+
+한국어로 작성하되, 의학적으로 정확하게. 환자가 이해하기 쉬운 용어로.`;
+
+  try {
+    const result = await callAI(aiId, '내과 전문의 + 예방의학 전문가', prompt);
+    // 결과를 모달로 표시 + 마스터에 저장
+    const interpretation = {
+      id: Date.now(),
+      date: kstToday(),
+      who: who,
+      aiUsed: aiId,
+      content: result,
+      checkupDates: recent.map(c => c.date),
+    };
+
+    // 마스터에 저장
+    const m = DM();
+    if (m) {
+      if (!m.aiInterpretations) m.aiInterpretations = [];
+      m.aiInterpretations.unshift(interpretation);
+      if (m.aiInterpretations.length > 10) m.aiInterpretations = m.aiInterpretations.slice(0, 10);
+      await saveMaster();
+    }
+
+    showConfirmModal('💡 AI 종합 해석',
+      `<div style="font-size:.72rem;color:var(--mu);margin-bottom:8px">${who} · ${kstToday()} · ${aiId} 분석 · 검진 ${recent.length}건 기반</div>
+      <div style="font-size:.78rem;line-height:1.7;max-height:400px;overflow-y:auto">${typeof marked !== 'undefined' ? DOMPurify.sanitize(marked.parse(result)) : esc(result).replace(/\n/g, '<br>')}</div>`,
+      [{ label: '확인', action: closeConfirmModal }]);
+  } catch (e) {
+    showToast('❌ 해석 실패: ' + e.message, 4000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // DOCUMENT ANALYSIS (PDF/DOCX/TXT → 텍스트 추출 → AI 분석)
 // ═══════════════════════════════════════════════════════════════
 
@@ -1455,7 +1526,8 @@ function renderCheckupArchive() {
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:1.1rem">📋</span>
       <span style="font-size:.88rem;font-weight:700;color:var(--domain-color)">검사 아카이브</span>
-      <button onclick="aiReclassifyAll()" style="margin-left:auto;background:none;border:1px solid #8b5cf6;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#8b5cf6;cursor:pointer;font-family:var(--font)">🤖 전체 AI 재분류</button>
+      <button onclick="aiCheckupInterpretation()" style="margin-left:auto;background:none;border:1px solid #10b981;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#10b981;cursor:pointer;font-family:var(--font)">💡 AI 종합 해석</button>
+      <button onclick="aiReclassifyAll()" style="background:none;border:1px solid #8b5cf6;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#8b5cf6;cursor:pointer;font-family:var(--font)">🤖 재분류</button>
       <span style="font-size:.62rem;color:var(--mu)">${allCheckups.length}건 · ${totalItems}항목</span>
     </div>
     <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${tabBar}</div>
