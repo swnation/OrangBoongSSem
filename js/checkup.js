@@ -1134,6 +1134,101 @@ ${who === '오랑이' ? '6. **임신 준비 관점** — 현재 결과가 임신
 // DOCUMENT ANALYSIS (PDF/DOCX/TXT → 텍스트 추출 → AI 분석)
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// GOOGLE DRIVE IMPORT — Drive에서 검사 파일 가져오기
+// ═══════════════════════════════════════════════════════════════
+
+async function importCheckupFromDrive() {
+  if (!S.token) { showToast('⚠️ 로그인 필요'); return; }
+  showToast('☁️ Drive 파일 검색 중...', 5000);
+
+  // 최근 수정된 이미지/PDF/문서 파일 검색
+  try {
+    const query = "(mimeType contains 'image/' or mimeType='application/pdf' or mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='text/plain') and trashed=false";
+    const resp = await fetchWithRetry(
+      'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(query) +
+      '&orderBy=modifiedTime desc&pageSize=20&fields=files(id,name,mimeType,modifiedTime,thumbnailLink,size)',
+      { headers: { Authorization: 'Bearer ' + S.token } });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    const files = data.files || [];
+    if (!files.length) { showToast('📭 Drive에 검사 파일이 없습니다'); return; }
+
+    // 파일 선택 모달
+    const fileList = files.map((f, i) => {
+      const icon = f.mimeType.includes('image') ? '🖼' : f.mimeType.includes('pdf') ? '📕' : f.mimeType.includes('word') ? '📘' : '📄';
+      const size = f.size ? Math.round(f.size / 1024) + 'KB' : '';
+      const date = f.modifiedTime ? f.modifiedTime.slice(0, 10) : '';
+      return `<div onclick="_selectDriveFile(${i})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;background:var(--sf2);margin-bottom:4px" data-drive-idx="${i}">
+        <span style="font-size:1.1rem">${icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.72rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div>
+          <div style="font-size:.58rem;color:var(--mu)">${date} · ${size}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    window._driveCheckupFiles = files;
+    showConfirmModal('☁️ Google Drive에서 파일 선택',
+      `<div style="max-height:350px;overflow-y:auto">${fileList}</div>
+      <div style="font-size:.58rem;color:var(--mu2);margin-top:6px">최근 수정된 이미지/PDF/문서 20개 표시</div>`,
+      [{ label: '취소', action: closeConfirmModal }]);
+  } catch (e) {
+    showToast('❌ Drive 검색 실패: ' + e.message, 4000);
+  }
+}
+
+async function _selectDriveFile(idx) {
+  const files = window._driveCheckupFiles;
+  if (!files || !files[idx]) return;
+  const f = files[idx];
+  closeConfirmModal();
+  showToast('☁️ 파일 다운로드 중...', 5000);
+
+  try {
+    if (f.mimeType.includes('image')) {
+      // 이미지 → Vision 분석 플로우
+      const resp = await fetchWithRetry('https://www.googleapis.com/drive/v3/files/' + f.id + '?alt=media',
+        { headers: { Authorization: 'Bearer ' + S.token } });
+      const blob = await resp.blob();
+      const dataUrl = await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+      _stagedCheckupPhotos = [{ dataUrl, name: f.name, type: f.mimeType }];
+      _showStagedCheckupPhotos();
+    } else {
+      // PDF/문서 → 텍스트 추출 플로우
+      const resp = await fetchWithRetry('https://www.googleapis.com/drive/v3/files/' + f.id + '?alt=media',
+        { headers: { Authorization: 'Bearer ' + S.token } });
+      const blob = await resp.blob();
+      const file = new File([blob], f.name, { type: f.mimeType });
+      // stageCheckupDocs 내부 로직 재활용
+      const ext = f.name.split('.').pop().toLowerCase();
+      let text = '';
+      if (ext === 'pdf' || f.mimeType.includes('pdf')) text = await _extractPdfText(file);
+      else if (ext === 'docx' || f.mimeType.includes('word')) text = await _extractDocxText(file);
+      else text = await _extractTxtText(file);
+
+      if (!text || text.trim().length < 20) {
+        showToast('⚠️ 텍스트 추출 부족. 이미지로 시도해 주세요.', 4000); return;
+      }
+      const aiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+      if (!aiId) { showToast('⚠️ AI API 키 필요'); return; }
+      const who = DC().user || '오랑이';
+      await _analyzeDocText(text, who, aiId, f.name);
+    }
+  } catch (e) {
+    showToast('❌ 파일 처리 실패: ' + e.message, 4000);
+  }
+  delete window._driveCheckupFiles;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DOCUMENT ANALYSIS (PDF/DOCX/TXT → 텍스트 추출 → AI 분석)
+// ═══════════════════════════════════════════════════════════════
+
 async function stageCheckupDocs(input) {
   if (!input.files || !input.files.length) return;
   const file = input.files[0];
@@ -1527,22 +1622,28 @@ function renderCheckupArchive() {
     cursor:pointer;font-family:var(--font);font-weight:${_checkupViewTab === t.id ? '600' : '400'}">${t.label}</button>`).join('');
 
   // 업로드 + 수동 입력 영역
-  const uploadArea = `<div style="display:flex;gap:6px;margin:8px 0">
-    <div style="flex:1;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
+  const uploadArea = `<div style="display:flex;gap:5px;margin:8px 0;flex-wrap:wrap">
+    <div style="flex:1;min-width:70px;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
       onclick="document.getElementById('ck-file-input').click()">
       <span style="font-size:1.2rem">📤</span>
-      <div style="font-size:.72rem;color:var(--mu);margin-top:4px">사진 업로드</div>
-      <div style="font-size:.55rem;color:var(--mu2)">AI Vision 자동 추출</div>
+      <div style="font-size:.72rem;color:var(--mu);margin-top:4px">사진</div>
+      <div style="font-size:.55rem;color:var(--mu2)">AI Vision</div>
       <input type="file" id="ck-file-input" multiple accept="image/*" onchange="stageCheckupPhotos(this)" style="display:none">
     </div>
-    <div style="flex:1;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
+    <div style="flex:1;min-width:70px;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
       onclick="document.getElementById('ck-doc-input').click()">
       <span style="font-size:1.2rem">📄</span>
-      <div style="font-size:.72rem;color:var(--mu);margin-top:4px">문서 업로드</div>
-      <div style="font-size:.55rem;color:var(--mu2)">PDF · 워드 · 텍스트</div>
+      <div style="font-size:.72rem;color:var(--mu);margin-top:4px">문서</div>
+      <div style="font-size:.55rem;color:var(--mu2)">PDF · 워드</div>
       <input type="file" id="ck-doc-input" accept=".pdf,.docx,.doc,.txt,.hwp" onchange="stageCheckupDocs(this)" style="display:none">
     </div>
-    <div style="width:70px;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
+    <div style="flex:1;min-width:70px;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
+      onclick="importCheckupFromDrive()">
+      <span style="font-size:1.2rem">☁️</span>
+      <div style="font-size:.72rem;color:var(--mu);margin-top:4px">Drive</div>
+      <div style="font-size:.55rem;color:var(--mu2)">구글 드라이브</div>
+    </div>
+    <div style="flex:1;min-width:70px;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
       onclick="openManualCheckupEntry()">
       <span style="font-size:1.2rem">📝</span>
       <div style="font-size:.72rem;color:var(--mu);margin-top:4px">수동</div>
