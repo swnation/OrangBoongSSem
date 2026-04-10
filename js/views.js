@@ -1089,7 +1089,7 @@ function renderStatsView() {
     </div>
   </div>
   <div class="card">
-    <div class="card-title">${lc.moodMode?'기분':'NRS'} 추세 (30일)</div>
+    <div class="card-title">${lc.moodMode?'기분':_scoreLabel()} 추세 (30일)</div>
     <div style="display:flex;align-items:flex-end;gap:1px;padding:8px 0">${barHtml}</div>
   </div>
   ${topSyms.length?`<div class="card"><div class="card-title">증상 빈도 (30일)</div>${symHtml}</div>`:''}
@@ -1223,7 +1223,7 @@ function renderCrossLogView() {
       const items=g.items.map(l=>{
         const tags=[
           l.mood?`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:'',
-          l.nrs>=0?`<span class="log-tag" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS${l.nrs}</span>`:'',
+          l.nrs>=0?`<span class="log-tag" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()}${l.nrs}</span>`:'',
           ...l.symptoms.map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`),
           ...l.meds.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`),
           ...l.categories.map(c=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(c)}</span>`),

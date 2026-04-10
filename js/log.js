@@ -1,5 +1,14 @@
 // js/log.js — 증상 기록 시스템 (Phase 4 모듈화)
 
+// 도메인별 점수 짧은 라벨 (NRS/기분/컨디션)
+function _scoreLabel() {
+  const lc = DC();
+  if (!lc?.nrsLabel) return 'NRS';
+  if (lc.nrsLabel.includes('통증') || lc.nrsLabel.includes('NRS')) return 'NRS';
+  if (lc.nrsLabel.includes('기분')) return '기분';
+  return '컨디션';
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MARKDOWN RENDERER (simple)
 // ═══════════════════════════════════════════════════════════════
@@ -241,7 +250,7 @@ function renderQuickLogBanner() {
     +'<div class="qlb-list">'+pending.map(function(l){
       var dt=l.datetime.split('T');
       var timeStr=dt[1]==='시간미상'?'시간미상':dt[1];
-      var nrsHtml=l.nrs>=0?'<span class="log-item-nrs" style="background:'+nrsColor(l.nrs)+'20;color:'+nrsColor(l.nrs)+'">NRS '+l.nrs+'</span>':'';
+      var nrsHtml=l.nrs>=0?'<span class="log-item-nrs" style="background:'+nrsColor(l.nrs)+'20;color:'+nrsColor(l.nrs)+'">'+_scoreLabel()+' '+l.nrs+'</span>':'';
       var tags=[].concat(
         (l.sites||[]).map(function(s){return '<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">'+esc(s)+'</span>';}),
         (l.symptoms||[]).map(function(s){return '<span class="log-tag" style="background:#faf5ff;color:#7c3aed">'+esc(s)+'</span>';}),
@@ -718,7 +727,7 @@ function renderRecentLogs() {
       <div class="log-item-time">${l.datetime.slice(11,16)!=='00:00'?l.datetime.slice(11,16):''}</div>
       <div class="log-item-body">
         ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
-          (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`:'')}
+          (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()} ${l.nrs}</span>`:'')}
         ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
         <div class="log-item-tags">
           ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
@@ -801,7 +810,7 @@ function renderLogList() {
         <div class="log-item-time">${timeStr!=='00:00'?timeStr:''}</div>
         <div class="log-item-body">
           ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
-            (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`:'')}
+            (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()} ${l.nrs}</span>`:'')}
           ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
           <div class="log-item-tags">
             ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`).join('')}
@@ -871,7 +880,7 @@ function renderLogListInner() {
         <div class="log-item-time">${timeStr!=='00:00'?timeStr:''}</div>
         <div class="log-item-body">
           ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
-            (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`:'')}
+            (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()} ${l.nrs}</span>`:'')}
           ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
           <div class="log-item-tags">
             ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`).join('')}
