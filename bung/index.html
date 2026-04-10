@@ -324,11 +324,21 @@ function renderCheckTab(){
   // Medication check per domain
   const _PROC_KW=['block','신경자극술','vns','ons','spg','물리치료','산소요법','cbt','시술','수술','주사'];
   const _isProc=m=>_PROC_KW.some(kw=>m.toLowerCase().includes(kw));
+  // 해당 날짜 전체 기록의 medCheck 병합 (이미 복용 체크한 약 파악)
+  const _allDayMc={};
+  for(const [domId2] of Object.entries(BUNG_DOMAINS)){
+    const ml2=domainData[domId2]?.logs?.[selectedDate.slice(0,7)];
+    if(!ml2?.data)continue;
+    ml2.data.filter(l=>l.datetime?.slice(0,10)===selectedDate&&_isBungEntry(domId2,l)&&l.medCheck).forEach(l=>{
+      Object.entries(l.medCheck).forEach(([k,v])=>{if(v)_allDayMc[k]=true;});
+    });
+  }
+  const isNewEntry=!editingEntryId;
   let hasMeds=false;
   for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
     const groups=getDomainMeds(domId);if(!groups.length)continue;
     hasMeds=true;
-    const existing=findEntry(domId,selectedDate);const existingMc=existing?.medCheck||{};
+    const existing=findEntry(domId,selectedDate);const existingMc=editEntry?.medCheck||existing?.medCheck||{};
     html+='<div class="card"><div class="domain-header" style="background:'+dc.color+'15;border:1px solid '+dc.color+'30">';
     html+='<span style="color:'+dc.color+'">'+dc.icon+' '+dc.label+'</span>';
     html+='<span style="margin-left:auto;display:flex;gap:4px"><button class="btn-toggle" onclick="toggleAll(\''+domId+'\',true)">전체 ✓</button><button class="btn-toggle" onclick="toggleAll(\''+domId+'\',false)">전체 ✗</button></span></div>';
@@ -338,17 +348,21 @@ function renderCheckTab(){
       const prnMeds=g.meds.filter(m=>m.includes('(PRN)')&&!_isProc(m));
       const procMeds=g.meds.filter(m=>_isProc(m));
       dailyMeds.forEach(m=>{
-        let checked=(m in existingMc)?existingMc[m]:false;
-        html+='<div class="med-row" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
-        html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(checked?' checked':'')+'>';
-        html+='<label>'+esc(m)+'</label></div>';
+        const prevTaken=_allDayMc[m]; // 이전 기록에서 이미 복용
+        let checked=isNewEntry?(m in existingMc?existingMc[m]:false):(m in existingMc?existingMc[m]:false);
+        const lockStyle=isNewEntry&&prevTaken?'opacity:.5;pointer-events:none':'';
+        const lockLabel=isNewEntry&&prevTaken?' <span style="font-size:.5rem;color:#10b981">✓이전 복용</span>':'';
+        html+='<div class="med-row" style="'+lockStyle+'" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
+        html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(checked||prevTaken?' checked':'')+''+(isNewEntry&&prevTaken?' disabled':'')+'>';
+        html+='<label>'+esc(m)+lockLabel+'</label></div>';
       });
       if(prnMeds.length){
         prnMeds.forEach(m=>{
+          const prevTaken=_allDayMc[m];
           let checked=(m in existingMc)?existingMc[m]:false;
           html+='<div class="med-row" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
           html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(checked?' checked':'')+'>';
-          html+='<label>'+esc(m)+'</label><span class="prn">PRN</span></div>';
+          html+='<label>'+esc(m)+(prevTaken?' <span style="font-size:.5rem;color:#10b981">✓이전</span>':'')+'</label><span class="prn">PRN</span></div>';
         });
       }
       if(procMeds.length){

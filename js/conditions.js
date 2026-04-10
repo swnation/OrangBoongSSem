@@ -32,10 +32,16 @@ function renderConditionMedSelector(date) {
 function renderDailyMedCheck(date) {
   const condMeds=getConditionMeds(date);
   if(!condMeds.length) return '';
+  // 당일 기존 기록에서 이미 복용 체크된 약물 수집
+  const _dayMc={};
+  const ds=D();
+  (ds.logData||[]).filter(l=>l.datetime?.slice(0,10)===date&&l.medCheck).forEach(l=>{
+    Object.entries(l.medCheck).forEach(([k,v])=>{if(v)_dayMc[k]=true;});
+  });
   return `<div class="log-section-title">💊 오늘 복용 체크
     <span style="margin-left:auto;display:flex;gap:4px">
-      <button onclick="document.querySelectorAll('.med-check-cb').forEach(c=>c.checked=true)" style="font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">전체 ✓</button>
-      <button onclick="document.querySelectorAll('.med-check-cb').forEach(c=>c.checked=false)" style="font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">전체 ✗</button>
+      <button onclick="document.querySelectorAll('.med-check-cb:not(:disabled)').forEach(c=>c.checked=true)" style="font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">전체 ✓</button>
+      <button onclick="document.querySelectorAll('.med-check-cb:not(:disabled)').forEach(c=>c.checked=false)" style="font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">전체 ✗</button>
     </span>
   </div>
     <div style="margin-bottom:8px">
@@ -46,17 +52,22 @@ function renderDailyMedCheck(date) {
       if(!daily.length&&!prn.length&&!procedures.length) return '';
       return `<div style="margin-bottom:6px;border:1px solid var(--bd);border-radius:8px;padding:8px 10px;background:var(--sf)">
         <div style="font-size:.72rem;font-weight:600;color:var(--ink);margin-bottom:6px">${cm.icon} ${esc(cm.condition)}</div>
-        ${daily.map(m=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
-          <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" style="width:16px;height:16px;accent-color:var(--ac)">
+        ${daily.map(m=>{
+          const prev=_dayMc[m];
+          return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;${prev?'opacity:.5':''}">
+          <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" ${prev?'checked disabled':''} style="width:16px;height:16px;accent-color:var(--ac)">
           <span style="font-size:.78rem;color:var(--ink)">${esc(m)}</span>
-          <span style="font-size:.6rem;color:var(--mu2)">매일</span>
-        </label>`).join('')}
+          ${prev?'<span style="font-size:.5rem;color:#10b981">✓이전 복용</span>':'<span style="font-size:.6rem;color:var(--mu2)">매일</span>'}
+        </label>`;}).join('')}
         ${prn.length?`<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd)">
-          ${prn.map(m=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+          ${prn.map(m=>{
+            const prev=_dayMc[m];
+            return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
             <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" style="width:16px;height:16px;accent-color:#f59e0b">
             <span style="font-size:.78rem;color:var(--ink)">${esc(m)}</span>
             <span style="font-size:.6rem;color:#f59e0b">PRN</span>
-          </label>`).join('')}
+            ${prev?'<span style="font-size:.5rem;color:#10b981">✓이전</span>':''}
+          </label>`;}).join('')}
         </div>`:''}
         ${procedures.length?`<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd)">
           <div style="font-size:.6rem;color:#1e40af;font-weight:600;margin-bottom:2px">💉 시술 (시행 시에만 기록)</div>
