@@ -33,7 +33,7 @@ function showConfirmModal(title,body,buttons) {
   document.getElementById('confirm-foot').onclick = function(e) {
     const btn = e.target.closest('[data-confirm-idx]');
     const closeBtn = e.target.closest('[data-confirm-close]');
-    if(btn) { const idx = parseInt(btn.dataset.confirmIdx); const action = _confirmActions[idx]; if(action) { try { if(typeof action==='function') action(); else new Function(action)(); } catch(err) { console.error('Confirm action error:', err); } } }
+    if(btn) { const idx = parseInt(btn.dataset.confirmIdx); const action = _confirmActions[idx]; if(typeof action==='function') { try { action(); } catch(err) { console.error('Confirm action error:', err); } } }
     if(closeBtn) closeConfirmModal();
   };
   openModal('confirm-modal');
