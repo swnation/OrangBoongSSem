@@ -926,7 +926,7 @@ function _showTimeline(idx){
   const entry=D()?.logData?.[idx];if(!entry?.timeline)return;
   const html=entry.timeline.map(t=>{
     const parts=[`<b>${t.time||'--:--'}</b>`];
-    if(t.nrs>=0)parts.push(`NRS:${t.nrs}`);
+    if(t.nrs>=0)parts.push(`${_scoreLabel()}:${t.nrs}`);
     if(t.mood)parts.push(t.mood);
     if(t.sites?.length)parts.push(t.sites.join('+'));
     if(t.meds?.length)parts.push('💊'+t.meds.join(', '));
@@ -1035,7 +1035,7 @@ function mergeDayEntries(date) {
   const beforeHtml=entries.map(e=>{
     const t=e.datetime?.slice(11,16)||'';
     const parts=[t];
-    if(e.nrs>=0)parts.push('NRS:'+e.nrs);
+    if(e.nrs>=0)parts.push(_scoreLabel()+':'+e.nrs);
     if(e.sites?.length)parts.push(e.sites.join('+'));
     if(e.meds?.length)parts.push('💊'+e.meds.join(','));
     if(e.treatments?.length)parts.push('🏥'+e.treatments.join(','));
@@ -1044,7 +1044,7 @@ function mergeDayEntries(date) {
     return `<div style="font-size:.7rem;padding:2px 0;color:var(--mu)">${esc(parts.join(' · '))}</div>`;
   }).join('');
 
-  const afterParts=[`NRS ${merged.nrs>=0?merged.nrs:'-'}`];
+  const afterParts=[`${_scoreLabel()} ${merged.nrs>=0?merged.nrs:'-'}`];
   if(merged.nrsRange)afterParts[0]+=` (${merged.nrsRange.min}→${merged.nrsRange.max})`;
   if(merged.sites?.length)afterParts.push(merged.sites.join('+'));
   if(merged.meds?.length)afterParts.push('💊'+merged.meds.join(', '));
@@ -1095,7 +1095,7 @@ async function testNtfy() {
 async function sendNtfyBung(entry) {
   const topic=localStorage.getItem('om_ntfy_bung');
   if(!topic||S.currentDomain!=='orangi-migraine') return;
-  const nrs=entry.nrs>=0?`NRS ${entry.nrs}`:'';
+  const nrs=entry.nrs>=0?`${_scoreLabel()} ${entry.nrs}`:'';
   const sites=(entry.sites||[]).join(', ');
   const meds=(entry.meds||[]).join(', ');
   const tx=(entry.treatments||[]).join(', ');
@@ -1106,7 +1106,7 @@ async function sendNtfyBung(entry) {
 async function sendNtfyFollowup(entry) {
   const topic=localStorage.getItem('om_ntfy_orangi');
   if(!topic||S.currentDomain!=='orangi-migraine') return;
-  const nrs=entry.nrs>=0?`NRS ${entry.nrs}`:'';
+  const nrs=entry.nrs>=0?`${_scoreLabel()} ${entry.nrs}`:'';
   const tx=[...(entry.meds||[]),...(entry.treatments||[])].join(', ');
   const body=`🤕 두통 경과 확인\n${entry.datetime.slice(11,16)} ${nrs} ${tx} → 지금 어때요?`;
   // ntfy 예약 발송 (At: 2h) — 서버측 타이머, 앱 꺼도 동작
@@ -1146,7 +1146,7 @@ function renderOutcomeCards() {
   return unrated.map(l=>{
     const date=l.datetime.slice(5,10);
     const time=l.datetime.slice(11,16);
-    const nrs=l.nrs>=0?`NRS ${l.nrs}`:'';
+    const nrs=l.nrs>=0?`${_scoreLabel()} ${l.nrs}`:'';
     const tx=[...(l.meds||[]),...(l.treatments||[])].join(', ');
     const idx=D().logData.indexOf(l);
     return `<div class="outcome-card" id="outcome-card-${idx}" style="padding:10px 14px;margin-bottom:8px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:10px;border-left:3px solid var(--ac)">
@@ -1177,7 +1177,7 @@ async function rateOutcome(logIdx,rating) {
 function editOutcome(logIdx) {
   const ds=D();const entry=ds.logData[logIdx];if(!entry) return;
   const date=entry.datetime.slice(5,10);const time=entry.datetime.slice(11,16);
-  const nrs=entry.nrs>=0?`NRS ${entry.nrs}`:'';
+  const nrs=entry.nrs>=0?`${_scoreLabel()} ${entry.nrs}`:'';
   const tx=[...(entry.meds||[]),...(entry.treatments||[])].join(', ');
   showConfirmModal('📋 경과 수정',
     `<div style="text-align:center;margin-bottom:12px"><div style="font-size:.8rem;color:var(--mu)">${date} ${time} ${nrs} — ${esc(tx)}</div></div>
@@ -1789,7 +1789,8 @@ function getRecentLogSummary() {
 
   // Standard mode (편두통)
   const outcomeLabel={better:'→호전',same:'→비슷',worse:'→악화',good:'→호전',partial:'→비슷',none:'→악화'};
-  const lines=week.map(l=>`${l.datetime.slice(5,16)} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' NRS'+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')+(l.outcome?.rating?' '+outcomeLabel[l.outcome.rating]:'')).join('\n');
+  const _sl=_scoreLabel();
+  const lines=week.map(l=>`${l.datetime.slice(5,16)} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' '+_sl+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')+(l.outcome?.rating?' '+outcomeLabel[l.outcome.rating]:'')).join('\n');
   const nrsVals=week.map(l=>l.nrs).filter(n=>n>=0);
   const avg=nrsVals.length?(nrsVals.reduce((a,b)=>a+b,0)/nrsVals.length).toFixed(1):'-';
   // 경과 요약
@@ -1802,7 +1803,7 @@ function getRecentLogSummary() {
     outcomeSummary=`\n경과평가: ${rated.length}건 중 호전${better} 비슷${same} 악화${worse}`;
   }
   // 날씨 정보 포함
-  const wLines=week.filter(l=>l.weather&&l.nrs>=0).map(l=>`${l.datetime.slice(5,10)} NRS${l.nrs} ${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa ${l.weather.humidity}%`);
+  const wLines=week.filter(l=>l.weather&&l.nrs>=0).map(l=>`${l.datetime.slice(5,10)} ${_sl}${l.nrs} ${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa ${l.weather.humidity}%`);
   const weatherCtx=wLines.length?`\n[날씨-두통 데이터]\n${wLines.join('\n')}`:'';
   // 트리거 상관분석
   const triggerCtx=getTriggerCorrelation(week);
@@ -1883,7 +1884,7 @@ function exportLogCSV() {
       csv+=`${l.datetime.slice(0,10)},${l.datetime.slice(11,16)},"${l.mood||''}","${(l.symptoms||[]).join(';')}","${(l.meds||[]).join(';')}","${(l.treatments||[]).join(';')}","${dc}","${mc}","${(l.memo||'').replace(/"/g,'""')}"\n`;
     });
   } else {
-    csv='날짜,시간,NRS,부위,트리거,증상,투약,치료,효과,메모\n';
+    csv='날짜,시간,'+_scoreLabel()+',부위,트리거,증상,투약,치료,효과,메모\n';
     ds.logData.forEach(l=>{
       csv+=`${l.datetime.slice(0,10)},${l.datetime.slice(11,16)},${l.nrs>=0?l.nrs:''},"${(l.sites||[]).join(';')}","${(l.triggers||[]).join(';')}","${(l.symptoms||[]).join(';')}","${(l.meds||[]).join(';')}","${(l.treatments||[]).join(';')}","${l.outcome?.rating||''}","${(l.memo||'').replace(/"/g,'""')}"\n`;
     });

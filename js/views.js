@@ -162,7 +162,7 @@ function renderMigraineForecast() {
   if(sameDow.length>=3) {
     const avg=sameDow.reduce((s,l)=>s+l.nrs,0)/sameDow.length;
     const allAvg=nrsLogs.reduce((s,l)=>s+l.nrs,0)/nrsLogs.length;
-    if(avg>allAvg+1) { riskScore+=20; factors.push(`📅 ${['일','월','화','수','목','금','토'][dow]}요일 평균 NRS ${avg.toFixed(1)} (전체 ${allAvg.toFixed(1)})`); }
+    if(avg>allAvg+1) { riskScore+=20; factors.push(`📅 ${['일','월','화','수','목','금','토'][dow]}요일 평균 ${_scoreLabel()} ${avg.toFixed(1)} (전체 ${allAvg.toFixed(1)})`); }
     else if(avg>allAvg) { riskScore+=8; }
   }
 
@@ -173,8 +173,8 @@ function renderMigraineForecast() {
   });
   if(recent3.length) {
     const avg3=recent3.reduce((s,l)=>s+l.nrs,0)/recent3.length;
-    if(avg3>=6) { riskScore+=25; factors.push(`🔥 최근 3일 평균 NRS ${avg3.toFixed(1)} — 고통 지속 중`); }
-    else if(avg3>=4) { riskScore+=12; factors.push(`⚠️ 최근 3일 평균 NRS ${avg3.toFixed(1)}`); }
+    if(avg3>=6) { riskScore+=25; factors.push(`🔥 최근 3일 평균 ${_scoreLabel()} ${avg3.toFixed(1)} — 고통 지속 중`); }
+    else if(avg3>=4) { riskScore+=12; factors.push(`⚠️ 최근 3일 평균 ${_scoreLabel()} ${avg3.toFixed(1)}`); }
   }
 
   // 3) 최근 기록의 트리거 활성 여부
@@ -1004,7 +1004,7 @@ function renderTriggerNrsChart(logs) {
       <div style="flex:1;height:18px;background:var(--bd);border-radius:4px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${color};border-radius:4px"></div></div>
       <span style="min-width:50px;font-size:.68rem;color:var(--mu)">${r.avg.toFixed(1)} (${r.count}회)</span></div>`;
   }).join('');
-  return `<div class="card"><div class="card-title">⚡ 트리거별 평균 NRS</div>${bars}<div style="font-size:.62rem;color:var(--mu2);text-align:center;margin-top:6px">최소 2회 이상 기록된 트리거만 표시.</div></div>`;
+  return `<div class="card"><div class="card-title">⚡ 트리거별 평균 ${_scoreLabel()}</div>${bars}<div style="font-size:.62rem;color:var(--mu2);text-align:center;margin-top:6px">최소 2회 이상 기록된 트리거만 표시.</div></div>`;
 }
 
 // ── 통계 차트: 기압-NRS 산점도 ──
@@ -1020,12 +1020,12 @@ function renderPressureChart(logs) {
     const color=l.nrs>=7?'#ef4444':l.nrs>=4?'#f59e0b':'#10b981';
     return `<circle cx="${x}" cy="${y}" r="4" fill="${color}" opacity=".7"/>`;
   }).join('');
-  return `<div class="card"><div class="card-title">🌡️ 기압 vs NRS 상관</div>
+  return `<div class="card"><div class="card-title">🌡️ 기압 vs ${_scoreLabel()} 상관</div>
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:400px;display:block;margin:0 auto">
       <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="var(--bd)" stroke-width="1"/>
       <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}" stroke="var(--bd)" stroke-width="1"/>
       <text x="${W/2}" y="${H-5}" text-anchor="middle" font-size="10" fill="var(--mu)">기압 (hPa)</text>
-      <text x="12" y="${H/2}" text-anchor="middle" font-size="10" fill="var(--mu)" transform="rotate(-90,12,${H/2})">NRS</text>
+      <text x="12" y="${H/2}" text-anchor="middle" font-size="10" fill="var(--mu)" transform="rotate(-90,12,${H/2})">${_scoreLabel()}</text>
       <text x="${pad}" y="${H-pad+14}" text-anchor="middle" font-size="9" fill="var(--mu2)">${pMin}</text>
       <text x="${W-pad}" y="${H-pad+14}" text-anchor="middle" font-size="9" fill="var(--mu2)">${pMax}</text>
       ${dots}
@@ -1073,7 +1073,7 @@ function renderStatsView() {
     const dayName=['일','월','화','수','목','금','토'][new Date(d+'T12:00').getDay()];
     const color=avgNrs>0?nrsColor(avgNrs):'var(--bd)';
     const label=d.slice(8);
-    return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0" title="${d}: ${avgNrs>0?'NRS '+avgNrs.toFixed(1):'기록없음'}${data?.count?' ('+data.count+'건)':''}">
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0" title="${d}: ${avgNrs>0?_scoreLabel()+' '+avgNrs.toFixed(1):'기록없음'}${data?.count?' ('+data.count+'건)':''}">
       <div style="font-size:.5rem;color:var(--mu2)">${avgNrs>0?avgNrs.toFixed(1):''}</div>
       <div style="width:100%;max-width:14px;height:${h}px;background:${color};border-radius:2px"></div>
       <div style="font-size:.5rem;color:${isToday?'var(--ac)':'var(--mu2)'};font-weight:${isToday?'700':'400'}">${label}</div>
@@ -1292,7 +1292,7 @@ function renderCrossLogView() {
     <div class="card-title">🔗 ${currentUser} — 교차 도메인 타임라인</div>
     <p style="font-size:.78rem;color:var(--mu);margin-bottom:6px">
       여러 도메인의 기록을 날짜별로 합쳐서 보여줍니다.<br>
-      예: 편두통 NRS가 높았던 날 수면/기분/식사가 어땠는지 한눈에 비교할 수 있습니다.
+      예: 편두통 통증이 높았던 날 수면/기분/식사가 어땠는지 한눈에 비교할 수 있습니다.
     </p>
     <p style="font-size:.72rem;color:var(--mu2);margin-bottom:10px">
       ${domains.map(id=>`<span style="color:${DOMAINS[id].color};font-weight:600">${DOMAINS[id].icon} ${DOMAINS[id].label}</span>`).join(' · ')}
@@ -1568,7 +1568,7 @@ function exportPDF() {
   const last30=logs.filter(l=>(Date.now()-new Date(l.datetime))<=30*86400000);
   if(last30.length) {
     html+=`<h2>증상 기록 (${last30.length}건)</h2><table><tr><th>날짜</th><th>시간</th>`;
-    html+=lc.moodMode?'<th>기분</th>':'<th>NRS</th>';
+    html+=lc.moodMode?'<th>기분</th>':'<th>${_scoreLabel()}</th>';
     html+=`<th>증상</th><th>투약</th><th>메모</th></tr>`;
     last30.forEach(l=>{
       html+=`<tr><td>${l.datetime.slice(0,10)}</td><td>${l.datetime.slice(11,16)}</td>`;
@@ -1620,9 +1620,9 @@ function renderCalendarHeatmap(logs,lc) {
     if(data?.nrs?.length) {
       const avg=data.nrs.reduce((a,b)=>a+b,0)/data.nrs.length;
       color=avg<=2?'#2d8a5a':avg<=4?'#4ade80':avg<=6?'#fbbf24':avg<=8?'#f97316':'#ef4444';
-      title=`${d}: NRS ${avg.toFixed(1)} (${data.count}건)`;
+      title=`${d}: ${_scoreLabel()} ${avg.toFixed(1)} (${data.count}건)`;
     } else if(data?.count) {
-      color='#93c5fd'; title=`${d}: ${data.count}건 (NRS 미기록)`;
+      color='#93c5fd'; title=`${d}: ${data.count}건 (${_scoreLabel()} 미기록)`;
     }
     cells.push(`<div style="width:10px;height:10px;border-radius:2px;background:${color}" title="${title}"></div>`);
   }
@@ -1807,7 +1807,7 @@ async function _aiDailySummary(){
   const dc=DC();
   const data=todayLogs.map(l=>{
     const parts=[l.datetime?.slice(11,16)];
-    if(l.nrs>=0)parts.push('NRS:'+l.nrs);
+    if(l.nrs>=0)parts.push(_scoreLabel()+':'+l.nrs);
     if(l.mood)parts.push('기분:'+l.mood);
     if(l.symptoms?.length)parts.push('증상:'+l.symptoms.join(','));
     if(l.meds?.length)parts.push('약물:'+l.meds.join(','));
@@ -1842,7 +1842,7 @@ async function _aiMonthlyInsight(){
   });
   const summary=Object.entries(byDate).sort(([a],[b])=>a.localeCompare(b)).map(([d,v])=>{
     const parts=[d];
-    if(v.nrs.length)parts.push('NRS:'+Math.round(v.nrs.reduce((a,b)=>a+b,0)/v.nrs.length*10)/10);
+    if(v.nrs.length)parts.push(_scoreLabel()+':'+Math.round(v.nrs.reduce((a,b)=>a+b,0)/v.nrs.length*10)/10);
     if(v.symptoms.length)parts.push('증상:'+[...new Set(v.symptoms)].join(','));
     if(v.meds.length)parts.push('약물:'+[...new Set(v.meds)].join(','));
     if(v.outcomes.length)parts.push('경과:'+v.outcomes.join(','));
@@ -2082,7 +2082,7 @@ function renderTimelineView() {
         text=(log.categories||[]).join(', ')||'기록';
         if(log.memo) text+=' — '+log.memo.substring(0,40);
       } else if(log.nrs>=0) {
-        text=`NRS ${log.nrs} — ${(log.symptoms||[]).join(', ')||'기록'}`;
+        text=`${_scoreLabel()} ${log.nrs} — ${(log.symptoms||[]).join(', ')||'기록'}`;
       } else { return; }
       events.push({date,type:'log',domain:label,icon,color,text,
         detail:(log.meds||[]).join(', ')});
@@ -2652,11 +2652,11 @@ function renderTrendChart(logs, days) {
   const dots=points.map(p=>{
     const color=nrsColor(p.avg);
     return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="${color}" stroke="var(--sf)" stroke-width="1">
-      <title>${p.date}: NRS ${p.avg.toFixed(1)}</title></circle>`;
+      <title>${p.date}: ${_scoreLabel()} ${p.avg.toFixed(1)}</title></circle>`;
   }).join('');
 
   return `<div class="card">
-    <div class="card-title">📈 NRS ${days}일 추세</div>
+    <div class="card-title">📈 ${_scoreLabel()} ${days}일 추세</div>
     <svg viewBox="0 0 ${width} ${height}" style="width:100%;height:auto;max-height:150px">
       ${gridLines}
       <path d="${areaD}" fill="var(--ac)" opacity="0.08"/>
@@ -2715,8 +2715,8 @@ function renderCorrelationAnalysis(logs) {
   }).join('');
 
   return `<div class="card">
-    <div class="card-title">🔬 약물-NRS 상관분석 <span class="badge badge-blue">vs 전체 평균 ${globalAvg.toFixed(1)}</span></div>
-    <div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">투약 시 NRS가 전체 평균 대비 어떻게 변했는지 보여줍니다.</div>
+    <div class="card-title">🔬 약물-${_scoreLabel()} 상관분석 <span class="badge badge-blue">vs 전체 평균 ${globalAvg.toFixed(1)}</span></div>
+    <div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">투약 시 ${_scoreLabel()}가 전체 평균 대비 어떻게 변했는지 보여줍니다.</div>
     ${rows}
     <div style="font-size:.6rem;color:var(--mu);margin-top:8px">※ 상관관계는 인과관계를 의미하지 않습니다. 최소 3회 이상 투약 데이터 기준.</div>
   </div>`;
@@ -2792,8 +2792,8 @@ function renderMedEffectAnalysis(logs) {
   }).join('');
 
   return `<div class="card">
-    <div class="card-title">💊 약물 효과 추적 <span class="badge badge-green">복용→다음날 NRS 변화</span></div>
-    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">약물 복용일과 다음날의 평균 NRS 변화를 비교합니다.</div>
+    <div class="card-title">💊 약물 효과 추적 <span class="badge badge-green">복용→다음날 ${_scoreLabel()} 변화</span></div>
+    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">약물 복용일과 다음날의 평균 ${_scoreLabel()} 변화를 비교합니다.</div>
     ${rows}
     <div style="font-size:.6rem;color:var(--mu);margin-top:8px">※ 최소 3회 이상 복용 데이터 기준. 다른 요인이 영향을 줄 수 있습니다.</div>
   </div>`;
@@ -2875,17 +2875,17 @@ function renderMedSummaryReport(logs) {
     return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;${i<ranked.length-1?'border-bottom:1px solid var(--bd)':''}">
       <span style="font-size:.85rem;width:22px;text-align:center">${medal[i]||''}</span>
       <span style="font-size:.8rem;font-weight:600;min-width:80px;flex:1">${esc(r.item)}</span>
-      <div style="text-align:center;min-width:55px"><div style="font-size:.72rem">${nrsStr}</div><div style="font-size:.55rem;color:var(--mu2)">NRS변화</div></div>
+      <div style="text-align:center;min-width:55px"><div style="font-size:.72rem">${nrsStr}</div><div style="font-size:.55rem;color:var(--mu2)">${_scoreLabel()}변화</div></div>
       <div style="text-align:center;min-width:45px"><div style="font-size:.72rem">${outcomeStr}</div><div style="font-size:.55rem;color:var(--mu2)">호전율</div></div>
       <div style="text-align:center;min-width:35px"><div style="font-size:.72rem;font-family:var(--mono)">${r.days}</div><div style="font-size:.55rem;color:var(--mu2)">일</div></div>
     </div>`;
   }).join('');
 
-  const baseline=noMedAvg!==null?`<div style="font-size:.68rem;color:var(--mu);margin-top:8px;padding:6px 8px;background:var(--sf2);border-radius:6px">📊 비교 기준: 약/시술 없는 날 평균 NRS <b>${noMedAvg.toFixed(1)}</b> | 전체 평균 <b>${allNrsAvg.toFixed(1)}</b></div>`:'';
+  const baseline=noMedAvg!==null?`<div style="font-size:.68rem;color:var(--mu);margin-top:8px;padding:6px 8px;background:var(--sf2);border-radius:6px">📊 비교 기준: 약/시술 없는 날 평균 ${_scoreLabel()} <b>${noMedAvg.toFixed(1)}</b> | 전체 평균 <b>${allNrsAvg.toFixed(1)}</b></div>`:'';
 
   return `<div class="card">
-    <div class="card-title">📋 약물 종합 효과 리포트 <span class="badge badge-green">NRS + 경과 통합</span></div>
-    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">NRS 변화와 경과 평가를 종합하여 효과 순으로 정렬합니다.</div>
+    <div class="card-title">📋 약물 종합 효과 리포트 <span class="badge badge-green">${_scoreLabel()} + 경과 통합</span></div>
+    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">${_scoreLabel()} 변화와 경과 평가를 종합하여 효과 순으로 정렬합니다.</div>
     ${rows}${baseline}
     <div style="font-size:.58rem;color:var(--mu2);margin-top:6px">※ 최소 3일 이상 사용 기준. 다른 요인(날씨·수면·트리거)이 영향을 줄 수 있습니다.</div>
   </div>`;
@@ -2925,7 +2925,7 @@ function detectDangerousPatterns() {
     else { consecHigh=0; }
   });
   if(maxConsec>=3) {
-    warnings.push({level:'high',icon:'🔴',text:`${maxConsec}일 연속 NRS 7 이상 — 전문의 상담을 권장합니다`});
+    warnings.push({level:'high',icon:'🔴',text:`${maxConsec}일 연속 ${_scoreLabel()} 7 이상 — 전문의 상담을 권장합니다`});
   }
 
   // 2. 투약 빈도 과다: 7일 중 5일 이상 진통제 사용
@@ -2938,7 +2938,7 @@ function detectDangerousPatterns() {
     warnings.push({level:'moderate',icon:'🟡',text:`최근 7일 중 ${medDays.size}일 투약 — 약물 과용 두통(MOH) 주의`});
   }
 
-  // 3. NRS 악화 추세: 최근 7일 평균 > 이전 7일 평균
+  // 3. ${_scoreLabel()} 악화 추세: 최근 7일 평균 > 이전 7일 평균
   const prev7=logs.filter(l=>{
     const diff=Math.round((new Date(today+'T00:00:00')-new Date(l.datetime.slice(0,10)+'T00:00:00'))/86400000);
     return diff>7&&diff<=14;
@@ -2949,7 +2949,7 @@ function detectDangerousPatterns() {
     const curAvg=cur7Nrs.reduce((a,b)=>a+b,0)/cur7Nrs.length;
     const prevAvg=prev7Nrs.reduce((a,b)=>a+b,0)/prev7Nrs.length;
     if(curAvg-prevAvg>=2) {
-      warnings.push({level:'moderate',icon:'📈',text:`NRS 악화 추세: 이전 주 평균 ${prevAvg.toFixed(1)} → 이번 주 ${curAvg.toFixed(1)} (+${(curAvg-prevAvg).toFixed(1)})`});
+      warnings.push({level:'moderate',icon:'📈',text:`${_scoreLabel()} 악화 추세: 이전 주 평균 ${prevAvg.toFixed(1)} → 이번 주 ${curAvg.toFixed(1)} (+${(curAvg-prevAvg).toFixed(1)})`});
     }
   }
 
@@ -3046,9 +3046,9 @@ function exportMonthlyPDF() {
   // Summary stats
   html+=`<div class="stat-grid">
     <div class="stat-box"><div class="stat-val">${last30.length}</div><div class="stat-label">총 기록 수</div></div>
-    <div class="stat-box"><div class="stat-val">${avgNrs}</div><div class="stat-label">평균 NRS</div></div>
-    <div class="stat-box"><div class="stat-val">${maxNrs}</div><div class="stat-label">최대 NRS</div></div>
-    <div class="stat-box"><div class="stat-val">${attackDays}일</div><div class="stat-label">발작일(NRS4+)</div></div>
+    <div class="stat-box"><div class="stat-val">${avgNrs}</div><div class="stat-label">평균 _scoreLabel()+'</div>'</div>
+    <div class="stat-box"><div class="stat-val">${maxNrs}</div><div class="stat-label">최대 _scoreLabel()+'</div>'</div>
+    <div class="stat-box"><div class="stat-val">${attackDays}일</div><div class="stat-label">발작일(${_scoreLabel()}4+)</div></div>
     <div class="stat-box"><div class="stat-val">${medDays}일</div><div class="stat-label">투약일</div></div>
   </div>`;
 
@@ -3085,7 +3085,7 @@ function exportMonthlyPDF() {
     html+=`<div class="week-row">
       <strong style="min-width:50px">${weekLabels[wi]}</strong>
       <span>기록 ${w.length}건</span>
-      <span>평균 NRS: ${wAvg}</span>
+      <span>평균 ${_scoreLabel()}: ${wAvg}</span>
       <span>최대: ${wMax}</span>
       <span>투약: ${wMeds}일</span>
     </div>`;
@@ -3094,7 +3094,7 @@ function exportMonthlyPDF() {
 
   // Detailed log table
   if(last30.length) {
-    html+=`<div class="section"><h2>상세 기록</h2><table><tr><th>날짜</th><th>시간</th><th>NRS</th><th>증상</th><th>투약</th><th>메모</th></tr>`;
+    html+=`<div class="section"><h2>상세 기록</h2><table><tr><th>날짜</th><th>시간</th><th>${_scoreLabel()}</th><th>증상</th><th>투약</th><th>메모</th></tr>`;
     last30.forEach(l=>{
       const nrsCls=l.nrs>=7?'nrs-high':l.nrs>=4?'nrs-med':'nrs-low';
       html+=`<tr><td>${l.datetime.slice(0,10)}</td><td>${l.datetime.slice(11,16)}</td>
@@ -3145,7 +3145,7 @@ function generateAIQuestionSuggestions() {
   // Pattern 1: High NRS frequency
   const highNrs=recent.filter(l=>l.nrs>=7);
   if(highNrs.length>=3) {
-    suggestions.push(`최근 2주간 NRS 7 이상이 ${highNrs.length}회 발생했습니다. 예방약 조정이 필요한지 검토해 주세요.`);
+    suggestions.push(`최근 2주간 ${_scoreLabel()} 7 이상이 ${highNrs.length}회 발생했습니다. 예방약 조정이 필요한지 검토해 주세요.`);
   }
 
   // Pattern 2: Same symptom recurring
@@ -3175,7 +3175,7 @@ function generateAIQuestionSuggestions() {
     const prev=first7.reduce((a,l)=>a+l.nrs,0)/first7.length;
     const cur=last7.reduce((a,l)=>a+l.nrs,0)/last7.length;
     if(cur-prev>=1.5) {
-      suggestions.push(`NRS가 악화 추세입니다 (${prev.toFixed(1)}→${cur.toFixed(1)}). 악화 원인과 치료 전략 변경을 논의해 주세요.`);
+      suggestions.push(`${_scoreLabel()}가 악화 추세입니다 (${prev.toFixed(1)}→${cur.toFixed(1)}). 악화 원인과 치료 전략 변경을 논의해 주세요.`);
     }
   }
 
