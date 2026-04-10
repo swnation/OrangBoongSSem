@@ -3251,5 +3251,133 @@ function _renderBungrukiStats(){
       ${semen.length?`<div style="font-size:.65rem;color:var(--mu)">검사일: ${semen[0].date}</div>`:''}
       ${hormone.length?`<div style="font-size:.78rem;margin-top:6px">호르몬: ${Object.entries(hormone[0].values).map(([k,v])=>k+':'+v).join(' · ')}</div>`:''}
       <button onclick="switchView('meds')" style="margin-top:8px;font-size:.72rem;padding:5px 14px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">📋 검사 결과 관리 →</button>
-    </div>`;
+    </div>
+    ${_renderIntimacyStats(m)}`;
 }
+
+// ── 관계 빈도 통계 + 가임기 적중률 ──
+function _renderIntimacyStats(m) {
+  const dc = m.dailyChecks || {};
+  const cycles = (m.menstrualCycles || []).sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const avgLen = typeof getAvgCycleLength === 'function' ? getAvgCycleLength(cycles) : 28;
+
+  // 관계 기록 수집 (최근 180일)
+  const today = kstToday();
+  const records = [];
+  for (let i = 0; i < 180; i++) {
+    const d = kstDaysAgo(i);
+    if (dc[d]?.intimacy) records.push({ date: d, ...dc[d].intimacy });
+  }
+  if (!records.length) return '';
+  records.reverse(); // 오래된 순
+
+  // 월별 빈도
+  const byMonth = {};
+  records.forEach(r => { const m2 = r.date.slice(0, 7); byMonth[m2] = (byMonth[m2] || 0) + 1; });
+  const monthKeys = Object.keys(byMonth).sort();
+  const avgPerMonth = records.length && monthKeys.length ? Math.round(records.length / monthKeys.length * 10) / 10 : 0;
+
+  // 주별 빈도 (최근 12주)
+  const weekCounts = [];
+  for (let w = 0; w < 12; w++) {
+    let cnt = 0;
+    for (let d = 0; d < 7; d++) {
+      const dt = kstDaysAgo(w * 7 + d);
+      if (dc[dt]?.intimacy) cnt++;
+    }
+    weekCounts.push(cnt);
+  }
+  weekCounts.reverse();
+  const maxWeek = Math.max(...weekCounts, 1);
+
+  // 주별 바 차트
+  const weekBars = weekCounts.map((c, i) => {
+    const h = Math.round(c / maxWeek * 40);
+    const label = i === weekCounts.length - 1 ? '이번주' : (weekCounts.length - 1 - i) + '주전';
+    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0">
+      <div style="font-size:.5rem;color:var(--mu);margin-bottom:2px">${c}</div>
+      <div style="width:100%;max-width:18px;height:${h}px;background:${c ? '#ec4899' : 'var(--bd)'};border-radius:3px 3px 0 0"></div>
+      <div style="font-size:.42rem;color:var(--mu2);margin-top:2px">${i % 2 === 0 ? label : ''}</div>
+    </div>`;
+  }).join('');
+
+  // 가임기 적중률 계산
+  let fertileCount = 0, ovDayCount = 0, nonFertileCount = 0;
+  const ovDayDiffs = []; // 배란일 기준 차이 수집 (히스토그램용)
+  records.forEach(r => {
+    if (typeof _getFertileStatus !== 'function') return;
+    const fs = _getFertileStatus(m, r.date);
+    if (fs.status === 'ovulation') { ovDayCount++; fertileCount++; }
+    else if (fs.status === 'fertile') fertileCount++;
+    else nonFertileCount++;
+    if (fs.daysToOv !== null && Math.abs(fs.daysToOv) <= 7) ovDayDiffs.push(fs.daysToOv);
+  });
+  const totalWithStatus = fertileCount + nonFertileCount;
+  const fertileRate = totalWithStatus ? Math.round(fertileCount / totalWithStatus * 100) : 0;
+
+  // 배란일 기준 타이밍 히스토그램 (-7 ~ +7)
+  const histogram = {};
+  for (let d = -7; d <= 7; d++) histogram[d] = 0;
+  ovDayDiffs.forEach(d => { if (histogram[d] !== undefined) histogram[d]++; });
+  const maxHist = Math.max(...Object.values(histogram), 1);
+  const histBars = [];
+  for (let d = -7; d <= 7; d++) {
+    const c = histogram[d];
+    const h = Math.round(c / maxHist * 50);
+    const isFertile = d >= -3 && d <= 3;
+    const isOv = d === 0;
+    const color = isOv ? '#8b5cf6' : isFertile ? '#ec4899' : 'var(--bd2)';
+    const bg = c ? color : 'var(--bd)';
+    histBars.push(`<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0">
+      <div style="font-size:.48rem;color:${c ? color : 'var(--mu2)'};margin-bottom:1px">${c || ''}</div>
+      <div style="width:100%;max-width:14px;height:${h || 2}px;background:${bg};border-radius:2px 2px 0 0"></div>
+      <div style="font-size:.45rem;color:${isOv ? '#8b5cf6' : 'var(--mu2)'};margin-top:1px;font-weight:${isOv ? '700' : '400'}">${d > 0 ? '+' + d : d}</div>
+    </div>`);
+  }
+
+  return `<div class="card">
+    <div class="card-title">❤️ 관계 빈도 통계</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+      <div style="text-align:center;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+        <div style="font-size:.68rem;color:var(--mu)">총 기록</div>
+        <div style="font-size:1.2rem;font-weight:700;color:#ec4899">${records.length}회</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+        <div style="font-size:.68rem;color:var(--mu)">월 평균</div>
+        <div style="font-size:1.2rem;font-weight:700;color:var(--ink)">${avgPerMonth}회</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+        <div style="font-size:.68rem;color:var(--mu)">가임기 비율</div>
+        <div style="font-size:1.2rem;font-weight:700;color:${fertileRate >= 50 ? '#10b981' : fertileRate >= 30 ? '#f59e0b' : '#ef4444'}">${fertileRate}%</div>
+      </div>
+    </div>
+    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">📊 주간 빈도 (12주)</div>
+    <div style="display:flex;gap:2px;align-items:flex-end;height:60px;padding:0 4px;margin-bottom:12px">${weekBars}</div>
+    ${monthKeys.length ? `<div style="font-size:.62rem;color:var(--mu);margin-bottom:8px">월별: ${monthKeys.slice(-4).map(k => k.slice(5) + '월 ' + byMonth[k] + '회').join(' · ')}</div>` : ''}
+  </div>
+  ${ovDayDiffs.length ? `<div class="card">
+    <div class="card-title">🎯 가임기 적중률</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1;text-align:center;padding:8px;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:8px">
+        <div style="font-size:.62rem;color:#be185d">가임기 내</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#ec4899">${fertileCount}회</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:8px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px">
+        <div style="font-size:.62rem;color:#6d28d9">배란 추정일</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#8b5cf6">${ovDayCount}회</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:8px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px">
+        <div style="font-size:.62rem;color:var(--mu)">비가임기</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--mu)">${nonFertileCount}회</div>
+      </div>
+    </div>
+    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">📈 배란일 기준 타이밍 (D-7 ~ D+7)</div>
+    <div style="display:flex;gap:1px;align-items:flex-end;height:65px;padding:0 2px;margin-bottom:4px">${histBars.join('')}</div>
+    <div style="display:flex;justify-content:center;gap:12px;font-size:.55rem;color:var(--mu)">
+      <span style="color:#ec4899">● 가임기 (D-3~D+3)</span>
+      <span style="color:#8b5cf6">● 배란 추정일 (D0)</span>
+    </div>
+    <div style="font-size:.62rem;color:var(--mu2);margin-top:6px;text-align:center">
+      💡 D-2~D0 타이밍이 임신 확률 가장 높음 (배란 2일 전~당일)
+    </div>
+  </div>` : ''}`;
