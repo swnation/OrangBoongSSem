@@ -1095,9 +1095,9 @@ function renderOutcomeTab() {
       +'</div>'
       +'<div style="font-size:.78rem;color:var(--mu);margin-bottom:8px">'+esc(tx)+'</div>'
       +'<div style="display:flex;gap:6px">'
-      +'<button onclick="rateQuickOutcome('+idx+',\'better\')" style="flex:1;padding:8px;border:1.5px solid #16a34a;border-radius:8px;background:'+(rating==='better'?'#16a34a':'transparent')+';color:'+(rating==='better'?'#fff':'#16a34a')+';font-size:.78rem;font-weight:600;cursor:pointer">🟢 호전</button>'
-      +'<button onclick="rateQuickOutcome('+idx+',\'same\')" style="flex:1;padding:8px;border:1.5px solid #f59e0b;border-radius:8px;background:'+(rating==='same'?'#f59e0b':'transparent')+';color:'+(rating==='same'?'#fff':'#f59e0b')+';font-size:.78rem;font-weight:600;cursor:pointer">🟡 비슷</button>'
-      +'<button onclick="rateQuickOutcome('+idx+',\'worse\')" style="flex:1;padding:8px;border:1.5px solid #dc2626;border-radius:8px;background:'+(rating==='worse'?'#dc2626':'transparent')+';color:'+(rating==='worse'?'#fff':'#dc2626')+';font-size:.78rem;font-weight:600;cursor:pointer">🔴 악화</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'better\')" style="flex:1;padding:8px;border:2px solid #16a34a;border-radius:8px;background:'+(rating==='better'?'#16a34a':'#16a34a18')+';color:'+(rating==='better'?'#fff':'#16a34a')+';font-size:.78rem;font-weight:600;cursor:pointer">🟢 호전</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'same\')" style="flex:1;padding:8px;border:2px solid #f59e0b;border-radius:8px;background:'+(rating==='same'?'#f59e0b':'#f59e0b18')+';color:'+(rating==='same'?'#fff':'#f59e0b')+';font-size:.78rem;font-weight:600;cursor:pointer">🟡 비슷</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'worse\')" style="flex:1;padding:8px;border:2px solid #dc2626;border-radius:8px;background:'+(rating==='worse'?'#dc2626':'#dc262618')+';color:'+(rating==='worse'?'#fff':'#dc2626')+';font-size:.78rem;font-weight:600;cursor:pointer">🔴 악화</button>'
       +'</div>'
       +'<div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">'
       +'<button onclick="rateQuickOutcome('+idx+',\'unknown\')" style="background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:.68rem;color:var(--mu);cursor:pointer;'+(rating==='unknown'?'background:var(--bd);font-weight:600':'')+'">🤷 기억 안남</button>'
@@ -1270,7 +1270,7 @@ function quickEditOutcome(id) {
       <div style="display:flex;flex-direction:column;gap:8px">
         ${['better','same','worse','unknown'].map(r=>{
           const c=colors[r];const sel=current===r;
-          return `<button onclick="saveQuickOutcome(${id},'${r}')" style="padding:12px;border:2px solid ${c[0]};background:${sel?c[1]:'transparent'};border-radius:10px;font-size:.92rem;font-weight:${sel?'700':'500'};cursor:pointer;font-family:inherit;color:${sel?c[2]:c[0]}">${labels[r]}</button>`;
+          return `<button onclick="saveQuickOutcome(${id},'${r}')" style="padding:12px;border:2px solid ${c[0]};background:${sel?c[1]:c[0]+'18'};border-radius:10px;font-size:.92rem;font-weight:${sel?'700':'500'};cursor:pointer;font-family:inherit;color:${sel?c[2]:c[0]}">${labels[r]}</button>`;
         }).join('')}
       </div>
       ${current?`<button onclick="saveQuickOutcome(${id},null)" style="display:block;margin:12px auto 0;font-size:.72rem;color:var(--mu);background:none;border:none;cursor:pointer;text-decoration:underline">경과 삭제</button>`:''}
