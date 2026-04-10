@@ -1981,3 +1981,25 @@ function _scheduleAutoSave() { clearTimeout(_autoSaveTimer); _autoSaveTimer=setT
 // 로그 폼 변경 감지 (이벤트 위임)
 document.addEventListener('click', e => { if(e.target.closest('.log-chip')) _scheduleAutoSave(); });
 document.addEventListener('input', e => { if(e.target.closest('#log-memo,#log-nrs,#log-time,#log-treatment')) _scheduleAutoSave(); });
+
+// ═══════════════════════════════════════════════════════════════
+// medCheck 마이그레이션 — 기존 meds 배열 → medCheck 객체 역산
+// ═══════════════════════════════════════════════════════════════
+async function migrateMedCheck() {
+  const ds = D();
+  if (!ds.logData?.length) { showToast('로그 데이터 없음'); return; }
+  const condMeds = typeof getConditionMeds === 'function' ? null : null; // 질환별 약물은 날짜별로 조회
+  let migrated = 0;
+  ds.logData.forEach(l => {
+    if (l.medCheck && Object.keys(l.medCheck).length) return; // 이미 있으면 스킵
+    const meds = l.meds || [];
+    if (!meds.length) return;
+    // meds 배열에 있는 약물은 복용한 것으로 간주
+    l.medCheck = {};
+    meds.forEach(m => { l.medCheck[m] = true; });
+    migrated++;
+  });
+  if (!migrated) { showToast('마이그레이션 대상 없음'); return; }
+  await saveMaster();
+  showToast('✅ medCheck 마이그레이션 완료: ' + migrated + '건');
+}

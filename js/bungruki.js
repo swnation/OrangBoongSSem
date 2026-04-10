@@ -1863,7 +1863,40 @@ function renderLabResults() {
     + '</div></div>'
     + _renderLabsByPerson(labs, typeLabels, typeIcons)
     + trendHtml
+    + _renderHealthCheckupLink()
     + '</div>';
+}
+
+// 붕룩이 검사탭에서 건강관리 도메인 검진 데이터 연계 표시
+function _renderHealthCheckupLink() {
+  if (typeof getAllHealthCheckups !== 'function') return '';
+  const oCheckups = getAllHealthCheckups('오랑이', true, { includePregnancy: true });
+  const bCheckups = getAllHealthCheckups('붕쌤', true, { includePregnancy: true });
+  if (!oCheckups.length && !bCheckups.length) return '';
+
+  const renderGroup = (who, checkups, color) => {
+    if (!checkups.length) return '';
+    const recent = checkups.slice(0, 3);
+    const items = recent.map(c => {
+      const abnormal = (c.results || []).filter(r => r.status === 'high' || r.status === 'low').length;
+      return `<div style="padding:4px 8px;background:var(--sf);border-radius:4px;font-size:.65rem;display:flex;align-items:center;gap:6px">
+        <span style="font-family:var(--mono)">${c.date}</span>
+        <span style="color:var(--mu)">${(c.results||[]).length}항목</span>
+        ${abnormal ? `<span style="color:#dc2626;font-weight:600">⚠${abnormal}</span>` : '<span style="color:#10b981">✓</span>'}
+        ${c._legacyLab ? '<span style="font-size:.5rem;color:#7c3aed">임준</span>' : ''}
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:6px">
+      <div style="font-size:.68rem;font-weight:600;color:${color};margin-bottom:3px">${who} (${checkups.length}건)</div>
+      ${items}
+    </div>`;
+  };
+
+  return `<div style="margin-top:12px;padding:10px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px">
+    <div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">🔗 건강관리 도메인 검진 연계</div>
+    ${renderGroup('오랑이', oCheckups, '#f97316')}
+    ${renderGroup('붕쌤', bCheckups, '#06b6d4')}
+  </div>`;
 }
 
 var _labBulkMode=false;

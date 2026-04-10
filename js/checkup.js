@@ -819,9 +819,43 @@ function _trendDirection(points) {
 async function saveHealthCheckup(checkupData) {
   const m = _getCheckupMaster();
   if (!m) { showToast('⚠️ 마스터 데이터 없음'); return; }
+  // 원본 이미지가 base64이면 Drive에 별도 저장
+  if (checkupData.imgSrc && checkupData.imgSrc.startsWith('data:')) {
+    try {
+      const fileId = await _uploadCheckupImage(checkupData.imgSrc, checkupData.date || kstToday());
+      if (fileId) { checkupData.imgDriveId = fileId; delete checkupData.imgSrc; }
+    } catch (e) { console.warn('이미지 Drive 업로드 실패:', e); /* imgSrc 유지 */ }
+  }
   m.healthCheckups.push(checkupData);
   await saveMaster();
   showToast('✅ 검진 결과 저장됨');
+}
+
+async function _uploadCheckupImage(dataUrl, dateStr) {
+  if (!S.token) return null;
+  const folderName = DC()?.user === '붕쌤' ? 'Bung Health' : 'Orangi Health';
+  const folderId = await getOrCreateFolder(folderName);
+  const imgFolder = await getOrCreateFolder('Checkup Images');
+  const fileName = 'checkup_' + dateStr + '_' + Date.now() + '.jpg';
+  // base64 → blob
+  const base64 = dataUrl.split(',')[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: 'image/jpeg' });
+  // Drive 업로드
+  const boundary = 'ck_img_' + Date.now();
+  const meta = JSON.stringify({ name: fileName, parents: [imgFolder] });
+  const body = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + meta + '\r\n--' + boundary + '\r\nContent-Type: image/jpeg\r\n\r\n';
+  const bodyEnd = '\r\n--' + boundary + '--';
+  const bodyBlob = new Blob([body, blob, bodyEnd]);
+  const resp = await fetchWithRetry('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + S.token, 'Content-Type': 'multipart/related; boundary=' + boundary },
+    body: bodyBlob,
+  });
+  const d = await resp.json();
+  return d.id || null;
 }
 
 // 검진 결과 삭제
