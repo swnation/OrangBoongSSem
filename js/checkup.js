@@ -950,6 +950,130 @@ ${refs ? JSON.stringify(refs, null, 1) : '없음'}
 // AI VISION ANALYSIS (검진 결과 사진/PDF → 표준화)
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// DOCUMENT ANALYSIS (PDF/DOCX/TXT → 텍스트 추출 → AI 분석)
+// ═══════════════════════════════════════════════════════════════
+
+async function stageCheckupDocs(input) {
+  if (!input.files || !input.files.length) return;
+  const file = input.files[0];
+  input.value = '';
+  const ext = file.name.split('.').pop().toLowerCase();
+
+  showToast('📄 문서 읽는 중...', 5000);
+  let text = '';
+  try {
+    if (ext === 'pdf') text = await _extractPdfText(file);
+    else if (ext === 'docx') text = await _extractDocxText(file);
+    else if (ext === 'txt') text = await _extractTxtText(file);
+    else { showToast('⚠️ 지원: PDF, DOCX, TXT'); return; }
+  } catch (e) {
+    showToast('❌ 문서 읽기 실패: ' + e.message, 4000); return;
+  }
+
+  if (!text || text.trim().length < 20) {
+    showToast('⚠️ 추출된 텍스트가 너무 적습니다. 사진으로 시도해 주세요.', 4000); return;
+  }
+
+  // AI 선택 → 분석
+  const aiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+  if (!aiId) { showToast('⚠️ AI API 키 필요'); return; }
+
+  const who = DC().user || '오랑이';
+  const preview = text.slice(0, 500) + (text.length > 500 ? '...' : '');
+
+  showConfirmModal('📄 문서 분석',
+    `<div style="font-size:.72rem">
+      <div style="margin-bottom:8px"><b>${esc(file.name)}</b> (${Math.round(text.length/1024)}KB 텍스트 추출)</div>
+      <div style="padding:8px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;max-height:150px;overflow-y:auto;font-size:.65rem;font-family:var(--mono);white-space:pre-wrap;color:var(--mu)">${esc(preview)}</div>
+      <div style="margin-top:8px;font-size:.62rem;color:var(--mu2)">💡 텍스트 기반 분석 — Vision API 불필요 (저비용)</div>
+    </div>`,
+    [{ label: '🤖 ' + aiId + '로 분석', primary: true, action: async () => {
+      closeConfirmModal();
+      await _analyzeDocText(text, who, aiId, file.name);
+    }}, { label: '취소', action: closeConfirmModal }]);
+}
+
+async function _extractPdfText(file) {
+  if (!window.pdfjsLib) await window._pdfjsReady;
+  if (!window.pdfjsLib) throw new Error('PDF 라이브러리 로딩 실패');
+  const arrayBuf = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({ data: arrayBuf }).promise;
+  const pages = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    pages.push(content.items.map(it => it.str).join(' '));
+  }
+  return pages.join('\n\n');
+}
+
+async function _extractDocxText(file) {
+  // JSZip 동적 로드
+  if (!window.JSZip) {
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jszip@3/dist/jszip.min.js';
+      s.onload = resolve; s.onerror = () => reject(new Error('JSZip 로딩 실패'));
+      document.head.appendChild(s);
+    });
+  }
+  const arrayBuf = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(arrayBuf);
+  const docXml = await zip.file('word/document.xml')?.async('string');
+  if (!docXml) throw new Error('워드 문서 구조 인식 실패');
+  // XML에서 텍스트만 추출 (w:t 태그)
+  const matches = docXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
+  return matches.map(m => m.replace(/<[^>]+>/g, '')).join(' ').replace(/\s+/g, ' ');
+}
+
+async function _extractTxtText(file) {
+  return await file.text();
+}
+
+async function _analyzeDocText(text, who, aiId, fileName) {
+  showToast('🤖 AI 분석 중...', 10000);
+  const prompt = `다음은 의료 검사 결과 문서입니다.
+대상: ${who} (${who === '붕쌤' ? '남성' : '여성'})
+
+문서 내용:
+${text.slice(0, 8000)}
+
+반드시 아래 JSON 형식으로 응답:
+{"type":"blood","date":"YYYY-MM-DD","who":"${who}",
+ "results":[
+  {"code":"WBC","name":"백혈구","value":6.78,"unit":"10^3/μL","refLow":4.0,"refHigh":10.0,"status":"normal","category":"cbc"}
+ ],
+ "opinion":"종합 소견"}
+
+규칙:
+1. type: semen/blood/hormone/ultrasound/other
+2. results 배열 — 실제 검사된 항목만. 미실시/빈값 제외
+3. value: 반드시 숫자. 항체: 높으면 면역(positive)
+4. status: normal/high/low/positive(항체 면역)
+5. category: cbc/liver/kidney/thyroid/lipid/glucose/electrolyte/inflammation/reproductive/semen/vitamin/iron/tumor/infection/coagulation/urine/other
+6. 중복 항목 제거`;
+
+  try {
+    const result = await callAI(aiId, '의료 검사 결과 분석 전문가', prompt);
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('AI 응답 파싱 실패');
+    const parsed = JSON.parse(jsonMatch[0]);
+    parsed._aiNormalized = true;
+    parsed._imgSrc = null;
+    parsed._usedAis = [aiId];
+    parsed._sourceFile = fileName;
+    // 기존 분석 결과 리뷰 플로우로 전달
+    _showCheckupAnalysisResults([parsed]);
+  } catch (e) {
+    showToast('❌ 분석 실패: ' + e.message, 4000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// IMAGE ANALYSIS (사진 → AI Vision)
+// ═══════════════════════════════════════════════════════════════
+
 var _stagedCheckupPhotos = [];
 var _checkupAnalyzeAbort = false;
 
@@ -1231,10 +1355,17 @@ function renderCheckupArchive() {
       <div style="font-size:.55rem;color:var(--mu2)">AI Vision 자동 추출</div>
       <input type="file" id="ck-file-input" multiple accept="image/*" onchange="stageCheckupPhotos(this)" style="display:none">
     </div>
-    <div style="width:80px;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
+    <div style="flex:1;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
+      onclick="document.getElementById('ck-doc-input').click()">
+      <span style="font-size:1.2rem">📄</span>
+      <div style="font-size:.72rem;color:var(--mu);margin-top:4px">문서 업로드</div>
+      <div style="font-size:.55rem;color:var(--mu2)">PDF · 워드 · 텍스트</div>
+      <input type="file" id="ck-doc-input" accept=".pdf,.docx,.doc,.txt,.hwp" onchange="stageCheckupDocs(this)" style="display:none">
+    </div>
+    <div style="width:70px;padding:10px;border:2px dashed var(--bd);border-radius:8px;text-align:center;cursor:pointer;background:var(--sf2)"
       onclick="openManualCheckupEntry()">
       <span style="font-size:1.2rem">📝</span>
-      <div style="font-size:.72rem;color:var(--mu);margin-top:4px">수동 입력</div>
+      <div style="font-size:.72rem;color:var(--mu);margin-top:4px">수동</div>
     </div>
   </div>
   <div id="checkup-staged-area"></div>`;
