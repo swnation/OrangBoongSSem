@@ -2257,7 +2257,7 @@ function renderWeeklySummaryCard() {
     // 요약 한줄 (접힌 상태)
     const firstLog=dd.logs.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''))[0];
     const nrsVals=dd.logs.filter(l=>l.nrs>=0).map(l=>l.nrs);
-    const nrsRange=nrsVals.length?'NRS '+(nrsVals.length>1?Math.min(...nrsVals)+'~'+Math.max(...nrsVals):nrsVals[0]):'';
+    const nrsRange=nrsVals.length?_scoreLabel()+' '+(nrsVals.length>1?Math.min(...nrsVals)+'~'+Math.max(...nrsVals):nrsVals[0]):'';
     const allMeds=[...new Set(dd.logs.flatMap(l=>l.meds||[]))];
     const previewMeds=allMeds.slice(0,2).map(m=>'<span style="font-size:.58rem;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#92400e">'+esc(m)+'</span>').join(' ');
     const allSites=[...new Set(dd.logs.flatMap(l=>l.sites||[]))];
@@ -2310,7 +2310,7 @@ function renderWeeklySummaryCard() {
     +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0">'
     +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--ac)">'+summary.logCount+'</div><div style="font-size:.65rem;color:var(--mu)">기록</div></div>'
     +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--r3)">'+summary.sessionCount+'</div><div style="font-size:.65rem;color:var(--mu)">세션</div></div>'
-    +(summary.avgNrs!==null?'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:'+avgColor+'">'+summary.avgNrs+'</div><div style="font-size:.65rem;color:var(--mu)">평균 NRS</div></div>':'')
+    +(summary.avgNrs!==null?'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:'+avgColor+'">'+summary.avgNrs+'</div><div style="font-size:.65rem;color:var(--mu)">평균 '+_scoreLabel()+'</div></div>':'')
     +'</div>'
     +svgChart
     +daysHtml

@@ -7,6 +7,13 @@
 // {id, name, diagnosisDate, status:'active'|'remission'|'resolved'|'self-stopped',
 //  medications:'텍스트', drugResponse:'텍스트', course:'텍스트', notes:'텍스트'}
 
+// 시술 판별: 약물이 아닌 시술/치료 항목 (데일리 체크에서 제외, 시행 시에만 기록)
+const _PROCEDURE_KEYWORDS = ['block','신경자극술','VNS','ONS','SPG','물리치료','산소요법','CBT','시술','수술','주사'];
+function _isProcedure(medName) {
+  const lower = medName.toLowerCase();
+  return _PROCEDURE_KEYWORDS.some(kw => lower.includes(kw.toLowerCase()));
+}
+
 function renderConditionMedSelector(date) {
   const condMeds=getConditionMeds(date);
   if(!condMeds.length) return '';
@@ -33,8 +40,10 @@ function renderDailyMedCheck(date) {
   </div>
     <div style="margin-bottom:8px">
     ${condMeds.map(cm=>{
-      const daily=cm.meds.filter(m=>!m.includes('(PRN)'));
-      const prn=cm.meds.filter(m=>m.includes('(PRN)'));
+      const procedures=cm.meds.filter(m=>_isProcedure(m));
+      const daily=cm.meds.filter(m=>!m.includes('(PRN)')&&!_isProcedure(m));
+      const prn=cm.meds.filter(m=>m.includes('(PRN)')&&!_isProcedure(m));
+      if(!daily.length&&!prn.length&&!procedures.length) return '';
       return `<div style="margin-bottom:6px;border:1px solid var(--bd);border-radius:8px;padding:8px 10px;background:var(--sf)">
         <div style="font-size:.72rem;font-weight:600;color:var(--ink);margin-bottom:6px">${cm.icon} ${esc(cm.condition)}</div>
         ${daily.map(m=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
@@ -47,6 +56,14 @@ function renderDailyMedCheck(date) {
             <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" style="width:16px;height:16px;accent-color:#f59e0b">
             <span style="font-size:.78rem;color:var(--ink)">${esc(m)}</span>
             <span style="font-size:.6rem;color:#f59e0b">PRN</span>
+          </label>`).join('')}
+        </div>`:''}
+        ${procedures.length?`<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd)">
+          <div style="font-size:.6rem;color:#1e40af;font-weight:600;margin-bottom:2px">💉 시술 (시행 시에만 기록)</div>
+          ${procedures.map(m=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+            <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" style="width:16px;height:16px;accent-color:#3b82f6">
+            <span style="font-size:.78rem;color:#1e40af">${esc(m)}</span>
+            <span style="font-size:.6rem;color:#3b82f6">시술</span>
           </label>`).join('')}
         </div>`:''}
       </div>`;
