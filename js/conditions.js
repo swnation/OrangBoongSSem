@@ -132,6 +132,8 @@ async function loadAllUserDomains() {
     } catch(e) { console.warn('Domain load failed:', domainId, e.message); }
   }
   _loadingAllDomains=false;
+  // 동적 약물 사전 로드 (클라우드 → 런타임)
+  if (typeof _loadCustomDrugDicts === 'function') _loadCustomDrugDicts();
 }
 
 // Get meds from all user conditions (for log form)
