@@ -1,6 +1,47 @@
 // js/checkup.js — 건강 검진 표준화 아카이브 (Phase 7 모듈화)
 
 // ═══════════════════════════════════════════════════════════════
+// AI 작업 진행률 오버레이 (규칙 #34: 실시간 진행률 필수)
+// ═══════════════════════════════════════════════════════════════
+var _ckProgressAbort = false;
+
+function _showCkProgress(title, color) {
+  _ckProgressAbort = false;
+  let overlay = document.getElementById('ck-progress-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'ck-progress-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:998;display:flex;align-items:center;justify-content:center';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `<div style="background:var(--sf,#fff);border-radius:14px;padding:24px;max-width:340px;width:85vw;box-shadow:0 4px 20px rgba(0,0,0,.3);text-align:center">
+    <div id="ck-prog-title" style="font-size:.88rem;font-weight:700;color:${color || 'var(--ac)'};margin-bottom:12px">${title}</div>
+    <div style="height:6px;background:var(--bd);border-radius:3px;overflow:hidden;margin-bottom:8px">
+      <div id="ck-prog-bar" style="height:100%;width:0%;background:${color || 'var(--ac)'};border-radius:3px;transition:width .3s"></div>
+    </div>
+    <div id="ck-prog-pct" style="font-size:1.1rem;font-weight:700;color:var(--ink);margin-bottom:4px">0%</div>
+    <div id="ck-prog-status" style="font-size:.72rem;color:var(--mu);margin-bottom:12px">준비 중...</div>
+    <button id="ck-prog-stop" onclick="_ckProgressAbort=true;this.textContent='⏹ 중단 요청됨';this.disabled=true" style="padding:8px 20px;border:1.5px solid #dc2626;border-radius:8px;background:none;color:#dc2626;font-size:.78rem;font-weight:600;cursor:pointer;font-family:var(--font)">⏹ 중단</button>
+  </div>`;
+  overlay.style.display = 'flex';
+}
+
+function _updateCkProgress(current, total, status) {
+  const pct = total ? Math.round(current / total * 100) : 0;
+  const bar = document.getElementById('ck-prog-bar');
+  const pctEl = document.getElementById('ck-prog-pct');
+  const statusEl = document.getElementById('ck-prog-status');
+  if (bar) bar.style.width = pct + '%';
+  if (pctEl) pctEl.textContent = pct + '%';
+  if (statusEl) statusEl.textContent = status || '';
+}
+
+function _closeCkProgress() {
+  const overlay = document.getElementById('ck-progress-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════
 // CATEGORIES
 // ═══════════════════════════════════════════════════════════════
 const _CHECKUP_CATEGORIES = {
@@ -972,10 +1013,12 @@ async function aiReclassifyCheckup(source, id, isLegacy) {
     who = origEntry.who; date = origEntry.date;
   }
 
-  showToast('🤖 AI 재분류 중...', 8000);
+  _showCkProgress('🤖 AI 재분류', '#8b5cf6');
+  _updateCkProgress(0, 1, aiId + ' 분석 중... (' + Object.keys(rawValues).length + '개 항목)');
   try {
     const newResults = await _aiReclassify(rawValues, rawRef, who, aiId);
-    if (!newResults.length) { showToast('⚠️ AI 재분류 결과 없음'); return; }
+    _updateCkProgress(1, 1, '완료!');
+    if (!newResults.length) { _closeCkProgress(); showToast('⚠️ AI 재분류 결과 없음'); return; }
 
     if (isLegacy) {
       // 붕룩이 labResult: 값은 유지, 건강관리에서 보이는 결과만 변경됨
@@ -994,9 +1037,11 @@ async function aiReclassifyCheckup(source, id, isLegacy) {
       origEntry.aiUsed = (origEntry.aiUsed || '') + '+reclassify:' + aiId;
       await saveMaster();
     }
+    _closeCkProgress();
     showToast('✅ AI 재분류 완료');
     renderView('meds');
   } catch (e) {
+    _closeCkProgress();
     showToast('❌ 재분류 실패: ' + e.message, 4000);
   }
 }
@@ -1010,16 +1055,40 @@ async function aiReclassifyAll() {
 
   if (!confirm(allCheckups.length + '건의 검사결과를 AI로 재분류합니다.\n비용이 발생할 수 있습니다. 계속?')) return;
 
-  showToast('🤖 전체 AI 재분류 시작...', 15000);
+  _showCkProgress('🤖 전체 AI 재분류', '#8b5cf6');
   let done = 0, failed = 0;
-  for (const c of allCheckups) {
+  for (let i = 0; i < allCheckups.length; i++) {
+    if (_ckProgressAbort) break;
+    const c = allCheckups[i];
+    _updateCkProgress(i, allCheckups.length, (i + 1) + '/' + allCheckups.length + ' — ' + (c.date || '') + ' 처리 중...');
     try {
-      await aiReclassifyCheckup(c._source, c.id, c._legacyLab || false);
+      // 개별 재분류 (내부에서 진행률을 덮어쓰지 않도록 직접 호출)
+      const rawValues = {}, rawRef = {};
+      if (c._legacyLab) {
+        const brkDs = S.domainState['bungruki'];
+        const orig = brkDs?.master?.labResults?.find(l => l.id === c.id);
+        if (orig) { Object.assign(rawValues, orig.values || {}); Object.assign(rawRef, orig.ref || {}); }
+      } else {
+        (c.results || []).forEach(r => { rawValues[r.displayName || r.rawName] = r.value; });
+        (c.results || []).forEach(r => { if (r.ref) rawRef[r.displayName || r.rawName] = r.ref.low + '-' + r.ref.high; });
+      }
+      if (Object.keys(rawValues).length) {
+        const newResults = await _aiReclassify(rawValues, rawRef, c.who || who, aiId);
+        if (newResults.length) {
+          if (c._legacyLab) {
+            await saveHealthCheckup({ id: Date.now() + done, date: c.date, who: c.who, institution: c.institution || '', type: c.type || 'general', sourceType: 'reclassified', results: newResults, aiUsed: 'reclassify:' + aiId, memo: (c.memo || '') + ' [AI 재분류]', _reclassifiedFrom: c.id });
+          } else {
+            const ds = S.domainState[c._source];
+            const orig = ds?.master?.healthCheckups?.find(x => x.id === c.id);
+            if (orig) { orig.results = newResults; orig.aiUsed = (orig.aiUsed || '') + '+reclassify:' + aiId; await saveMaster(); }
+          }
+        }
+      }
       done++;
     } catch (e) { failed++; }
   }
-  showToast('✅ 재분류 완료: ' + done + '건 성공' + (failed ? ', ' + failed + '건 실패' : ''));
-  renderView('meds');
+  _updateCkProgress(allCheckups.length, allCheckups.length, '✅ 완료!');
+  setTimeout(() => { _closeCkProgress(); showToast('✅ 재분류 완료: ' + done + '건 성공' + (failed ? ', ' + failed + '건 실패' : '')); renderView('meds'); }, 800);
 }
 
 // AI에게 기존 values/ref를 보내서 results[] 배열로 재분류
@@ -1083,7 +1152,8 @@ async function aiCheckupInterpretation() {
     return `[${date} ${inst}]\n  ${items}`;
   }).join('\n\n');
 
-  showToast('💡 AI 종합 해석 중...', 15000);
+  _showCkProgress('💡 AI 종합 해석', '#10b981');
+  _updateCkProgress(0, 2, aiId + '에게 검진 ' + recent.length + '건 분석 요청 중...');
 
   const prompt = `다음은 ${who}의 건강검진 결과 ${recent.length}건입니다.
 
@@ -1102,6 +1172,7 @@ ${who === '오랑이' ? '6. **임신 준비 관점** — 현재 결과가 임신
 
   try {
     const result = await callAI(aiId, '내과 전문의 + 예방의학 전문가', prompt);
+    _updateCkProgress(2, 2, '✅ 해석 완료! 결과 저장 중...');
     // 결과를 모달로 표시 + 마스터에 저장
     const interpretation = {
       id: Date.now(),
@@ -1121,11 +1192,13 @@ ${who === '오랑이' ? '6. **임신 준비 관점** — 현재 결과가 임신
       await saveMaster();
     }
 
+    _closeCkProgress();
     showConfirmModal('💡 AI 종합 해석',
       `<div style="font-size:.72rem;color:var(--mu);margin-bottom:8px">${who} · ${kstToday()} · ${aiId} 분석 · 검진 ${recent.length}건 기반</div>
       <div style="font-size:.78rem;line-height:1.7;max-height:400px;overflow-y:auto">${typeof marked !== 'undefined' ? DOMPurify.sanitize(marked.parse(result)) : esc(result).replace(/\n/g, '<br>')}</div>`,
       [{ label: '확인', action: closeConfirmModal }]);
   } catch (e) {
+    _closeCkProgress();
     showToast('❌ 해석 실패: ' + e.message, 4000);
   }
 }
@@ -1307,7 +1380,8 @@ async function _extractTxtText(file) {
 }
 
 async function _analyzeDocText(text, who, aiId, fileName) {
-  showToast('🤖 AI 분석 중...', 10000);
+  _showCkProgress('📄 문서 AI 분석', 'var(--ac)');
+  _updateCkProgress(0, 2, aiId + '에게 ' + fileName + ' 분석 요청 중...');
   const prompt = `다음은 의료 검사 결과 문서입니다.
 대상: ${who} (${who === '붕쌤' ? '남성' : '여성'})
 
@@ -1338,9 +1412,10 @@ ${text.slice(0, 8000)}
     parsed._imgSrc = null;
     parsed._usedAis = [aiId];
     parsed._sourceFile = fileName;
-    // 기존 분석 결과 리뷰 플로우로 전달
-    _showCheckupAnalysisResults([parsed]);
+    _updateCkProgress(2, 2, '✅ 분석 완료!');
+    setTimeout(() => { _closeCkProgress(); _showCheckupAnalysisResults([parsed]); }, 500);
   } catch (e) {
+    _closeCkProgress();
     showToast('❌ 분석 실패: ' + e.message, 4000);
   }
 }
@@ -1532,15 +1607,18 @@ function _showCheckupAnalysisResults(allResults) {
     buttons.push({
       label: '🤖 AI 검증 후 저장', primary: true,
       action: async () => {
-        showToast('🤖 AI 표준화 검증 중...', 8000);
+        closeConfirmModal();
+        const validResults = allResults.filter(r => !r.error);
+        _showCkProgress('🤖 AI 검증 + 저장', '#8b5cf6');
         let saved = 0;
-        for (let i = 0; i < allResults.length; i++) {
-          const r = allResults[i]; if (r.error) continue;
-          const inst = document.querySelector(`input[data-ck-inst="${i}"]`)?.value || '';
+        for (let i = 0; i < validResults.length; i++) {
+          if (_ckProgressAbort) break;
+          const r = validResults[i];
+          _updateCkProgress(i, validResults.length, (i + 1) + '/' + validResults.length + ' 검증 중...');
+          const inst = document.querySelector(`input[data-ck-inst="${allResults.indexOf(r)}"]`)?.value || '';
           let normalized = (r._aiNormalized && r.results)
             ? normalizeFromAI(r.results, r.who || who)
             : normalizeWithCache(r.values || {}, r.ref || {}, r.who || who, inst);
-          // 미매칭 항목만 AI 추가 검증
           if (normalized.some(n => !n.stdCode)) {
             normalized = await aiVerifyNormalization(normalized, r.who || who, verifyAiId);
           }
@@ -1553,9 +1631,8 @@ function _showCheckupAnalysisResults(allResults) {
           };
           await saveHealthCheckup(checkup); saved++;
         }
-        closeConfirmModal();
-        if (saved) showToast('✅ ' + saved + '건 AI 검증 + 저장 완료');
-        renderView('meds');
+        _updateCkProgress(validResults.length, validResults.length, '✅ 완료!');
+        setTimeout(() => { _closeCkProgress(); if (saved) showToast('✅ ' + saved + '건 AI 검증 + 저장 완료'); renderView('meds'); }, 800);
       }
     });
   }
