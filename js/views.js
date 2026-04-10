@@ -3420,3 +3420,4 @@ function _renderIntimacyStats(m) {
       💡 D-2~D0 타이밍이 임신 확률 가장 높음 (배란 2일 전~당일)
     </div>
   </div>` : ''}`;
+}
