@@ -2,10 +2,10 @@
 
 // 도메인별 점수 짧은 라벨 (NRS/기분/컨디션)
 function _scoreLabel() {
-  const lc = DC();
-  if (!lc?.nrsLabel) return 'NRS';
-  if (lc.nrsLabel.includes('통증') || lc.nrsLabel.includes('NRS')) return 'NRS';
-  if (lc.nrsLabel.includes('기분')) return '기분';
+  const nrsLabel = DC()?.logConfig?.nrsLabel || DC()?.nrsLabel;
+  if (!nrsLabel) return 'NRS';
+  if (nrsLabel.includes('통증') || nrsLabel.includes('NRS')) return 'NRS';
+  if (nrsLabel.includes('기분')) return '기분';
   return '컨디션';
 }
 
