@@ -252,10 +252,10 @@ function renderQuickLogBanner() {
       var timeStr=dt[1]==='시간미상'?'시간미상':dt[1];
       var nrsHtml=l.nrs>=0?'<span class="log-item-nrs" style="background:'+nrsColor(l.nrs)+'20;color:'+nrsColor(l.nrs)+'">'+_scoreLabel()+' '+l.nrs+'</span>':'';
       var tags=[].concat(
-        (l.sites||[]).map(function(s){return '<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">'+esc(s)+'</span>';}),
-        (l.symptoms||[]).map(function(s){return '<span class="log-tag" style="background:#faf5ff;color:#7c3aed">'+esc(s)+'</span>';}),
-        (l.meds||[]).map(function(s){return '<span class="log-tag" style="background:#fff7ed;color:#c2410c">'+esc(s)+'</span>';}),
-        (l.treatments||[]).map(function(s){return '<span class="log-tag" style="background:#f0fdf4;color:#15803d">'+esc(s)+'</span>';})
+        (l.sites||[]).map(function(s){return '<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">'+esc(s)+'</span>';}),
+        (l.symptoms||[]).map(function(s){return '<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">'+esc(s)+'</span>';}),
+        (l.meds||[]).map(function(s){return '<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">'+esc(s)+'</span>';}),
+        (l.treatments||[]).map(function(s){return '<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">'+esc(s)+'</span>';})
       ).join('');
       return '<div class="qlb-item" id="qlb-'+l.id+'">'
         +'<div class="qlb-item-head">'
@@ -730,15 +730,15 @@ function renderRecentLogs() {
     todayLogs.map(l=>`<div class="log-item">
       <div class="log-item-time">${l.datetime.slice(11,16)!=='00:00'?l.datetime.slice(11,16):''}</div>
       <div class="log-item-body">
-        ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
+        ${l.mood?`<span class="log-item-nrs" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(l.mood)}</span>`:
           (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()} ${l.nrs}</span>`:'')}
-        ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
+        ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(s)}</span>`).join('')}
         <div class="log-item-tags">
-          ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
-          ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
-          ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-          ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:#f0f9ff;color:#0369a1;font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
-          ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'#f0fdf4':'#fef2f2'};color:${v?'#15803d':'#dc2626'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
+          ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`).join('')}
+          ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}</span>`).join('')}
+          ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
+          ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:var(--tag-dc-bg);color:var(--tag-dc);font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
+          ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'var(--ok-bg)':'var(--err-bg)'};color:${v?'var(--ok)':'var(--err)'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
         </div>
         ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
       </div>
@@ -813,16 +813,16 @@ function renderLogList() {
       return `<div class="log-item">
         <div class="log-item-time">${timeStr!=='00:00'?timeStr:''}</div>
         <div class="log-item-body">
-          ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
+          ${l.mood?`<span class="log-item-nrs" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(l.mood)}</span>`:
             (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()} ${l.nrs}</span>`:'')}
-          ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
+          ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(s)}</span>`).join('')}
           <div class="log-item-tags">
-            ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`).join('')}
-            ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
-            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
-            ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-            ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:#f0f9ff;color:#0369a1;font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
-            ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'#f0fdf4':'#fef2f2'};color:${v?'#15803d':'#dc2626'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
+            ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:var(--tag-trigger-bg);color:var(--tag-trigger)">⚡${esc(t)}</span>`).join('')}
+            ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`).join('')}
+            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}</span>`).join('')}
+            ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
+            ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:var(--tag-dc-bg);color:var(--tag-dc);font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
+            ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'var(--ok-bg)':'var(--err-bg)'};color:${v?'var(--ok)':'var(--err)'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
             ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
@@ -883,14 +883,14 @@ function renderLogListInner() {
       return `<div class="log-item">
         <div class="log-item-time">${timeStr!=='00:00'?timeStr:''}</div>
         <div class="log-item-body">
-          ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
+          ${l.mood?`<span class="log-item-nrs" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(l.mood)}</span>`:
             (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()} ${l.nrs}</span>`:'')}
-          ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
+          ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(s)}</span>`).join('')}
           <div class="log-item-tags">
-            ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`).join('')}
-            ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
-            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
-            ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
+            ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:var(--tag-trigger-bg);color:var(--tag-trigger)">⚡${esc(t)}</span>`).join('')}
+            ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`).join('')}
+            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}</span>`).join('')}
+            ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
             ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
@@ -1717,7 +1717,7 @@ function renderJournalLogs() {
       return `<div class="log-item">
         <div class="log-item-time">${l.datetime.slice(5,10)}${who?'<br><span style="color:'+(whoColors[who]||'var(--mu)')+'">'+((whoEmoji[who]||'')+' '+who)+'</span>':''}</div>
         <div class="log-item-body">
-          ${(l.categories||[]).map(c=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(c)}</span>`).join('')}
+          ${(l.categories||[]).map(c=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(c)}</span>`).join('')}
           <div style="font-size:.82rem;margin-top:4px;line-height:1.65">${esc(l.memo||'')}</div>
         </div>
         <button class="log-del" onclick="editJournalEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
@@ -2031,7 +2031,7 @@ function _renderLogDailyExtras(dateStr) {
   // 영양제
   const oKeys = typeof BRK_SUPPL_ORANGI !== 'undefined' ? BRK_SUPPL_ORANGI : [];
   const bKeys = typeof BRK_SUPPL_BUNG !== 'undefined' ? BRK_SUPPL_BUNG : [];
-  const supplLabels = {folicAcid:'엽산',iron:'철분',vitaminD:'비타민D',multivitamin:'멀티비타민',magnesium:'마그네슘',arginine:'아르기닌',coq10:'CoQ10',silymarin:'실리마린'};
+  const supplLabels = Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(([k,v])=>[k,v.label]));
   let supplKeys = who === 'orangi' ? [...oKeys] : [...bKeys];
   if (m.customSuppl?.[who]) m.customSuppl[who].forEach(c => { if (!supplKeys.includes(c.key)) { supplKeys.push(c.key); supplLabels[c.key] = c.label; } });
   const hidden = m.hiddenSuppl?.[who] || [];

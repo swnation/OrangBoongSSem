@@ -345,6 +345,15 @@ const DOMAINS = {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// SUPPLEMENT LABELS — 영양제 라벨 일원화 (bungruki/log/views 공유)
+// ═══════════════════════════════════════════════════════════════
+const BRK_SUPPL_LABELS = {
+  folicAcid:{label:'엽산',icon:'💊'}, iron:{label:'철분',icon:'🩸'}, vitaminD:{label:'비타민D',icon:'☀️'},
+  multivitamin:{label:'멀티비타민',icon:'💊'}, magnesium:{label:'마그네슘',icon:'🧲'},
+  arginine:{label:'아르기닌',icon:'💪'}, coq10:{label:'CoQ10',icon:'⚡'}, silymarin:{label:'실리마린',icon:'🌿'},
+};
+
+// ═══════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════
 const CLIENT_ID = '103056429713-6ne324793lgc09nl9rkjqonlg4pcd12i.apps.googleusercontent.com';

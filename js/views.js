@@ -1263,11 +1263,11 @@ function renderCrossLogView() {
     const groupHtml=Object.values(domainGroups).map(g=>{
       const items=g.items.map(l=>{
         const tags=[
-          l.mood?`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:'',
+          l.mood?`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(l.mood)}</span>`:'',
           l.nrs>=0?`<span class="log-tag" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()}${l.nrs}</span>`:'',
-          ...l.symptoms.map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`),
-          ...l.meds.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`),
-          ...l.categories.map(c=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(c)}</span>`),
+          ...l.symptoms.map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`),
+          ...l.meds.map(m=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(m)}</span>`),
+          ...l.categories.map(c=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(c)}</span>`),
         ].filter(Boolean).join('');
         return `<div style="display:flex;align-items:flex-start;gap:6px;padding:2px 0">
           ${l.time&&l.time!=='00:00'?`<span style="font-size:.65rem;font-family:var(--mono);color:var(--mu2);min-width:36px">${l.time}</span>`:''}
@@ -1665,7 +1665,7 @@ function _showCalDetail(date) {
       if(wd.weight) items.push('⚖️ '+wd.weight+'kg');
       if(wd.exercises?.length) items.push('🏃 '+wd.exercises.map(function(e){return e.name;}).join(', '));
       if(wd.alcohol) items.push('🍺 음주');
-      var supplLabels={folicAcid:'엽산',iron:'철분',vitaminD:'비타민D',multivitamin:'멀티비타민',magnesium:'마그네슘',arginine:'아르기닌',coq10:'CoQ10',silymarin:'실리마린'};
+      var supplLabels=Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(function(e){return[e[0],e[1].label]}));
       var oKeys=typeof BRK_SUPPL_ORANGI!=='undefined'?BRK_SUPPL_ORANGI:[];
       var bKeys=typeof BRK_SUPPL_BUNG!=='undefined'?BRK_SUPPL_BUNG:[];
       var sk=who==='orangi'?oKeys:bKeys;
@@ -1678,11 +1678,11 @@ function _showCalDetail(date) {
   var logsHtml=data.logs.map(function(l){
     var time=l.datetime.slice(11,16);
     var tags=[];
-    if(l.mood) tags.push('<span class="log-tag" style="background:#faf5ff;color:#7c3aed">'+esc(l.mood)+'</span>');
+    if(l.mood) tags.push('<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">'+esc(l.mood)+'</span>');
     if(l.nrs>=0) tags.push('<span class="log-tag" style="background:'+nrsColor(l.nrs)+'20;color:'+nrsColor(l.nrs)+'">'+_scoreLabel()+' '+l.nrs+'</span>');
-    (l.symptoms||[]).forEach(function(s){tags.push('<span class="log-tag" style="background:#faf5ff;color:#7c3aed;font-size:.58rem">'+esc(s)+'</span>');});
-    (l.meds||[]).forEach(function(m){tags.push('<span class="log-tag" style="background:#fff7ed;color:#c2410c;font-size:.58rem">'+esc(m)+'</span>');});
-    (l.treatments||[]).forEach(function(t){tags.push('<span class="log-tag" style="background:#f0fdf4;color:#15803d;font-size:.58rem">'+esc(t)+'</span>');});
+    (l.symptoms||[]).forEach(function(s){tags.push('<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym);font-size:.58rem">'+esc(s)+'</span>');});
+    (l.meds||[]).forEach(function(m){tags.push('<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med);font-size:.58rem">'+esc(m)+'</span>');});
+    (l.treatments||[]).forEach(function(t){tags.push('<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx);font-size:.58rem">'+esc(t)+'</span>');});
     if(l.medCheck){Object.entries(l.medCheck).forEach(function(mc){tags.push('<span class="log-tag" style="background:'+(mc[1]?'#f0fdf4':'#fef2f2')+';color:'+(mc[1]?'#15803d':'#dc2626')+';font-size:.55rem">'+(mc[1]?'✓':'✗')+' '+esc(mc[0])+'</span>');});}
     return '<div style="display:flex;gap:6px;padding:4px 0;border-bottom:1px dotted var(--bd)">'
       +'<span style="font-size:.65rem;font-family:var(--mono);color:var(--mu);min-width:36px">'+(time!=='00:00'?time:'')+'</span>'
@@ -1864,7 +1864,7 @@ function _renderMcSupplExercise(date) {
   // 영양제
   const oKeys = typeof BRK_SUPPL_ORANGI !== 'undefined' ? BRK_SUPPL_ORANGI : [];
   const bKeys = typeof BRK_SUPPL_BUNG !== 'undefined' ? BRK_SUPPL_BUNG : [];
-  const supplLabels = {folicAcid:'엽산',iron:'철분',vitaminD:'비타민D',multivitamin:'멀티비타민',magnesium:'마그네슘',arginine:'아르기닌',coq10:'CoQ10',silymarin:'실리마린'};
+  const supplLabels = Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(function(e){return[e[0],e[1].label]}));
   let supplKeys = who === 'orangi' ? oKeys : bKeys;
   // 커스텀 영양제 추가
   if (m.customSuppl?.[who]) m.customSuppl[who].forEach(c => { if (!supplKeys.includes(c.key)) { supplKeys = [...supplKeys, c.key]; supplLabels[c.key] = c.label; } });
@@ -2559,7 +2559,7 @@ function renderWeeklySummaryCard() {
     const nrsVals=dd.logs.filter(l=>l.nrs>=0).map(l=>l.nrs);
     const nrsRange=nrsVals.length?_scoreLabel()+' '+(nrsVals.length>1?Math.min(...nrsVals)+'~'+Math.max(...nrsVals):nrsVals[0]):'';
     const allMeds=[...new Set(dd.logs.flatMap(l=>l.meds||[]))];
-    const previewMeds=allMeds.slice(0,2).map(m=>'<span style="font-size:.58rem;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#92400e">'+esc(m)+'</span>').join(' ');
+    const previewMeds=allMeds.slice(0,2).map(m=>'<span style="font-size:.58rem;padding:1px 4px;border-radius:3px;background:var(--tag-trigger-bg);color:var(--tag-trigger)">'+esc(m)+'</span>').join(' ');
     const allSites=[...new Set(dd.logs.flatMap(l=>l.sites||[]))];
     const previewSites=allSites.length?'<span style="font-size:.58rem;color:var(--mu)">'+allSites.slice(0,3).map(s=>esc(s)).join(', ')+'</span>':'';
 
@@ -2569,7 +2569,7 @@ function renderWeeklySummaryCard() {
       const nrs=l.nrs>=0?l.nrs:null;
       const nc=nrs===null?'var(--mu)':nrs>=7?'#ef4444':nrs>=4?'#f59e0b':'#10b981';
       const barW=nrs!==null?Math.max(5,nrs*10):0;
-      const meds=(l.meds||[]).map(m=>'<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:#fef3c7;color:#92400e">'+esc(m)+'</span>').join(' ');
+      const meds=(l.meds||[]).map(m=>'<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:var(--tag-trigger-bg);color:var(--tag-trigger)">'+esc(m)+'</span>').join(' ');
       const tx=(l.treatments||[]).map(t=>{
         if(isBlock(t)) return '<span style="font-size:.6rem;padding:1px 6px;border-radius:4px;background:#dbeafe;color:#1e40af;font-weight:700;border:1.5px solid #93c5fd">💉 '+esc(t)+'</span>';
         return '<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:#d1fae5;color:#065f46">'+esc(t)+'</span>';
@@ -3332,7 +3332,7 @@ function exportMonthlyPDF() {
     table{width:100%;border-collapse:collapse;margin:8px 0;font-size:10px}
     th{background:#e8f0fe;padding:5px 8px;text-align:left;font-weight:600;border:1px solid #ddd}
     td{border:1px solid #ddd;padding:4px 8px}
-    .nrs-high{background:#fee2e2;color:#991b1b}.nrs-med{background:#fef3c7;color:#92400e}.nrs-low{background:#d1fae5;color:#065f46}
+    .nrs-high{background:#fee2e2;color:#991b1b}.nrs-med{background:var(--tag-trigger-bg);color:var(--tag-trigger)}.nrs-low{background:#d1fae5;color:#065f46}
     .freq-bar{display:inline-block;height:8px;border-radius:4px;margin-right:6px;vertical-align:middle}
     .section{margin-bottom:16px;page-break-inside:avoid}
     .footer{margin-top:24px;padding-top:12px;border-top:1px solid #ddd;font-size:9px;color:#999;text-align:center}
@@ -3819,7 +3819,7 @@ function _renderHealthDashboardStats(logs, last30, dc, lc) {
   var oKeys = typeof BRK_SUPPL_ORANGI !== 'undefined' ? BRK_SUPPL_ORANGI : [];
   var bKeys = typeof BRK_SUPPL_BUNG !== 'undefined' ? BRK_SUPPL_BUNG : [];
   var supplKeys = who === 'orangi' ? [...oKeys] : [...bKeys];
-  var supplLabels = { folicAcid: '엽산', iron: '철분', vitaminD: '비타민D', multivitamin: '멀티비타민', magnesium: '마그네슘', arginine: '아르기닌', coq10: 'CoQ10', silymarin: '실리마린' };
+  var supplLabels = Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(function(e){return[e[0],e[1].label]}));
   if (m.customSuppl && m.customSuppl[who]) m.customSuppl[who].forEach(function(c) { if (supplKeys.indexOf(c.key) < 0) { supplKeys.push(c.key); supplLabels[c.key] = c.label; } });
   if (supplKeys.length && dcData.length) {
     var supplStats = {};
