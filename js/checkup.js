@@ -2150,6 +2150,7 @@ function renderCheckupArchive() {
       <span style="font-size:.88rem;font-weight:700;color:var(--domain-color)">검사 아카이브</span>
       <button onclick="aiCheckupInterpretation()" style="margin-left:auto;background:none;border:1px solid #10b981;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#10b981;cursor:pointer;font-family:var(--font)">💡 AI 종합 해석</button>
       <button onclick="aiReclassifyAll()" style="background:none;border:1px solid #8b5cf6;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#8b5cf6;cursor:pointer;font-family:var(--font)">🤖 재분류</button>
+      <button onclick="openBatchInstitution()" style="background:none;border:1px solid #f59e0b;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#f59e0b;cursor:pointer;font-family:var(--font)">🏥 기관명</button>
       <span style="font-size:.62rem;color:var(--mu)">${allCheckups.length}건 · ${totalItems}항목</span>
     </div>
     <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${tabBar}</div>
@@ -2364,7 +2365,18 @@ function _renderCheckupCategories(who, checkups) {
     majorGroups[majorKey][cat] = items;
   });
 
-  return _CHECKUP_MAJOR_CATEGORIES.filter(mc => majorGroups[mc.key]).map(mc => {
+  // 사용자 커스텀 대분류 또는 기본 대분류
+  const effectiveMajor = _getEffectiveMajorCategories();
+
+  // 대분류 편집 버튼
+  const editBtn = '<div style="text-align:right;margin-bottom:6px"><button onclick="openEditMajorCategories()" style="font-size:.6rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">🏷 대분류 편집</button></div>';
+
+  return editBtn + effectiveMajor.filter(mc => majorGroups[mc.key] || (mc.subcats && mc.subcats.some(sc => grouped[sc]))).map(mc => {
+    // 커스텀 대분류의 경우 subcats 기반 OR major 기반 매칭
+    if (!majorGroups[mc.key]) {
+      majorGroups[mc.key] = {};
+      (mc.subcats || []).forEach(sc => { if (grouped[sc]) majorGroups[mc.key][sc] = grouped[sc]; });
+    }
     const subcats = majorGroups[mc.key];
     const totalItems = Object.values(subcats).reduce((s, items) => s + items.length, 0);
     const totalAbn = Object.values(subcats).reduce((s, items) => s + items.filter(r => _isAbnormal(r.latest?.status)).length, 0);
@@ -2740,4 +2752,155 @@ async function _refreshDrugAlerts() {
   const result = await generateDrugSafetyAlerts();
   showToast(result.alerts?.length ? '✅ ' + result.alerts.length + '건 경고' : '✅ 이슈 없음');
   renderView('meds');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BATCH INSTITUTION NAME — 기관명 일괄 입력
+// ═══════════════════════════════════════════════════════════════
+
+function openBatchInstitution() {
+  const who = DC().user;
+  const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
+  const noInst = allCheckups.filter(c => !c.institution || c.institution.trim() === '');
+  const withInst = allCheckups.filter(c => c.institution && c.institution.trim());
+  // 기존 기관명 목록 (자동완성)
+  const existingInsts = [...new Set(withInst.map(c => c.institution.trim()))];
+
+  const listHtml = noInst.length
+    ? noInst.map(c => {
+      const items = (c.results || []).slice(0, 3).map(r => esc(r.displayName)).join(', ');
+      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">'
+        + '<input type="checkbox" class="batch-inst-cb" data-ck-id="' + c.id + '" data-ck-source="' + (c._source || '') + '" data-ck-legacy="' + (c._legacyLab || false) + '" checked>'
+        + '<span style="font-size:.7rem;font-family:var(--mono);min-width:80px">' + esc(c.date || '날짜없음') + '</span>'
+        + '<span style="font-size:.65rem;color:var(--mu)">' + (c.results?.length || 0) + '항목</span>'
+        + '<span style="font-size:.6rem;color:var(--mu2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + items + '</span>'
+        + '</div>';
+    }).join('')
+    : '<div style="font-size:.72rem;color:var(--mu);text-align:center;padding:10px">✅ 모든 검진에 기관명이 입력되어 있습니다.</div>';
+
+  const instOptions = existingInsts.map(n => '<option value="' + esc(n) + '">').join('');
+
+  showConfirmModal('🏥 기관명 일괄 입력',
+    '<div style="font-size:.72rem">'
+    + '<div style="margin-bottom:8px">'
+    + '<label>기관명 <input type="text" id="batch-inst-name" list="batch-inst-list" placeholder="예: 한국의료재단, 세브란스 등" class="dx-form-input" style="width:100%"></label>'
+    + '<datalist id="batch-inst-list">' + instOptions + '</datalist>'
+    + '</div>'
+    + '<div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">기관명 없는 검진 ' + noInst.length + '건:</div>'
+    + '<div style="max-height:250px;overflow-y:auto">' + listHtml + '</div>'
+    + '</div>',
+    [
+      { label: '💾 선택 항목에 적용', primary: true, action: async () => {
+        const name = (document.getElementById('batch-inst-name')?.value || '').trim();
+        if (!name) { showToast('기관명을 입력하세요'); return; }
+        const checked = [];
+        document.querySelectorAll('.batch-inst-cb:checked').forEach(cb => {
+          checked.push({ id: parseInt(cb.dataset.ckId), source: cb.dataset.ckSource, legacy: cb.dataset.ckLegacy === 'true' });
+        });
+        if (!checked.length) { showToast('선택된 항목 없음'); return; }
+        let updated = 0;
+        for (const item of checked) {
+          if (item.legacy) {
+            const brkDs = S.domainState['bungruki'];
+            const entry = brkDs?.master?.labResults?.find(l => l.id === item.id);
+            if (entry) { entry.institution = name; updated++; }
+          } else {
+            const ds = S.domainState[item.source];
+            const entry = ds?.master?.healthCheckups?.find(c => c.id === item.id);
+            if (entry) { entry.institution = name; updated++; }
+          }
+        }
+        if (updated) { await saveMaster(); showToast('✅ ' + updated + '건 기관명 입력됨: ' + name); }
+        closeConfirmModal();
+        renderView('meds');
+      }},
+      { label: '취소', action: closeConfirmModal },
+    ]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAJOR CATEGORY EDIT — 대분류 편집/추가/삭제
+// ═══════════════════════════════════════════════════════════════
+
+function _getCustomMajorCategories() {
+  const dm = DM();
+  return dm?.settings?.customMajorCategories || null;
+}
+
+function _getEffectiveMajorCategories() {
+  const custom = _getCustomMajorCategories();
+  if (custom) return custom;
+  return _CHECKUP_MAJOR_CATEGORIES.map(c => ({ key: c.key, name: c.name, subcats: Object.entries(_CHECKUP_CATEGORIES).filter(([k, v]) => v.major === c.key).map(([k]) => k) }));
+}
+
+function openEditMajorCategories() {
+  const current = _getEffectiveMajorCategories();
+  const allSubcats = Object.entries(_CHECKUP_CATEGORIES).map(([k, v]) => ({ key: k, name: v.icon + ' ' + v.name }));
+
+  const listHtml = current.map((mc, i) => {
+    return '<div style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;margin-bottom:4px;background:var(--sf)">'
+      + '<div style="display:flex;align-items:center;gap:6px">'
+      + '<span style="cursor:grab;color:var(--mu)">☰</span>'
+      + '<input type="text" data-mc-idx="' + i + '" value="' + esc(mc.name) + '" style="flex:1;font-size:.72rem;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;font-family:var(--font);color:var(--ink);background:var(--sf2)">'
+      + '<button onclick="this.closest(\'div\').closest(\'div\').remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.7rem">✕</button>'
+      + '</div>'
+      + '<div style="font-size:.58rem;color:var(--mu);margin-top:3px">포함: '
+      + (mc.subcats || []).map(sc => { const def = _CHECKUP_CATEGORIES[sc]; return def ? def.icon + def.name : sc; }).join(', ')
+      + '</div></div>';
+  }).join('');
+
+  showConfirmModal('🏷 검사 대분류 편집',
+    '<div style="font-size:.72rem">'
+    + '<div style="max-height:300px;overflow-y:auto" id="mc-edit-list">' + listHtml + '</div>'
+    + '<button onclick="_addMajorCategoryRow()" style="margin-top:6px;font-size:.68rem;padding:4px 12px;border:1.5px dashed var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font);width:100%">+ 대분류 추가</button>'
+    + '<div style="font-size:.58rem;color:var(--mu2);margin-top:6px">이름 변경/삭제 후 저장하면 카테고리 뷰에 반영됩니다.</div>'
+    + '</div>',
+    [
+      { label: '💾 저장', primary: true, action: async () => {
+        const items = [];
+        document.querySelectorAll('[data-mc-idx]').forEach(inp => {
+          const name = inp.value.trim();
+          if (!name) return;
+          const idx = parseInt(inp.dataset.mcIdx);
+          const orig = current[idx];
+          items.push({ key: orig?.key || ('custom_' + Date.now() + '_' + items.length), name, subcats: orig?.subcats || [] });
+        });
+        // 새로 추가된 항목 (data-mc-new)
+        document.querySelectorAll('[data-mc-new]').forEach(inp => {
+          const name = inp.value.trim();
+          if (!name) return;
+          items.push({ key: 'custom_' + Date.now() + '_' + items.length, name, subcats: [] });
+        });
+        if (!items.length) { showToast('최소 1개 대분류 필요'); return; }
+        const dm = DM();
+        if (!dm.settings) dm.settings = {};
+        dm.settings.customMajorCategories = items;
+        await saveMaster();
+        closeConfirmModal();
+        showToast('✅ 대분류 저장됨');
+        renderView('meds');
+      }},
+      { label: '초기화', action: async () => {
+        const dm = DM();
+        if (dm.settings) delete dm.settings.customMajorCategories;
+        await saveMaster();
+        closeConfirmModal();
+        showToast('🔄 기본 대분류로 복원');
+        renderView('meds');
+      }},
+      { label: '취소', action: closeConfirmModal },
+    ]);
+}
+
+function _addMajorCategoryRow() {
+  const list = document.getElementById('mc-edit-list');
+  if (!list) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'padding:6px 8px;border:1px solid var(--ac);border-radius:6px;margin-bottom:4px;background:var(--sf)';
+  div.innerHTML = '<div style="display:flex;align-items:center;gap:6px">'
+    + '<span style="color:var(--ac)">✨</span>'
+    + '<input type="text" data-mc-new="1" placeholder="새 대분류 이름" style="flex:1;font-size:.72rem;padding:3px 6px;border:1px solid var(--ac);border-radius:4px;font-family:var(--font);color:var(--ink);background:var(--sf2)">'
+    + '<button onclick="this.closest(\'div\').closest(\'div\').remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.7rem">✕</button>'
+    + '</div>';
+  list.appendChild(div);
 }

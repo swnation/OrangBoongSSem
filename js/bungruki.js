@@ -3346,12 +3346,163 @@ function renderDrugSafety() {
 
 // ── 7-6: 메인 대시보드 렌더러 ──
 
+// ═══════════════════════════════════════════════════════════════
+// 🍼 출산준비 체크리스트
+// ═══════════════════════════════════════════════════════════════
+const _DEFAULT_BIRTH_PREP = [
+  { cat: '🏥 병원/조리원', items: [
+    { key: 'obgyn', label: '산부인과 선택', desc: '분만 가능 여부, 위치, 비용 비교' },
+    { key: 'postpartum', label: '산후조리원 예약', desc: '시기, 비용, 후기 비교' },
+    { key: 'delivery_plan', label: '분만 계획서 작성', desc: '자연분만/제왕절개 선호, 무통 등' },
+  ]},
+  { cat: '👶 아기 용품', items: [
+    { key: 'stroller', label: '유모차', desc: '디럭스/절충형/휴대용' },
+    { key: 'carseat', label: '카시트', desc: '신생아용 필수 (퇴원 시 필요)' },
+    { key: 'crib', label: '아기 침대/범퍼', desc: '침대 or 바닥 생활' },
+    { key: 'bottle', label: '젖병/소독기', desc: '신생아용 젖병 + 소독기' },
+    { key: 'formula', label: '분유', desc: '모유 수유 계획에 따라 준비' },
+    { key: 'diaper', label: '기저귀/물티슈', desc: '신생아용 1단계' },
+    { key: 'clothes', label: '신생아 의류', desc: '배냇저고리, 속싸개, 외출복' },
+    { key: 'bath', label: '목욕용품', desc: '아기욕조, 체온계, 보습제' },
+  ]},
+  { cat: '🤰 산모 용품', items: [
+    { key: 'maternity_pad', label: '산모패드', desc: '출산 후 필수' },
+    { key: 'nursing_bra', label: '수유브라/수유패드', desc: '' },
+    { key: 'hospital_bag', label: '출산가방', desc: '입원 시 필요한 물품 패킹' },
+    { key: 'belly_band', label: '산후복대', desc: '' },
+    { key: 'breast_pump', label: '유축기', desc: '전동/수동' },
+  ]},
+  { cat: '📋 서류/보험', items: [
+    { key: 'prenatal_ins', label: '태아보험 가입', desc: '임신 22주 전 가입 권장' },
+    { key: 'birth_reg', label: '출생신고 준비', desc: '이름 결정, 주민센터' },
+    { key: 'maternity_leave', label: '출산휴가/육아휴직 신청', desc: '' },
+    { key: 'gov_support', label: '정부 지원금 확인', desc: '첫만남이용권, 영아수당 등' },
+  ]},
+  { cat: '💪 건강 관리', items: [
+    { key: 'folic_acid', label: '엽산/철분 복용', desc: '임신 3개월 전부터' },
+    { key: 'checkup_schedule', label: '산전검사 일정', desc: '기형아검사, 임당검사 등' },
+    { key: 'dental', label: '치과 검진', desc: '임신 전 치료 권장' },
+    { key: 'vaccination', label: '예방접종 확인', desc: '풍진, A형간염, 독감 등' },
+  ]},
+];
+
+function _getBirthPrepData() {
+  var m = getBrkMaster(); if (!m) return null;
+  if (!m.birthPrep) m.birthPrep = { categories: JSON.parse(JSON.stringify(_DEFAULT_BIRTH_PREP)), checked: {}, notes: {} };
+  return m.birthPrep;
+}
+
+function _renderBirthPrepTab() {
+  var bp = _getBirthPrepData();
+  if (!bp) return '<div style="font-size:.72rem;color:var(--mu)">붕룩이 마스터 데이터 없음</div>';
+
+  var totalItems = 0, checkedItems = 0;
+  bp.categories.forEach(function(cat) { cat.items.forEach(function(it) { totalItems++; if (bp.checked[it.key]) checkedItems++; }); });
+  var pct = totalItems ? Math.round(checkedItems / totalItems * 100) : 0;
+  var pctColor = pct >= 80 ? '#10b981' : pct >= 40 ? '#f59e0b' : '#ef4444';
+
+  var html = '<div style="text-align:center;margin-bottom:12px">'
+    + '<div style="font-size:1.8rem;font-weight:700;color:' + pctColor + '">' + pct + '%</div>'
+    + '<div style="font-size:.68rem;color:var(--mu)">' + checkedItems + '/' + totalItems + ' 완료</div>'
+    + '<div style="width:100%;height:8px;background:var(--bd);border-radius:4px;margin-top:6px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:' + pctColor + ';border-radius:4px;transition:width .3s"></div></div>'
+    + '</div>';
+
+  html += bp.categories.map(function(cat, ci) {
+    var catChecked = cat.items.filter(function(it) { return bp.checked[it.key]; }).length;
+    var catTotal = cat.items.length;
+    var itemsHtml = cat.items.map(function(it) {
+      var checked = bp.checked[it.key] || false;
+      var note = bp.notes[it.key] || '';
+      return '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--sf)">'
+        + '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="_toggleBirthPrep(\'' + it.key + '\',this.checked)" style="margin-top:2px;width:16px;height:16px;accent-color:#ec4899;flex-shrink:0">'
+        + '<div style="flex:1">'
+        + '<div style="font-size:.78rem;font-weight:' + (checked ? '400' : '500') + ';color:' + (checked ? 'var(--mu)' : 'var(--ink)') + ';' + (checked ? 'text-decoration:line-through' : '') + '">' + esc(it.label) + '</div>'
+        + (it.desc ? '<div style="font-size:.6rem;color:var(--mu2)">' + esc(it.desc) + '</div>' : '')
+        + (note ? '<div style="font-size:.6rem;color:var(--ac);margin-top:2px">📝 ' + esc(note) + '</div>' : '')
+        + '</div>'
+        + '<button onclick="_editBirthPrepNote(\'' + it.key + '\')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu);padding:2px" title="메모">📝</button>'
+        + '<button onclick="_removeBirthPrepItem(' + ci + ',\'' + it.key + '\')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:#dc2626;padding:2px" title="삭제">✕</button>'
+        + '</div>';
+    }).join('');
+
+    return '<div style="margin-bottom:8px;border:1px solid var(--bd);border-radius:8px;overflow:hidden">'
+      + '<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--sf2);cursor:pointer" onclick="var b=this.nextElementSibling;b.style.display=b.style.display===\'none\'?\'block\':\'none\'">'
+      + '<span style="font-size:.78rem;font-weight:600">' + esc(cat.cat) + '</span>'
+      + '<span style="font-size:.6rem;color:var(--mu);margin-left:auto">' + catChecked + '/' + catTotal + '</span>'
+      + '<div style="width:40px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden"><div style="width:' + (catTotal ? Math.round(catChecked / catTotal * 100) : 0) + '%;height:100%;background:#ec4899;border-radius:2px"></div></div>'
+      + '</div>'
+      + '<div style="padding:4px 10px">' + itemsHtml
+      + '<button onclick="_addBirthPrepItem(' + ci + ')" style="width:100%;margin-top:4px;padding:4px;font-size:.65rem;border:1px dashed var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 항목 추가</button>'
+      + '</div></div>';
+  }).join('');
+
+  html += '<button onclick="_addBirthPrepCategory()" style="width:100%;margin-top:6px;padding:6px;font-size:.68rem;border:1.5px dashed #ec4899;border-radius:6px;background:none;color:#ec4899;cursor:pointer;font-family:var(--font)">+ 카테고리 추가</button>';
+  html += '<button onclick="_resetBirthPrep()" style="display:block;margin:8px auto 0;font-size:.58rem;color:var(--mu2);background:none;border:none;cursor:pointer;font-family:var(--font)">🔄 기본값으로 초기화</button>';
+
+  return html;
+}
+
+function _toggleBirthPrep(key, checked) {
+  var bp = _getBirthPrepData(); if (!bp) return;
+  bp.checked[key] = checked;
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _editBirthPrepNote(key) {
+  var bp = _getBirthPrepData(); if (!bp) return;
+  var note = prompt('메모 입력:', bp.notes[key] || '');
+  if (note === null) return;
+  bp.notes[key] = note.trim();
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _addBirthPrepItem(catIdx) {
+  var bp = _getBirthPrepData(); if (!bp || !bp.categories[catIdx]) return;
+  var label = prompt('항목 이름:');
+  if (!label || !label.trim()) return;
+  var desc = prompt('설명 (선택):') || '';
+  var key = 'custom_' + Date.now();
+  bp.categories[catIdx].items.push({ key: key, label: label.trim(), desc: desc.trim() });
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _removeBirthPrepItem(catIdx, key) {
+  if (!confirm('이 항목을 삭제할까요?')) return;
+  var bp = _getBirthPrepData(); if (!bp || !bp.categories[catIdx]) return;
+  bp.categories[catIdx].items = bp.categories[catIdx].items.filter(function(it) { return it.key !== key; });
+  delete bp.checked[key];
+  delete bp.notes[key];
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _addBirthPrepCategory() {
+  var bp = _getBirthPrepData(); if (!bp) return;
+  var name = prompt('카테고리 이름 (예: 🏠 인테리어):');
+  if (!name || !name.trim()) return;
+  bp.categories.push({ cat: name.trim(), items: [] });
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _resetBirthPrep() {
+  if (!confirm('출산준비 체크리스트를 기본값으로 초기화할까요? 체크/메모는 유지됩니다.')) return;
+  var bp = _getBirthPrepData(); if (!bp) return;
+  bp.categories = JSON.parse(JSON.stringify(_DEFAULT_BIRTH_PREP));
+  saveBrkMaster();
+  renderView('meds');
+}
+
 function renderBungrukiDashboard() {
   var tabs = [
     {id:'cycle',label:'🩸 생리주기',color:'#dc2626'},
     {id:'daily',label:'✅ 일일체크',color:'#16a34a'},
     {id:'lab',label:'🔬 검사결과',color:'#2563eb'},
     {id:'vaccine',label:'💉 접종',color:'#0891b2'},
+    {id:'birthprep',label:'🍼 출산준비',color:'#ec4899'},
     {id:'milestone',label:'🏁 마일스톤',color:'#7c3aed'},
     {id:'safety',label:'💊 약물안전',color:'#ea580c'},
   ];
@@ -3366,6 +3517,7 @@ function renderBungrukiDashboard() {
   else if (_brkDashTab === 'daily') contentHtml = renderDailyChecks();
   else if (_brkDashTab === 'lab') contentHtml = renderLabResults();
   else if (_brkDashTab === 'vaccine') contentHtml = _renderBrkVaccineTab();
+  else if (_brkDashTab === 'birthprep') contentHtml = _renderBirthPrepTab();
   else if (_brkDashTab === 'milestone') contentHtml = renderMilestones();
   else if (_brkDashTab === 'safety') contentHtml = renderDrugSafety();
 
