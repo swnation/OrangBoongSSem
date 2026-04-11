@@ -3490,23 +3490,25 @@ function renderHealthDailyCheck() {
 
   // ── 운동 기록 (직접 입력 + DB 자동매칭) ──
   const _EX_DB = {
-    // 유산소
-    '걷기':{cat:'cardio',icon:'🚶',defaultInt:'light'},'산책':{cat:'cardio',icon:'🚶',defaultInt:'light'},
-    '조깅':{cat:'cardio',icon:'🏃',defaultInt:'moderate'},'달리기':{cat:'cardio',icon:'🏃',defaultInt:'intense'},
-    '러닝':{cat:'cardio',icon:'🏃',defaultInt:'moderate'},'자전거':{cat:'cardio',icon:'🚴',defaultInt:'moderate'},
-    '수영':{cat:'cardio',icon:'🏊',defaultInt:'moderate'},'줄넘기':{cat:'cardio',icon:'⏫',defaultInt:'intense'},
-    '등산':{cat:'cardio',icon:'⛰️',defaultInt:'intense'},'에어로빅':{cat:'cardio',icon:'💃',defaultInt:'moderate'},
-    '댄스':{cat:'cardio',icon:'💃',defaultInt:'moderate'},'계단':{cat:'cardio',icon:'🪜',defaultInt:'moderate'},
-    // 근력
-    '웨이트':{cat:'strength',icon:'🏋️',defaultInt:'intense'},'헬스':{cat:'strength',icon:'🏋️',defaultInt:'moderate'},
-    '스쿼트':{cat:'strength',icon:'🦵',defaultInt:'moderate'},'푸시업':{cat:'strength',icon:'💪',defaultInt:'moderate'},
-    '풀업':{cat:'strength',icon:'💪',defaultInt:'intense'},'플랭크':{cat:'strength',icon:'🧘',defaultInt:'moderate'},
-    '덤벨':{cat:'strength',icon:'🏋️',defaultInt:'moderate'},'바벨':{cat:'strength',icon:'🏋️',defaultInt:'intense'},
-    '필라테스':{cat:'strength',icon:'🧘',defaultInt:'moderate'},'크로스핏':{cat:'strength',icon:'🔥',defaultInt:'intense'},
+    // 유산소 (기본 단위: 분)
+    '걷기':{cat:'cardio',icon:'🚶',defaultInt:'light',unit:'min'},'산책':{cat:'cardio',icon:'🚶',defaultInt:'light',unit:'min'},
+    '조깅':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'min'},'달리기':{cat:'cardio',icon:'🏃',defaultInt:'intense',unit:'km'},
+    '러닝':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'km'},'자전거':{cat:'cardio',icon:'🚴',defaultInt:'moderate',unit:'km'},
+    '수영':{cat:'cardio',icon:'🏊',defaultInt:'moderate',unit:'min'},'줄넘기':{cat:'cardio',icon:'⏫',defaultInt:'intense',unit:'reps'},
+    '등산':{cat:'cardio',icon:'⛰️',defaultInt:'intense',unit:'min'},'에어로빅':{cat:'cardio',icon:'💃',defaultInt:'moderate',unit:'min'},
+    '댄스':{cat:'cardio',icon:'💃',defaultInt:'moderate',unit:'min'},'계단':{cat:'cardio',icon:'🪜',defaultInt:'moderate',unit:'min'},
+    // 근력 (기본 단위: 횟수 또는 분)
+    '웨이트':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'min'},'헬스':{cat:'strength',icon:'🏋️',defaultInt:'moderate',unit:'min'},
+    '스쿼트':{cat:'strength',icon:'🦵',defaultInt:'moderate',unit:'reps'},'푸시업':{cat:'strength',icon:'💪',defaultInt:'moderate',unit:'reps'},
+    '풀업':{cat:'strength',icon:'💪',defaultInt:'intense',unit:'reps'},'플랭크':{cat:'strength',icon:'🧘',defaultInt:'moderate',unit:'sec'},
+    '덤벨':{cat:'strength',icon:'🏋️',defaultInt:'moderate',unit:'reps'},'바벨':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'reps'},
+    '필라테스':{cat:'strength',icon:'🧘',defaultInt:'moderate',unit:'min'},'크로스핏':{cat:'strength',icon:'🔥',defaultInt:'intense',unit:'min'},
     // 유연성
-    '스트레칭':{cat:'stretch',icon:'🧘',defaultInt:'light'},'요가':{cat:'stretch',icon:'🧘',defaultInt:'moderate'},
-    '폼롤러':{cat:'stretch',icon:'🔄',defaultInt:'light'},'마사지건':{cat:'stretch',icon:'🔧',defaultInt:'light'},
+    '스트레칭':{cat:'stretch',icon:'🧘',defaultInt:'light',unit:'min'},'요가':{cat:'stretch',icon:'🧘',defaultInt:'moderate',unit:'min'},
+    '폼롤러':{cat:'stretch',icon:'🔄',defaultInt:'light',unit:'min'},'마사지건':{cat:'stretch',icon:'🔧',defaultInt:'light',unit:'min'},
   };
+  const _EX_UNITS = {min:'분',sec:'초',reps:'회',sets:'세트',km:'km',m:'m'};
+  const _EX_UNIT_LIST = ['min','sec','reps','sets','km','m'];
   // 커스텀 운동 (클라우드)
   const customEx = m.settings?.customExercises || {};
   const allExDb = { ..._EX_DB, ...customEx };
@@ -3523,23 +3525,29 @@ function renderHealthDailyCheck() {
     const db = allExDb[e.name];
     const icon = db?.icon || (e.cat==='cardio'?'🏃':e.cat==='strength'?'🏋️':'🧘');
     const catLabel = catLabels[e.cat||db?.cat] || '';
-    return `<div style="display:flex;align-items:center;gap:4px;padding:4px 6px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:3px">
+    const curUnit = e.unit || db?.unit || 'min';
+    const amount = e.amount ?? e.duration ?? '';
+    const unitOpts = _EX_UNIT_LIST.map(u =>
+      `<option value="${u}"${curUnit===u?' selected':''}>${_EX_UNITS[u]}</option>`
+    ).join('');
+    return `<div style="display:flex;align-items:center;gap:3px;padding:4px 6px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:3px;flex-wrap:wrap">
       <span style="font-size:.8rem">${icon}</span>
-      <span style="font-size:.72rem;font-weight:500;flex:1">${esc(e.name)}</span>
-      <span style="font-size:.55rem;color:var(--mu)">${catLabel}</span>
-      <div style="display:flex;gap:2px">${['light','moderate','intense'].map(int => {
+      <span style="font-size:.72rem;font-weight:500">${esc(e.name)}</span>
+      <span style="font-size:.5rem;color:var(--mu)">${catLabel}</span>
+      <div style="display:flex;gap:2px;margin-left:auto">${['light','moderate','intense'].map(int => {
         const sel = e.intensity === int;
         return `<button onclick="_setExIntensity(${i},'${int}')" style="padding:1px 5px;font-size:.52rem;border:1px solid ${sel?intensityColors[int]:'var(--bd)'};border-radius:3px;background:${sel?intensityColors[int]+'20':'transparent'};color:${sel?intensityColors[int]:'var(--mu)'};cursor:pointer;font-family:var(--font)">${intensityLabels[int]}</button>`;
       }).join('')}</div>
-      <input type="number" placeholder="분" value="${e.duration||''}" onchange="_setExDuration(${i},this.value)"
+      <input type="number" placeholder="${_EX_UNITS[curUnit]}" value="${amount}" onchange="_setExAmount(${i},this.value)"
         style="width:35px;padding:2px;font-size:.6rem;border:1px solid var(--bd);border-radius:3px;text-align:center;font-family:var(--mono);color:var(--ink);background:var(--sf2)">
+      <select onchange="_setExUnit(${i},this.value)" style="padding:1px 2px;font-size:.55rem;border:1px solid var(--bd);border-radius:3px;background:var(--sf2);color:var(--ink);font-family:var(--font)">${unitOpts}</select>
       <button onclick="_removeExercise(${i})" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.6rem;padding:2px">✕</button>
     </div>`;
   }).join('');
 
   // 운동 요약
   const exSummary = exercises.length
-    ? exercises.map(e => { const db=allExDb[e.name]; return (db?.icon||'🏃')+esc(e.name)+'('+intensityLabels[e.intensity||'moderate']+(e.duration?' '+e.duration+'분':'')+')'; }).join(' · ')
+    ? exercises.map(e => { const db=allExDb[e.name]; const u=_EX_UNITS[e.unit||db?.unit||'min']||'분'; const amt=e.amount??e.duration; return (db?.icon||'🏃')+esc(e.name)+'('+intensityLabels[e.intensity||'moderate']+(amt?' '+amt+u:'')+')'; }).join(' · ')
     : '안함';
 
   // 빠른 추가 버튼 (자주 쓰는 운동)
@@ -3690,7 +3698,7 @@ async function _addExercise(name) {
   const d = _getExDayData(); if(!d) return;
   if (d.exercises.some(e => e.name === name)) return;
   const db = _EXERCISE_DB[name] || getBrkMaster()?.settings?.customExercises?.[name];
-  d.exercises.push({ name, cat: db?.cat||'cardio', intensity: db?.defaultInt||'moderate', duration: null });
+  d.exercises.push({ name, cat: db?.cat||'cardio', intensity: db?.defaultInt||'moderate', unit: db?.unit||'min', amount: null, duration: null });
   // 최근 운동 목록 업데이트
   const m = getBrkMaster();
   if (m) {
@@ -3726,10 +3734,16 @@ async function _setExIntensity(idx, intensity) {
   d.exercises[idx].intensity = intensity;
   await saveBrkMaster(); renderView('meds');
 }
-async function _setExDuration(idx, val) {
+async function _setExAmount(idx, val) {
   const d = _getExDayData(); if(!d || !d.exercises[idx]) return;
-  d.exercises[idx].duration = val ? parseInt(val) : null;
+  d.exercises[idx].amount = val ? parseFloat(val) : null;
+  d.exercises[idx].duration = d.exercises[idx].amount; // 하위호환
   await saveBrkMaster();
+}
+async function _setExUnit(idx, unit) {
+  const d = _getExDayData(); if(!d || !d.exercises[idx]) return;
+  d.exercises[idx].unit = unit;
+  await saveBrkMaster(); renderView('meds');
 }
 
 async function _setHealthWeight(val) {
