@@ -602,57 +602,9 @@ async function _saveBrkDaily(date){
 }
 
 async function _syncBrkToHealthLocal(date){
-  const brkM=domainData['bungruki']?.master;if(!brkM)return;
-  const dayData=brkM.dailyChecks?.[date]?.bung;if(!dayData)return;
-  const ds=domainData['bung-health'];if(!ds)return;
-
-  const items=_getBrkSupplItems();
-  const takenSuppl=items.filter(it=>dayData[it.key]).map(it=>it.label);
-  const notTakenSuppl=items.filter(it=>!dayData[it.key]).map(it=>it.label);
-  const exerciseLabel={cardio:'유산소',strength:'근력',stretch:'스트레칭'};
-  const exercise=dayData.exercise||'';
-  const alcohol=dayData.alcohol||false;
-
-  const month=date.slice(0,7);
-  // 해당 월 로그가 미로드면 로드
-  await loadLogMonth('bung-health',month);
-  const ml=ds.logs?.[month];if(!ml)return;
-
-  const syncId='brk-sync-'+date;
-  let existing=ml.data.find(l=>l._syncId===syncId);
-
-  const parts=[];
-  if(takenSuppl.length)parts.push('💊 영양제: '+takenSuppl.join(', '));
-  if(notTakenSuppl.length)parts.push('⬜ 미복용: '+notTakenSuppl.join(', '));
-  if(exercise)parts.push('🏃 운동: '+(exerciseLabel[exercise]||exercise));
-  if(alcohol)parts.push('🍺 음주');
-
-  if(!parts.length){
-    if(existing){ml.data=ml.data.filter(l=>l._syncId!==syncId);}
-    return;
-  }
-
-  const categories=[];
-  if(takenSuppl.length)categories.push('투약');
-  if(exercise)categories.push('운동');
-
-  const entry={
-    _syncId:syncId,datetime:date+'T00:00',
-    categories:categories,
-    memo:'[🍼 임신준비 연동] '+parts.join(' | '),
-    who:'붕쌤',
-    _brkSync:{supplements:takenSuppl,exercise:exercise||null,alcohol:alcohol},
-  };
-
-  if(existing)Object.assign(existing,entry);
-  else{entry.id=Date.now();ml.data.push(entry);ml.data.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));}
-
-  // bung-health 로그 Drive 저장
-  const logName=BUNG_DOMAINS['bung-health'].logPrefix+'_'+month+'.json';
-  try{
-    if(ml.fileId)await driveUpdate(ml.fileId,ml.data);
-    else ml.fileId=await driveCreate(logName,ml.data,ds.folderId);
-  }catch(e){console.error('Sync save:',e);}
+  // 건강관리 캘린더에서 직접 편집 가능하므로
+  // logData에 별도 동기화 엔트리를 더 이상 생성하지 않음.
+  // 영양제/운동/체중은 붕룩이 dailyChecks에만 저장.
 }
 
 // ═══════════════════════════════════════════════════════════════
