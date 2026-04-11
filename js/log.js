@@ -701,6 +701,7 @@ function renderLog() {
       </div>
     </div>`:''}
     ${treatmentHtml}
+    ${_renderLogDailyExtras(dateStr)}
     <div class="log-section-title">메모</div>
     <textarea class="log-memo" id="log-memo" rows="2" placeholder="특이사항..."></textarea>
     <input type="hidden" id="log-edit-idx" value="-1">
@@ -2003,4 +2004,82 @@ async function migrateMedCheck() {
   if (!migrated) { showToast('마이그레이션 대상 없음'); return; }
   await saveMaster();
   showToast('✅ medCheck 마이그레이션 완료: ' + migrated + '건');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 증상 기록 폼 — 운동/영양제/체중/음주 (건강관리 도메인용)
+// ═══════════════════════════════════════════════════════════════
+function _renderLogDailyExtras(dateStr) {
+  if (!S.currentDomain?.endsWith('-health')) return '';
+  const brkDs = S.domainState['bungruki'];
+  if (!brkDs?.master) return '';
+  const m = brkDs.master;
+  if (!m.dailyChecks) m.dailyChecks = {};
+  if (!m.dailyChecks[dateStr]) m.dailyChecks[dateStr] = {};
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  if (!m.dailyChecks[dateStr][who]) m.dailyChecks[dateStr][who] = {};
+  const dayData = m.dailyChecks[dateStr][who];
+
+  // 영양제
+  const oKeys = typeof BRK_SUPPL_ORANGI !== 'undefined' ? BRK_SUPPL_ORANGI : [];
+  const bKeys = typeof BRK_SUPPL_BUNG !== 'undefined' ? BRK_SUPPL_BUNG : [];
+  const supplLabels = {folicAcid:'엽산',iron:'철분',vitaminD:'비타민D',multivitamin:'멀티비타민',magnesium:'마그네슘',arginine:'아르기닌',coq10:'CoQ10',silymarin:'실리마린'};
+  let supplKeys = who === 'orangi' ? [...oKeys] : [...bKeys];
+  if (m.customSuppl?.[who]) m.customSuppl[who].forEach(c => { if (!supplKeys.includes(c.key)) { supplKeys.push(c.key); supplLabels[c.key] = c.label; } });
+  const hidden = m.hiddenSuppl?.[who] || [];
+  supplKeys = supplKeys.filter(k => !hidden.includes(k));
+
+  const supplHtml = supplKeys.map(k => {
+    const checked = dayData[k] || false;
+    return `<div class="log-chip ${checked?'sel-med':''}" data-log-suppl="${k}" onclick="this.classList.toggle('sel-med');_saveLogSuppl('${dateStr}')">${checked?'✅':'⬜'} ${esc(supplLabels[k]||k)}</div>`;
+  }).join('');
+
+  // 운동 요약
+  const exercises = dayData.exercises || [];
+  const exSummary = exercises.length
+    ? exercises.map(e => esc(e.name) + '(' + ({light:'약',moderate:'중',intense:'강'}[e.intensity]||'중') + (e.amount ? ' ' + e.amount + ({min:'분',sec:'초',reps:'회',sets:'세트',km:'km',m:'m'}[e.unit]||'분') : '') + ')').join(', ')
+    : '없음';
+
+  // 체중/음주
+  const weight = dayData.weight || '';
+  const alcohol = dayData.alcohol || false;
+
+  return `<div style="margin-top:8px;padding:10px;background:var(--sf2);border:1.5px solid var(--domain-color,var(--bd));border-radius:8px">
+    <div style="font-size:.72rem;font-weight:700;color:var(--domain-color,var(--ac));margin-bottom:6px">🏃 데일리체크</div>
+    <div class="log-section-title" style="margin-top:0">💊 영양제</div>
+    <div class="log-chips">${supplHtml}</div>
+    <div class="log-section-title">🏃 운동: <span style="font-weight:400;font-size:.68rem">${exSummary}</span>
+      <button onclick="if(typeof _addExerciseCustom==='function')_addExerciseCustom()" style="background:none;border:1px dashed var(--ac);border-radius:4px;padding:1px 6px;font-size:.58rem;color:var(--ac);cursor:pointer;margin-left:4px">+ 추가</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+      <span style="font-size:.65rem;color:var(--mu)">⚖️</span>
+      <input type="number" step="0.1" id="log-weight" value="${weight}" placeholder="kg" onchange="_saveLogWeight('${dateStr}',this.value)"
+        style="width:55px;padding:3px 4px;font-size:.68rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:var(--mono);color:var(--ink);background:var(--sf)">
+      <span style="font-size:.55rem;color:var(--mu2)">kg</span>
+      ${who === 'bung' ? `<label style="margin-left:auto;display:flex;align-items:center;gap:4px;font-size:.65rem;color:var(--mu);cursor:pointer">
+        <input type="checkbox" ${alcohol?'checked':''} onchange="_saveLogAlcohol('${dateStr}',this.checked)" style="accent-color:#dc2626"> 🍺 음주
+      </label>` : ''}
+    </div>
+  </div>`;
+}
+
+function _saveLogSuppl(dateStr) {
+  const brkDs = S.domainState['bungruki']; if (!brkDs?.master) return;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const d = brkDs.master.dailyChecks[dateStr][who];
+  document.querySelectorAll('[data-log-suppl]').forEach(el => {
+    d[el.dataset.logSuppl] = el.classList.contains('sel-med');
+  });
+  saveBrkMaster();
+}
+function _saveLogWeight(dateStr, val) {
+  const brkDs = S.domainState['bungruki']; if (!brkDs?.master) return;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  brkDs.master.dailyChecks[dateStr][who].weight = val ? parseFloat(val) : null;
+  saveBrkMaster();
+}
+function _saveLogAlcohol(dateStr, checked) {
+  const brkDs = S.domainState['bungruki']; if (!brkDs?.master) return;
+  brkDs.master.dailyChecks['bung'] && (brkDs.master.dailyChecks[dateStr].bung.alcohol = checked);
+  saveBrkMaster();
 }
