@@ -1371,11 +1371,16 @@ async function stageCheckupDocs(input) {
   input.value = '';
   const ext = file.name.split('.').pop().toLowerCase();
 
+  if (ext === 'pdf') {
+    // PDF 전용 플로우: 페이지 미리보기 → 선택 → Vision 분석
+    await _handlePdfUpload(file);
+    return;
+  }
+
   showToast('📄 문서 읽는 중...', 5000);
   let text = '';
   try {
-    if (ext === 'pdf') text = await _extractPdfText(file);
-    else if (ext === 'docx') text = await _extractDocxText(file);
+    if (ext === 'docx') text = await _extractDocxText(file);
     else if (ext === 'txt') text = await _extractTxtText(file);
     else { showToast('⚠️ 지원: PDF, DOCX, TXT'); return; }
   } catch (e) {
@@ -1513,6 +1518,116 @@ async function _extractDocxText(file) {
   // XML에서 텍스트만 추출 (w:t 태그)
   const matches = docXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
   return matches.map(m => m.replace(/<[^>]+>/g, '')).join(' ').replace(/\s+/g, ' ');
+}
+
+// PDF 전용 플로우: 페이지 미리보기 → 범위 선택 → Vision 분석
+async function _handlePdfUpload(file) {
+  showToast('📄 PDF 로딩 중...', 5000);
+  try {
+    if (!window.pdfjsLib) await window._pdfjsReady;
+    if (!window.pdfjsLib) throw new Error('PDF 라이브러리 로딩 실패');
+    const arrayBuf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuf }).promise;
+    const totalPages = pdf.numPages;
+
+    // 페이지 썸네일 생성 (빠른 미리보기용, 저해상도)
+    const thumbs = [];
+    const previewCount = Math.min(totalPages, 20);
+    for (let i = 1; i <= previewCount; i++) {
+      const page = await pdf.getPage(i);
+      const vp = page.getViewport({ scale: 0.3 });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      thumbs.push(canvas.toDataURL('image/jpeg', 0.6));
+    }
+
+    // 검진 PDF 자동 감지: 앞 1-4페이지는 표지/교육, 5페이지~가 검사 데이터
+    const defaultStart = totalPages > 10 ? 5 : 1;
+    const defaultEnd = Math.min(totalPages, 20);
+
+    const thumbHtml = thumbs.map((t, i) => {
+      const pageNum = i + 1;
+      const inRange = pageNum >= defaultStart && pageNum <= defaultEnd;
+      return `<div style="display:inline-block;margin:2px;cursor:pointer;border:2px solid ${inRange ? 'var(--ac)' : 'transparent'};border-radius:4px;opacity:${inRange ? 1 : 0.4}" data-pdf-page="${pageNum}" onclick="this.style.borderColor=this.style.borderColor==='transparent'?'var(--ac)':'transparent';this.style.opacity=this.style.opacity==='0.4'?'1':'0.4'">
+        <img src="${t}" style="width:50px;height:auto;border-radius:2px;display:block">
+        <div style="font-size:.5rem;text-align:center;color:var(--mu)">${pageNum}</div>
+      </div>`;
+    }).join('');
+
+    window._pdfFile = file;
+    window._pdfTotalPages = totalPages;
+
+    showConfirmModal('📄 PDF 검진 분석 — ' + totalPages + '페이지',
+      `<div style="font-size:.72rem">
+        <div style="margin-bottom:6px"><b>${esc(file.name)}</b> (${Math.round(file.size/1024)}KB, ${totalPages}페이지)</div>
+        <div style="padding:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;font-size:.65rem;color:#1d4ed8;margin-bottom:8px">
+          💡 검진 PDF는 표 형식이라 📷 Vision AI(이미지 분석)이 가장 정확합니다.<br>
+          분석할 페이지를 클릭하여 선택/해제하세요. 표지·교육 페이지는 제외해도 됩니다.
+        </div>
+        <div style="margin-bottom:6px">
+          <span style="font-size:.65rem;color:var(--mu)">페이지 범위:</span>
+          <input type="number" id="pdf-start" value="${defaultStart}" min="1" max="${totalPages}" style="width:40px;font-size:.72rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;text-align:center">
+          <span style="font-size:.65rem"> ~ </span>
+          <input type="number" id="pdf-end" value="${defaultEnd}" min="1" max="${totalPages}" style="width:40px;font-size:.72rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;text-align:center">
+          <span style="font-size:.58rem;color:var(--mu2)"> / ${totalPages}</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:1px;margin-bottom:6px;max-height:200px;overflow-y:auto">${thumbHtml}</div>
+        <div style="font-size:.58rem;color:var(--mu2)">📷 Vision: 정확하지만 페이지당 비용 발생 | 📄 텍스트: 저비용이지만 표 인식 부정확</div>
+      </div>`,
+      [{
+        label: '📷 Vision 분석 (추천)', primary: true,
+        action: async () => {
+          closeConfirmModal();
+          const start = parseInt(document.getElementById('pdf-start')?.value) || 1;
+          const end = parseInt(document.getElementById('pdf-end')?.value) || totalPages;
+          await _analyzePdfVision(file, start, end);
+        }
+      }, {
+        label: '📄 텍스트 분석 (저비용)',
+        action: async () => {
+          closeConfirmModal();
+          showToast('📄 텍스트 추출 중...', 5000);
+          const text = await _extractPdfText(file);
+          const aiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+          if (!aiId) { showToast('⚠️ AI 키 필요'); return; }
+          if (text.trim().length < 50) {
+            showToast('⚠️ 텍스트 부족 (' + text.trim().length + '자) — Vision을 사용하세요', 4000);
+            return;
+          }
+          await _analyzeDocText(text, DC().user || '붕쌤', aiId, file.name);
+        }
+      }, { label: '취소', action: closeConfirmModal }]);
+  } catch (e) {
+    showToast('❌ PDF 로딩 실패: ' + e.message, 4000);
+  }
+}
+
+// 선택한 페이지 범위를 이미지로 변환 → 사진 분석 파이프라인에 전달
+async function _analyzePdfVision(file, startPage, endPage) {
+  showToast('📷 PDF → 이미지 변환 중...', 8000);
+  try {
+    if (!window.pdfjsLib) await window._pdfjsReady;
+    const arrayBuf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuf }).promise;
+    const start = Math.max(1, startPage);
+    const end = Math.min(pdf.numPages, endPage);
+    const images = [];
+    for (let i = start; i <= end; i++) {
+      const page = await pdf.getPage(i);
+      const scale = 2;
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      images.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.9), name: file.name + ' p' + i, type: 'image/jpeg' });
+    }
+    showToast('📷 ' + images.length + '페이지 변환 완료 → AI를 선택하세요');
+    _stagedCheckupPhotos = images;
+    _showStagedCheckupPhotos();
+  } catch (e) {
+    showToast('❌ PDF 변환 실패: ' + e.message, 4000);
+  }
 }
 
 async function _pdfToVision() {
