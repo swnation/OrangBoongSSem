@@ -45,24 +45,33 @@ function _closeCkProgress() {
 // CATEGORIES
 // ═══════════════════════════════════════════════════════════════
 const _CHECKUP_CATEGORIES = {
-  cbc:          { name:'혈액검사(CBC)', icon:'🩸', order:1 },
-  liver:        { name:'간기능', icon:'🫁', order:2 },
-  kidney:       { name:'신장기능', icon:'🫘', order:3 },
-  thyroid:      { name:'갑상선', icon:'🦋', order:4 },
-  lipid:        { name:'지질', icon:'🫀', order:5 },
-  glucose:      { name:'당대사', icon:'🍬', order:6 },
-  electrolyte:  { name:'전해질', icon:'⚡', order:7 },
-  inflammation: { name:'염증', icon:'🔥', order:8 },
-  reproductive: { name:'생식호르몬', icon:'🧬', order:9 },
-  semen:        { name:'정액검사', icon:'🔬', order:10 },
-  vitamin:      { name:'비타민/영양', icon:'💊', order:11 },
-  iron:         { name:'철분', icon:'🧲', order:12 },
-  tumor:        { name:'종양표지자', icon:'🎯', order:13 },
-  infection:    { name:'감염', icon:'🛡️', order:14 },
-  coagulation:  { name:'응고', icon:'🩹', order:15 },
-  urine:        { name:'소변검사', icon:'🧪', order:16 },
-  other:        { name:'기타', icon:'📋', order:99 },
+  cbc:          { name:'혈액검사(CBC)', icon:'🩸', order:1, major:'blood' },
+  liver:        { name:'간기능', icon:'🫁', order:2, major:'blood' },
+  kidney:       { name:'신장기능', icon:'🫘', order:3, major:'blood' },
+  thyroid:      { name:'갑상선', icon:'🦋', order:4, major:'blood' },
+  lipid:        { name:'지질', icon:'🫀', order:5, major:'blood' },
+  glucose:      { name:'당대사', icon:'🍬', order:6, major:'blood' },
+  electrolyte:  { name:'전해질', icon:'⚡', order:7, major:'blood' },
+  inflammation: { name:'염증', icon:'🔥', order:8, major:'blood' },
+  iron:         { name:'철분', icon:'🧲', order:12, major:'blood' },
+  coagulation:  { name:'응고', icon:'🩹', order:15, major:'blood' },
+  vitamin:      { name:'비타민/영양', icon:'💊', order:11, major:'blood' },
+  urine:        { name:'소변검사', icon:'🧪', order:16, major:'urine' },
+  tumor:        { name:'종양표지자', icon:'🎯', order:13, major:'cancer' },
+  infection:    { name:'감염/항체', icon:'🛡️', order:14, major:'infection' },
+  reproductive: { name:'생식호르몬', icon:'🧬', order:9, major:'reproductive' },
+  semen:        { name:'정액검사', icon:'🔬', order:10, major:'reproductive' },
+  other:        { name:'기타', icon:'📋', order:99, major:'other' },
 };
+
+const _CHECKUP_MAJOR_CATEGORIES = [
+  { key:'blood', name:'🩸 혈액검사', order:1 },
+  { key:'urine', name:'🧪 소변검사', order:2 },
+  { key:'infection', name:'🛡️ 감염/예접 항체', order:3 },
+  { key:'cancer', name:'🎯 암검사/종양표지자', order:4 },
+  { key:'reproductive', name:'🧬 생식검사', order:5 },
+  { key:'other', name:'📋 기타', order:99 },
+];
 
 // ═══════════════════════════════════════════════════════════════
 // STANDARD TEST DICTIONARY
@@ -2150,10 +2159,19 @@ function renderCheckupArchive() {
 }
 
 // 타임라인 뷰
+function _isValidDate(d) { return d && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d+'T00:00').getTime()); }
+
 function _renderCheckupTimeline(checkups) {
   if (!checkups.length) return '<div style="font-size:.72rem;color:var(--mu);text-align:center;padding:20px">검진 기록이 없습니다. 위에서 사진을 업로드하세요.</div>';
+  // 잘못된 날짜 경고 (YYYY-MM-DD 등)
+  const invalidDateEntries = checkups.filter(c => !_isValidDate(c.date));
+  const invalidWarn = invalidDateEntries.length
+    ? `<div style="padding:6px 8px;margin-bottom:6px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;font-size:.68rem;color:#dc2626">
+        ⚠️ 날짜 오류 ${invalidDateEntries.length}건 — 편집 버튼(✏️)으로 올바른 날짜 입력 필요
+        ${invalidDateEntries.map(c => '<span style="background:#fee2e2;padding:1px 4px;border-radius:3px;margin-left:4px">' + esc(c.date||'없음') + ' (' + esc(c.institution||'기관미상') + ')</span>').join('')}
+      </div>` : '';
 
-  return checkups.map(c => {
+  return invalidWarn + checkups.map(c => {
     const results = c.results || [];
     const abnormal = results.filter(r => _isAbnormal(r.status));
     const normal = results.filter(r => r.status === 'normal' || r.status === 'positive');
@@ -2315,55 +2333,86 @@ function _renderCheckupTrends(who, checkups) {
 function _renderCheckupCategories(who, checkups) {
   if (!checkups.length) return '<div style="font-size:.72rem;color:var(--mu);text-align:center;padding:20px">검진 기록이 없습니다.</div>';
 
-  // 각 표준코드의 최신 값 수집
-  const latestByCode = {};
+  // 각 표준코드별 시계열 데이터 수집 (최신 → 과거 순)
+  const historyByCode = {};
   checkups.forEach(c => {
     (c.results || []).forEach(r => {
-      if (r.stdCode && (!latestByCode[r.stdCode] || c.date > latestByCode[r.stdCode].date)) {
-        latestByCode[r.stdCode] = { ...r, date: c.date, institution: c.institution };
+      if (!r.stdCode) return;
+      if (!historyByCode[r.stdCode]) historyByCode[r.stdCode] = { latest: null, history: [], category: r.category || 'other', displayName: r.displayName, unit: r.unit, ref: r.ref };
+      historyByCode[r.stdCode].history.push({ value: r.value, date: c.date, status: r.status, institution: c.institution });
+      if (!historyByCode[r.stdCode].latest || c.date > historyByCode[r.stdCode].latest.date) {
+        historyByCode[r.stdCode].latest = { value: r.value, date: c.date, status: r.status, institution: c.institution };
       }
     });
   });
+  // 시계열 정렬
+  Object.values(historyByCode).forEach(h => h.history.sort((a, b) => a.date.localeCompare(b.date)));
 
-  // 카테고리별 그룹
+  // 세부 카테고리별 그룹
   const grouped = {};
-  Object.entries(latestByCode).forEach(([code, r]) => {
-    const cat = r.category || 'other';
+  Object.entries(historyByCode).forEach(([code, h]) => {
+    const cat = h.category;
     if (!grouped[cat]) grouped[cat] = [];
-    grouped[cat].push({ code, ...r });
+    grouped[cat].push({ code, ...h });
   });
 
-  return Object.entries(grouped)
-    .sort((a, b) => (_CHECKUP_CATEGORIES[a[0]]?.order || 99) - (_CHECKUP_CATEGORIES[b[0]]?.order || 99))
-    .map(([cat, items]) => {
-      const catDef = _CHECKUP_CATEGORIES[cat] || _CHECKUP_CATEGORIES.other;
-      const abnCount = items.filter(r => _isAbnormal(r.status)).length;
-      const rows = items.map(r => {
-        const statusColor = _statusColor(r.status);
-        const trend = getCheckupTrend(who, r.code);
-        const dir = _trendDirection(trend);
-        const trendIcon = trend.length >= 2 ? (dir === 'up' ? '📈' : dir === 'down' ? '📉' : '➡️') : '';
-        const refStr = r.ref ? `${r.ref.low}-${r.ref.high}` : '-';
-        return `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;font-size:.68rem;border-bottom:1px solid var(--sf)">
-          <span style="flex:1">${esc(r.displayName)}</span>
-          <span style="font-weight:600;color:${statusColor};font-family:var(--mono)">${esc(String(r.value))}</span>
-          <span style="font-size:.58rem;color:var(--mu)">${esc(r.unit || '')}</span>
-          <span style="font-size:.55rem;color:var(--mu2)">${esc(refStr)}</span>
-          <span style="font-size:.55rem">${trendIcon}</span>
-          <span style="font-size:.5rem;color:var(--mu2)">${esc(r.date?.slice(5) || '')}</span>
-        </div>`;
+  // 대분류별 묶기
+  const majorGroups = {};
+  Object.entries(grouped).forEach(([cat, items]) => {
+    const majorKey = _CHECKUP_CATEGORIES[cat]?.major || 'other';
+    if (!majorGroups[majorKey]) majorGroups[majorKey] = {};
+    majorGroups[majorKey][cat] = items;
+  });
+
+  return _CHECKUP_MAJOR_CATEGORIES.filter(mc => majorGroups[mc.key]).map(mc => {
+    const subcats = majorGroups[mc.key];
+    const totalItems = Object.values(subcats).reduce((s, items) => s + items.length, 0);
+    const totalAbn = Object.values(subcats).reduce((s, items) => s + items.filter(r => _isAbnormal(r.latest?.status)).length, 0);
+
+    const subcatHtml = Object.entries(subcats)
+      .sort((a, b) => (_CHECKUP_CATEGORIES[a[0]]?.order || 99) - (_CHECKUP_CATEGORIES[b[0]]?.order || 99))
+      .map(([cat, items]) => {
+        const catDef = _CHECKUP_CATEGORIES[cat] || _CHECKUP_CATEGORIES.other;
+        const abnCount = items.filter(r => _isAbnormal(r.latest?.status)).length;
+        const rows = items.map(r => {
+          const statusColor = _statusColor(r.latest?.status);
+          const trend = r.history.length >= 2 ? _trendDirection(r.history.map(h => ({ value: h.value, date: h.date }))) : '';
+          const trendIcon = trend === 'up' ? '📈' : trend === 'down' ? '📉' : (r.history.length >= 2 ? '➡️' : '');
+          const refStr = r.ref ? (r.ref.low !== undefined ? r.ref.low + '-' + r.ref.high : '-') : '-';
+          // 시계열 미니 표시 (최근 4건)
+          const histMini = r.history.slice(-4).map(h => {
+            const c = _statusColor(h.status);
+            return '<span style="font-size:.5rem;color:' + c + '">' + h.value + '</span>';
+          }).join('<span style="color:var(--bd)">→</span>');
+          return '<div style="display:flex;align-items:center;gap:4px;padding:3px 0;font-size:.68rem;border-bottom:1px solid var(--sf)">'
+            + '<span style="flex:1;color:var(--ink)">' + esc(r.displayName) + '</span>'
+            + '<span style="font-weight:600;color:' + statusColor + ';font-family:var(--mono);min-width:40px;text-align:right">' + esc(String(r.latest?.value)) + '</span>'
+            + '<span style="font-size:.55rem;color:var(--mu);min-width:30px">' + esc(r.unit || '') + '</span>'
+            + '<span style="font-size:.52rem;color:var(--mu2);min-width:50px">' + esc(refStr) + '</span>'
+            + '<span style="font-size:.52rem;min-width:14px">' + trendIcon + '</span>'
+            + (r.history.length >= 2 ? '<span style="font-size:.5rem;min-width:60px;text-align:right">' + histMini + '</span>' : '<span style="min-width:60px"></span>')
+            + '<span style="font-size:.48rem;color:var(--mu2);min-width:32px;text-align:right">' + esc(r.latest?.date?.slice(2) || '') + '</span>'
+            + '</div>';
+        }).join('');
+
+        return '<div style="margin-bottom:4px">'
+          + '<div style="display:flex;align-items:center;gap:4px;padding:2px 0">'
+          + '<span style="font-size:.7rem">' + catDef.icon + '</span>'
+          + '<span style="font-size:.68rem;font-weight:600;color:var(--mu)">' + catDef.name + '</span>'
+          + '<span style="font-size:.55rem;color:var(--mu2)">' + items.length + '항목</span>'
+          + (abnCount ? '<span style="font-size:.5rem;padding:1px 4px;border-radius:3px;background:#fee2e2;color:#dc2626">이상 ' + abnCount + '</span>' : '')
+          + '</div>'
+          + rows + '</div>';
       }).join('');
 
-      return `<div style="padding:6px 8px;background:var(--sf2);border:1.5px solid ${abnCount ? '#fca5a580' : 'var(--bd)'};border-radius:8px;margin-bottom:5px">
-        <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
-          <span>${catDef.icon}</span>
-          <span style="font-size:.75rem;font-weight:600">${catDef.name}</span>
-          <span style="font-size:.6rem;color:var(--mu);margin-left:auto">${items.length}항목</span>
-          ${abnCount ? `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:#fee2e2;color:#dc2626">이상 ${abnCount}</span>` : ''}
-        </div>
-        ${rows}
-      </div>`;
-    }).join('');
+    return '<div style="padding:8px 10px;background:var(--sf2);border:1.5px solid ' + (totalAbn ? '#fca5a580' : 'var(--bd)') + ';border-radius:8px;margin-bottom:6px">'
+      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid var(--bd)">'
+      + '<span style="font-size:.82rem;font-weight:700">' + mc.name + '</span>'
+      + '<span style="font-size:.6rem;color:var(--mu)">' + totalItems + '항목</span>'
+      + (totalAbn ? '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:#fee2e2;color:#dc2626;font-weight:600">⚠ 이상 ' + totalAbn + '</span>' : '<span style="font-size:.55rem;color:#10b981">✅ 정상</span>')
+      + '</div>'
+      + subcatHtml + '</div>';
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2617,6 +2666,30 @@ level: danger/warning/caution/info. JSON만.`;
   }
 }
 
+let _drugAlertExpanded = false;
+let _drugAlertSearch = '';
+
+function _filterDrugAlerts(q) {
+  _drugAlertSearch = q.toLowerCase().trim();
+  const body = document.getElementById('drug-alert-body');
+  if (!body) return;
+  body.querySelectorAll('[data-drug-alert]').forEach(function(el) {
+    var drugs = el.dataset.drugAlert.toLowerCase();
+    if (!_drugAlertSearch) { el.style.display = ''; return; }
+    var terms = _drugAlertSearch.split(/[+,\s]+/).filter(Boolean);
+    var match = terms.every(function(t) { return drugs.includes(t); });
+    el.style.display = match ? '' : 'none';
+  });
+}
+
+function toggleDrugAlerts() {
+  _drugAlertExpanded = !_drugAlertExpanded;
+  var body = document.getElementById('drug-alert-body');
+  var arrow = document.getElementById('drug-alert-arrow');
+  if (body) body.style.display = _drugAlertExpanded ? 'block' : 'none';
+  if (arrow) arrow.textContent = _drugAlertExpanded ? '▾' : '▸';
+}
+
 function renderDrugAlerts() {
   const dm = DM();
   const alerts = dm?.settings?.lastDrugAlerts;
@@ -2627,24 +2700,39 @@ function renderDrugAlerts() {
   const levelColors = { danger:'#dc2626', warning:'#f59e0b', caution:'#3b82f6', info:'#6b7280' };
   const typeLabels = { hepato:'🫁 간독성', nephro:'🫘 신독성', ddi:'💊 상호작용', lactose:'🥛 유당' };
 
+  const dangerCount = alerts.alerts.filter(a => a.level === 'danger').length;
+  const warnCount = alerts.alerts.filter(a => a.level === 'warning').length;
+  const summaryBadge = (dangerCount ? `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:#fee2e2;color:#dc2626">🚨${dangerCount}</span>` : '')
+    + (warnCount ? `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:#fef3c7;color:#92400e">⚠️${warnCount}</span>` : '');
+
   const html = alerts.alerts.map(a => {
     const color = levelColors[a.level] || '#f59e0b';
     const drug = a.drugs ? a.drugs.join('+') : (a.drug || '');
-    return `<div style="padding:5px 8px;background:${color}08;border-left:3px solid ${color};border-radius:0 6px 6px 0;margin-bottom:2px;font-size:.68rem">
+    return `<div data-drug-alert="${esc(drug)}" style="padding:5px 8px;background:${color}08;border-left:3px solid ${color};border-radius:0 6px 6px 0;margin-bottom:2px;font-size:.68rem">
       <span style="font-weight:600;color:${color}">${levelIcons[a.level]||'⚠️'} ${typeLabels[a.type]||a.type}</span>
-      <span style="margin-left:4px">${esc(drug)}</span>
+      <span style="margin-left:4px;font-weight:500">${esc(drug)}</span>
       <div style="color:var(--mu);margin-top:1px">${esc(a.msg)}</div>
     </div>`;
   }).join('');
 
   return `<div style="margin-bottom:8px;padding:8px;background:var(--sf2);border:1.5px solid #f59e0b30;border-radius:8px">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+    <div onclick="toggleDrugAlerts()" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+      <span id="drug-alert-arrow" style="font-size:.7rem;color:var(--mu)">${_drugAlertExpanded?'▾':'▸'}</span>
       <span style="font-size:.78rem;font-weight:700;color:#f59e0b">💊 약물 안전 경고</span>
+      ${summaryBadge}
+      <span style="font-size:.58rem;color:var(--mu)">${alerts.alerts.length}건</span>
       <span style="font-size:.55rem;color:var(--mu);margin-left:auto">${alerts.checkedAt||''}</span>
-      <button onclick="_refreshDrugAlerts()" style="font-size:.58rem;padding:2px 6px;border:1px solid var(--bd);border-radius:4px;background:none;cursor:pointer;color:var(--ac);font-family:var(--font)">🔄</button>
+      <button onclick="event.stopPropagation();_refreshDrugAlerts()" style="font-size:.58rem;padding:2px 6px;border:1px solid var(--bd);border-radius:4px;background:none;cursor:pointer;color:var(--ac);font-family:var(--font)">🔄</button>
     </div>
-    ${html}
-    ${alerts.summary ? `<div style="font-size:.62rem;color:var(--mu);margin-top:3px;padding-top:3px;border-top:1px solid var(--bd)">${esc(alerts.summary)}</div>` : ''}
+    <div id="drug-alert-body" style="display:${_drugAlertExpanded?'block':'none'};margin-top:6px">
+      <div style="margin-bottom:6px;display:flex;gap:4px">
+        <input type="text" placeholder="🔍 약 이름 검색 (예: 리튬, 부프로피온+아토목세틴)" oninput="_filterDrugAlerts(this.value)"
+          style="flex:1;padding:4px 8px;font-size:.68rem;border:1px solid var(--bd);border-radius:6px;background:var(--sf);color:var(--ink);font-family:var(--font)">
+      </div>
+      <div style="font-size:.58rem;color:var(--mu2);margin-bottom:4px">약 하나만 입력하면 관련 경고 전체, 두 개를 +로 연결하면 해당 조합만 필터</div>
+      ${html}
+      ${alerts.summary ? `<div style="font-size:.62rem;color:var(--mu);margin-top:3px;padding-top:3px;border-top:1px solid var(--bd)">${esc(alerts.summary)}</div>` : ''}
+    </div>
   </div>`;
 }
 

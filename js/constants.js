@@ -339,6 +339,7 @@ const DOMAINS = {
       treatments: [],
       nrsLabel: '컨디션 (0=최악 10=최상)',
       customFields: true,
+      journalCategories: ['🏥 병원비교','📋 검사기록','❤️ 시도/관계','💊 약물변경','📊 컨디션','|','🍼 출산준비','💊 영양제','기타'],
     },
   },
 };
