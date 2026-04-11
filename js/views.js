@@ -1719,27 +1719,98 @@ function renderMedComplianceCalendar(logs) {
 function _showMcDetail(date){
   const el=document.getElementById('mc-cal-detail');if(!el)return;
   const data=window._mcCalData?.[date];
-  let html=`<div style="border-top:1px solid var(--bd);margin-top:8px;padding-top:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-    <span style="font-size:.78rem;font-weight:600">${date}</span>`;
-  if(data?.hasRecord){
-    const rate=data.total>0?Math.round(data.taken/data.total*100):0;
-    html+=`<span style="font-size:.68rem;font-weight:600;color:${rate>=90?'#10b981':rate>=50?'#f59e0b':'#ef4444'}">${rate}%</span>`;
-  }else{html+=`<span style="font-size:.68rem;color:var(--mu2)">기록 없음</span>`;}
-  html+=`</div>`;
-  if(data?.meds&&Object.keys(data.meds).length){
-    html+=Object.entries(data.meds).map(([m,t])=>`<div style="font-size:.72rem;padding:1px 0 1px 8px">${t?'✅':'❌'} ${esc(m)}</div>`).join('');
-  }
-  if(data?.entries?.length){
-    data.entries.forEach(e=>{
-      const parts=[];
-      if(e.nrs>=0)parts.push('컨디션:'+e.nrs);
-      if(e.mood)parts.push(e.mood);
-      if(e.symptoms?.length)parts.push('증상:'+e.symptoms.join(','));
-      if(e.memo)parts.push(esc(e.memo.slice(0,40)));
-      if(parts.length)html+=`<div style="font-size:.65rem;color:var(--mu);padding:2px 0 2px 8px;border-top:1px dotted var(--bd);margin-top:3px">${e.datetime?.slice(11,16)||''} ${parts.join(' · ')}</div>`;
+  const ds=D(); const logData=ds.logData||[];
+  const dayLogs=logData.filter(l=>l.datetime?.slice(0,10)===date);
+  const entry=dayLogs[0];
+
+  // 약물 체크 (bung/ 데일리체크와 동일)
+  const condMeds=typeof getConditionMeds==='function'?getConditionMeds(date):[];
+  const existMc=entry?.medCheck||{};
+  const _isProcFn=typeof _isProcedure==='function'?_isProcedure:(m=>false);
+
+  let medsHtml='';
+  condMeds.forEach(g=>{
+    const daily=g.meds.filter(m=>!m.includes('(PRN)')&&!_isProcFn(m));
+    const prn=g.meds.filter(m=>m.includes('(PRN)')&&!_isProcFn(m));
+    if(!daily.length&&!prn.length)return;
+    medsHtml+=`<div style="font-size:.62rem;font-weight:600;color:var(--mu);margin-top:4px">${esc(g.condition||'')}</div>`;
+    daily.forEach(m=>{
+      const checked=existMc[m]||false;
+      medsHtml+=`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer" onclick="this.querySelector('input').checked=!this.querySelector('input').checked">
+        <input type="checkbox" data-mc-med="${esc(m)}" ${checked?'checked':''} style="accent-color:var(--ac)">
+        <span style="font-size:.72rem">${esc(m)}</span>
+      </div>`;
     });
+    prn.forEach(m=>{
+      const checked=existMc[m]||false;
+      medsHtml+=`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer" onclick="this.querySelector('input').checked=!this.querySelector('input').checked">
+        <input type="checkbox" data-mc-med="${esc(m)}" ${checked?'checked':''} style="accent-color:#f59e0b">
+        <span style="font-size:.72rem">${esc(m)}</span><span style="font-size:.55rem;color:#f59e0b;padding:1px 4px;border:1px dashed #f59e0b;border-radius:3px">PRN</span>
+      </div>`;
+    });
+  });
+
+  // 증상 (도메인 설정에서 가져오기)
+  const dc=DC();
+  const domSymptoms=dc?.logConfig?.symptoms||[];
+  const existSyms=entry?.symptoms||[];
+  const symsHtml=domSymptoms.length?`<div style="margin-top:6px"><div style="font-size:.62rem;font-weight:600;color:var(--mu);margin-bottom:3px">증상</div>
+    <div style="display:flex;flex-wrap:wrap;gap:3px">${domSymptoms.map(s=>{
+      const sel=existSyms.includes(s);
+      return `<span data-mc-sym="${esc(s)}" onclick="this.classList.toggle('sel')" class="log-tag${sel?' sel':''}" style="cursor:pointer;font-size:.62rem;${sel?'background:#fee2e2;color:#dc2626':'background:var(--sf);color:var(--mu)'}">${esc(s)}</span>`;
+    }).join('')}</div></div>`:'';
+
+  // NRS
+  const nrs=entry?.nrs??-1;
+  const nrsLabel=typeof _scoreLabel==='function'?_scoreLabel():'컨디션';
+
+  // 메모
+  const memo=entry?.memo||'';
+
+  let html=`<div style="border-top:1px solid var(--bd);margin-top:8px;padding-top:8px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:.78rem;font-weight:600">${date}</span>
+      ${data?.hasRecord?`<span style="font-size:.68rem;font-weight:600;color:${(data.total>0?Math.round(data.taken/data.total*100):0)>=90?'#10b981':'#f59e0b'}">${data.total>0?Math.round(data.taken/data.total*100):0}%</span>`:'<span style="font-size:.68rem;color:var(--mu2)">기록 없음</span>'}
+      <button onclick="_saveMcDetail('${date}')" style="margin-left:auto;font-size:.65rem;padding:3px 10px;border:1.5px solid var(--ac);border-radius:6px;background:var(--ac);color:#fff;cursor:pointer;font-family:var(--font);font-weight:600">💾 저장</button>
+    </div>
+    ${medsHtml}
+    ${symsHtml}
+    <div style="margin-top:6px"><div style="font-size:.62rem;font-weight:600;color:var(--mu);margin-bottom:2px">${nrsLabel} (0-10)</div>
+      <input type="range" id="mc-nrs" min="0" max="10" value="${nrs>=0?nrs:5}" style="width:100%">
+      <div style="display:flex;justify-content:space-between;font-size:.55rem;color:var(--mu)"><span>0</span><span id="mc-nrs-val">${nrs>=0?nrs:'-'}</span><span>10</span></div>
+    </div>
+    <div style="margin-top:4px"><textarea id="mc-memo" placeholder="메모..." style="width:100%;height:40px;border:1px solid var(--bd);border-radius:6px;padding:6px;font-size:.68rem;font-family:var(--font);resize:vertical;color:var(--ink);background:var(--sf2)">${esc(memo)}</textarea></div>
+  </div>`;
+  el.innerHTML=html;
+  const slider=document.getElementById('mc-nrs');
+  if(slider)slider.oninput=function(){document.getElementById('mc-nrs-val').textContent=this.value;};
+}
+
+async function _saveMcDetail(date){
+  const ds=D();if(!ds.logData)return;
+  let entry=ds.logData.find(l=>l.datetime?.slice(0,10)===date);
+  if(!entry){
+    entry={datetime:date+'T'+kstTimeStr(),nrs:-1,meds:[],symptoms:[],medCheck:{},memo:''};
+    ds.logData.push(entry);
   }
-  html+=`</div>`;el.innerHTML=html;
+  // medCheck
+  const mc={};
+  document.querySelectorAll('[data-mc-med]').forEach(cb=>{mc[cb.dataset.mcMed]=cb.checked;});
+  entry.medCheck=mc;
+  // 증상
+  const syms=[];
+  document.querySelectorAll('[data-mc-sym].sel').forEach(el=>{syms.push(el.dataset.mcSym);});
+  entry.symptoms=syms;
+  // NRS
+  const nrs=parseInt(document.getElementById('mc-nrs')?.value);
+  entry.nrs=isNaN(nrs)?-1:nrs;
+  // 메모
+  entry.memo=document.getElementById('mc-memo')?.value||'';
+  // meds 동기화
+  entry.meds=Object.entries(mc).filter(([,v])=>v).map(([k])=>k);
+
+  try{await saveLogData();showToast('✅ '+date+' 저장됨');renderView('stats');}
+  catch(e){showToast('❌ 저장 실패');}
 }
 
 async function _syncMedsToMedCheck(){
