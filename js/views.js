@@ -3187,7 +3187,7 @@ function exportMonthlyPDF() {
     <div class="stat-box"><div class="stat-val">${last30.length}</div><div class="stat-label">총 기록 수</div></div>
     <div class="stat-box"><div class="stat-val">${avgNrs}</div><div class="stat-label">평균 ${_scoreLabel()}</div></div>
     <div class="stat-box"><div class="stat-val">${maxNrs}</div><div class="stat-label">최대 ${_scoreLabel()}</div></div>
-    <div class="stat-box"><div class="stat-val">${attackDays}일</div><div class="stat-label">발작일(${_scoreLabel()}4+)</div></div>
+    <div class="stat-box"><div class="stat-val">${attackDays}일</div><div class="stat-label">${DC()?.logConfig?.moodMode?'저조일':_scoreLabel()+'4+'}</div></div>
     <div class="stat-box"><div class="stat-val">${medDays}일</div><div class="stat-label">투약일</div></div>
   </div>`;
 
