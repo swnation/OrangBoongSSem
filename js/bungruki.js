@@ -3596,13 +3596,42 @@ function renderHealthDailyCheck() {
       <span style="font-size:.62rem;color:var(--mu);margin-left:auto">${takenCount}/${totalCount} (${pct}%)</span>
     </div>
     ${dateNav}
-    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">💊 영양제</div>
+    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">💊 영양제
+      <button onclick="_addHealthSuppl()" style="font-size:.6rem;padding:1px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font);margin-left:6px">+ 추가</button>
+    </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px;margin-bottom:8px">${supplHtml}</div>
     <div style="margin-top:4px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:${pct}%;background:${pct>=80?'#16a34a':pct>=50?'#f59e0b':'#ef4444'};border-radius:2px"></div></div>
     <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">🏃 운동</div>
     <div style="display:flex;gap:4px;margin-bottom:4px">${exHtml}</div>
     ${alcoholHtml}
   </div>`;
+}
+
+function _addHealthSuppl() {
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  showConfirmModal('💊 영양제 추가',
+    `<div style="font-size:.72rem">
+      <label>영양제 이름<br><input type="text" id="health-suppl-name" class="dx-form-input" style="width:100%" placeholder="예: 오메가3, 유산균, 비타민C"></label>
+    </div>`,
+    [{
+      label: '추가', primary: true,
+      action: async () => {
+        const name = document.getElementById('health-suppl-name')?.value?.trim();
+        if (!name) { showToast('이름을 입력하세요'); return; }
+        const key = name.replace(/\s+/g, '_').toLowerCase();
+        const brkDs = S.domainState['bungruki'];
+        if (!brkDs?.master) { showToast('⚠️ 붕룩이 데이터 없음'); return; }
+        const m = brkDs.master;
+        if (!m.customSuppl) m.customSuppl = {};
+        if (!m.customSuppl[who]) m.customSuppl[who] = [];
+        if (m.customSuppl[who].find(c => c.key === key)) { showToast('이미 존재하는 항목'); return; }
+        m.customSuppl[who].push({ key, label: name });
+        await saveBrkMaster();
+        closeConfirmModal();
+        showToast('✅ ' + name + ' 추가됨');
+        renderView('meds');
+      }
+    }, { label: '취소', action: closeConfirmModal }]);
 }
 
 function _prevDay(d){const dt=new Date(d+'T00:00:00');dt.setDate(dt.getDate()-1);return _localDateStr(dt);}
