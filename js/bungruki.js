@@ -1235,70 +1235,10 @@ async function brkToggleCheck(key) {
 
 // 붕룩이 체크 → 건강관리 도메인 로그 동기화
 function syncBrkToHealth(date, who) {
-  const healthDomain = who==='orangi' ? 'orangi-health' : 'bung-health';
-  const ds = S.domainState[healthDomain];
-  if(!ds?.master) return; // 건강관리 도메인 미로드 시 스킵
-  const m = getBrkMaster(); if(!m) return;
-  const dayData = m.dailyChecks?.[date]?.[who];
-  if(!dayData) return;
-  // 영양제 목록 수집
-  const supplItems = who==='orangi'
-    ? [{key:'folicAcid',label:'엽산'},{key:'iron',label:'철분'},{key:'vitaminD',label:'비타민D'},{key:'multivitamin',label:'멀티비타민'},{key:'magnesium',label:'마그네슘'}]
-    : [{key:'arginine',label:'아르기닌'},{key:'coq10',label:'CoQ10'},{key:'silymarin',label:'실리마린'},{key:'multivitamin',label:'멀티비타민'}];
-  // 사용자 추가 영양제도 동기화에 포함
-  var syncCustomKey='om_brk_suppl_'+who;
-  var syncCustoms=JSON.parse(localStorage.getItem(syncCustomKey)||'[]');
-  // 클라우드 커스텀도 포함
-  if(m.customSuppl?.[who==='orangi'?'orangi':'bung']) {
-    m.customSuppl[who==='orangi'?'orangi':'bung'].forEach(function(c){
-      if(!syncCustoms.find(x=>x.key===c.key)) syncCustoms.push(c);
-    });
-  }
-  syncCustoms.forEach(function(c){supplItems.push({key:c.key,label:c.label});});
-  const takenSuppl = supplItems.filter(it=>dayData[it.key]).map(it=>it.label);
-  const notTakenSuppl = supplItems.filter(it=>!dayData[it.key]).map(it=>it.label);
-  const exerciseLabel = {cardio:'유산소',strength:'근력',stretch:'스트레칭'};
-  const exercise = dayData.exercise || '';
-  const alcohol = dayData.alcohol || false;
-  const memo = dayData.memo || '';
-  // 건강관리 로그에 동기화 기록 찾기/생성
-  if(!ds.logData) ds.logData=[];
-  const syncId = 'brk-sync-'+date;
-  let existing = ds.logData.find(l=>l._syncId===syncId);
-  const parts = [];
-  if(takenSuppl.length) parts.push('💊 영양제: '+takenSuppl.join(', '));
-  if(notTakenSuppl.length) parts.push('⬜ 미복용: '+notTakenSuppl.join(', '));
-  if(exercise) parts.push('🏃 운동: '+(exerciseLabel[exercise]||exercise));
-  if(who==='bung' && alcohol) parts.push('🍺 음주');
-  if(memo) parts.push('📝 '+memo);
-  if(!parts.length) {
-    // 모두 해제됨 → 동기화 기록 제거
-    if(existing) { ds.logData=ds.logData.filter(l=>l._syncId!==syncId); }
-    return;
-  }
-  const categories = [];
-  if(takenSuppl.length) categories.push('투약');
-  if(exercise) categories.push('운동');
-  const entry = {
-    _syncId: syncId,
-    datetime: date+'T00:00',
-    categories: categories,
-    memo: '[🍼 임신준비 연동] '+parts.join(' | '),
-    who: who==='orangi'?'오랑이':'붕쌤',
-    // 구조화된 데이터: 건강관리 도메인에서 직접 참조 가능
-    _brkSync: {
-      supplements: takenSuppl,
-      exercise: exercise || null,
-      alcohol: who==='bung' ? alcohol : undefined,
-    },
-  };
-  if(existing) {
-    Object.assign(existing, entry);
-  } else {
-    entry.id = Date.now();
-    ds.logData.push(entry);
-    ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-  }
+  // 건강관리 캘린더 상세에서 직접 편집 가능하므로
+  // logData에 별도 동기화 엔트리를 더 이상 생성하지 않음.
+  // 영양제/운동/체중 데이터는 붕룩이 dailyChecks에만 저장하고
+  // 건강관리에서 직접 참조 (_renderMcSupplExercise, renderHealthDailyCheck)
 }
 
 async function brkSetMeals(n) {

@@ -2342,7 +2342,7 @@ function _renderWeeklyNrsChart(logs, dates) {
     var r=hasTx?4:2.5;
     var stroke=hasTx?'stroke="#1e40af" stroke-width="2"':'stroke="var(--sf)" stroke-width="1"';
     return '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+r+'" fill="'+c+'" '+stroke+'>'
-      +'<title>'+p.time+' NRS '+p.nrs+(p.meds.length?' | '+p.meds.join(', '):'')+(p.tx&&p.tx.length?' | '+p.tx.join(', '):'')+'</title></circle>';
+      +'<title>'+p.time+' '+_scoreLabel()+' '+p.nrs+(p.meds.length?' | '+p.meds.join(', '):'')+(p.tx&&p.tx.length?' | '+p.tx.join(', '):'')+'</title></circle>';
   }).join('');
   // Med/tx markers
   var markers=pts.map(function(p){
@@ -3185,8 +3185,8 @@ function exportMonthlyPDF() {
   // Summary stats
   html+=`<div class="stat-grid">
     <div class="stat-box"><div class="stat-val">${last30.length}</div><div class="stat-label">총 기록 수</div></div>
-    <div class="stat-box"><div class="stat-val">${avgNrs}</div><div class="stat-label">평균 _scoreLabel()+'</div>'</div>
-    <div class="stat-box"><div class="stat-val">${maxNrs}</div><div class="stat-label">최대 _scoreLabel()+'</div>'</div>
+    <div class="stat-box"><div class="stat-val">${avgNrs}</div><div class="stat-label">평균 ${_scoreLabel()}</div></div>
+    <div class="stat-box"><div class="stat-val">${maxNrs}</div><div class="stat-label">최대 ${_scoreLabel()}</div></div>
     <div class="stat-box"><div class="stat-val">${attackDays}일</div><div class="stat-label">발작일(${_scoreLabel()}4+)</div></div>
     <div class="stat-box"><div class="stat-val">${medDays}일</div><div class="stat-label">투약일</div></div>
   </div>`;
