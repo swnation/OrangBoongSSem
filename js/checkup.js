@@ -1214,26 +1214,87 @@ ${who === '오랑이' ? '6. **임신 준비 관점** — 현재 결과가 임신
 
 async function importCheckupFromDrive() {
   if (!S.token) { showToast('⚠️ 로그인 필요'); return; }
-  showToast('☁️ Drive 파일 검색 중...', 5000);
+  _browseDriveFolder('root');
+}
 
-  // 최근 수정된 이미지/PDF/문서 파일 검색
+// Drive 폴더 탐색 + 파일 선택
+async function _browseDriveFolder(folderId) {
+  showToast('☁️ Drive 탐색 중...', 3000);
   try {
-    const query = "(mimeType contains 'image/' or mimeType='application/pdf' or mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='text/plain') and trashed=false";
+    // 폴더 내 파일 + 하위 폴더 검색
+    const folderQ = folderId === 'root'
+      ? "'root' in parents and trashed=false"
+      : "'" + folderId + "' in parents and trashed=false";
+    const query = folderQ + " and (mimeType='application/vnd.google-apps.folder' or mimeType contains 'image/' or mimeType='application/pdf' or mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='text/plain')";
     const resp = await fetchWithRetry(
       'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(query) +
-      '&orderBy=modifiedTime desc&pageSize=20&fields=files(id,name,mimeType,modifiedTime,thumbnailLink,size)',
+      '&orderBy=folder,modifiedTime desc&pageSize=50&fields=files(id,name,mimeType,modifiedTime,size)',
       { headers: { Authorization: 'Bearer ' + S.token } });
     const data = await resp.json();
     if (data.error) throw new Error(data.error.message);
     const files = data.files || [];
-    if (!files.length) { showToast('📭 Drive에 검사 파일이 없습니다'); return; }
 
-    // 파일 선택 모달
-    const fileList = files.map((f, i) => {
+    // 폴더와 파일 분리
+    const folders = files.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
+    const docs = files.filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+
+    const folderList = folders.map(f =>
+      `<div onclick="_browseDriveFolder('${f.id}')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;background:var(--sf);margin-bottom:3px">
+        <span style="font-size:1.1rem">📁</span>
+        <span style="font-size:.75rem;font-weight:500">${esc(f.name)}</span>
+        <span style="font-size:.6rem;color:var(--mu);margin-left:auto">▶</span>
+      </div>`).join('');
+
+    const fileList = docs.map((f, i) => {
       const icon = f.mimeType.includes('image') ? '🖼' : f.mimeType.includes('pdf') ? '📕' : f.mimeType.includes('word') ? '📘' : '📄';
       const size = f.size ? Math.round(f.size / 1024) + 'KB' : '';
       const date = f.modifiedTime ? f.modifiedTime.slice(0, 10) : '';
-      return `<div onclick="_selectDriveFile(${i})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;background:var(--sf2);margin-bottom:4px" data-drive-idx="${i}">
+      return `<div onclick="_selectDriveFile(${i})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;background:var(--sf2);margin-bottom:3px" data-drive-idx="${i}">
+        <span style="font-size:1.1rem">${icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.72rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div>
+          <div style="font-size:.58rem;color:var(--mu)">${date} · ${size}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    window._driveCheckupFiles = docs;
+    const backBtn = folderId !== 'root'
+      ? `<button onclick="_browseDriveFolder('root')" style="font-size:.68rem;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf);cursor:pointer;color:var(--ink);font-family:var(--font);margin-bottom:6px">⬆ 루트로</button>` : '';
+    const recentBtn = `<button onclick="_browseRecentDriveFiles()" style="font-size:.68rem;padding:4px 10px;border:1px solid var(--ac);border-radius:6px;background:var(--sf);cursor:pointer;color:var(--ac);font-family:var(--font);margin-bottom:6px;margin-left:4px">🕐 최근 파일</button>`;
+
+    showConfirmModal('☁️ Google Drive에서 파일 선택',
+      `<div style="display:flex;gap:4px;margin-bottom:6px">${backBtn}${recentBtn}</div>
+      <div style="max-height:350px;overflow-y:auto">
+        ${folderList}
+        ${fileList}
+        ${!folders.length && !docs.length ? '<div style="text-align:center;padding:20px;font-size:.72rem;color:var(--mu)">이 폴더에 파일이 없습니다</div>' : ''}
+      </div>`,
+      [{ label: '취소', action: closeConfirmModal }]);
+  } catch (e) {
+    showToast('❌ Drive 탐색 실패: ' + e.message, 4000);
+  }
+}
+
+// 최근 파일 보기 (기존 동작)
+async function _browseRecentDriveFiles() {
+  showToast('🕐 최근 파일 검색 중...', 3000);
+  try {
+    const query = "(mimeType contains 'image/' or mimeType='application/pdf' or mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='text/plain') and trashed=false";
+    const resp = await fetchWithRetry(
+      'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(query) +
+      '&orderBy=modifiedTime desc&pageSize=20&fields=files(id,name,mimeType,modifiedTime,size)',
+      { headers: { Authorization: 'Bearer ' + S.token } });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    const files = data.files || [];
+    if (!files.length) { showToast('📭 최근 파일 없음'); return; }
+
+    const fileList = files.map((f, i) => {
+      const icon = f.mimeType.includes('image') ? '🖼' : f.mimeType.includes('pdf') ? '📕' : '📄';
+      const size = f.size ? Math.round(f.size / 1024) + 'KB' : '';
+      const date = f.modifiedTime ? f.modifiedTime.slice(0, 10) : '';
+      return `<div onclick="_selectDriveFile(${i})" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;background:var(--sf2);margin-bottom:3px">
         <span style="font-size:1.1rem">${icon}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:.72rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</div>
@@ -1243,12 +1304,13 @@ async function importCheckupFromDrive() {
     }).join('');
 
     window._driveCheckupFiles = files;
-    showConfirmModal('☁️ Google Drive에서 파일 선택',
-      `<div style="max-height:350px;overflow-y:auto">${fileList}</div>
-      <div style="font-size:.58rem;color:var(--mu2);margin-top:6px">최근 수정된 이미지/PDF/문서 20개 표시</div>`,
+    const backBtn = `<button onclick="_browseDriveFolder('root')" style="font-size:.68rem;padding:4px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf);cursor:pointer;color:var(--ink);font-family:var(--font);margin-bottom:6px">📁 폴더 탐색</button>`;
+
+    showConfirmModal('🕐 최근 수정된 파일',
+      `${backBtn}<div style="max-height:350px;overflow-y:auto">${fileList}</div>`,
       [{ label: '취소', action: closeConfirmModal }]);
   } catch (e) {
-    showToast('❌ Drive 검색 실패: ' + e.message, 4000);
+    showToast('❌ 검색 실패: ' + e.message, 4000);
   }
 }
 
