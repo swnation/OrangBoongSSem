@@ -3630,6 +3630,11 @@ function renderHealthDailyCheck() {
     </div>
     <div style="display:flex;gap:4px;margin-bottom:4px">${exHtml}</div>
     ${alcoholHtml}
+    <div style="margin-top:6px"><span style="font-size:.68rem;font-weight:600;color:var(--mu)">⚖️ 체중</span>
+      <input type="number" step="0.1" placeholder="kg" value="${dayData.weight||''}" onchange="_setHealthWeight(this.value)"
+        style="width:60px;margin-left:8px;padding:4px 6px;font-size:.72rem;border:1px solid var(--bd);border-radius:6px;text-align:center;font-family:var(--mono);color:var(--ink);background:var(--sf2)">
+      <span style="font-size:.6rem;color:var(--mu2)">kg</span>
+    </div>
   </div>`;
 }
 
@@ -3715,6 +3720,16 @@ async function _setHealthExDuration(type, val) {
   await saveBrkMaster();
 }
 
+async function _setHealthWeight(val) {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const date = _healthDailyDate || kstToday();
+  const m = brkDs.master;
+  if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if(!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
+  m.dailyChecks[date][who].weight = val ? parseFloat(val) : null;
+  await saveBrkMaster();
+}
 async function _toggleHealthAlcohol() {
   const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
   const who = 'bung';

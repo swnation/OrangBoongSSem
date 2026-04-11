@@ -1942,6 +1942,9 @@ async function _analyzeCheckupConsensus() {
 // 분석 결과 리뷰 → 표준화 → 저장
 function _showCheckupAnalysisResults(allResults) {
   const who = DC().user || '오랑이';
+  // 건강관리 도메인: AI의 who 판정을 무시하고 도메인 유저로 강제 (자료 섞임 방지)
+  const isHealthDomain = S.currentDomain?.endsWith('-health');
+  if (isHealthDomain) allResults.forEach(r => { if (!r.error) r.who = who; });
   const resultsHtml = allResults.map((r, i) => {
     if (r.error) return `<div style="padding:6px;background:#fef2f2;border-radius:6px;margin-bottom:6px;font-size:.72rem">사진 ${i + 1}: ❌ ${esc(r.error)}</div>`;
     // 표준화: AI 정규화 결과 우선, 없으면 기존 사전 기반
