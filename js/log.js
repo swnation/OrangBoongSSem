@@ -2291,29 +2291,38 @@ async function _saveOtherDomainData(dateStr, timeStr) {
   var otherDomains = Object.entries(DOMAINS).filter(function(e) {
     return e[1].user === currentUser && e[0] !== S.currentDomain && e[0] !== 'bungruki';
   });
-  var saved = 0;
+  // 저장 대상 먼저 수집
+  var toSave = [];
   for (var i = 0; i < otherDomains.length; i++) {
     var domId = otherDomains[i][0], dom = otherDomains[i][1];
     var data = _collectUfDomainData(domId);
     if (!data) continue;
     var ds = S.domainState[domId];
     if (!ds || !ds.folderId) continue;
-    var ym = dateStr.slice(0, 7);
-    var logFn = dom.logPrefix + '_' + ym + '.json';
-    try {
-      if (!ds.logData || ds.logMonth !== ym) {
-        var files = await driveSearch(logFn, ds.folderId);
-        if (files.length > 0) { ds.logFileId = files[0].id; var d = await driveRead(ds.logFileId); ds.logData = Array.isArray(d) ? d : []; }
-        else { ds.logData = []; ds.logFileId = null; }
-        ds.logMonth = ym;
-      }
-      var entry = Object.assign({ id: Date.now() + i + 1, datetime: dateStr + 'T' + timeStr }, data);
-      ds.logData.push(entry);
-      ds.logData.sort(function(a, b) { return a.datetime.localeCompare(b.datetime); });
-      if (ds.logFileId) await driveUpdate(ds.logFileId, ds.logData);
-      else ds.logFileId = await driveCreate(logFn, ds.logData, ds.folderId);
-      saved++;
-    } catch (e) { console.warn('Other domain save failed:', domId, e); }
+    toSave.push({ domId: domId, dom: dom, data: data, ds: ds });
   }
-  if (saved) showToast('📋 다른 도메인 ' + saved + '건도 저장됨');
+  if (!toSave.length) return;
+  var saved = 0, failed = 0;
+  for (var j = 0; j < toSave.length; j++) {
+    var t = toSave[j];
+    var ym = dateStr.slice(0, 7);
+    var logFn = t.dom.logPrefix + '_' + ym + '.json';
+    try {
+      if (!t.ds.logData || t.ds.logMonth !== ym) {
+        var files = await driveSearch(logFn, t.ds.folderId);
+        if (files.length > 0) { t.ds.logFileId = files[0].id; var d = await driveRead(t.ds.logFileId); t.ds.logData = Array.isArray(d) ? d : []; }
+        else { t.ds.logData = []; t.ds.logFileId = null; }
+        t.ds.logMonth = ym;
+      }
+      var entry = Object.assign({ id: Date.now() + j + 1, datetime: dateStr + 'T' + timeStr }, t.data);
+      t.ds.logData.push(entry);
+      t.ds.logData.sort(function(a, b) { return a.datetime.localeCompare(b.datetime); });
+      if (t.ds.logFileId) await driveUpdate(t.ds.logFileId, t.ds.logData);
+      else t.ds.logFileId = await driveCreate(logFn, t.ds.logData, t.ds.folderId);
+      saved++;
+    } catch (e) { console.warn('Other domain save failed:', t.domId, e); failed++; }
+  }
+  if (saved && !failed) showToast('📋 다른 도메인 ' + saved + '건도 저장됨');
+  else if (saved && failed) showToast('⚠️ 다른 도메인 ' + saved + '건 저장, ' + failed + '건 실패', 4000);
+  else if (failed) showToast('❌ 다른 도메인 저장 실패 ' + failed + '건', 4000);
 }

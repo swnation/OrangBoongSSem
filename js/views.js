@@ -3818,7 +3818,7 @@ function _renderHealthDashboardStats(logs, last30, dc, lc) {
   // ── 영양제 순응도 ──
   var oKeys = typeof BRK_SUPPL_ORANGI !== 'undefined' ? BRK_SUPPL_ORANGI : [];
   var bKeys = typeof BRK_SUPPL_BUNG !== 'undefined' ? BRK_SUPPL_BUNG : [];
-  var supplKeys = who === 'orangi' ? oKeys : bKeys;
+  var supplKeys = who === 'orangi' ? [...oKeys] : [...bKeys];
   var supplLabels = { folicAcid: '엽산', iron: '철분', vitaminD: '비타민D', multivitamin: '멀티비타민', magnesium: '마그네슘', arginine: '아르기닌', coq10: 'CoQ10', silymarin: '실리마린' };
   if (m.customSuppl && m.customSuppl[who]) m.customSuppl[who].forEach(function(c) { if (supplKeys.indexOf(c.key) < 0) { supplKeys.push(c.key); supplLabels[c.key] = c.label; } });
   if (supplKeys.length && dcData.length) {
