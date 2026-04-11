@@ -3548,36 +3548,73 @@ function renderHealthDailyCheck() {
     </div>`;
   }).join('');
 
-  const exerciseTypes = [{v:'cardio',l:'유산소',c:'🏃'},{v:'strength',l:'근력',c:'🏋️'},{v:'stretch',l:'스트레칭',c:'🧘'}];
+  // ── 운동 기록 (직접 입력 + DB 자동매칭) ──
+  const _EX_DB = {
+    // 유산소
+    '걷기':{cat:'cardio',icon:'🚶',defaultInt:'light'},'산책':{cat:'cardio',icon:'🚶',defaultInt:'light'},
+    '조깅':{cat:'cardio',icon:'🏃',defaultInt:'moderate'},'달리기':{cat:'cardio',icon:'🏃',defaultInt:'intense'},
+    '러닝':{cat:'cardio',icon:'🏃',defaultInt:'moderate'},'자전거':{cat:'cardio',icon:'🚴',defaultInt:'moderate'},
+    '수영':{cat:'cardio',icon:'🏊',defaultInt:'moderate'},'줄넘기':{cat:'cardio',icon:'⏫',defaultInt:'intense'},
+    '등산':{cat:'cardio',icon:'⛰️',defaultInt:'intense'},'에어로빅':{cat:'cardio',icon:'💃',defaultInt:'moderate'},
+    '댄스':{cat:'cardio',icon:'💃',defaultInt:'moderate'},'계단':{cat:'cardio',icon:'🪜',defaultInt:'moderate'},
+    // 근력
+    '웨이트':{cat:'strength',icon:'🏋️',defaultInt:'intense'},'헬스':{cat:'strength',icon:'🏋️',defaultInt:'moderate'},
+    '스쿼트':{cat:'strength',icon:'🦵',defaultInt:'moderate'},'푸시업':{cat:'strength',icon:'💪',defaultInt:'moderate'},
+    '풀업':{cat:'strength',icon:'💪',defaultInt:'intense'},'플랭크':{cat:'strength',icon:'🧘',defaultInt:'moderate'},
+    '덤벨':{cat:'strength',icon:'🏋️',defaultInt:'moderate'},'바벨':{cat:'strength',icon:'🏋️',defaultInt:'intense'},
+    '필라테스':{cat:'strength',icon:'🧘',defaultInt:'moderate'},'크로스핏':{cat:'strength',icon:'🔥',defaultInt:'intense'},
+    // 유연성
+    '스트레칭':{cat:'stretch',icon:'🧘',defaultInt:'light'},'요가':{cat:'stretch',icon:'🧘',defaultInt:'moderate'},
+    '폼롤러':{cat:'stretch',icon:'🔄',defaultInt:'light'},'마사지건':{cat:'stretch',icon:'🔧',defaultInt:'light'},
+  };
+  // 커스텀 운동 (클라우드)
+  const customEx = m.settings?.customExercises || {};
+  const allExDb = { ..._EX_DB, ...customEx };
   const intensityLabels = {light:'약',moderate:'중',intense:'강'};
   const intensityColors = {light:'#10b981',moderate:'#f59e0b',intense:'#dc2626'};
-  // 하위호환: exercise(string) → exercises(array) 변환
-  let exercises = dayData.exercises || [];
-  if (!exercises.length && dayData.exercise) exercises = [{type:dayData.exercise, intensity:'moderate', duration:null}];
+  const catLabels = {cardio:'유산소',strength:'근력',stretch:'유연성'};
 
-  const exHtml = exerciseTypes.map(o => {
-    const entry = exercises.find(e => e.type === o.v);
-    const sel = !!entry;
-    return `<div style="flex:1;min-width:0">
-      <button onclick="_toggleHealthExType('${o.v}')" style="width:100%;padding:6px 2px;font-size:.72rem;border:1.5px solid ${sel?'var(--ac)':'var(--bd)'};border-radius:6px;background:${sel?'var(--ac)':'var(--sf2)'};color:${sel?'#fff':'var(--ink)'};cursor:pointer;font-family:var(--font)">${o.c} ${o.l}</button>
-      ${sel ? `<div style="display:flex;gap:2px;margin-top:3px">
-        ${['light','moderate','intense'].map(int => {
-          const isSel = entry.intensity === int;
-          return `<button onclick="_setHealthExIntensity('${o.v}','${int}')" style="flex:1;padding:2px;font-size:.55rem;border:1px solid ${isSel ? intensityColors[int] : 'var(--bd)'};border-radius:4px;background:${isSel ? intensityColors[int]+'20' : 'transparent'};color:${isSel ? intensityColors[int] : 'var(--mu)'};cursor:pointer;font-family:var(--font)">${intensityLabels[int]}</button>`;
-        }).join('')}
-      </div>
-      <input type="number" placeholder="분" value="${entry.duration||''}" onchange="_setHealthExDuration('${o.v}',this.value)"
-        style="width:100%;margin-top:2px;padding:2px 4px;font-size:.6rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:var(--mono);color:var(--ink);background:var(--sf2)">` : ''}
+  // 하위호환
+  let exercises = dayData.exercises || [];
+  if (!exercises.length && dayData.exercise) exercises = [{name:dayData.exercise, cat:'cardio', intensity:'moderate', duration:null}];
+
+  // 기록된 운동 목록
+  const exListHtml = exercises.map((e, i) => {
+    const db = allExDb[e.name];
+    const icon = db?.icon || (e.cat==='cardio'?'🏃':e.cat==='strength'?'🏋️':'🧘');
+    const catLabel = catLabels[e.cat||db?.cat] || '';
+    return `<div style="display:flex;align-items:center;gap:4px;padding:4px 6px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:3px">
+      <span style="font-size:.8rem">${icon}</span>
+      <span style="font-size:.72rem;font-weight:500;flex:1">${esc(e.name)}</span>
+      <span style="font-size:.55rem;color:var(--mu)">${catLabel}</span>
+      <div style="display:flex;gap:2px">${['light','moderate','intense'].map(int => {
+        const sel = e.intensity === int;
+        return `<button onclick="_setExIntensity(${i},'${int}')" style="padding:1px 5px;font-size:.52rem;border:1px solid ${sel?intensityColors[int]:'var(--bd)'};border-radius:3px;background:${sel?intensityColors[int]+'20':'transparent'};color:${sel?intensityColors[int]:'var(--mu)'};cursor:pointer;font-family:var(--font)">${intensityLabels[int]}</button>`;
+      }).join('')}</div>
+      <input type="number" placeholder="분" value="${e.duration||''}" onchange="_setExDuration(${i},this.value)"
+        style="width:35px;padding:2px;font-size:.6rem;border:1px solid var(--bd);border-radius:3px;text-align:center;font-family:var(--mono);color:var(--ink);background:var(--sf2)">
+      <button onclick="_removeExercise(${i})" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.6rem;padding:2px">✕</button>
     </div>`;
   }).join('');
 
   // 운동 요약
   const exSummary = exercises.length
-    ? exercises.map(e => {
-      const t = exerciseTypes.find(x => x.v === e.type);
-      return (t?t.c:'') + (intensityLabels[e.intensity]||'') + (e.duration ? ' ' + e.duration + '분' : '');
-    }).join(' · ')
+    ? exercises.map(e => { const db=allExDb[e.name]; return (db?.icon||'🏃')+esc(e.name)+'('+intensityLabels[e.intensity||'moderate']+(e.duration?' '+e.duration+'분':'')+')'; }).join(' · ')
     : '안함';
+
+  // 빠른 추가 버튼 (자주 쓰는 운동)
+  const recentEx = m.settings?.recentExercises || ['걷기','조깅','웨이트','스트레칭','요가'];
+  const quickBtns = recentEx.slice(0,6).map(name => {
+    const db = allExDb[name];
+    const already = exercises.some(e => e.name === name);
+    if (already) return '';
+    return `<button onclick="_addExercise('${esc(name)}')" style="padding:3px 8px;font-size:.62rem;border:1px solid var(--bd);border-radius:12px;background:var(--sf2);color:var(--ink);cursor:pointer;font-family:var(--font)">${db?.icon||'🏃'} ${esc(name)}</button>`;
+  }).filter(Boolean).join('');
+
+  const exHtml = `${exListHtml}
+    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:4px">${quickBtns}
+      <button onclick="_addExerciseCustom()" style="padding:3px 8px;font-size:.62rem;border:1px dashed var(--ac);border-radius:12px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 직접 입력</button>
+    </div>`;
 
   // 붕쌤 전용: 음주
   let alcoholHtml = '';
@@ -3681,8 +3718,25 @@ async function _toggleHealthSuppl(key) {
   renderView('meds');
 }
 
-async function _toggleHealthExType(type) {
-  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
+// 운동 DB
+const _EXERCISE_DB = {
+  '걷기':{cat:'cardio',icon:'🚶',defaultInt:'light'},'산책':{cat:'cardio',icon:'🚶',defaultInt:'light'},
+  '조깅':{cat:'cardio',icon:'🏃',defaultInt:'moderate'},'달리기':{cat:'cardio',icon:'🏃',defaultInt:'intense'},
+  '러닝':{cat:'cardio',icon:'🏃',defaultInt:'moderate'},'자전거':{cat:'cardio',icon:'🚴',defaultInt:'moderate'},
+  '수영':{cat:'cardio',icon:'🏊',defaultInt:'moderate'},'줄넘기':{cat:'cardio',icon:'⏫',defaultInt:'intense'},
+  '등산':{cat:'cardio',icon:'⛰️',defaultInt:'intense'},'에어로빅':{cat:'cardio',icon:'💃',defaultInt:'moderate'},
+  '댄스':{cat:'cardio',icon:'💃',defaultInt:'moderate'},'계단':{cat:'cardio',icon:'🪜',defaultInt:'moderate'},
+  '웨이트':{cat:'strength',icon:'🏋️',defaultInt:'intense'},'헬스':{cat:'strength',icon:'🏋️',defaultInt:'moderate'},
+  '스쿼트':{cat:'strength',icon:'🦵',defaultInt:'moderate'},'푸시업':{cat:'strength',icon:'💪',defaultInt:'moderate'},
+  '풀업':{cat:'strength',icon:'💪',defaultInt:'intense'},'플랭크':{cat:'strength',icon:'🧘',defaultInt:'moderate'},
+  '덤벨':{cat:'strength',icon:'🏋️',defaultInt:'moderate'},'바벨':{cat:'strength',icon:'🏋️',defaultInt:'intense'},
+  '필라테스':{cat:'strength',icon:'🧘',defaultInt:'moderate'},'크로스핏':{cat:'strength',icon:'🔥',defaultInt:'intense'},
+  '스트레칭':{cat:'stretch',icon:'🧘',defaultInt:'light'},'요가':{cat:'stretch',icon:'🧘',defaultInt:'moderate'},
+  '폼롤러':{cat:'stretch',icon:'🔄',defaultInt:'light'},'마사지건':{cat:'stretch',icon:'🔧',defaultInt:'light'},
+};
+
+function _getExDayData() {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return null;
   const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
   const date = _healthDailyDate || kstToday();
   const m = brkDs.master;
@@ -3690,33 +3744,51 @@ async function _toggleHealthExType(type) {
   if(!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
   const d = m.dailyChecks[date][who];
   if (!d.exercises) d.exercises = [];
-  const idx = d.exercises.findIndex(e => e.type === type);
-  if (idx >= 0) d.exercises.splice(idx, 1); // 해제
-  else d.exercises.push({ type, intensity: 'moderate', duration: null }); // 추가
-  // 하위호환: exercise 필드도 동기화
-  d.exercise = d.exercises.length ? d.exercises[0].type : null;
-  await saveBrkMaster();
-  syncBrkToHealth(date, who);
-  renderView('meds');
+  return d;
 }
-async function _setHealthExIntensity(type, intensity) {
-  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
-  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
-  const date = _healthDailyDate || kstToday();
-  const d = brkDs.master.dailyChecks?.[date]?.[who];
-  if (!d?.exercises) return;
-  const entry = d.exercises.find(e => e.type === type);
-  if (entry) entry.intensity = intensity;
+async function _addExercise(name) {
+  const d = _getExDayData(); if(!d) return;
+  if (d.exercises.some(e => e.name === name)) return;
+  const db = _EXERCISE_DB[name] || getBrkMaster()?.settings?.customExercises?.[name];
+  d.exercises.push({ name, cat: db?.cat||'cardio', intensity: db?.defaultInt||'moderate', duration: null });
+  // 최근 운동 목록 업데이트
+  const m = getBrkMaster();
+  if (m) {
+    if (!m.settings) m.settings = {};
+    const recent = m.settings.recentExercises || ['걷기','조깅','웨이트','스트레칭','요가'];
+    if (!recent.includes(name)) { recent.unshift(name); if (recent.length > 10) recent.pop(); }
+    m.settings.recentExercises = recent;
+  }
   await saveBrkMaster(); renderView('meds');
 }
-async function _setHealthExDuration(type, val) {
-  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
-  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
-  const date = _healthDailyDate || kstToday();
-  const d = brkDs.master.dailyChecks?.[date]?.[who];
-  if (!d?.exercises) return;
-  const entry = d.exercises.find(e => e.type === type);
-  if (entry) entry.duration = val ? parseInt(val) : null;
+function _addExerciseCustom() {
+  const name = prompt('운동 이름을 입력하세요 (예: 배드민턴, 테니스, 복싱)');
+  if (!name?.trim()) return;
+  const trimmed = name.trim();
+  // 커스텀 운동 DB에 추가
+  const m = getBrkMaster();
+  if (m) {
+    if (!m.settings) m.settings = {};
+    if (!m.settings.customExercises) m.settings.customExercises = {};
+    if (!m.settings.customExercises[trimmed]) {
+      m.settings.customExercises[trimmed] = { cat:'cardio', icon:'🏃', defaultInt:'moderate' };
+    }
+  }
+  _addExercise(trimmed);
+}
+async function _removeExercise(idx) {
+  const d = _getExDayData(); if(!d) return;
+  d.exercises.splice(idx, 1);
+  await saveBrkMaster(); renderView('meds');
+}
+async function _setExIntensity(idx, intensity) {
+  const d = _getExDayData(); if(!d || !d.exercises[idx]) return;
+  d.exercises[idx].intensity = intensity;
+  await saveBrkMaster(); renderView('meds');
+}
+async function _setExDuration(idx, val) {
+  const d = _getExDayData(); if(!d || !d.exercises[idx]) return;
+  d.exercises[idx].duration = val ? parseInt(val) : null;
   await saveBrkMaster();
 }
 
