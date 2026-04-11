@@ -2127,7 +2127,10 @@ function renderCheckupArchive() {
   else if (_checkupViewTab === 'trends') content = _renderCheckupTrends(who, allCheckups);
   else if (_checkupViewTab === 'categories') content = _renderCheckupCategories(who, allCheckups);
 
-  return `<div style="padding:12px;background:var(--sf2);border:1.5px solid var(--domain-color);border-radius:10px;margin-bottom:10px">
+  // 약물 안전 경고
+  const drugAlertsHtml = renderDrugAlerts();
+
+  return `${drugAlertsHtml}<div style="padding:12px;background:var(--sf2);border:1.5px solid var(--domain-color);border-radius:10px;margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       <span style="font-size:1.1rem">📋</span>
       <span style="font-size:.88rem;font-weight:700;color:var(--domain-color)">검사 아카이브</span>
@@ -2529,5 +2532,119 @@ async function _saveManualCheckup() {
   };
   await saveHealthCheckup(checkup);
   closeConfirmModal();
+  renderView('meds');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRUG SAFETY ALERTS — 약물↔검사 연계 경고 (간/신독성 + DDI + 유당불내증)
+// ═══════════════════════════════════════════════════════════════
+
+async function generateDrugSafetyAlerts(who) {
+  const currentUser = who || DC()?.user;
+  // 현재 복용 약물 수집
+  const meds = [];
+  Object.entries(S.domainState).forEach(([domainId, ds]) => {
+    const dd = DOMAINS[domainId];
+    if (!dd || dd.user !== currentUser || !ds.master?.conditions) return;
+    ds.master.conditions.forEach(c => {
+      if (c.status === 'resolved' || !c.medsList?.length) return;
+      c.medsList.forEach(med => meds.push({ name: med, condition: c.name }));
+    });
+  });
+  if (!meds.length) return { alerts: [] };
+
+  // 최근 이상 검사 결과
+  const checkups = getAllHealthCheckups(currentUser, true);
+  const labMarkers = {};
+  checkups.forEach(c => {
+    (c.results || []).forEach(r => {
+      if (r.stdCode && (r.status === 'high' || r.status === 'low')) {
+        if (!labMarkers[r.stdCode] || c.date > labMarkers[r.stdCode].date) {
+          labMarkers[r.stdCode] = { value: r.value, unit: r.unit, status: r.status, date: c.date };
+        }
+      }
+    });
+  });
+
+  const aiId = S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : (S.keys?.gemini ? 'gemini' : null));
+  if (!aiId) return { alerts: [] };
+
+  const isLactoseIntolerant = typeof USER_PROFILES !== 'undefined' && USER_PROFILES[currentUser]?.basics?.includes('유당불내증');
+  const medList = meds.map(m => m.name + ' (' + m.condition + ')').join(', ');
+  const labInfo = Object.entries(labMarkers).map(([code, v]) => {
+    const def = _getTestDef(code);
+    return (def?.name?.ko || code) + ': ' + v.value + ' ' + (v.unit||'') + ' (' + v.status + ', ' + v.date + ')';
+  }).join('\n');
+
+  showToast('🔍 약물 안전 분석 중...', 8000);
+  const prompt = `환자: ${currentUser}${isLactoseIntolerant ? ' (유당불내증 있음)' : ''}
+현재 복용 약물: ${medList}
+최근 이상 검사 결과:
+${labInfo || '없음'}
+
+JSON으로 분석:
+1. 간독성: 약물 중 AST/ALT/GGT 상승 원인 가능 약물
+2. 신독성: 약물 중 Cr/BUN/eGFR 악화 원인 가능 약물
+3. Drug-Drug Interaction: 약물 간 상호작용
+${isLactoseIntolerant ? '4. 유당 함유: 각 약물의 유당(lactose) 포함 가능성 (부형제 기준)' : ''}
+
+{"alerts":[
+  {"type":"hepato","drug":"약물명","level":"warning","msg":"설명"},
+  {"type":"ddi","drugs":["A","B"],"level":"warning","msg":"설명"},
+  {"type":"lactose","drug":"약물명","level":"info","msg":"유당 포함 가능"}
+],"summary":"종합 1문장"}
+level: danger/warning/caution/info. JSON만.`;
+
+  try {
+    const resp = await callAI(aiId, '임상약학+약물감시 전문가. JSON만.', prompt);
+    const match = resp.match(/\{[\s\S]*\}/);
+    if (!match) return { alerts: [] };
+    const result = JSON.parse(match[0]);
+    const dm = DM();
+    if (dm) {
+      if (!dm.settings) dm.settings = {};
+      dm.settings.lastDrugAlerts = { ...result, checkedAt: kstToday(), who: currentUser };
+      await saveMaster();
+    }
+    return result;
+  } catch (e) {
+    showToast('⚠️ 약물 분석 실패'); return { alerts: [] };
+  }
+}
+
+function renderDrugAlerts() {
+  const dm = DM();
+  const alerts = dm?.settings?.lastDrugAlerts;
+  if (!alerts?.alerts?.length) {
+    return `<div style="margin-bottom:6px;text-align:right"><button onclick="_refreshDrugAlerts()" style="font-size:.62rem;padding:3px 10px;border:1px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">💊 약물 안전 체크</button></div>`;
+  }
+  const levelIcons = { danger:'🚨', warning:'⚠️', caution:'💡', info:'ℹ️' };
+  const levelColors = { danger:'#dc2626', warning:'#f59e0b', caution:'#3b82f6', info:'#6b7280' };
+  const typeLabels = { hepato:'🫁 간독성', nephro:'🫘 신독성', ddi:'💊 상호작용', lactose:'🥛 유당' };
+
+  const html = alerts.alerts.map(a => {
+    const color = levelColors[a.level] || '#f59e0b';
+    const drug = a.drugs ? a.drugs.join('+') : (a.drug || '');
+    return `<div style="padding:5px 8px;background:${color}08;border-left:3px solid ${color};border-radius:0 6px 6px 0;margin-bottom:2px;font-size:.68rem">
+      <span style="font-weight:600;color:${color}">${levelIcons[a.level]||'⚠️'} ${typeLabels[a.type]||a.type}</span>
+      <span style="margin-left:4px">${esc(drug)}</span>
+      <div style="color:var(--mu);margin-top:1px">${esc(a.msg)}</div>
+    </div>`;
+  }).join('');
+
+  return `<div style="margin-bottom:8px;padding:8px;background:var(--sf2);border:1.5px solid #f59e0b30;border-radius:8px">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span style="font-size:.78rem;font-weight:700;color:#f59e0b">💊 약물 안전 경고</span>
+      <span style="font-size:.55rem;color:var(--mu);margin-left:auto">${alerts.checkedAt||''}</span>
+      <button onclick="_refreshDrugAlerts()" style="font-size:.58rem;padding:2px 6px;border:1px solid var(--bd);border-radius:4px;background:none;cursor:pointer;color:var(--ac);font-family:var(--font)">🔄</button>
+    </div>
+    ${html}
+    ${alerts.summary ? `<div style="font-size:.62rem;color:var(--mu);margin-top:3px;padding-top:3px;border-top:1px solid var(--bd)">${esc(alerts.summary)}</div>` : ''}
+  </div>`;
+}
+
+async function _refreshDrugAlerts() {
+  const result = await generateDrugSafetyAlerts();
+  showToast(result.alerts?.length ? '✅ ' + result.alerts.length + '건 경고' : '✅ 이슈 없음');
   renderView('meds');
 }
