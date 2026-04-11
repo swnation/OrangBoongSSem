@@ -3548,13 +3548,36 @@ function renderHealthDailyCheck() {
     </div>`;
   }).join('');
 
-  const exerciseLabel = {cardio:'유산소',strength:'근력',stretch:'스트레칭'};
-  const exOpts = [{v:null,l:'안함',c:''},{v:'cardio',l:'유산소',c:'🏃'},{v:'strength',l:'근력',c:'🏋️'},{v:'stretch',l:'스트레칭',c:'🧘'}];
-  const exercise = dayData.exercise || null;
-  const exHtml = exOpts.map(o => {
-    const sel = exercise === o.v;
-    return `<button onclick="_setHealthExercise(${o.v?'\''+o.v+'\'':'null'})" style="flex:1;padding:6px 4px;font-size:.72rem;border:1.5px solid ${sel?'var(--ac)':'var(--bd)'};border-radius:6px;background:${sel?'var(--ac)':'var(--sf2)'};color:${sel?'#fff':'var(--ink)'};cursor:pointer;font-family:var(--font)">${o.c?o.c+' ':''}${o.l}</button>`;
+  const exerciseTypes = [{v:'cardio',l:'유산소',c:'🏃'},{v:'strength',l:'근력',c:'🏋️'},{v:'stretch',l:'스트레칭',c:'🧘'}];
+  const intensityLabels = {light:'약',moderate:'중',intense:'강'};
+  const intensityColors = {light:'#10b981',moderate:'#f59e0b',intense:'#dc2626'};
+  // 하위호환: exercise(string) → exercises(array) 변환
+  let exercises = dayData.exercises || [];
+  if (!exercises.length && dayData.exercise) exercises = [{type:dayData.exercise, intensity:'moderate', duration:null}];
+
+  const exHtml = exerciseTypes.map(o => {
+    const entry = exercises.find(e => e.type === o.v);
+    const sel = !!entry;
+    return `<div style="flex:1;min-width:0">
+      <button onclick="_toggleHealthExType('${o.v}')" style="width:100%;padding:6px 2px;font-size:.72rem;border:1.5px solid ${sel?'var(--ac)':'var(--bd)'};border-radius:6px;background:${sel?'var(--ac)':'var(--sf2)'};color:${sel?'#fff':'var(--ink)'};cursor:pointer;font-family:var(--font)">${o.c} ${o.l}</button>
+      ${sel ? `<div style="display:flex;gap:2px;margin-top:3px">
+        ${['light','moderate','intense'].map(int => {
+          const isSel = entry.intensity === int;
+          return `<button onclick="_setHealthExIntensity('${o.v}','${int}')" style="flex:1;padding:2px;font-size:.55rem;border:1px solid ${isSel ? intensityColors[int] : 'var(--bd)'};border-radius:4px;background:${isSel ? intensityColors[int]+'20' : 'transparent'};color:${isSel ? intensityColors[int] : 'var(--mu)'};cursor:pointer;font-family:var(--font)">${intensityLabels[int]}</button>`;
+        }).join('')}
+      </div>
+      <input type="number" placeholder="분" value="${entry.duration||''}" onchange="_setHealthExDuration('${o.v}',this.value)"
+        style="width:100%;margin-top:2px;padding:2px 4px;font-size:.6rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:var(--mono);color:var(--ink);background:var(--sf2)">` : ''}
+    </div>`;
   }).join('');
+
+  // 운동 요약
+  const exSummary = exercises.length
+    ? exercises.map(e => {
+      const t = exerciseTypes.find(x => x.v === e.type);
+      return (t?t.c:'') + (intensityLabels[e.intensity]||'') + (e.duration ? ' ' + e.duration + '분' : '');
+    }).join(' · ')
+    : '안함';
 
   // 붕쌤 전용: 음주
   let alcoholHtml = '';
@@ -3601,7 +3624,10 @@ function renderHealthDailyCheck() {
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px;margin-bottom:8px">${supplHtml}</div>
     <div style="margin-top:4px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:${pct}%;background:${pct>=80?'#16a34a':pct>=50?'#f59e0b':'#ef4444'};border-radius:2px"></div></div>
-    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">🏃 운동</div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span style="font-size:.68rem;font-weight:600;color:var(--mu)">🏃 운동</span>
+      <span style="font-size:.58rem;color:var(--ac)">${exSummary}</span>
+    </div>
     <div style="display:flex;gap:4px;margin-bottom:4px">${exHtml}</div>
     ${alcoholHtml}
   </div>`;
@@ -3650,17 +3676,43 @@ async function _toggleHealthSuppl(key) {
   renderView('meds');
 }
 
-async function _setHealthExercise(val) {
+async function _toggleHealthExType(type) {
   const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
   const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
   const date = _healthDailyDate || kstToday();
   const m = brkDs.master;
   if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
   if(!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
-  m.dailyChecks[date][who].exercise = val;
+  const d = m.dailyChecks[date][who];
+  if (!d.exercises) d.exercises = [];
+  const idx = d.exercises.findIndex(e => e.type === type);
+  if (idx >= 0) d.exercises.splice(idx, 1); // 해제
+  else d.exercises.push({ type, intensity: 'moderate', duration: null }); // 추가
+  // 하위호환: exercise 필드도 동기화
+  d.exercise = d.exercises.length ? d.exercises[0].type : null;
   await saveBrkMaster();
   syncBrkToHealth(date, who);
   renderView('meds');
+}
+async function _setHealthExIntensity(type, intensity) {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const date = _healthDailyDate || kstToday();
+  const d = brkDs.master.dailyChecks?.[date]?.[who];
+  if (!d?.exercises) return;
+  const entry = d.exercises.find(e => e.type === type);
+  if (entry) entry.intensity = intensity;
+  await saveBrkMaster(); renderView('meds');
+}
+async function _setHealthExDuration(type, val) {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const date = _healthDailyDate || kstToday();
+  const d = brkDs.master.dailyChecks?.[date]?.[who];
+  if (!d?.exercises) return;
+  const entry = d.exercises.find(e => e.type === type);
+  if (entry) entry.duration = val ? parseInt(val) : null;
+  await saveBrkMaster();
 }
 
 async function _toggleHealthAlcohol() {
