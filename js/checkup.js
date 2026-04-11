@@ -1554,15 +1554,17 @@ async function _handlePdfUpload(file) {
     }
     window._pdfHiRes = hiRes;
 
-    // 검진 PDF 자동 감지: 앞 1-4페이지는 표지/교육, 5페이지~가 검사 데이터
+    // 선택 페이지 초기화: 앞 1-4페이지는 표지/교육, 5페이지~가 검사 데이터
     const defaultStart = totalPages > 10 ? 5 : 1;
-    const defaultEnd = Math.min(totalPages, 20);
+    const defaultEnd = Math.min(totalPages, previewCount);
+    _pdfSelectedPages = new Set();
+    for (let p = defaultStart; p <= defaultEnd; p++) _pdfSelectedPages.add(p);
 
     const thumbHtml = thumbs.map((t, i) => {
       const pageNum = i + 1;
-      const inRange = pageNum >= defaultStart && pageNum <= defaultEnd;
+      const inRange = _pdfSelectedPages.has(pageNum);
       return `<div style="display:inline-block;margin:2px;cursor:pointer;border:3px solid ${inRange ? 'var(--ac)' : 'var(--bd)'};border-radius:6px;opacity:${inRange ? 1 : 0.5};position:relative" data-pdf-page="${pageNum}"
-        onclick="var s=this.style;var sel=s.borderColor.includes('var(--ac)')||s.borderColor.includes('rgb(');if(sel){s.borderColor='var(--bd)';s.opacity='0.5'}else{s.borderColor='var(--ac)';s.opacity='1'}">
+        onclick="var pn=${pageNum};if(_pdfSelectedPages.has(pn))_pdfSelectedPages.delete(pn);else _pdfSelectedPages.add(pn);_syncPdfThumbSelection()">
         <img src="${t}" style="width:70px;height:auto;border-radius:3px;display:block">
         <div style="font-size:.55rem;text-align:center;color:var(--mu);padding:1px 0">${pageNum}</div>
         <button onclick="event.stopPropagation();_previewPdfPage(${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:.55rem;cursor:pointer;line-height:18px">🔍</button>
@@ -1579,12 +1581,14 @@ async function _handlePdfUpload(file) {
           💡 검진 PDF는 표 형식이라 📷 Vision AI(이미지 분석)이 가장 정확합니다.<br>
           분석할 페이지를 클릭하여 선택/해제하세요. 표지·교육 페이지는 제외해도 됩니다.
         </div>
-        <div style="margin-bottom:6px">
-          <span style="font-size:.65rem;color:var(--mu)">페이지 범위:</span>
-          <input type="number" id="pdf-start" value="${defaultStart}" min="1" max="${totalPages}" style="width:40px;font-size:.72rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;text-align:center">
-          <span style="font-size:.65rem"> ~ </span>
-          <input type="number" id="pdf-end" value="${defaultEnd}" min="1" max="${totalPages}" style="width:40px;font-size:.72rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;text-align:center">
-          <span style="font-size:.58rem;color:var(--mu2)"> / ${totalPages}</span>
+        <div style="display:flex;gap:4px;margin-bottom:6px;font-size:.62rem">
+          <button onclick="_pdfSelectAll(true)" style="padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);cursor:pointer;color:var(--ink);font-family:var(--font)">전체 선택</button>
+          <button onclick="_pdfSelectAll(false)" style="padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);cursor:pointer;color:var(--ink);font-family:var(--font)">전체 해제</button>
+          <button onclick="_pdfSelectRange(5,${Math.min(totalPages,20)})" style="padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;cursor:pointer;color:var(--ac);font-family:var(--font)">검사 페이지만 (5~${Math.min(totalPages,20)})</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span id="pdf-sel-count" style="font-size:.65rem;font-weight:600;color:var(--ac)">${_pdfSelectedPages.size}개 선택 / ${totalPages}페이지</span>
+          <button onclick="_previewPdfPage(0)" style="font-size:.62rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font);margin-left:auto">🔍 전체 미리보기</button>
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:1px;margin-bottom:6px;max-height:200px;overflow-y:auto">${thumbHtml}</div>
         <div style="font-size:.58rem;color:var(--mu2)">📷 Vision: 정확하지만 페이지당 비용 발생 | 📄 텍스트: 저비용이지만 표 인식 부정확</div>
@@ -1593,9 +1597,8 @@ async function _handlePdfUpload(file) {
         label: '📷 Vision 분석 (추천)', primary: true,
         action: async () => {
           closeConfirmModal();
-          const start = parseInt(document.getElementById('pdf-start')?.value) || 1;
-          const end = parseInt(document.getElementById('pdf-end')?.value) || totalPages;
-          await _analyzePdfVision(file, start, end);
+          if (!_pdfSelectedPages.size) { showToast('⚠️ 페이지를 선택하세요'); return; }
+          await _analyzePdfVisionSelected(file, _pdfSelectedPages);
         }
       }, {
         label: '📄 텍스트 분석 (저비용)',
@@ -1617,34 +1620,115 @@ async function _handlePdfUpload(file) {
   }
 }
 
-// 페이지 확대 미리보기
+// 선택된 페이지 추적
+var _pdfSelectedPages = new Set();
+
+// 페이지 확대 미리보기 (선택/해제 가능)
 function _previewPdfPage(idx) {
   const hiRes = window._pdfHiRes;
   if (!hiRes || !hiRes[idx]) return;
   const total = hiRes.length;
+  const pageNum = idx + 1;
+  const sel = _pdfSelectedPages.has(pageNum);
+
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center';
   overlay.innerHTML = `
-    <div style="color:#fff;font-size:.82rem;font-weight:600;margin-bottom:8px">페이지 ${idx + 1} / ${total}</div>
-    <img src="${hiRes[idx]}" style="max-width:92vw;max-height:78vh;border-radius:6px;border:2px solid #fff3">
-    <div style="display:flex;gap:12px;margin-top:10px">
-      <button onclick="this.closest('div[style*=fixed]')._nav(-1)" style="padding:6px 16px;background:#fff2;color:#fff;border:1px solid #fff4;border-radius:6px;font-size:.78rem;cursor:pointer">◀ 이전</button>
-      <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:6px 16px;background:#fff2;color:#fff;border:1px solid #fff4;border-radius:6px;font-size:.78rem;cursor:pointer">✕ 닫기</button>
-      <button onclick="this.closest('div[style*=fixed]')._nav(1)" style="padding:6px 16px;background:#fff2;color:#fff;border:1px solid #fff4;border-radius:6px;font-size:.78rem;cursor:pointer">다음 ▶</button>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="color:#fff;font-size:.82rem;font-weight:600">페이지 ${pageNum} / ${total}</span>
+      <span id="pdf-pv-count" style="font-size:.68rem;padding:2px 8px;border-radius:10px;background:#3b82f6;color:#fff">${_pdfSelectedPages.size}개 선택</span>
+    </div>
+    <img src="${hiRes[idx]}" style="max-width:92vw;max-height:72vh;border-radius:6px;border:3px solid ${sel ? '#3b82f6' : '#fff3'}" id="pdf-pv-img">
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;justify-content:center">
+      <button onclick="this.closest('div[style*=fixed]')._nav(-1)" style="padding:8px 16px;background:#fff2;color:#fff;border:1px solid #fff4;border-radius:6px;font-size:.78rem;cursor:pointer">◀ 이전</button>
+      <button id="pdf-pv-sel-btn" onclick="this.closest('div[style*=fixed]')._toggleSel()" style="padding:8px 20px;background:${sel ? '#3b82f6' : '#fff2'};color:#fff;border:1px solid ${sel ? '#3b82f6' : '#fff4'};border-radius:6px;font-size:.78rem;cursor:pointer;font-weight:600">${sel ? '✅ 선택됨 — 해제' : '☐ 선택'}</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:8px 16px;background:#fff2;color:#fff;border:1px solid #fff4;border-radius:6px;font-size:.78rem;cursor:pointer">✕ 닫기</button>
+      <button onclick="this.closest('div[style*=fixed]')._nav(1)" style="padding:8px 16px;background:#fff2;color:#fff;border:1px solid #fff4;border-radius:6px;font-size:.78rem;cursor:pointer">다음 ▶</button>
     </div>`;
   overlay._idx = idx;
   overlay._nav = function(dir) {
     const next = this._idx + dir;
     if (next < 0 || next >= total) return;
     this._idx = next;
-    this.querySelector('img').src = hiRes[next];
-    this.querySelector('div').textContent = '페이지 ' + (next + 1) + ' / ' + total;
+    const pn = next + 1;
+    const s = _pdfSelectedPages.has(pn);
+    this.querySelector('#pdf-pv-img').src = hiRes[next];
+    this.querySelector('#pdf-pv-img').style.borderColor = s ? '#3b82f6' : '#fff3';
+    this.querySelector('span').textContent = '페이지 ' + pn + ' / ' + total;
+    const btn = this.querySelector('#pdf-pv-sel-btn');
+    btn.textContent = s ? '✅ 선택됨 — 해제' : '☐ 선택';
+    btn.style.background = s ? '#3b82f6' : '#fff2';
+    btn.style.borderColor = s ? '#3b82f6' : '#fff4';
+  };
+  overlay._toggleSel = function() {
+    const pn = this._idx + 1;
+    if (_pdfSelectedPages.has(pn)) _pdfSelectedPages.delete(pn);
+    else _pdfSelectedPages.add(pn);
+    // 업데이트
+    const s = _pdfSelectedPages.has(pn);
+    this.querySelector('#pdf-pv-img').style.borderColor = s ? '#3b82f6' : '#fff3';
+    const btn = this.querySelector('#pdf-pv-sel-btn');
+    btn.textContent = s ? '✅ 선택됨 — 해제' : '☐ 선택';
+    btn.style.background = s ? '#3b82f6' : '#fff2';
+    btn.style.borderColor = s ? '#3b82f6' : '#fff4';
+    this.querySelector('#pdf-pv-count').textContent = _pdfSelectedPages.size + '개 선택';
+    // 모달의 썸네일도 동기화
+    _syncPdfThumbSelection();
   };
   overlay.onclick = function(e) { if (e.target === this) this.remove(); };
   document.body.appendChild(overlay);
 }
 
-// 선택한 페이지 범위를 이미지로 변환 → 사진 분석 파이프라인에 전달
+function _pdfSelectAll(select) {
+  const total = window._pdfTotalPages || 0;
+  _pdfSelectedPages = new Set();
+  if (select) for (let i = 1; i <= Math.min(total, 20); i++) _pdfSelectedPages.add(i);
+  _syncPdfThumbSelection();
+}
+function _pdfSelectRange(start, end) {
+  _pdfSelectedPages = new Set();
+  for (let i = start; i <= end; i++) _pdfSelectedPages.add(i);
+  _syncPdfThumbSelection();
+}
+function _syncPdfThumbSelection() {
+  document.querySelectorAll('[data-pdf-page]').forEach(el => {
+    const pn = parseInt(el.dataset.pdfPage);
+    const sel = _pdfSelectedPages.has(pn);
+    el.style.borderColor = sel ? 'var(--ac)' : 'var(--bd)';
+    el.style.opacity = sel ? '1' : '0.5';
+  });
+  const countEl = document.getElementById('pdf-sel-count');
+  if (countEl) countEl.textContent = _pdfSelectedPages.size + '개 선택 / ' + (window._pdfTotalPages || '?') + '페이지';
+}
+
+// 선택된 페이지들을 이미지로 변환 → 사진 분석 파이프라인에 전달
+async function _analyzePdfVisionSelected(file, selectedPages) {
+  const pages = [...selectedPages].sort((a, b) => a - b);
+  showToast('📷 ' + pages.length + '페이지 변환 중...', 8000);
+  try {
+    if (!window.pdfjsLib) await window._pdfjsReady;
+    const arrayBuf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuf }).promise;
+    const images = [];
+    for (const pn of pages) {
+      if (pn < 1 || pn > pdf.numPages) continue;
+      const page = await pdf.getPage(pn);
+      const scale = 2;
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = vp.width; canvas.height = vp.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+      images.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.9), name: file.name + ' p' + pn, type: 'image/jpeg' });
+    }
+    showToast('📷 ' + images.length + '페이지 변환 완료 → AI를 선택하세요');
+    _stagedCheckupPhotos = images;
+    _showStagedCheckupPhotos();
+  } catch (e) {
+    showToast('❌ PDF 변환 실패: ' + e.message, 4000);
+  }
+}
+
+// (레거시) 범위 기반 변환
 async function _analyzePdfVision(file, startPage, endPage) {
   showToast('📷 PDF → 이미지 변환 중...', 8000);
   try {
