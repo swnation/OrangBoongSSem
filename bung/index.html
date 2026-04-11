@@ -522,9 +522,10 @@ function _renderBrkDailySection(date){
   const m=domainData['bungruki']?.master;
   if(!m)return '';
   if(!m.dailyChecks)m.dailyChecks={};
-  const dayData=m.dailyChecks[date]?.bung||{};
+  if(!m.dailyChecks[date])m.dailyChecks[date]={};
+  if(!m.dailyChecks[date].bung)m.dailyChecks[date].bung={};
+  const dayData=m.dailyChecks[date].bung;
   const items=_getBrkSupplItems();
-  const exercise=dayData.exercise||'';
   const alcohol=dayData.alcohol||false;
 
   const supplHtml=items.map(it=>{
@@ -535,10 +536,63 @@ function _renderBrkDailySection(date){
     </div>`;
   }).join('');
 
-  const exHtml=_BRK_EXERCISE_OPTS.map(o=>{
-    const sel=exercise===(o.v||null)||(!exercise&&!o.v);
-    return `<button class="dc-btn${sel?' sel':''}" data-brk-ex="${o.v}" onclick="_selectBrkEx(this)" style="width:auto;padding:6px 12px;font-size:.72rem">${o.c?o.c+' ':''}${o.l}</button>`;
+  // 운동 DB (메인앱과 동일)
+  const _EX_DB_B={
+    '걷기':{cat:'cardio',icon:'🚶',defaultInt:'light',unit:'min'},'산책':{cat:'cardio',icon:'🚶',defaultInt:'light',unit:'min'},
+    '조깅':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'min'},'달리기':{cat:'cardio',icon:'🏃',defaultInt:'intense',unit:'km'},
+    '러닝':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'km'},'자전거':{cat:'cardio',icon:'🚴',defaultInt:'moderate',unit:'km'},
+    '수영':{cat:'cardio',icon:'🏊',defaultInt:'moderate',unit:'min'},'줄넘기':{cat:'cardio',icon:'⏫',defaultInt:'intense',unit:'reps'},
+    '등산':{cat:'cardio',icon:'⛰️',defaultInt:'intense',unit:'min'},'웨이트':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'min'},
+    '헬스':{cat:'strength',icon:'🏋️',defaultInt:'moderate',unit:'min'},'스쿼트':{cat:'strength',icon:'🦵',defaultInt:'moderate',unit:'reps'},
+    '푸시업':{cat:'strength',icon:'💪',defaultInt:'moderate',unit:'reps'},'풀업':{cat:'strength',icon:'💪',defaultInt:'intense',unit:'reps'},
+    '플랭크':{cat:'strength',icon:'🧘',defaultInt:'moderate',unit:'sec'},'필라테스':{cat:'strength',icon:'🧘',defaultInt:'moderate',unit:'min'},
+    '스트레칭':{cat:'stretch',icon:'🧘',defaultInt:'light',unit:'min'},'요가':{cat:'stretch',icon:'🧘',defaultInt:'moderate',unit:'min'},
+  };
+  const customEx=m.settings?.customExercises||{};
+  const allExDb={..._EX_DB_B,...customEx};
+  const _UNITS={min:'분',sec:'초',reps:'회',sets:'세트',km:'km',m:'m'};
+  const _UNIT_LIST=['min','sec','reps','sets','km','m'];
+  const intLabels={light:'약',moderate:'중',intense:'강'};
+  const intColors={light:'#10b981',moderate:'#f59e0b',intense:'#dc2626'};
+
+  // 하위호환
+  let exercises=dayData.exercises||[];
+  if(!exercises.length&&dayData.exercise)exercises=[{name:dayData.exercise,cat:'cardio',intensity:'moderate',unit:'min',amount:null}];
+
+  const exListHtml=exercises.map((e,i)=>{
+    const db=allExDb[e.name];
+    const icon=db?.icon||'🏃';
+    const curUnit=e.unit||db?.unit||'min';
+    const amt=e.amount??e.duration??'';
+    const unitOpts=_UNIT_LIST.map(u=>`<option value="${u}"${curUnit===u?' selected':''}>${_UNITS[u]}</option>`).join('');
+    return `<div style="display:flex;align-items:center;gap:3px;padding:4px 6px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:3px;flex-wrap:wrap">
+      <span>${icon}</span>
+      <span style="font-size:.72rem;font-weight:500">${esc(e.name)}</span>
+      <div style="display:flex;gap:2px;margin-left:auto">${['light','moderate','intense'].map(int=>{
+        const sel=e.intensity===int;
+        return `<button onclick="_setBrkExInt(${i},'${int}')" style="padding:1px 5px;font-size:.52rem;border:1px solid ${sel?intColors[int]:'var(--bd)'};border-radius:3px;background:${sel?intColors[int]+'20':'transparent'};color:${sel?intColors[int]:'var(--mu)'};cursor:pointer">${intLabels[int]}</button>`;
+      }).join('')}</div>
+      <input type="number" data-brk-ex-amt="${i}" placeholder="${_UNITS[curUnit]}" value="${amt}" style="width:35px;padding:2px;font-size:.6rem;border:1px solid var(--bd);border-radius:3px;text-align:center;font-family:monospace">
+      <select data-brk-ex-unit="${i}" style="padding:1px;font-size:.55rem;border:1px solid var(--bd);border-radius:3px;background:var(--sf)">${unitOpts}</select>
+      <button onclick="_removeBrkEx(${i})" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.6rem">✕</button>
+    </div>`;
   }).join('');
+
+  const recentEx=m.settings?.recentExercises||['걷기','조깅','웨이트','스트레칭','요가'];
+  const quickBtns=recentEx.slice(0,6).map(name=>{
+    if(exercises.some(e=>e.name===name))return '';
+    const db=allExDb[name];
+    return `<button onclick="_addBrkEx('${esc(name)}')" style="padding:3px 8px;font-size:.62rem;border:1px solid var(--bd);border-radius:12px;background:var(--sf);cursor:pointer">${db?.icon||'🏃'} ${esc(name)}</button>`;
+  }).filter(Boolean).join('');
+
+  const exHtml=`${exListHtml}<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">${quickBtns}<button onclick="_addBrkExCustom()" style="padding:3px 8px;font-size:.62rem;border:1px dashed var(--ac);border-radius:12px;background:none;color:var(--ac);cursor:pointer">+ 직접 입력</button></div>`;
+
+  // 체중
+  const weightHtml=`<div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+    <span style="font-size:.68rem;font-weight:600;color:var(--mu)">⚖️ 체중</span>
+    <input type="number" step="0.1" id="brk-weight" value="${dayData.weight||''}" placeholder="kg" style="width:55px;padding:2px 4px;font-size:.68rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:monospace">
+    <span style="font-size:.55rem;color:var(--mu)">kg</span>
+  </div>`;
 
   const alcHtml=`<div class="med-row" onclick="this.querySelector('input').checked=!this.querySelector('input').checked" style="margin-top:6px">
     <input type="checkbox" id="brk-alcohol"${alcohol?' checked':''}>
@@ -556,15 +610,51 @@ function _renderBrkDailySection(date){
     <div class="condition-name">영양제</div>
     ${supplHtml}
     <div class="condition-name">운동</div>
-    <div style="display:flex;gap:4px;margin-bottom:4px">${exHtml}</div>
+    ${exHtml}
+    ${weightHtml}
     <div class="condition-name">음주 여부</div>
     ${alcHtml}
   </div>`;
 }
 
-function _selectBrkEx(btn){
-  document.querySelectorAll('[data-brk-ex]').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel');
+function _addBrkEx(name){
+  const m=domainData['bungruki']?.master;if(!m)return;
+  if(!m.dailyChecks[selectedDate])m.dailyChecks[selectedDate]={};
+  if(!m.dailyChecks[selectedDate].bung)m.dailyChecks[selectedDate].bung={};
+  const d=m.dailyChecks[selectedDate].bung;
+  if(!d.exercises)d.exercises=[];
+  if(d.exercises.some(e=>e.name===name))return;
+  const db={..._BRK_SUPPL_BUNG,...(m.settings?.customExercises||{})};
+  const exDb={
+    '걷기':{cat:'cardio',defaultInt:'light',unit:'min'},'조깅':{cat:'cardio',defaultInt:'moderate',unit:'min'},
+    '웨이트':{cat:'strength',defaultInt:'intense',unit:'min'},'스쿼트':{cat:'strength',defaultInt:'moderate',unit:'reps'},
+    '푸시업':{cat:'strength',defaultInt:'moderate',unit:'reps'},'스트레칭':{cat:'stretch',defaultInt:'light',unit:'min'},
+    '요가':{cat:'stretch',defaultInt:'moderate',unit:'min'},...(m.settings?.customExercises||{}),
+  };
+  const info=exDb[name]||{};
+  d.exercises.push({name,cat:info.cat||'cardio',intensity:info.defaultInt||'moderate',unit:info.unit||'min',amount:null});
+  // 최근 운동 업데이트
+  if(!m.settings)m.settings={};
+  const recent=m.settings.recentExercises||['걷기','조깅','웨이트','스트레칭','요가'];
+  if(!recent.includes(name)){recent.unshift(name);if(recent.length>10)recent.pop();}
+  m.settings.recentExercises=recent;
+  renderCheckTab();
+}
+function _addBrkExCustom(){
+  const name=prompt('운동 이름 입력 (예: 배드민턴, 테니스)');
+  if(!name?.trim())return;
+  const m=domainData['bungruki']?.master;
+  if(m){if(!m.settings)m.settings={};if(!m.settings.customExercises)m.settings.customExercises={};
+    m.settings.customExercises[name.trim()]={cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'min'};}
+  _addBrkEx(name.trim());
+}
+function _removeBrkEx(idx){
+  const d=domainData['bungruki']?.master?.dailyChecks?.[selectedDate]?.bung;
+  if(!d?.exercises)return;d.exercises.splice(idx,1);renderCheckTab();
+}
+function _setBrkExInt(idx,intensity){
+  const d=domainData['bungruki']?.master?.dailyChecks?.[selectedDate]?.bung;
+  if(!d?.exercises?.[idx])return;d.exercises[idx].intensity=intensity;renderCheckTab();
 }
 function _toggleAllBrkSuppl(checked){
   document.querySelectorAll('[data-brk-suppl]').forEach(cb=>cb.checked=checked);
@@ -582,9 +672,20 @@ async function _saveBrkDaily(date){
   document.querySelectorAll('[data-brk-suppl]').forEach(cb=>{
     bung[cb.dataset.brkSuppl]=cb.checked;
   });
-  // 운동
-  const exBtn=document.querySelector('[data-brk-ex].sel');
-  bung.exercise=exBtn?.dataset?.brkEx||null;
+  // 운동: 각 운동의 amount/unit 수집
+  if(bung.exercises){
+    bung.exercises.forEach((e,i)=>{
+      const amtEl=document.querySelector(`[data-brk-ex-amt="${i}"]`);
+      const unitEl=document.querySelector(`[data-brk-ex-unit="${i}"]`);
+      if(amtEl)e.amount=amtEl.value?parseFloat(amtEl.value):null;
+      if(unitEl)e.unit=unitEl.value;
+      e.duration=e.amount; // 하위호환
+    });
+  }
+  bung.exercise=bung.exercises?.length?bung.exercises[0].name:null; // 하위호환
+  // 체중
+  const weightEl=document.getElementById('brk-weight');
+  bung.weight=weightEl?.value?parseFloat(weightEl.value):null;
   // 음주
   bung.alcohol=document.getElementById('brk-alcohol')?.checked||false;
 
