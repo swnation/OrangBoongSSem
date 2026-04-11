@@ -1542,6 +1542,18 @@ async function _handlePdfUpload(file) {
       thumbs.push(canvas.toDataURL('image/jpeg', 0.6));
     }
 
+    // 고해상도 미리보기용 이미지도 생성
+    const hiRes = [];
+    for (let i = 1; i <= previewCount; i++) {
+      const page = await pdf.getPage(i);
+      const vp2 = page.getViewport({ scale: 1.2 });
+      const c2 = document.createElement('canvas');
+      c2.width = vp2.width; c2.height = vp2.height;
+      await page.render({ canvasContext: c2.getContext('2d'), viewport: vp2 }).promise;
+      hiRes.push(c2.toDataURL('image/jpeg', 0.85));
+    }
+    window._pdfHiRes = hiRes;
+
     // 검진 PDF 자동 감지: 앞 1-4페이지는 표지/교육, 5페이지~가 검사 데이터
     const defaultStart = totalPages > 10 ? 5 : 1;
     const defaultEnd = Math.min(totalPages, 20);
@@ -1549,9 +1561,11 @@ async function _handlePdfUpload(file) {
     const thumbHtml = thumbs.map((t, i) => {
       const pageNum = i + 1;
       const inRange = pageNum >= defaultStart && pageNum <= defaultEnd;
-      return `<div style="display:inline-block;margin:2px;cursor:pointer;border:2px solid ${inRange ? 'var(--ac)' : 'transparent'};border-radius:4px;opacity:${inRange ? 1 : 0.4}" data-pdf-page="${pageNum}" onclick="this.style.borderColor=this.style.borderColor==='transparent'?'var(--ac)':'transparent';this.style.opacity=this.style.opacity==='0.4'?'1':'0.4'">
-        <img src="${t}" style="width:50px;height:auto;border-radius:2px;display:block">
-        <div style="font-size:.5rem;text-align:center;color:var(--mu)">${pageNum}</div>
+      return `<div style="display:inline-block;margin:2px;cursor:pointer;border:3px solid ${inRange ? 'var(--ac)' : 'var(--bd)'};border-radius:6px;opacity:${inRange ? 1 : 0.5};position:relative" data-pdf-page="${pageNum}"
+        onclick="var s=this.style;var sel=s.borderColor.includes('var(--ac)')||s.borderColor.includes('rgb(');if(sel){s.borderColor='var(--bd)';s.opacity='0.5'}else{s.borderColor='var(--ac)';s.opacity='1'}">
+        <img src="${t}" style="width:70px;height:auto;border-radius:3px;display:block">
+        <div style="font-size:.55rem;text-align:center;color:var(--mu);padding:1px 0">${pageNum}</div>
+        <button onclick="event.stopPropagation();_previewPdfPage(${i})" style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:.55rem;cursor:pointer;line-height:18px">🔍</button>
       </div>`;
     }).join('');
 
@@ -1601,6 +1615,33 @@ async function _handlePdfUpload(file) {
   } catch (e) {
     showToast('❌ PDF 로딩 실패: ' + e.message, 4000);
   }
+}
+
+// 페이지 확대 미리보기
+function _previewPdfPage(idx) {
+  const hiRes = window._pdfHiRes;
+  if (!hiRes || !hiRes[idx]) return;
+  const total = hiRes.length;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="color:#fff;font-size:.82rem;font-weight:600;margin-bottom:8px">페이지 ${idx + 1} / ${total}</div>
+    <img src="${hiRes[idx]}" style="max-width:92vw;max-height:78vh;border-radius:6px;border:2px solid #fff3">
+    <div style="display:flex;gap:12px;margin-top:10px">
+      <button onclick="this.closest('div[style*=fixed]')._nav(-1)" style="padding:6px 16px;background:#fff2;color:#fff;border:1px solid #fff4;border-radius:6px;font-size:.78rem;cursor:pointer">◀ 이전</button>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:6px 16px;background:#fff2;color:#fff;border:1px solid #fff4;border-radius:6px;font-size:.78rem;cursor:pointer">✕ 닫기</button>
+      <button onclick="this.closest('div[style*=fixed]')._nav(1)" style="padding:6px 16px;background:#fff2;color:#fff;border:1px solid #fff4;border-radius:6px;font-size:.78rem;cursor:pointer">다음 ▶</button>
+    </div>`;
+  overlay._idx = idx;
+  overlay._nav = function(dir) {
+    const next = this._idx + dir;
+    if (next < 0 || next >= total) return;
+    this._idx = next;
+    this.querySelector('img').src = hiRes[next];
+    this.querySelector('div').textContent = '페이지 ' + (next + 1) + ' / ' + total;
+  };
+  overlay.onclick = function(e) { if (e.target === this) this.remove(); };
+  document.body.appendChild(overlay);
 }
 
 // 선택한 페이지 범위를 이미지로 변환 → 사진 분석 파이프라인에 전달
