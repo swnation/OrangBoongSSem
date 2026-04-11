@@ -1228,15 +1228,17 @@ async function _browseDriveFolder(folderId) {
     const query = folderQ + " and (mimeType='application/vnd.google-apps.folder' or mimeType contains 'image/' or mimeType='application/pdf' or mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='text/plain')";
     const resp = await fetchWithRetry(
       'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(query) +
-      '&orderBy=folder,modifiedTime desc&pageSize=50&fields=files(id,name,mimeType,modifiedTime,size)',
+      '&orderBy=name&pageSize=100&fields=files(id,name,mimeType,modifiedTime,size)',
       { headers: { Authorization: 'Bearer ' + S.token } });
     const data = await resp.json();
     if (data.error) throw new Error(data.error.message);
     const files = data.files || [];
 
-    // 폴더와 파일 분리
-    const folders = files.filter(f => f.mimeType === 'application/vnd.google-apps.folder');
-    const docs = files.filter(f => f.mimeType !== 'application/vnd.google-apps.folder');
+    // 폴더와 파일 분리 (폴더: 이름순, 파일: 최근 수정순)
+    const folders = files.filter(f => f.mimeType === 'application/vnd.google-apps.folder')
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    const docs = files.filter(f => f.mimeType !== 'application/vnd.google-apps.folder')
+      .sort((a, b) => (b.modifiedTime || '').localeCompare(a.modifiedTime || ''));
 
     const folderList = folders.map(f =>
       `<div onclick="_browseDriveFolder('${f.id}')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;cursor:pointer;background:var(--sf);margin-bottom:3px">
