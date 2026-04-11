@@ -1382,27 +1382,65 @@ async function stageCheckupDocs(input) {
     showToast('❌ 문서 읽기 실패: ' + e.message, 4000); return;
   }
 
-  if (!text || text.trim().length < 20) {
+  const aiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+  if (!aiId) { showToast('⚠️ AI API 키 필요'); return; }
+  const who = DC().user || '오랑이';
+  const isPdf = ext === 'pdf';
+
+  // 텍스트 추출 성공 여부 판별
+  const textOk = text && text.trim().length >= 50;
+  const preview = textOk ? (text.slice(0, 500) + (text.length > 500 ? '...' : '')) : '';
+
+  if (!textOk && isPdf) {
+    // PDF 텍스트 추출 실패 → 이미지 변환 Vision 분석 제안
+    showConfirmModal('📄 PDF 텍스트 추출 부족',
+      `<div style="font-size:.72rem">
+        <div style="margin-bottom:8px"><b>${esc(file.name)}</b></div>
+        <div style="padding:8px;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;font-size:.68rem;color:#92400e;margin-bottom:8px">
+          ⚠️ 텍스트 추출이 부족합니다 (${text.trim().length}자). 검진 PDF는 표 형식이라 텍스트 추출이 어려울 수 있습니다.
+        </div>
+        <div style="font-size:.65rem;color:var(--mu)">📷 PDF를 이미지로 변환하여 Vision AI로 분석하면 표/수치를 정확히 읽을 수 있습니다.</div>
+      </div>`,
+      [{
+        label: '📷 이미지 변환 후 Vision 분석 (추천)', primary: true,
+        action: async () => {
+          closeConfirmModal();
+          showToast('📷 PDF → 이미지 변환 중...', 5000);
+          try {
+            const images = await _renderPdfToImages(file);
+            if (!images.length) { showToast('⚠️ 이미지 변환 실패'); return; }
+            showToast('📷 ' + images.length + '페이지 변환 완료 → AI 분석 시작');
+            _stagedCheckupPhotos = images;
+            _showStagedCheckupPhotos();
+          } catch (e) { showToast('❌ PDF 이미지 변환 실패: ' + e.message, 4000); }
+        }
+      },
+      text.trim().length >= 20 ? {
+        label: '📄 텍스트로 시도 (' + text.trim().length + '자)',
+        action: async () => { closeConfirmModal(); await _analyzeDocText(text, who, aiId, file.name); }
+      } : null,
+      { label: '취소', action: closeConfirmModal }].filter(Boolean));
+    return;
+  }
+
+  if (!textOk) {
     showToast('⚠️ 추출된 텍스트가 너무 적습니다. 사진으로 시도해 주세요.', 4000); return;
   }
 
-  // AI 선택 → 분석
-  const aiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
-  if (!aiId) { showToast('⚠️ AI API 키 필요'); return; }
-
-  const who = DC().user || '오랑이';
-  const preview = text.slice(0, 500) + (text.length > 500 ? '...' : '');
-
+  // 텍스트 추출 성공 → 기존 플로우
   showConfirmModal('📄 문서 분석',
     `<div style="font-size:.72rem">
       <div style="margin-bottom:8px"><b>${esc(file.name)}</b> (${Math.round(text.length/1024)}KB 텍스트 추출)</div>
       <div style="padding:8px;background:var(--sf2);border:1px solid var(--bd);border-radius:6px;max-height:150px;overflow-y:auto;font-size:.65rem;font-family:var(--mono);white-space:pre-wrap;color:var(--mu)">${esc(preview)}</div>
       <div style="margin-top:8px;font-size:.62rem;color:var(--mu2)">💡 텍스트 기반 분석 — Vision API 불필요 (저비용)</div>
+      ${isPdf ? '<div style="margin-top:4px;font-size:.62rem;color:var(--ac);cursor:pointer" onclick="closeConfirmModal();_pdfToVision()">📷 텍스트가 이상하면 Vision으로 전환</div>' : ''}
     </div>`,
     [{ label: '🤖 ' + aiId + '로 분석', primary: true, action: async () => {
       closeConfirmModal();
       await _analyzeDocText(text, who, aiId, file.name);
     }}, { label: '취소', action: closeConfirmModal }]);
+  // PDF Vision 전환용 파일 참조 저장
+  if (isPdf) window._lastPdfFile = file;
 }
 
 async function _extractPdfText(file) {
@@ -1414,9 +1452,48 @@ async function _extractPdfText(file) {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    pages.push(content.items.map(it => it.str).join(' '));
+    // 위치 기반 정렬: Y좌표(행) → X좌표(열) 순서로 텍스트 재조립
+    const items = content.items.filter(it => it.str.trim());
+    items.sort((a, b) => {
+      const ay = Math.round(a.transform[5] / 5) * 5; // Y 5px 단위 그룹
+      const by = Math.round(b.transform[5] / 5) * 5;
+      if (ay !== by) return by - ay; // Y는 아래→위이므로 역순
+      return a.transform[4] - b.transform[4]; // X는 왼→오
+    });
+    // 같은 행(Y그룹)은 탭으로 구분, 다른 행은 줄바꿈
+    let lastY = null;
+    const lineItems = [];
+    items.forEach(it => {
+      const y = Math.round(it.transform[5] / 5) * 5;
+      if (lastY !== null && y !== lastY) lineItems.push('\n');
+      else if (lastY !== null) lineItems.push('\t');
+      lineItems.push(it.str);
+      lastY = y;
+    });
+    pages.push(lineItems.join(''));
   }
-  return pages.join('\n\n');
+  return pages.join('\n\n--- 페이지 구분 ---\n\n');
+}
+
+// PDF → 이미지 변환 (텍스트 추출 실패 시 Vision AI 폴백)
+async function _renderPdfToImages(file) {
+  if (!window.pdfjsLib) await window._pdfjsReady;
+  if (!window.pdfjsLib) throw new Error('PDF 라이브러리 로딩 실패');
+  const arrayBuf = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({ data: arrayBuf }).promise;
+  const images = [];
+  const maxPages = Math.min(pdf.numPages, 10); // 최대 10페이지
+  for (let i = 1; i <= maxPages; i++) {
+    const page = await pdf.getPage(i);
+    const scale = 2; // 해상도 2배 (OCR 정확도)
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    images.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.9), name: file.name + ' p' + i, type: 'image/jpeg' });
+  }
+  return images;
 }
 
 async function _extractDocxText(file) {
@@ -1436,6 +1513,19 @@ async function _extractDocxText(file) {
   // XML에서 텍스트만 추출 (w:t 태그)
   const matches = docXml.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || [];
   return matches.map(m => m.replace(/<[^>]+>/g, '')).join(' ').replace(/\s+/g, ' ');
+}
+
+async function _pdfToVision() {
+  if (!window._lastPdfFile) { showToast('⚠️ PDF 파일 없음'); return; }
+  showToast('📷 PDF → 이미지 변환 중...', 5000);
+  try {
+    const images = await _renderPdfToImages(window._lastPdfFile);
+    if (!images.length) { showToast('⚠️ 변환 실패'); return; }
+    showToast('📷 ' + images.length + '페이지 변환 → AI 선택하세요');
+    _stagedCheckupPhotos = images;
+    _showStagedCheckupPhotos();
+    delete window._lastPdfFile;
+  } catch (e) { showToast('❌ ' + e.message, 4000); }
 }
 
 async function _extractTxtText(file) {
