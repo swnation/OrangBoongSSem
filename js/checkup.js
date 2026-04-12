@@ -95,7 +95,7 @@ const _CHECKUP_STD_TESTS = {
   MCH:  { name:{ko:'평균적혈구혈색소량',en:'MCH'}, unit:'pg', category:'cbc', ref:{low:27,high:33},
     aliases:['mch','평균적혈구혈색소량','mean corpuscular hemoglobin'], related:['MCV','MCHC'], pregnancyRelevant:false },
   MCHC: { name:{ko:'평균적혈구혈색소농도',en:'MCHC'}, unit:'g/dL', category:'cbc', ref:{low:32,high:36},
-    aliases:['mchc','평균적혈구혈색소농도'], related:['MCV','MCH'], pregnancyRelevant:false },
+    aliases:['mchc','평균적혈구혈색소농도','mean corpuscular hemoglobin concentration'], related:['MCV','MCH'], pregnancyRelevant:false },
   RDW:  { name:{ko:'적혈구분포폭',en:'RDW'}, unit:'%', category:'cbc', ref:{low:11.5,high:14.5},
     aliases:['rdw','적혈구분포폭','rdw-cv','rdw cv','적혈구분포계수'], related:['MCV'], pregnancyRelevant:false },
   MPV:  { name:{ko:'평균혈소판용적',en:'MPV'}, unit:'fL', category:'cbc', ref:{low:7.5,high:11.5},
@@ -127,7 +127,7 @@ const _CHECKUP_STD_TESTS = {
   IBIL: { name:{ko:'간접빌리루빈',en:'Indirect Bilirubin'}, unit:'mg/dL', category:'liver', ref:{low:0.1,high:1.0},
     aliases:['indirect bilirubin','ibil','i-bil','간접빌리루빈','간접 빌리루빈'], related:['TBIL','DBIL'], pregnancyRelevant:false },
   LDH:  { name:{ko:'젖산탈수소효소',en:'LDH'}, unit:'U/L', category:'liver', ref:{low:120,high:250},
-    aliases:['ldh','젖산탈수소효소','lactate dehydrogenase','lactate dehydrogenase'], related:['AST','ALT'], pregnancyRelevant:false },
+    aliases:['ldh','젖산탈수소효소','lactate dehydrogenase','젖산탈수소 효소','ld'], related:['AST','ALT'], pregnancyRelevant:false },
   CPK:  { name:{ko:'크레아틴키나제',en:'CPK'}, unit:'U/L', category:'liver', ref:{male:{low:38,high:174},female:{low:26,high:140}},
     aliases:['cpk','ck','크레아틴키나제','creatine kinase','creatine phosphokinase'], related:['LDH'], pregnancyRelevant:false },
   ALB:  { name:{ko:'알부민',en:'Albumin'}, unit:'g/dL', category:'liver', ref:{low:3.5,high:5.2},
@@ -182,7 +182,7 @@ const _CHECKUP_STD_TESTS = {
     aliases:['glucose','glu','fasting glucose','공복혈당','혈당','blood sugar','fbs','공복 혈당','blood glucose','당검사'], related:['HBA1C','INSULIN'], pregnancyRelevant:true,
     conversions:{'mmol/L':{factor:18.02}} },
   GLUPP2:{ name:{ko:'식후2시간혈당',en:'2h Postprandial Glucose'}, unit:'mg/dL', category:'glucose', ref:{low:70,high:140},
-    aliases:['glupp2','식후2시간혈당','식후혈당','pp2','postprandial glucose','2hr glucose','pp2hr','당검사(식후)','식후 2시간'], related:['GLU','HBA1C'], pregnancyRelevant:true },
+    aliases:['glupp2','식후2시간혈당','식후혈당','pp2','postprandial glucose','2hr glucose','pp2hr','당검사(식후)','식후 2시간','2h pp glucose'], related:['GLU','HBA1C'], pregnancyRelevant:true },
   HBA1C:{ name:{ko:'당화혈색소',en:'HbA1c'}, unit:'%', category:'glucose', ref:{low:4.0,high:6.0},
     aliases:['hba1c','a1c','glycated hemoglobin','당화혈색소','당화 혈색소','hemoglobin a1c','glycohemoglobin','hb a1c'], related:['GLU','INSULIN'], pregnancyRelevant:true },
   INSULIN:{ name:{ko:'인슐린',en:'Insulin'}, unit:'μIU/mL', category:'glucose', ref:{low:2,high:25},
@@ -205,9 +205,9 @@ const _CHECKUP_STD_TESTS = {
   MG:   { name:{ko:'마그네슘',en:'Magnesium'}, unit:'mg/dL', category:'electrolyte', ref:{low:1.6,high:2.6},
     aliases:['magnesium','mg','마그네슘','s-mg'], related:['CA','P'], pregnancyRelevant:true },
   ICA:  { name:{ko:'이온화칼슘',en:'Ionized Calcium'}, unit:'mmol/L', category:'electrolyte', ref:{low:1.13,high:1.32},
-    aliases:['ionized calcium','ica','이온화칼슘','이온화 칼슘','ca2+ ionized'], related:['CA'], pregnancyRelevant:false },
+    aliases:['ionized calcium','ica','이온화칼슘','이온화 칼슘','ca2+ ionized','ionic calcium'], related:['CA'], pregnancyRelevant:false },
   PO4:  { name:{ko:'인산',en:'Phosphate'}, unit:'mg/dL', category:'electrolyte', ref:{low:2.5,high:4.5},
-    aliases:['phosphate','po4','인산','무기인산'], related:['CA','P'], pregnancyRelevant:false },
+    aliases:['phosphate','po4','인산','무기인산','inorganic phosphorus'], related:['CA','P'], pregnancyRelevant:false },
 
   // ── 염증 ──
   CRP:  { name:{ko:'C반응단백',en:'CRP'}, unit:'mg/dL', category:'inflammation', ref:{low:0,high:0.5},
@@ -262,7 +262,7 @@ const _CHECKUP_STD_TESTS = {
   TIBC: { name:{ko:'총철결합능',en:'TIBC'}, unit:'μg/dL', category:'iron', ref:{low:250,high:400},
     aliases:['tibc','총철결합능','total iron binding capacity','총철결합력','철결합능'], related:['FERRITIN','FE'], pregnancyRelevant:false },
   UIBC: { name:{ko:'불포화철결합능',en:'UIBC'}, unit:'μg/dL', category:'iron', ref:{low:110,high:330},
-    aliases:['uibc','불포화철결합능','unsaturated iron binding capacity'], related:['TIBC','FE','FERRITIN'], pregnancyRelevant:false },
+    aliases:['uibc','불포화철결합능','unsaturated iron binding capacity','불포화 철결합능'], related:['TIBC','FE','FERRITIN'], pregnancyRelevant:false },
   TRANSF:{ name:{ko:'트랜스페린',en:'Transferrin'}, unit:'mg/dL', category:'iron', ref:{low:200,high:360},
     aliases:['transferrin','transfe','트랜스페린','트랜스훼린'], related:['FE','TIBC','FERRITIN'], pregnancyRelevant:true },
 
@@ -278,7 +278,7 @@ const _CHECKUP_STD_TESTS = {
   CA199:{ name:{ko:'CA19-9',en:'CA19-9'}, unit:'U/mL', category:'tumor', ref:{low:0,high:37},
     aliases:['ca19-9','ca199','ca 19-9','ca19 9'], related:['CA125','CEA'], pregnancyRelevant:false },
   CA153:{ name:{ko:'CA15-3',en:'CA15-3'}, unit:'U/mL', category:'tumor', ref:{low:0,high:30},
-    aliases:['ca15-3','ca153','ca 15-3'], related:['CA125','CEA'], pregnancyRelevant:false },
+    aliases:['ca15-3','ca153','ca 15-3','씨에이15-3'], related:['CA125','CEA'], pregnancyRelevant:false },
 
   // ── 감염 / 면역 ──
   HBSAG:{ name:{ko:'B형간염표면항원',en:'HBsAg'}, unit:'Index', category:'infection', ref:{low:0,high:1},
@@ -290,7 +290,7 @@ const _CHECKUP_STD_TESTS = {
   HBEAB:{ name:{ko:'B형간염e항체',en:'HBe Ab'}, unit:'Index', category:'infection', ref:{low:0,high:1},
     aliases:['hbeab','b형간염e항체','hepatitis b e antibody','hbe ab','hbe-ab','anti-hbe'], related:['HBEAG','HBSAG'], pregnancyRelevant:true },
   HBCIGG:{ name:{ko:'B형간염핵심항체(IgG)',en:'HBc IgG'}, unit:'Index', category:'infection', ref:{low:0,high:1},
-    aliases:['hbc igg','hbc','b형간염핵심항체','hepatitis b core antibody','anti-hbc','hbc-igg','hbc igm'], related:['HBSAG','HBSAB'], pregnancyRelevant:true },
+    aliases:['hbc igg','hbc','b형간염핵심항체','hepatitis b core antibody','anti-hbc','hbc-igg','anti-hbc igg'], related:['HBSAG','HBSAB'], pregnancyRelevant:true },
   HAVIGG:{ name:{ko:'A형간염항체(IgG)',en:'HAV IgG'}, unit:'Index', category:'infection', ref:{low:1,high:999},
     aliases:['hav igg','a형간염항체','hepatitis a igg','a형간염 igg','hav-igg','hav_igg','a형간염igg'], related:[], pregnancyRelevant:true, higherIsBetter:true },
   HAVIGM:{ name:{ko:'A형간염항체(IgM)',en:'HAV IgM'}, unit:'Index', category:'infection', ref:{low:0,high:1},
@@ -312,7 +312,7 @@ const _CHECKUP_STD_TESTS = {
   APTT: { name:{ko:'aPTT',en:'aPTT'}, unit:'sec', category:'coagulation', ref:{low:25,high:35},
     aliases:['aptt','활성부분트롬보플라스틴시간','activated partial thromboplastin time','ptt'], related:['PT','INR'], pregnancyRelevant:false },
   INR:  { name:{ko:'INR',en:'INR'}, unit:'ratio', category:'coagulation', ref:{low:0.8,high:1.2},
-    aliases:['inr','international normalized ratio','pt-inr','pt/inr'], related:['PT','APTT'], pregnancyRelevant:false },
+    aliases:['inr','international normalized ratio','pt-inr','pt/inr','국제표준화비율'], related:['PT','APTT'], pregnancyRelevant:false },
 
   // ── 소변검사 ──
   UPROT:{ name:{ko:'소변단백',en:'Urine Protein'}, unit:'qualitative', category:'urine', ref:{low:0,high:0},
