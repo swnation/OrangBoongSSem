@@ -1129,7 +1129,7 @@ async function checkRxRefillAlerts() {
   allConds.forEach(c => {
     if (c.status === 'resolved' || !c.medsDetail) return;
     Object.entries(c.medsDetail).forEach(([med, detail]) => {
-      if (!detail.rxStartDate || !detail.rxDays || detail.freq === 'PRN') return;
+      if (!detail.rxStartDate || !detail.rxDays || detail.cycle === 'prn') return;
       const endDate = new Date(detail.rxStartDate + 'T00:00:00');
       endDate.setDate(endDate.getDate() + detail.rxDays);
       const end = endDate.toISOString().slice(0, 10);

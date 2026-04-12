@@ -2120,18 +2120,57 @@ const _DRUG_INTERACTIONS = [
 ];
 
 function _normalizeDrugName(name) {
-  // Convert Korean drug name to English using _DRUG_NAMES mapping
+  // 3단계 파이프라인 (Rule #37): ①사전 매칭 → ②규칙 기반 → ③AI 검증(비동기 별도)
   const upper=(name||'').trim();
   if(!upper) return '';
-  // Check exact match in _DRUG_NAMES
+  // ① 사전 빠른 매칭
   if(_DRUG_NAMES[upper]) return _DRUG_NAMES[upper];
-  // Check case-insensitive English
+  // ② 규칙 기반: 대소문자 무시 + 제형/용량 접미사 제거
   const lower=upper.toLowerCase();
   for(const [ko,en] of Object.entries(_DRUG_NAMES)) {
     if(ko.toLowerCase()===lower||en.toLowerCase()===lower) return en;
   }
-  // Return original (capitalized) for English names
+  // 제형/용량 접미사 제거 후 재시도 (XR, XL, SR, ER, 숫자mg 등)
+  const stripped=upper.replace(/\s*(XR|XL|SR|ER|IR|CR|LA|qAM|qPM|qHS)\s*$/i,'').replace(/\s*\d+(\.\d+)?\s*(mg|mcg|μg|g|ml|mL)\s*$/i,'').trim();
+  if(stripped!==upper){
+    if(_DRUG_NAMES[stripped]) return _DRUG_NAMES[stripped];
+    const sl=stripped.toLowerCase();
+    for(const [ko,en] of Object.entries(_DRUG_NAMES)) {
+      if(ko.toLowerCase()===sl||en.toLowerCase()===sl) return en;
+    }
+  }
+  // 동적 사전 캐시 확인 (AI가 이전에 매핑한 항목)
+  const dm=typeof DM==='function'?DM():null;
+  const dynMap=dm?.settings?.customDrugMappings||{};
+  if(dynMap[lower]) return dynMap[lower];
+  // 매칭 실패: 원본 반환 (AI 비동기 검증은 별도 호출)
   return upper.charAt(0).toUpperCase()+upper.slice(1).toLowerCase();
+}
+
+// AI 약물명 검증 (비동기) — 미매칭 약물에 대해 호출
+async function aiVerifyDrugName(drugName) {
+  const aiId=S.keys?.gemini?'gemini':(S.keys?.claude?'claude':(S.keys?.gpt?'gpt':null));
+  if(!aiId) return null;
+  const prompt='약물명 "'+drugName+'"의 국제 일반명(INN/generic name)을 영문으로 알려주세요. JSON: {"generic":"영문일반명","korean":"한글명"} JSON만.';
+  try{
+    const resp=await callAI(aiId,'약물명 정규화 전문가. JSON만.',prompt);
+    const m=resp.match(/\{[\s\S]*?\}/);
+    if(!m) return null;
+    const result=JSON.parse(m[0]);
+    if(result.generic){
+      // 동적 사전 확장: 클라우드에 저장
+      const dm=DM();
+      if(dm){
+        if(!dm.settings) dm.settings={};
+        if(!dm.settings.customDrugMappings) dm.settings.customDrugMappings={};
+        dm.settings.customDrugMappings[drugName.toLowerCase()]=result.generic;
+        if(result.korean) dm.settings.customDrugMappings[result.korean.toLowerCase()]=result.generic;
+        await saveMaster();
+      }
+      return result.generic;
+    }
+  }catch(e){console.warn('AI drug name verify failed:',e);}
+  return null;
 }
 
 function checkDrugInteractions() {
