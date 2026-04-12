@@ -2059,7 +2059,7 @@ async function brkSaveLab() {
     if (textEl && textEl.value) values.text = textEl.value;
   }
 
-  var institution = (document.getElementById('brk-lab-inst')?.value || '').trim();
+  const institution = (document.getElementById('brk-lab-inst')?.value || '').trim();
   const labEntry3={ id: Date.now(), date: date, who: who, type: type, values: values, memo: memo, institution: institution || undefined };
   m.labResults.push(labEntry3);
   if(typeof _checkAntibodyAndSyncVax==='function')_checkAntibodyAndSyncVax(labEntry3);
