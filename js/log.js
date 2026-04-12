@@ -1391,11 +1391,33 @@ function editLogEntry(idx) {
     // Memo
     const memoEl=document.getElementById('log-memo');
     if(memoEl) memoEl.value=entry.memo||'';
-    // MedCheck restore
+    // 컨디션 점수 (moodMode: mood-nrs 슬라이더)
+    if(lc.moodMode && entry.nrs>=0) {
+      const moodNrs=document.getElementById('mood-nrs');
+      const moodNrsVal=document.getElementById('mood-nrs-val');
+      const moodNrsSkip=document.getElementById('mood-nrs-skip');
+      if(moodNrs){moodNrs.value=entry.nrs;moodNrs.disabled=false;}
+      if(moodNrsVal){moodNrsVal.textContent=entry.nrs;}
+      if(moodNrsSkip){moodNrsSkip.checked=false;}
+    }
+    // 컨디션 체크 (dailyChecks: 수면/집중력/발화 등)
+    if(entry.dailyChecks){
+      Object.entries(entry.dailyChecks).forEach(([item,val])=>{
+        const chip=document.querySelector(`#dc-${item} .log-chip[data-val="${val}"]`);
+        if(chip) chip.classList.add('sel','sel-sym');
+      });
+    }
+    // MedCheck restore — 편집 시 자기 기록의 disabled 해제
     if(entry.medCheck){
       document.querySelectorAll('.med-check-cb').forEach(cb=>{
         const med=cb.dataset.med;
-        if(med in entry.medCheck) cb.checked=entry.medCheck[med];
+        if(med in entry.medCheck){
+          cb.checked=entry.medCheck[med];
+          cb.disabled=false; // 편집 모드: 자기 기록이 "이전 복용"으로 잠기지 않도록
+          cb.closest('label').style.opacity='1';
+          const prevTag=cb.closest('label')?.querySelector('[style*="이전"]');
+          if(prevTag) prevTag.remove();
+        }
       });
     }
     // Scroll to form
