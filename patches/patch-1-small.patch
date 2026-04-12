@@ -1,0 +1,130 @@
+diff --git a/js/constants.js b/js/constants.js
+index 089d9b3..3b9fb60 100644
+--- a/js/constants.js
++++ b/js/constants.js
+@@ -418,12 +418,16 @@ const KEY_INFO = {
+ };
+ 
+ const DEFAULT_PRICE_TABLE = {
++  // GPT (2026-04 verified)
+   'gpt-5.4':{in:2.50,out:15.00},
+   'gpt-5.4-mini':{in:0.75,out:4.50},
+   'gpt-5.4-nano':{in:0.20,out:1.25},
+   'gpt-5.3-chat-latest':{in:2.50,out:10.00},
+   'gpt-4.1':{in:2.00,out:8.00},
+   'gpt-4.1-mini':{in:0.40,out:1.60},
++  'gpt-4.1-nano':{in:0.05,out:0.20},
++  'gpt-4o':{in:2.50,out:10.00},
++  'gpt-4o-mini':{in:0.15,out:0.60},
+   'o3':{in:2.00,out:8.00},
+   'o3-mini':{in:1.10,out:4.40},
+   'o4-mini':{in:0.55,out:2.20},
+diff --git a/js/session.js b/js/session.js
+index 5a34e24..9d9b529 100644
+--- a/js/session.js
++++ b/js/session.js
+@@ -88,7 +88,7 @@ async function runBasicMode() {
+       const answer=await callAIStream(aiId,getRoleSystem(aiId),r1Prompt,(chunk)=>{
+         const ta=document.getElementById('ans-'+aiId);
+         if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
+-      },ac.signal);
++      },ac.signal,'session-r1');
+       r1Results[aiId]=answer;
+       S.session.rounds[0].answers[aiId]=answer;
+       delete S.session.rounds[0].errors[aiId];
+@@ -131,7 +131,7 @@ async function runBasicMode() {
+     const answer=await callAIStream('claude',getRoleSystem('claude'),claudePrompt,(chunk)=>{
+       const ta=document.getElementById('ans-claude');
+       if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
+-    },ac.signal);
++    },ac.signal,'session-r1');
+     S.session.rounds[1].answers.claude=answer;
+     delete S.session.rounds[1].errors.claude;
+     const ta=document.getElementById('ans-claude');
+@@ -209,7 +209,7 @@ async function runQuickQuestion(aiId) {
+     const answer=await callAIStream(aiId,getRoleSystem(aiId),buildUserPrompt(aiId,1),(chunk)=>{
+       const ta=document.getElementById('ans-'+aiId);
+       if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
+-    });
++    },undefined,'session-r1');
+     S.session.rounds[0].answers[aiId]=answer;
+     const ta=document.getElementById('ans-'+aiId);
+     if(ta){ta.value=answer;ta.classList.remove('gen');}
+@@ -288,7 +288,7 @@ async function runRound(roundNum, errorsOnly) {
+       const answer = await callAIStream(aiId, getRoleSystem(aiId), buildUserPrompt(aiId,roundNum), (chunk)=>{
+         const ta=document.getElementById('ans-'+aiId);
+         if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
+-      }, ac.signal);
++      }, ac.signal, 'session-r'+roundNum);
+       S.session.rounds[roundNum-1].answers[aiId]=answer;
+       delete S.session.rounds[roundNum-1].errors[aiId];
+       const ta=document.getElementById('ans-'+aiId);
+@@ -363,7 +363,7 @@ async function regenOne(aiId) {
+     const answer=await callAIStream(aiId,getRoleSystem(aiId),buildUserPrompt(aiId,curRound),(chunk)=>{
+       const ta=document.getElementById('ans-'+aiId);
+       if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
+-    }, ac.signal);
++    }, ac.signal, 'session-r'+curRound);
+     S.session.rounds[curRound-1].answers[aiId]=answer;
+     delete S.session.rounds[curRound-1].errors[aiId];
+     const ta=document.getElementById('ans-'+aiId);
+@@ -427,14 +427,17 @@ function startAITimer(aiId) {
+   const el=document.getElementById('timer-'+aiId);
+   if(!el) return;
+   const start=Date.now();
+-  el.textContent='0s';
++  const model=S.models[aiId]||DEFAULT_MODELS[aiId];
++  const price=DEFAULT_PRICE_TABLE[model];
++  const estInfo=price?` · ~$${((4000/1e6*price.in)+(2000/1e6*price.out)).toFixed(4)}/call`:'';
++  el.textContent=`0s${estInfo}`;
+   el.style.display='inline';
+   el.style.color='var(--mu)';
+   const warn=document.getElementById('slow-'+aiId);
+   if(warn) warn.style.display='none';
+   _aiTimers[aiId]=setInterval(()=>{
+     const sec=Math.round((Date.now()-start)/1000);
+-    el.textContent=sec+'s';
++    el.textContent=`${sec}s${estInfo}`;
+     if(sec>=AI_SLOW_THRESHOLD) {
+       el.style.color='#f59e0b';
+       if(warn) { warn.style.display='inline'; warn.title=`${sec}초 경과 — 중단 후 재시도를 권장합니다`; }
+@@ -548,7 +551,7 @@ SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요.
+     const raw=(data.output||[]).filter(o=>o.type==='message').map(o=>(o.content||[]).filter(c=>c.type==='output_text').map(c=>c.text).join('')).join('\n')||data.output_text||JSON.stringify(data);
+     // 토큰 비용 기록
+     const mu=data.usage||{};
+-    recordUsage('grok',maModel,mu.input_tokens||0,mu.output_tokens||0);
++    recordUsage('grok',maModel,mu.input_tokens||0,mu.output_tokens||0,'summary');
+ 
+     // JSON 추출 (기존 Claude runFinalSummary와 동일한 파싱)
+     let parsed;
+@@ -612,7 +615,7 @@ JSON 형식 (각 문자열 100자 이내):
+   try {
+     const result = await callAI('claude',
+       '당신은 협진 세션 요약 전문가. 유효한 JSON만 출력. 다른 텍스트 금지.',
+-      prompt);
++      prompt, 'summary');
+ 
+     let parsed;
+     let clean = result.replace(/```json|```/g,'').trim();
+diff --git a/js/settings.js b/js/settings.js
+index ec2bb96..3c5595b 100644
+--- a/js/settings.js
++++ b/js/settings.js
+@@ -444,7 +444,7 @@ async function reorganizeCtx() {
+     const raw=await callAIStream(aiId,system,user,(chunk)=>{
+       chunkLen=chunk.length;
+       if(progressText) progressText.textContent=`${AI_DEFS[aiId].name} 생성 중... ${chunkLen}자`;
+-    },ac.signal);
++    },ac.signal,'insight');
+ 
+     if(progressText) progressText.textContent='결과 파싱 중...';
+     const jsonMatch=raw.match(/\{[\s\S]*\}/);
+@@ -548,7 +548,7 @@ async function upgradeCtxFromRecent() {
+     const raw=await callAIStream(aiId,system,userParts,(chunk)=>{
+       chunkLen=chunk.length;
+       if(progressText) progressText.textContent=`${AI_DEFS[aiId].name} 생성 중... ${chunkLen}자`;
+-    },ac.signal);
++    },ac.signal,'insight');
+ 
+     if(progressText) progressText.textContent='결과 파싱 중...';
+     const jsonMatch=raw.match(/\{[\s\S]*\}/);
