@@ -337,7 +337,7 @@ function renderHome() {
   const _cardRenderers = {
     sessions: () => `<button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
       <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
-      <button onclick="startLightMode()" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,#f0fdf4,#eff6ff);border:1.5px solid var(--bd);border-radius:12px;cursor:pointer;font-size:.88rem;width:100%;margin-bottom:12px;margin-top:-8px">
+      <button onclick="startLightMode()" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,var(--ok-bg),var(--info-bg));border:1.5px solid var(--bd);border-radius:12px;cursor:pointer;font-size:.88rem;width:100%;margin-bottom:12px;margin-top:-8px">
         <span style="font-size:1.2rem">⚡</span>
         <div style="text-align:left"><div style="font-weight:600;color:var(--ink)">빠른 체크</div><div style="font-size:.68rem;color:var(--mu)">AI 1개 · 최근 기록 기반 빠른 요약</div></div>
       </button>`,
@@ -1478,7 +1478,7 @@ function renderUsageView() {
 
   // 가격 업데이트 알림
   const priceAlerts=DM()?._priceAlerts||[];
-  const alertHtml=priceAlerts.length?`<div class="card" style="background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:1.5px solid #3b82f630">
+  const alertHtml=priceAlerts.length?`<div class="card" style="background:linear-gradient(135deg,var(--info-bg),var(--ok-bg));border:1.5px solid var(--ac)">
     <div style="font-size:.78rem;font-weight:600;margin-bottom:6px">📢 가격/모델 업데이트</div>
     ${priceAlerts.map(a=>`<div style="font-size:.72rem;color:var(--mu);padding:2px 0">• ${a}</div>`).join('')}
     <div style="font-size:.6rem;color:var(--mu2);margin-top:4px">마지막 확인: ${DM()?.price_updated?.slice(0,10)||'—'}</div>
