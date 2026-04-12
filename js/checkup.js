@@ -2173,6 +2173,7 @@ function renderCheckupArchive() {
       <button onclick="aiCheckupInterpretation()" style="margin-left:auto;background:none;border:1px solid #10b981;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#10b981;cursor:pointer;font-family:var(--font)">💡 AI 종합 해석</button>
       <button onclick="aiReclassifyAll()" style="background:none;border:1px solid #8b5cf6;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#8b5cf6;cursor:pointer;font-family:var(--font)">🤖 재분류</button>
       <button onclick="openBatchInstitution()" style="background:none;border:1px solid #f59e0b;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#f59e0b;cursor:pointer;font-family:var(--font)">🏥 기관명</button>
+      <button onclick="_detectDuplicateCheckups()" style="background:none;border:1px solid #dc2626;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#dc2626;cursor:pointer;font-family:var(--font)">🔗 중복 정리</button>
       <span style="font-size:.62rem;color:var(--mu)">${allCheckups.length}건 · ${totalItems}항목</span>
     </div>
     <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${tabBar}</div>
@@ -2702,9 +2703,19 @@ level: danger/warning/caution/info. JSON만.`;
 
 let _drugAlertExpanded = false;
 let _drugAlertSearch = '';
+let _drugAlertSort = 'severity'; // severity | drug | type
 
 function _filterDrugAlerts(q) {
   _drugAlertSearch = q.toLowerCase().trim();
+  _applyDrugAlertFilter();
+}
+
+function _sortDrugAlerts(mode) {
+  _drugAlertSort = mode;
+  renderView('meds');
+}
+
+function _applyDrugAlertFilter() {
   const body = document.getElementById('drug-alert-body');
   if (!body) return;
   body.querySelectorAll('[data-drug-alert]').forEach(function(el) {
@@ -2732,14 +2743,28 @@ function renderDrugAlerts() {
   }
   const levelIcons = { danger:'🚨', warning:'⚠️', caution:'💡', info:'ℹ️' };
   const levelColors = { danger:'#dc2626', warning:'#f59e0b', caution:'#3b82f6', info:'#6b7280' };
+  const levelOrder = { danger:0, warning:1, caution:2, info:3 };
   const typeLabels = { hepato:'🫁 간독성', nephro:'🫘 신독성', ddi:'💊 상호작용', lactose:'🥛 유당' };
+  const typeOrder = { hepato:0, nephro:1, ddi:2, lactose:3 };
 
   const dangerCount = alerts.alerts.filter(a => a.level === 'danger').length;
   const warnCount = alerts.alerts.filter(a => a.level === 'warning').length;
-  const summaryBadge = (dangerCount ? `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:#fee2e2;color:#dc2626">🚨${dangerCount}</span>` : '')
-    + (warnCount ? `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:#fef3c7;color:#92400e">⚠️${warnCount}</span>` : '');
+  const summaryBadge = (dangerCount ? `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:var(--err-bg);color:var(--err)">🚨${dangerCount}</span>` : '')
+    + (warnCount ? `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:var(--warn-bg);color:var(--warn)">⚠️${warnCount}</span>` : '');
 
-  const html = alerts.alerts.map(a => {
+  // Sort
+  const sorted = [...alerts.alerts].sort((a, b) => {
+    if (_drugAlertSort === 'severity') return (levelOrder[a.level]||9) - (levelOrder[b.level]||9);
+    if (_drugAlertSort === 'drug') {
+      const da = a.drugs ? a.drugs.join('+') : (a.drug || '');
+      const db = b.drugs ? b.drugs.join('+') : (b.drug || '');
+      return da.localeCompare(db);
+    }
+    if (_drugAlertSort === 'type') return (typeOrder[a.type]||9) - (typeOrder[b.type]||9);
+    return 0;
+  });
+
+  const html = sorted.map(a => {
     const color = levelColors[a.level] || '#f59e0b';
     const drug = a.drugs ? a.drugs.join('+') : (a.drug || '');
     return `<div data-drug-alert="${esc(drug)}" style="padding:5px 8px;background:${color}08;border-left:3px solid ${color};border-radius:0 6px 6px 0;margin-bottom:2px;font-size:.68rem">
@@ -2748,6 +2773,12 @@ function renderDrugAlerts() {
       <div style="color:var(--mu);margin-top:1px">${esc(a.msg)}</div>
     </div>`;
   }).join('');
+
+  const sortBtns = [
+    {key:'severity',label:'위험도순'},
+    {key:'drug',label:'약물명순'},
+    {key:'type',label:'유형순'},
+  ].map(s => `<button onclick="event.stopPropagation();_sortDrugAlerts('${s.key}')" style="font-size:.55rem;padding:1px 6px;border:1px solid ${_drugAlertSort===s.key?'var(--ac)':'var(--bd)'};border-radius:3px;background:${_drugAlertSort===s.key?'var(--ac)':'transparent'};color:${_drugAlertSort===s.key?'#fff':'var(--mu)'};cursor:pointer;font-family:var(--font)">${s.label}</button>`).join('');
 
   return `<div style="margin-bottom:8px;padding:8px;background:var(--sf2);border:1.5px solid #f59e0b30;border-radius:8px">
     <div onclick="toggleDrugAlerts()" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
@@ -2759,11 +2790,11 @@ function renderDrugAlerts() {
       <button onclick="event.stopPropagation();_refreshDrugAlerts()" style="font-size:.58rem;padding:2px 6px;border:1px solid var(--bd);border-radius:4px;background:none;cursor:pointer;color:var(--ac);font-family:var(--font)">🔄</button>
     </div>
     <div id="drug-alert-body" style="display:${_drugAlertExpanded?'block':'none'};margin-top:6px">
-      <div style="margin-bottom:6px;display:flex;gap:4px">
-        <input type="text" placeholder="🔍 약 이름 검색 (예: 리튬, 부프로피온+아토목세틴)" oninput="_filterDrugAlerts(this.value)"
+      <div style="display:flex;gap:4px;margin-bottom:4px;align-items:center">
+        <input type="text" placeholder="🔍 약 이름 검색" oninput="_filterDrugAlerts(this.value)"
           style="flex:1;padding:4px 8px;font-size:.68rem;border:1px solid var(--bd);border-radius:6px;background:var(--sf);color:var(--ink);font-family:var(--font)">
+        <span style="font-size:.5rem;color:var(--mu2)">정렬:</span>${sortBtns}
       </div>
-      <div style="font-size:.58rem;color:var(--mu2);margin-bottom:4px">약 하나만 입력하면 관련 경고 전체, 두 개를 +로 연결하면 해당 조합만 필터</div>
       ${html}
       ${alerts.summary ? `<div style="font-size:.62rem;color:var(--mu);margin-top:3px;padding-top:3px;border-top:1px solid var(--bd)">${esc(alerts.summary)}</div>` : ''}
     </div>
@@ -2925,4 +2956,137 @@ function _addMajorCategoryRow() {
     + '<button onclick="this.closest(\'div\').closest(\'div\').remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.7rem">✕</button>'
     + '</div>';
   list.appendChild(div);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DUPLICATE DETECTION & MERGE — 중복 검사 감지 + 병합
+// ═══════════════════════════════════════════════════════════════
+
+function _detectDuplicateCheckups() {
+  const who = DC().user;
+  const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
+
+  // 같은 날짜 + 같은 기관 + 같은 항목수 → 중복 후보
+  const groups = {};
+  allCheckups.forEach(c => {
+    const key = (c.date || '') + '|' + (c.institution || '') + '|' + (c.results?.length || 0);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(c);
+  });
+
+  const duplicates = Object.entries(groups).filter(([, g]) => g.length > 1);
+
+  if (!duplicates.length) {
+    showToast('✅ 중복 검진 없음');
+    return;
+  }
+
+  const listHtml = duplicates.map(([key, group]) => {
+    const [date, inst, cnt] = key.split('|');
+    return '<div style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;margin-bottom:4px;background:var(--sf)">'
+      + '<div style="font-size:.72rem;font-weight:600">' + esc(date) + ' ' + esc(inst || '기관미상') + ' — ' + cnt + '항목 × ' + group.length + '건 중복</div>'
+      + '<div style="font-size:.6rem;color:var(--mu);margin-top:2px">'
+      + group.map(c => 'ID:' + c.id + (c._legacyLab ? ' (붕룩이)' : '') + (c._source ? ' [' + c._source + ']' : '')).join(' / ')
+      + '</div>'
+      + '<div style="display:flex;gap:4px;margin-top:4px">'
+      + '<button onclick="_mergeCheckupGroup(\'' + esc(key) + '\')" style="font-size:.6rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:var(--ac);color:#fff;cursor:pointer;font-family:var(--font)">🔗 첫 건 유지 + 나머지 삭제</button>'
+      + '</div></div>';
+  }).join('');
+
+  const totalDups = duplicates.reduce((s, [, g]) => s + g.length - 1, 0);
+
+  showConfirmModal('🔗 중복 검진 정리',
+    '<div style="font-size:.72rem">'
+    + '<div style="margin-bottom:8px;color:var(--mu)">같은 날짜 · 같은 기관 · 같은 항목수인 검진을 중복으로 감지했습니다.</div>'
+    + '<div style="margin-bottom:8px;font-weight:600;color:var(--err)">' + totalDups + '건 중복 발견</div>'
+    + '<div style="max-height:300px;overflow-y:auto">' + listHtml + '</div>'
+    + '<button onclick="_mergeAllDuplicates()" style="margin-top:8px;width:100%;padding:6px;font-size:.72rem;border:1.5px solid var(--err);border-radius:6px;background:none;color:var(--err);cursor:pointer;font-family:var(--font);font-weight:600">🗑 전체 중복 일괄 정리</button>'
+    + '</div>',
+    [{ label: '닫기', action: closeConfirmModal }]);
+}
+
+async function _mergeCheckupGroup(key) {
+  const who = DC().user;
+  const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
+  const [date, inst, cnt] = key.split('|');
+
+  const group = allCheckups.filter(c =>
+    (c.date || '') === date && (c.institution || '') === inst && String(c.results?.length || 0) === cnt
+  );
+
+  if (group.length < 2) { showToast('중복 없음'); return; }
+
+  _pushUndo('중복 정리');
+
+  // 첫 건 유지, 나머지 삭제
+  const keep = group[0];
+  let deleted = 0;
+  for (let i = 1; i < group.length; i++) {
+    const c = group[i];
+    if (c._legacyLab) {
+      const brkDs = S.domainState['bungruki'];
+      if (brkDs?.master?.labResults) {
+        const idx = brkDs.master.labResults.findIndex(l => l.id === c.id);
+        if (idx >= 0) { brkDs.master.labResults.splice(idx, 1); deleted++; }
+      }
+    } else {
+      const ds = S.domainState[c._source];
+      if (ds?.master?.healthCheckups) {
+        const idx = ds.master.healthCheckups.findIndex(h => h.id === c.id);
+        if (idx >= 0) { ds.master.healthCheckups.splice(idx, 1); deleted++; }
+      }
+    }
+  }
+
+  if (deleted) {
+    await saveMaster();
+    showToast('✅ ' + deleted + '건 중복 삭제됨');
+    closeConfirmModal();
+    renderView('meds');
+  }
+}
+
+async function _mergeAllDuplicates() {
+  if (!confirm('모든 중복 검진을 정리할까요? 각 그룹의 첫 번째 건만 남깁니다.')) return;
+
+  const who = DC().user;
+  const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
+  const groups = {};
+  allCheckups.forEach(c => {
+    const key = (c.date || '') + '|' + (c.institution || '') + '|' + (c.results?.length || 0);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(c);
+  });
+
+  _pushUndo('전체 중복 정리');
+
+  let totalDeleted = 0;
+  for (const [, group] of Object.entries(groups)) {
+    if (group.length < 2) continue;
+    for (let i = 1; i < group.length; i++) {
+      const c = group[i];
+      if (c._legacyLab) {
+        const brkDs = S.domainState['bungruki'];
+        if (brkDs?.master?.labResults) {
+          const idx = brkDs.master.labResults.findIndex(l => l.id === c.id);
+          if (idx >= 0) { brkDs.master.labResults.splice(idx, 1); totalDeleted++; }
+        }
+      } else {
+        const ds = S.domainState[c._source];
+        if (ds?.master?.healthCheckups) {
+          const idx = ds.master.healthCheckups.findIndex(h => h.id === c.id);
+          if (idx >= 0) { ds.master.healthCheckups.splice(idx, 1); totalDeleted++; }
+        }
+      }
+    }
+  }
+
+  if (totalDeleted) {
+    await saveMaster();
+    showToast('✅ ' + totalDeleted + '건 중복 삭제 완료');
+    closeConfirmModal();
+    renderView('meds');
+  } else {
+    showToast('중복 없음');
+  }
 }
