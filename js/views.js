@@ -337,7 +337,7 @@ function renderHome() {
   const _cardRenderers = {
     sessions: () => `<button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
       <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
-      <button onclick="startLightMode()" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,#f0fdf4,#eff6ff);border:1.5px solid var(--bd);border-radius:12px;cursor:pointer;font-size:.88rem;width:100%;margin-bottom:12px;margin-top:-8px">
+      <button onclick="startLightMode()" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,var(--ok-bg),var(--info-bg));border:1.5px solid var(--bd);border-radius:12px;cursor:pointer;font-size:.88rem;width:100%;margin-bottom:12px;margin-top:-8px">
         <span style="font-size:1.2rem">⚡</span>
         <div style="text-align:left"><div style="font-weight:600;color:var(--ink)">빠른 체크</div><div style="font-size:.68rem;color:var(--mu)">AI 1개 · 최근 기록 기반 빠른 요약</div></div>
       </button>`,
@@ -1135,7 +1135,9 @@ function renderStatsView() {
   ${topMeds.length?`<div class="card"><div class="card-title">투약 빈도 (30일)</div>${medHtml}</div>`:''}
   ${lc.moodMode?renderMedComplianceStats(last30)+renderDailyCheckTrend(last30,lc):renderCalendarHeatmap(logs,lc)}
   ${renderMedComplianceCalendar(logs)}
+  ${_renderHealthDashboardStats(logs,last30,dc,lc)}
   ${renderTrendChart(logs, 90)}
+  ${_renderCrossDomainCorrelation()}
   ${renderCorrelationAnalysis(logs)}
   ${renderMedEffectAnalysis(logs)}
   ${renderMedSummaryReport(logs)}
@@ -1261,11 +1263,11 @@ function renderCrossLogView() {
     const groupHtml=Object.values(domainGroups).map(g=>{
       const items=g.items.map(l=>{
         const tags=[
-          l.mood?`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:'',
+          l.mood?`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(l.mood)}</span>`:'',
           l.nrs>=0?`<span class="log-tag" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()}${l.nrs}</span>`:'',
-          ...l.symptoms.map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`),
-          ...l.meds.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`),
-          ...l.categories.map(c=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(c)}</span>`),
+          ...l.symptoms.map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`),
+          ...l.meds.map(m=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(m)}</span>`),
+          ...l.categories.map(c=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(c)}</span>`),
         ].filter(Boolean).join('');
         return `<div style="display:flex;align-items:flex-start;gap:6px;padding:2px 0">
           ${l.time&&l.time!=='00:00'?`<span style="font-size:.65rem;font-family:var(--mono);color:var(--mu2);min-width:36px">${l.time}</span>`:''}
@@ -1476,7 +1478,7 @@ function renderUsageView() {
 
   // 가격 업데이트 알림
   const priceAlerts=DM()?._priceAlerts||[];
-  const alertHtml=priceAlerts.length?`<div class="card" style="background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:1.5px solid #3b82f630">
+  const alertHtml=priceAlerts.length?`<div class="card" style="background:linear-gradient(135deg,var(--info-bg),var(--ok-bg));border:1.5px solid var(--ac)">
     <div style="font-size:.78rem;font-weight:600;margin-bottom:6px">📢 가격/모델 업데이트</div>
     ${priceAlerts.map(a=>`<div style="font-size:.72rem;color:var(--mu);padding:2px 0">• ${a}</div>`).join('')}
     <div style="font-size:.6rem;color:var(--mu2);margin-top:4px">마지막 확인: ${DM()?.price_updated?.slice(0,10)||'—'}</div>
@@ -1606,35 +1608,97 @@ function renderCalendarHeatmap(logs,lc) {
   const byDate={};
   logs.forEach(l=>{
     const d=l.datetime.slice(0,10);
-    if(!byDate[d]) byDate[d]={nrs:[],count:0};
+    if(!byDate[d]) byDate[d]={nrs:[],count:0,logs:[]};
     byDate[d].count++;
+    byDate[d].logs.push(l);
     if(l.nrs>=0) byDate[d].nrs.push(l.nrs);
   });
+  window._calHeatData=byDate;
 
-  // Last 90 days
+  // Last 90 days — grid layout (7 cols = week)
   const cells=[];
   for(let i=89;i>=0;i--){
     const d=kstDaysAgo(i);
     const data=byDate[d];
+    const isToday=d===kstToday();
+    const dayNum=new Date(d+'T12:00').getDate();
     let color='var(--bd)';let title=d+': 기록없음';
     if(data?.nrs?.length) {
       const avg=data.nrs.reduce((a,b)=>a+b,0)/data.nrs.length;
       color=avg<=2?'#2d8a5a':avg<=4?'#4ade80':avg<=6?'#fbbf24':avg<=8?'#f97316':'#ef4444';
-      title=`${d}: ${_scoreLabel()} ${avg.toFixed(1)} (${data.count}건)`;
+      title=d+': '+_scoreLabel()+' '+avg.toFixed(1)+' ('+data.count+'건)';
     } else if(data?.count) {
-      color='#93c5fd'; title=`${d}: ${data.count}건 (${_scoreLabel()} 미기록)`;
+      color='#93c5fd'; title=d+': '+data.count+'건 ('+_scoreLabel()+' 미기록)';
     }
-    cells.push(`<div style="width:10px;height:10px;border-radius:2px;background:${color}" title="${title}"></div>`);
+    cells.push('<div onclick="_showCalDetail(\''+d+'\')" style="width:12px;height:12px;border-radius:2px;background:'+color+';cursor:pointer'+(isToday?';outline:1.5px solid var(--ac)':'')+'" title="'+title+'"></div>');
   }
 
-  return `<div class="card">
-    <div class="card-title">📅 90일 캘린더 히트맵</div>
-    <div style="display:flex;flex-wrap:wrap;gap:2px;padding:4px">${cells.join('')}</div>
-    <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;font-size:.6rem;color:var(--mu)">
-      <span>⬜ 없음</span><span style="color:#2d8a5a">🟩 0-2</span><span style="color:#4ade80">🟢 3-4</span>
-      <span style="color:#fbbf24">🟡 5-6</span><span style="color:#f97316">🟠 7-8</span><span style="color:#ef4444">🔴 9-10</span>
-    </div>
-  </div>`;
+  return '<div class="card">'
+    +'<div class="card-title">📅 90일 캘린더 히트맵 <span style="font-size:.6rem;color:var(--mu2);font-weight:400">클릭하여 상세 보기</span></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:2px;padding:4px">'+cells.join('')+'</div>'
+    +'<div style="display:flex;gap:8px;justify-content:center;margin-top:6px;font-size:.6rem;color:var(--mu)">'
+    +'<span>⬜ 없음</span><span style="color:#2d8a5a">🟩 0-2</span><span style="color:#4ade80">🟢 3-4</span>'
+    +'<span style="color:#fbbf24">🟡 5-6</span><span style="color:#f97316">🟠 7-8</span><span style="color:#ef4444">🔴 9-10</span>'
+    +'</div>'
+    +'<div id="cal-heat-detail"></div>'
+    +'</div>';
+}
+
+function _showCalDetail(date) {
+  var el=document.getElementById('cal-heat-detail'); if(!el) return;
+  var data=window._calHeatData?.[date];
+  if(!data||!data.logs.length) { el.innerHTML='<div style="padding:8px;font-size:.72rem;color:var(--mu);border-top:1px solid var(--bd);margin-top:8px">'+date+' — 기록 없음</div>'; return; }
+  var dayNames=['일','월','화','수','목','금','토'];
+  var dayOfWeek=dayNames[new Date(date+'T12:00').getDay()];
+  var nrsVals=data.nrs;
+  var avg=nrsVals.length?(nrsVals.reduce(function(a,b){return a+b;},0)/nrsVals.length).toFixed(1):'-';
+  var nc=avg==='-'?'var(--mu)':avg>=7?'#ef4444':avg>=4?'#f59e0b':'#10b981';
+
+  // Daily check from bungruki
+  var brkDs=S.domainState['bungruki'];
+  var dcHtml='';
+  if(brkDs?.master?.dailyChecks?.[date]){
+    var who=DC()?.user==='붕쌤'?'bung':'orangi';
+    var wd=brkDs.master.dailyChecks[date][who];
+    if(wd){
+      var items=[];
+      if(wd.weight) items.push('⚖️ '+wd.weight+'kg');
+      if(wd.exercises?.length) items.push('🏃 '+wd.exercises.map(function(e){return e.name;}).join(', '));
+      if(wd.alcohol) items.push('🍺 음주');
+      var supplLabels=Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(function(e){return[e[0],e[1].label]}));
+      var oKeys=typeof BRK_SUPPL_ORANGI!=='undefined'?BRK_SUPPL_ORANGI:[];
+      var bKeys=typeof BRK_SUPPL_BUNG!=='undefined'?BRK_SUPPL_BUNG:[];
+      var sk=who==='orangi'?oKeys:bKeys;
+      var taken=sk.filter(function(k){return wd[k];}).map(function(k){return supplLabels[k]||k;});
+      if(taken.length) items.push('💊 '+taken.join(', '));
+      if(items.length) dcHtml='<div style="font-size:.65rem;color:var(--ac);margin-top:4px">'+items.join(' · ')+'</div>';
+    }
+  }
+
+  var logsHtml=data.logs.map(function(l){
+    var time=l.datetime.slice(11,16);
+    var tags=[];
+    if(l.mood) tags.push('<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">'+esc(l.mood)+'</span>');
+    if(l.nrs>=0) tags.push('<span class="log-tag" style="background:'+nrsColor(l.nrs)+'20;color:'+nrsColor(l.nrs)+'">'+_scoreLabel()+' '+l.nrs+'</span>');
+    (l.symptoms||[]).forEach(function(s){tags.push('<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym);font-size:.58rem">'+esc(s)+'</span>');});
+    (l.meds||[]).forEach(function(m){tags.push('<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med);font-size:.58rem">'+esc(m)+'</span>');});
+    (l.treatments||[]).forEach(function(t){tags.push('<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx);font-size:.58rem">'+esc(t)+'</span>');});
+    if(l.medCheck){Object.entries(l.medCheck).forEach(function(mc){tags.push('<span class="log-tag" style="background:'+(mc[1]?'#f0fdf4':'#fef2f2')+';color:'+(mc[1]?'#15803d':'#dc2626')+';font-size:.55rem">'+(mc[1]?'✓':'✗')+' '+esc(mc[0])+'</span>');});}
+    return '<div style="display:flex;gap:6px;padding:4px 0;border-bottom:1px dotted var(--bd)">'
+      +'<span style="font-size:.65rem;font-family:var(--mono);color:var(--mu);min-width:36px">'+(time!=='00:00'?time:'')+'</span>'
+      +'<div style="flex:1;display:flex;flex-wrap:wrap;gap:2px;align-items:center">'+tags.join('')+'</div>'
+      +(l.memo?'<span style="font-size:.6rem;color:var(--mu);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.memo)+'</span>':'')
+      +'</div>';
+  }).join('');
+
+  el.innerHTML='<div style="border-top:1.5px solid var(--bd);margin-top:10px;padding-top:10px">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+    +'<span style="font-size:.82rem;font-weight:700">'+date+' ('+dayOfWeek+')</span>'
+    +'<span style="font-size:.72rem;color:'+nc+';font-weight:600">평균 '+avg+'</span>'
+    +'<span style="font-size:.62rem;color:var(--mu)">'+data.count+'건</span>'
+    +'<button onclick="document.getElementById(\'cal-heat-detail\').innerHTML=\'\'" style="margin-left:auto;font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf2);color:var(--mu);cursor:pointer">✕ 닫기</button>'
+    +'</div>'
+    +dcHtml+logsHtml+'</div>';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1800,7 +1864,7 @@ function _renderMcSupplExercise(date) {
   // 영양제
   const oKeys = typeof BRK_SUPPL_ORANGI !== 'undefined' ? BRK_SUPPL_ORANGI : [];
   const bKeys = typeof BRK_SUPPL_BUNG !== 'undefined' ? BRK_SUPPL_BUNG : [];
-  const supplLabels = {folicAcid:'엽산',iron:'철분',vitaminD:'비타민D',multivitamin:'멀티비타민',magnesium:'마그네슘',arginine:'아르기닌',coq10:'CoQ10',silymarin:'실리마린'};
+  const supplLabels = Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(function(e){return[e[0],e[1].label]}));
   let supplKeys = who === 'orangi' ? oKeys : bKeys;
   // 커스텀 영양제 추가
   if (m.customSuppl?.[who]) m.customSuppl[who].forEach(c => { if (!supplKeys.includes(c.key)) { supplKeys = [...supplKeys, c.key]; supplLabels[c.key] = c.label; } });
@@ -2198,65 +2262,162 @@ function getEnabledAIs() {
 // ═══════════════════════════════════════════════════════════════
 // #10 환자 타임라인 뷰
 // ═══════════════════════════════════════════════════════════════
+let _tlFilter = 'all';
+let _tlLimit = 50;
+function setTlFilter(f) { _tlFilter = f; _tlLimit = 50; renderView('timeline'); }
+function loadMoreTl() { _tlLimit += 50; renderView('timeline'); }
+
 function renderTimelineView() {
   const currentUser=DC().user;
   const events=[];
+  const typeIcons={log:'📊',session:'💬',medChange:'💊',checkup:'🏥',condition:'📋',exercise:'🏃',milestone:'🎯'};
 
-  // Collect logs and sessions from all loaded domains
   Object.entries(S.domainState).forEach(([domainId,ds])=>{
     const dd=DOMAINS[domainId];
     if(!dd||dd.user!==currentUser||!ds.master) return;
-    const icon=dd.icon;const label=dd.label;const color=dd.color;
-    const lc=dd.logConfig;
+    const icon=dd.icon,label=dd.label,color=dd.color,lc=dd.logConfig;
 
     // Log entries
     (ds.logData||[]).forEach(log=>{
-      const date=log.datetime?.slice(0,10)||'';
-      if(!date) return;
+      const date=log.datetime?.slice(0,10)||''; if(!date) return;
       let text='';
-      if(lc.moodMode) {
-        text=log.mood||'기분 기록';
-        if(log.symptoms?.length) text+=' — '+log.symptoms.join(', ');
-      } else if(lc.customFields) {
-        text=(log.categories||[]).join(', ')||'기록';
-        if(log.memo) text+=' — '+log.memo.substring(0,40);
-      } else if(log.nrs>=0) {
-        text=`${_scoreLabel()} ${log.nrs} — ${(log.symptoms||[]).join(', ')||'기록'}`;
-      } else { return; }
+      if(lc.moodMode) { text=log.mood||'기분 기록'; if(log.symptoms?.length) text+=' — '+log.symptoms.join(', '); }
+      else if(lc.customFields) { text=(log.categories||[]).join(', ')||'기록'; if(log.memo) text+=' — '+log.memo.substring(0,50); }
+      else if(log.nrs>=0) { text=_scoreLabel()+' '+log.nrs+' — '+((log.symptoms||[]).join(', ')||'기록'); }
+      else return;
       events.push({date,type:'log',domain:label,icon,color,text,
-        detail:(log.meds||[]).join(', ')});
+        detail:(log.meds||[]).join(', '),
+        nrs:log.nrs,medCheck:log.medCheck,dailyChecks:log.dailyChecks});
     });
+
     // Sessions
     (ds.master?.sessions||[]).forEach(sess=>{
       events.push({date:sess.date,type:'session',domain:label,icon,color,
         text:sess.question?(sess.question.substring(0,60)+'...'):'세션',
-        detail:`R${sess.rounds?.length||0} · ${Object.keys(sess.rounds?.[0]?.answers||{}).length}개 AI`});
+        detail:'R'+(sess.rounds?.length||0)+' · '+Object.keys(sess.rounds?.[0]?.answers||{}).length+'개 AI'});
     });
+
+    // Med changes (from condition history)
+    (ds.master?.conditions||[]).forEach(c=>{
+      if(!c.medHistory?.length) return;
+      c.medHistory.forEach((h,i)=>{
+        if(i===0) return;
+        const prev=c.medHistory[i-1];
+        const added=(h.meds||[]).filter(m=>(prev.meds||[]).indexOf(m)<0);
+        const removed=(prev.meds||[]).filter(m=>(h.meds||[]).indexOf(m)<0);
+        if(!added.length&&!removed.length) return;
+        let text=c.name+': ';
+        if(added.length) text+='추가 '+added.join(', ');
+        if(added.length&&removed.length) text+=' / ';
+        if(removed.length) text+='중단 '+removed.join(', ');
+        events.push({date:h.date,type:'medChange',domain:label,icon,color,text,detail:''});
+      });
+    });
+
+    // Condition status changes
+    (ds.master?.conditions||[]).forEach(c=>{
+      if(c.diagnosisDate) {
+        events.push({date:c.diagnosisDate,type:'condition',domain:label,icon,color,
+          text:c.name+' — 진단',detail:'상태: '+(c.status||'active')});
+      }
+    });
+
+    // Checkup results
+    if(ds.master?.checkupArchive?.length) {
+      ds.master.checkupArchive.forEach(ch=>{
+        const count=ch.results?.length||0;
+        events.push({date:ch.date,type:'checkup',domain:label,icon,color,
+          text:'건강검진 ('+(ch.institution||'기관미상')+')',
+          detail:count+'항목'+(ch.aiInterpretation?' · AI해석':'')});
+      });
+    }
   });
+
+  // Exercise milestones from bungruki
+  const brkDs=S.domainState['bungruki'];
+  if(brkDs?.master?.dailyChecks) {
+    const dc=brkDs.master.dailyChecks;
+    const who=DC().user==='붕쌤'?'bung':'orangi';
+    Object.entries(dc).forEach(([date,dayData])=>{
+      const wd=dayData[who];
+      if(wd?.exercises?.length) {
+        const exStr=wd.exercises.map(e=>e.name+'('+({light:'약',moderate:'중',intense:'강'}[e.intensity]||'중')+')').join(', ');
+        events.push({date,type:'exercise',domain:'데일리',icon:'🏃',color:'#10b981',text:exStr,detail:''});
+      }
+    });
+    // Milestones
+    (brkDs.master.milestones||[]).forEach(ms=>{
+      events.push({date:ms.date,type:'milestone',domain:'임신준비',icon:'🎯',color:'#ec4899',text:ms.title||ms.text||'마일스톤',detail:ms.note||''});
+    });
+  }
 
   if(!events.length) return '<div class="hint">데이터를 로딩 중입니다... 잠시만 기다려 주세요.</div>';
 
   events.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
-  const items=events.slice(0,50).map(e=>{
-    const typeIcon=e.type==='log'?'📊':'💬';
-    return `<div class="timeline-card">
-      <div class="timeline-event" style="border-left:3px solid ${e.color}">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span style="font-size:.68rem;color:var(--mu);font-family:var(--mono)">${e.date}</span>
-          <span style="font-size:.72rem">${typeIcon} ${e.icon} ${esc(e.domain)}</span>
-        </div>
-        <div style="font-size:.82rem;font-weight:500;color:var(--ink)">${esc(e.text)}</div>
-        ${e.detail?`<div style="font-size:.7rem;color:var(--mu);margin-top:2px">${esc(e.detail)}</div>`:''}
-      </div>
-    </div>`;
+  // Type counts for filter buttons
+  const typeCounts={};
+  events.forEach(e=>{ typeCounts[e.type]=(typeCounts[e.type]||0)+1; });
+
+  const filtered=_tlFilter==='all'?events:events.filter(e=>e.type===_tlFilter);
+  const shown=filtered.slice(0,_tlLimit);
+
+  // Group by date
+  const byDate={};
+  shown.forEach(e=>{
+    if(!byDate[e.date]) byDate[e.date]=[];
+    byDate[e.date].push(e);
+  });
+
+  const dayNames=['일','월','화','수','목','금','토'];
+  const groupsHtml=Object.entries(byDate).map(([date,evts])=>{
+    const dayOfWeek=dayNames[new Date(date+'T12:00').getDay()];
+    const evtsHtml=evts.map(e=>{
+      const ti=typeIcons[e.type]||'📋';
+      return '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">'
+        +'<div style="width:3px;border-radius:2px;background:'+e.color+';flex-shrink:0"></div>'
+        +'<div style="flex:1">'
+        +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">'
+        +'<span style="font-size:.72rem">'+ti+' '+e.icon+'</span>'
+        +'<span style="font-size:.68rem;font-weight:600;color:'+e.color+'">'+esc(e.domain)+'</span>'
+        +'<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:var(--sf2);color:var(--mu)">'+esc(e.type)+'</span>'
+        +'</div>'
+        +'<div style="font-size:.78rem;color:var(--ink)">'+esc(e.text)+'</div>'
+        +(e.detail?'<div style="font-size:.65rem;color:var(--mu);margin-top:1px">'+esc(e.detail)+'</div>':'')
+        +'</div></div>';
+    }).join('');
+
+    return '<div class="card" style="padding:10px 14px;margin-bottom:6px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+      +'<span style="font-size:.78rem;font-weight:700;font-family:var(--mono)">'+date+'</span>'
+      +'<span style="font-size:.62rem;color:var(--mu)">'+dayOfWeek+'요일</span>'
+      +'<span style="font-size:.6rem;color:var(--mu);margin-left:auto">'+evts.length+'건</span>'
+      +'</div>'+evtsHtml+'</div>';
   }).join('');
 
-  return `<div class="card">
-    <div class="card-title">📅 전체 타임라인 <span class="badge badge-blue">${events.length}건</span></div>
-    ${items}
-    ${events.length>50?`<div style="text-align:center;padding:8px;font-size:.72rem;color:var(--mu)">최근 50건만 표시됩니다.</div>`:''}
-  </div>`;
+  // Filter bar
+  const filterTypes=[
+    {key:'all',label:'전체',count:events.length},
+    {key:'log',label:'📊 기록',count:typeCounts.log||0},
+    {key:'session',label:'💬 세션',count:typeCounts.session||0},
+    {key:'medChange',label:'💊 약물변경',count:typeCounts.medChange||0},
+    {key:'checkup',label:'🏥 검진',count:typeCounts.checkup||0},
+    {key:'exercise',label:'🏃 운동',count:typeCounts.exercise||0},
+    {key:'condition',label:'📋 질환',count:typeCounts.condition||0},
+    {key:'milestone',label:'🎯 마일스톤',count:typeCounts.milestone||0},
+  ].filter(f=>f.count>0||f.key==='all');
+
+  const filterBar='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">'
+    +filterTypes.map(f=>{
+      const active=_tlFilter===f.key;
+      return '<button onclick="setTlFilter(\''+f.key+'\')" style="font-size:.62rem;padding:3px 8px;border:1px solid '+(active?'var(--ac)':'var(--bd)')+';border-radius:12px;background:'+(active?'var(--ac)':'var(--sf)')+';color:'+(active?'#fff':'var(--ink)')+';cursor:pointer;font-family:var(--font)">'+f.label+' <span style="font-size:.55rem;opacity:.7">'+f.count+'</span></button>';
+    }).join('')+'</div>';
+
+  return '<div class="card"><div class="card-title">📅 통합 타임라인 <span class="badge badge-blue">'+filtered.length+'건</span></div>'
+    +'<div style="font-size:.72rem;color:var(--mu);margin-bottom:8px">모든 도메인의 기록 · 세션 · 약물변경 · 검진 · 운동을 시간순으로 통합합니다.</div>'
+    +filterBar+'</div>'
+    +groupsHtml
+    +(filtered.length>_tlLimit?'<div style="text-align:center;padding:10px"><button onclick="loadMoreTl()" style="font-size:.72rem;padding:6px 20px;border:1.5px solid var(--ac);border-radius:8px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">더 보기 ('+(_tlLimit)+'/'+filtered.length+')</button></div>':'');
 }
 
 
@@ -2398,7 +2559,7 @@ function renderWeeklySummaryCard() {
     const nrsVals=dd.logs.filter(l=>l.nrs>=0).map(l=>l.nrs);
     const nrsRange=nrsVals.length?_scoreLabel()+' '+(nrsVals.length>1?Math.min(...nrsVals)+'~'+Math.max(...nrsVals):nrsVals[0]):'';
     const allMeds=[...new Set(dd.logs.flatMap(l=>l.meds||[]))];
-    const previewMeds=allMeds.slice(0,2).map(m=>'<span style="font-size:.58rem;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#92400e">'+esc(m)+'</span>').join(' ');
+    const previewMeds=allMeds.slice(0,2).map(m=>'<span style="font-size:.58rem;padding:1px 4px;border-radius:3px;background:var(--tag-trigger-bg);color:var(--tag-trigger)">'+esc(m)+'</span>').join(' ');
     const allSites=[...new Set(dd.logs.flatMap(l=>l.sites||[]))];
     const previewSites=allSites.length?'<span style="font-size:.58rem;color:var(--mu)">'+allSites.slice(0,3).map(s=>esc(s)).join(', ')+'</span>':'';
 
@@ -2408,7 +2569,7 @@ function renderWeeklySummaryCard() {
       const nrs=l.nrs>=0?l.nrs:null;
       const nc=nrs===null?'var(--mu)':nrs>=7?'#ef4444':nrs>=4?'#f59e0b':'#10b981';
       const barW=nrs!==null?Math.max(5,nrs*10):0;
-      const meds=(l.meds||[]).map(m=>'<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:#fef3c7;color:#92400e">'+esc(m)+'</span>').join(' ');
+      const meds=(l.meds||[]).map(m=>'<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:var(--tag-trigger-bg);color:var(--tag-trigger)">'+esc(m)+'</span>').join(' ');
       const tx=(l.treatments||[]).map(t=>{
         if(isBlock(t)) return '<span style="font-size:.6rem;padding:1px 6px;border-radius:4px;background:#dbeafe;color:#1e40af;font-weight:700;border:1.5px solid #93c5fd">💉 '+esc(t)+'</span>';
         return '<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:#d1fae5;color:#065f46">'+esc(t)+'</span>';
@@ -3171,7 +3332,7 @@ function exportMonthlyPDF() {
     table{width:100%;border-collapse:collapse;margin:8px 0;font-size:10px}
     th{background:#e8f0fe;padding:5px 8px;text-align:left;font-weight:600;border:1px solid #ddd}
     td{border:1px solid #ddd;padding:4px 8px}
-    .nrs-high{background:#fee2e2;color:#991b1b}.nrs-med{background:#fef3c7;color:#92400e}.nrs-low{background:#d1fae5;color:#065f46}
+    .nrs-high{background:#fee2e2;color:#991b1b}.nrs-med{background:var(--tag-trigger-bg);color:var(--tag-trigger)}.nrs-low{background:#d1fae5;color:#065f46}
     .freq-bar{display:inline-block;height:8px;border-radius:4px;margin-right:6px;vertical-align:middle}
     .section{margin-bottom:16px;page-break-inside:avoid}
     .footer{margin-top:24px;padding-top:12px;border-top:1px solid #ddd;font-size:9px;color:#999;text-align:center}
@@ -3559,4 +3720,262 @@ function _renderIntimacyStats(m) {
       💡 D-2~D0 타이밍이 임신 확률 가장 높음 (배란 2일 전~당일)
     </div>
   </div>` : ''}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HEALTH DASHBOARD STATS — 건강관리 도메인 전용 통계
+// ═══════════════════════════════════════════════════════════════
+function _renderHealthDashboardStats(logs, last30, dc, lc) {
+  var brkDs = S.domainState['bungruki'];
+  if (!brkDs || !brkDs.master) return '';
+  var m = brkDs.master;
+  var dc2 = m.dailyChecks || {};
+  var who = dc.user === '붕쌤' ? 'bung' : 'orangi';
+
+  // Collect last 30 days of daily check data
+  var days30 = [];
+  for (var i = 29; i >= 0; i--) { days30.push(kstDaysAgo(i)); }
+  var dcData = days30.map(function(d) {
+    var dayD = dc2[d]; if (!dayD) return null;
+    var w = dayD[who]; if (!w) return null;
+    return { date: d, data: w };
+  }).filter(Boolean);
+
+  if (!dcData.length) return '';
+  var html = '';
+
+  // ── 체중 추세 ──
+  var weightData = dcData.filter(function(d) { return d.data.weight; }).map(function(d) { return { date: d.date, val: d.data.weight }; });
+  if (weightData.length >= 2) {
+    var wMin = Math.min.apply(null, weightData.map(function(d) { return d.val; })) - 1;
+    var wMax = Math.max.apply(null, weightData.map(function(d) { return d.val; })) + 1;
+    var wRange = wMax - wMin || 1;
+    var wW = 400, wH = 100, wPad = 35;
+    var wPts = weightData.map(function(d, i) {
+      var x = wPad + (i / (weightData.length - 1 || 1)) * (wW - wPad * 2);
+      var y = 10 + (1 - (d.val - wMin) / wRange) * (wH - 25);
+      return { x: x, y: y, val: d.val, date: d.date };
+    });
+    var wPath = wPts.map(function(p, i) { return (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
+    var wDots = wPts.map(function(p) {
+      return '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="3" fill="var(--ac)" stroke="var(--sf)" stroke-width="1"><title>' + p.date + ': ' + p.val + 'kg</title></circle>';
+    }).join('');
+    var latest = weightData[weightData.length - 1].val;
+    var first = weightData[0].val;
+    var diff = (latest - first).toFixed(1);
+    var diffColor = diff > 0 ? '#10b981' : diff < 0 ? '#ef4444' : 'var(--mu)';
+    html += '<div class="card"><div class="card-title">⚖️ 체중 추세</div>'
+      + '<div style="display:flex;gap:16px;margin-bottom:8px">'
+      + '<div style="text-align:center"><div style="font-size:1.3rem;font-weight:700">' + latest + '</div><div style="font-size:.6rem;color:var(--mu)">현재 (kg)</div></div>'
+      + '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:600;color:' + diffColor + '">' + (diff > 0 ? '+' : '') + diff + '</div><div style="font-size:.6rem;color:var(--mu)">변화</div></div>'
+      + '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:600">' + weightData.length + '</div><div style="font-size:.6rem;color:var(--mu)">기록일</div></div>'
+      + '</div>'
+      + '<svg viewBox="0 0 ' + wW + ' ' + wH + '" style="width:100%;height:auto;max-height:120px">'
+      + '<text x="' + (wPad - 4) + '" y="15" text-anchor="end" font-size="8" fill="var(--mu)">' + wMax.toFixed(0) + '</text>'
+      + '<text x="' + (wPad - 4) + '" y="' + (wH - 12) + '" text-anchor="end" font-size="8" fill="var(--mu)">' + wMin.toFixed(0) + '</text>'
+      + '<line x1="' + wPad + '" y1="10" x2="' + wPad + '" y2="' + (wH - 15) + '" stroke="var(--bd)" stroke-width="0.5"/>'
+      + '<path d="' + wPath + '" fill="none" stroke="var(--ac)" stroke-width="2" stroke-linecap="round"/>'
+      + wDots + '</svg></div>';
+  }
+
+  // ── 운동 일수/강도 추세 ──
+  var exData = dcData.filter(function(d) { return d.data.exercises && d.data.exercises.length; });
+  if (exData.length) {
+    var totalDays = exData.length;
+    var exTypes = {};
+    var intCount = { light: 0, moderate: 0, intense: 0 };
+    exData.forEach(function(d) {
+      d.data.exercises.forEach(function(e) {
+        exTypes[e.name] = (exTypes[e.name] || 0) + 1;
+        intCount[e.intensity || 'moderate']++;
+      });
+    });
+    var topEx = Object.entries(exTypes).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 5);
+    var maxEx = topEx[0] ? topEx[0][1] : 1;
+    var intTotal = intCount.light + intCount.moderate + intCount.intense || 1;
+    html += '<div class="card"><div class="card-title">🏃 운동 통계 (30일)</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'
+      + '<div style="text-align:center;background:var(--sf2);padding:8px;border-radius:8px;border:1px solid var(--bd)"><div style="font-size:1.2rem;font-weight:700;color:var(--ac)">' + totalDays + '</div><div style="font-size:.6rem;color:var(--mu)">운동일</div></div>'
+      + '<div style="text-align:center;background:var(--sf2);padding:8px;border-radius:8px;border:1px solid var(--bd)"><div style="font-size:1.2rem;font-weight:700;color:#10b981">' + Math.round(totalDays / 30 * 100) + '%</div><div style="font-size:.6rem;color:var(--mu)">실천율</div></div>'
+      + '<div style="text-align:center;background:var(--sf2);padding:8px;border-radius:8px;border:1px solid var(--bd)"><div style="font-size:1.2rem;font-weight:700;color:#f59e0b">' + Object.keys(exTypes).length + '</div><div style="font-size:.6rem;color:var(--mu)">종류</div></div>'
+      + '</div>'
+      + '<div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">강도 분포</div>'
+      + '<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:10px">'
+      + (intCount.light ? '<div style="width:' + Math.round(intCount.light / intTotal * 100) + '%;background:#10b981" title="약 ' + intCount.light + '회"></div>' : '')
+      + (intCount.moderate ? '<div style="width:' + Math.round(intCount.moderate / intTotal * 100) + '%;background:#f59e0b" title="중 ' + intCount.moderate + '회"></div>' : '')
+      + (intCount.intense ? '<div style="width:' + Math.round(intCount.intense / intTotal * 100) + '%;background:#ef4444" title="강 ' + intCount.intense + '회"></div>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:12px;font-size:.6rem;color:var(--mu);margin-bottom:8px"><span style="color:#10b981">● 약 ' + intCount.light + '</span><span style="color:#f59e0b">● 중 ' + intCount.moderate + '</span><span style="color:#ef4444">● 강 ' + intCount.intense + '</span></div>'
+      + '<div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">운동 빈도</div>'
+      + topEx.map(function(e) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><span style="font-size:.72rem;min-width:70px;text-align:right">' + esc(e[0]) + '</span>'
+          + '<div style="flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden"><div style="width:' + Math.round(e[1] / maxEx * 100) + '%;height:100%;background:var(--ac);border-radius:4px"></div></div>'
+          + '<span style="font-size:.62rem;color:var(--mu)">' + e[1] + '회</span></div>';
+      }).join('')
+      + '</div>';
+  }
+
+  // ── 영양제 순응도 ──
+  var oKeys = typeof BRK_SUPPL_ORANGI !== 'undefined' ? BRK_SUPPL_ORANGI : [];
+  var bKeys = typeof BRK_SUPPL_BUNG !== 'undefined' ? BRK_SUPPL_BUNG : [];
+  var supplKeys = who === 'orangi' ? [...oKeys] : [...bKeys];
+  var supplLabels = Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(function(e){return[e[0],e[1].label]}));
+  if (m.customSuppl && m.customSuppl[who]) m.customSuppl[who].forEach(function(c) { if (supplKeys.indexOf(c.key) < 0) { supplKeys.push(c.key); supplLabels[c.key] = c.label; } });
+  if (supplKeys.length && dcData.length) {
+    var supplStats = {};
+    supplKeys.forEach(function(k) { supplStats[k] = { taken: 0, total: dcData.length }; });
+    dcData.forEach(function(d) {
+      supplKeys.forEach(function(k) { if (d.data[k]) supplStats[k].taken++; });
+    });
+    var overallSuppl = supplKeys.length ? Math.round(supplKeys.reduce(function(s, k) { return s + (supplStats[k].taken / supplStats[k].total * 100); }, 0) / supplKeys.length) : 0;
+    var supplColor = overallSuppl >= 80 ? '#10b981' : overallSuppl >= 50 ? '#f59e0b' : '#ef4444';
+    html += '<div class="card"><div class="card-title">💊 영양제 순응도 (30일)</div>'
+      + '<div style="text-align:center;margin-bottom:10px"><span style="font-size:1.5rem;font-weight:700;color:' + supplColor + '">' + overallSuppl + '%</span><span style="font-size:.72rem;color:var(--mu)"> 평균 순응도</span></div>'
+      + supplKeys.map(function(k) {
+        var s = supplStats[k];
+        var pct = Math.round(s.taken / s.total * 100);
+        var c = pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><span style="font-size:.72rem;min-width:80px;text-align:right">' + esc(supplLabels[k] || k) + '</span>'
+          + '<div style="flex:1;height:10px;background:var(--bd);border-radius:5px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:' + c + ';border-radius:5px"></div></div>'
+          + '<span style="font-size:.68rem;font-weight:600;color:' + c + ';min-width:36px">' + pct + '%</span>'
+          + '<span style="font-size:.55rem;color:var(--mu)">' + s.taken + '/' + s.total + '</span></div>';
+      }).join('')
+      + '</div>';
+  }
+
+  // ── 음주 패턴 (붕쌤) ──
+  if (who === 'bung') {
+    var alcoholDays = dcData.filter(function(d) { return d.data.alcohol; });
+    if (alcoholDays.length) {
+      html += '<div class="card"><div class="card-title">🍺 음주 기록 (30일)</div>'
+        + '<div style="display:flex;gap:16px;margin-bottom:8px">'
+        + '<div style="text-align:center"><div style="font-size:1.3rem;font-weight:700;color:#dc2626">' + alcoholDays.length + '</div><div style="font-size:.6rem;color:var(--mu)">음주일</div></div>'
+        + '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:600">' + Math.round(alcoholDays.length / dcData.length * 100) + '%</div><div style="font-size:.6rem;color:var(--mu)">빈도</div></div>'
+        + '</div></div>';
+    }
+  }
+
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CROSS-DOMAIN CORRELATION — 도메인 간 상관분석
+// ═══════════════════════════════════════════════════════════════
+function _renderCrossDomainCorrelation() {
+  var currentUser = DC().user;
+  var domainPairs = [];
+  var domainLogs = {};
+
+  Object.entries(S.domainState).forEach(function(e) {
+    var domId = e[0], ds = e[1];
+    var dd = DOMAINS[domId];
+    if (!dd || dd.user !== currentUser || !ds.logData || !ds.logData.length) return;
+    domainLogs[domId] = {};
+    ds.logData.forEach(function(l) {
+      var d = l.datetime ? l.datetime.slice(0, 10) : '';
+      if (!d) return;
+      if (!domainLogs[domId][d]) domainLogs[domId][d] = { nrs: [], mood: [], dailyChecks: {} };
+      if (l.nrs >= 0) domainLogs[domId][d].nrs.push(l.nrs);
+      if (l.mood) domainLogs[domId][d].mood.push(l.mood);
+      if (l.dailyChecks) {
+        Object.entries(l.dailyChecks).forEach(function(dc) {
+          domainLogs[domId][d].dailyChecks[dc[0]] = dc[1];
+        });
+      }
+    });
+  });
+
+  var domIds = Object.keys(domainLogs);
+  if (domIds.length < 2) return '';
+
+  // Find correlations between domains
+  var correlations = [];
+  for (var i = 0; i < domIds.length; i++) {
+    for (var j = i + 1; j < domIds.length; j++) {
+      var d1 = domIds[i], d2 = domIds[j];
+      var dd1 = DOMAINS[d1], dd2 = DOMAINS[d2];
+      var commonDates = Object.keys(domainLogs[d1]).filter(function(d) { return domainLogs[d2][d]; });
+      if (commonDates.length < 5) continue;
+
+      // NRS correlation
+      var pairs = commonDates.map(function(d) {
+        var nrs1 = domainLogs[d1][d].nrs.length ? domainLogs[d1][d].nrs.reduce(function(a, b) { return a + b; }, 0) / domainLogs[d1][d].nrs.length : null;
+        var nrs2 = domainLogs[d2][d].nrs.length ? domainLogs[d2][d].nrs.reduce(function(a, b) { return a + b; }, 0) / domainLogs[d2][d].nrs.length : null;
+        return { nrs1: nrs1, nrs2: nrs2 };
+      }).filter(function(p) { return p.nrs1 !== null && p.nrs2 !== null; });
+
+      if (pairs.length >= 5) {
+        var avg1 = pairs.reduce(function(s, p) { return s + p.nrs1; }, 0) / pairs.length;
+        var avg2 = pairs.reduce(function(s, p) { return s + p.nrs2; }, 0) / pairs.length;
+        var cov = pairs.reduce(function(s, p) { return s + (p.nrs1 - avg1) * (p.nrs2 - avg2); }, 0) / pairs.length;
+        var std1 = Math.sqrt(pairs.reduce(function(s, p) { return s + (p.nrs1 - avg1) * (p.nrs1 - avg1); }, 0) / pairs.length);
+        var std2 = Math.sqrt(pairs.reduce(function(s, p) { return s + (p.nrs2 - avg2) * (p.nrs2 - avg2); }, 0) / pairs.length);
+        var r = (std1 && std2) ? (cov / (std1 * std2)) : 0;
+        correlations.push({
+          label: dd1.icon + ' ' + dd1.label + ' ↔ ' + dd2.icon + ' ' + dd2.label,
+          r: r, n: pairs.length, type: 'nrs'
+        });
+      }
+
+      // Daily check vs NRS correlation
+      var dcKeys = {};
+      commonDates.forEach(function(d) {
+        var dc = domainLogs[d1][d].dailyChecks;
+        Object.keys(dc).forEach(function(k) { dcKeys[k] = true; });
+        dc = domainLogs[d2][d].dailyChecks;
+        Object.keys(dc).forEach(function(k) { dcKeys[k] = true; });
+      });
+
+      Object.keys(dcKeys).forEach(function(dcKey) {
+        // Check which domain has this daily check and which has NRS
+        var dcDom = null, nrsDom = null;
+        if (domainLogs[d1][commonDates[0]] && domainLogs[d1][commonDates[0]].dailyChecks[dcKey] !== undefined) dcDom = d1;
+        else if (domainLogs[d2][commonDates[0]] && domainLogs[d2][commonDates[0]].dailyChecks[dcKey] !== undefined) dcDom = d2;
+        nrsDom = dcDom === d1 ? d2 : d1;
+
+        if (!dcDom) return;
+        var dcPairs = commonDates.map(function(d) {
+          var dcVal = domainLogs[dcDom][d].dailyChecks[dcKey];
+          var nrsVal = domainLogs[nrsDom][d].nrs.length ? domainLogs[nrsDom][d].nrs.reduce(function(a, b) { return a + b; }, 0) / domainLogs[nrsDom][d].nrs.length : null;
+          return { dc: dcVal, nrs: nrsVal };
+        }).filter(function(p) { return p.dc !== undefined && p.nrs !== null; });
+
+        if (dcPairs.length >= 5) {
+          var avgDc = dcPairs.reduce(function(s, p) { return s + p.dc; }, 0) / dcPairs.length;
+          var avgNrs = dcPairs.reduce(function(s, p) { return s + p.nrs; }, 0) / dcPairs.length;
+          var covDc = dcPairs.reduce(function(s, p) { return s + (p.dc - avgDc) * (p.nrs - avgNrs); }, 0) / dcPairs.length;
+          var stdDc = Math.sqrt(dcPairs.reduce(function(s, p) { return s + (p.dc - avgDc) * (p.dc - avgDc); }, 0) / dcPairs.length);
+          var stdNrs = Math.sqrt(dcPairs.reduce(function(s, p) { return s + (p.nrs - avgNrs) * (p.nrs - avgNrs); }, 0) / dcPairs.length);
+          var rr = (stdDc && stdNrs) ? (covDc / (stdDc * stdNrs)) : 0;
+          if (Math.abs(rr) >= 0.2) {
+            var nrsDd = DOMAINS[nrsDom];
+            correlations.push({
+              label: dcKey + ' → ' + nrsDd.icon + ' ' + nrsDd.label,
+              r: rr, n: dcPairs.length, type: 'dc'
+            });
+          }
+        }
+      });
+    }
+  }
+
+  if (!correlations.length) return '';
+
+  correlations.sort(function(a, b) { return Math.abs(b.r) - Math.abs(a.r); });
+  var rows = correlations.slice(0, 8).map(function(c) {
+    var absR = Math.abs(c.r);
+    var color = c.r > 0 ? '#ef4444' : '#10b981';
+    var strength = absR >= 0.7 ? '강함' : absR >= 0.4 ? '보통' : '약함';
+    var dir = c.r > 0 ? '양의 상관' : '음의 상관';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bd)">'
+      + '<span style="font-size:.72rem;min-width:140px">' + esc(c.label) + '</span>'
+      + '<div style="flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden"><div style="width:' + Math.round(absR * 100) + '%;height:100%;background:' + color + ';border-radius:4px"></div></div>'
+      + '<span style="font-size:.65rem;font-weight:600;color:' + color + ';min-width:70px">' + dir + '</span>'
+      + '<span style="font-size:.58rem;color:var(--mu)">' + c.r.toFixed(2) + ' (' + strength + ', n=' + c.n + ')</span></div>';
+  }).join('');
+
+  return '<div class="card"><div class="card-title">🔗 도메인 간 상관분석</div>'
+    + '<div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">같은 날 기록된 서로 다른 도메인의 점수/컨디션 간 상관관계입니다.</div>'
+    + rows
+    + '<div style="font-size:.58rem;color:var(--mu2);margin-top:8px">※ 5일 이상 동시 기록 필요. 상관관계 ≠ 인과관계</div></div>';
 }

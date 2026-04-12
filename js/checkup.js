@@ -45,24 +45,33 @@ function _closeCkProgress() {
 // CATEGORIES
 // ═══════════════════════════════════════════════════════════════
 const _CHECKUP_CATEGORIES = {
-  cbc:          { name:'혈액검사(CBC)', icon:'🩸', order:1 },
-  liver:        { name:'간기능', icon:'🫁', order:2 },
-  kidney:       { name:'신장기능', icon:'🫘', order:3 },
-  thyroid:      { name:'갑상선', icon:'🦋', order:4 },
-  lipid:        { name:'지질', icon:'🫀', order:5 },
-  glucose:      { name:'당대사', icon:'🍬', order:6 },
-  electrolyte:  { name:'전해질', icon:'⚡', order:7 },
-  inflammation: { name:'염증', icon:'🔥', order:8 },
-  reproductive: { name:'생식호르몬', icon:'🧬', order:9 },
-  semen:        { name:'정액검사', icon:'🔬', order:10 },
-  vitamin:      { name:'비타민/영양', icon:'💊', order:11 },
-  iron:         { name:'철분', icon:'🧲', order:12 },
-  tumor:        { name:'종양표지자', icon:'🎯', order:13 },
-  infection:    { name:'감염', icon:'🛡️', order:14 },
-  coagulation:  { name:'응고', icon:'🩹', order:15 },
-  urine:        { name:'소변검사', icon:'🧪', order:16 },
-  other:        { name:'기타', icon:'📋', order:99 },
+  cbc:          { name:'혈액검사(CBC)', icon:'🩸', order:1, major:'blood' },
+  liver:        { name:'간기능', icon:'🫁', order:2, major:'blood' },
+  kidney:       { name:'신장기능', icon:'🫘', order:3, major:'blood' },
+  thyroid:      { name:'갑상선', icon:'🦋', order:4, major:'blood' },
+  lipid:        { name:'지질', icon:'🫀', order:5, major:'blood' },
+  glucose:      { name:'당대사', icon:'🍬', order:6, major:'blood' },
+  electrolyte:  { name:'전해질', icon:'⚡', order:7, major:'blood' },
+  inflammation: { name:'염증', icon:'🔥', order:8, major:'blood' },
+  iron:         { name:'철분', icon:'🧲', order:12, major:'blood' },
+  coagulation:  { name:'응고', icon:'🩹', order:15, major:'blood' },
+  vitamin:      { name:'비타민/영양', icon:'💊', order:11, major:'blood' },
+  urine:        { name:'소변검사', icon:'🧪', order:16, major:'urine' },
+  tumor:        { name:'종양표지자', icon:'🎯', order:13, major:'cancer' },
+  infection:    { name:'감염/항체', icon:'🛡️', order:14, major:'infection' },
+  reproductive: { name:'생식호르몬', icon:'🧬', order:9, major:'reproductive' },
+  semen:        { name:'정액검사', icon:'🔬', order:10, major:'reproductive' },
+  other:        { name:'기타', icon:'📋', order:99, major:'other' },
 };
+
+const _CHECKUP_MAJOR_CATEGORIES = [
+  { key:'blood', name:'🩸 혈액검사', order:1 },
+  { key:'urine', name:'🧪 소변검사', order:2 },
+  { key:'infection', name:'🛡️ 감염/예접 항체', order:3 },
+  { key:'cancer', name:'🎯 암검사/종양표지자', order:4 },
+  { key:'reproductive', name:'🧬 생식검사', order:5 },
+  { key:'other', name:'📋 기타', order:99 },
+];
 
 // ═══════════════════════════════════════════════════════════════
 // STANDARD TEST DICTIONARY
@@ -72,7 +81,7 @@ const _CHECKUP_CATEGORIES = {
 const _CHECKUP_STD_TESTS = {
   // ── CBC ──
   WBC:  { name:{ko:'백혈구',en:'WBC'}, unit:'10^3/μL', category:'cbc', ref:{low:4.0,high:10.0},
-    aliases:['wbc','백혈구','백혈구수','white blood cell','wbc count','w.b.c'], related:['RBC','HGB','PLT'], pregnancyRelevant:false },
+    aliases:['wbc','백혈구','백혈구수','white blood cell','wbc count','w.b.c','백혈구백분율'], related:['RBC','HGB','PLT'], pregnancyRelevant:false },
   RBC:  { name:{ko:'적혈구',en:'RBC'}, unit:'10^6/μL', category:'cbc', ref:{male:{low:4.5,high:5.5},female:{low:4.0,high:5.0}},
     aliases:['rbc','적혈구','적혈구수','red blood cell','rbc count','r.b.c'], related:['WBC','HGB','HCT'], pregnancyRelevant:false },
   HGB:  { name:{ko:'혈색소',en:'Hemoglobin'}, unit:'g/dL', category:'cbc', ref:{male:{low:13.0,high:17.0},female:{low:12.0,high:16.0}},
@@ -86,9 +95,9 @@ const _CHECKUP_STD_TESTS = {
   MCH:  { name:{ko:'평균적혈구혈색소량',en:'MCH'}, unit:'pg', category:'cbc', ref:{low:27,high:33},
     aliases:['mch','평균적혈구혈색소량','mean corpuscular hemoglobin'], related:['MCV','MCHC'], pregnancyRelevant:false },
   MCHC: { name:{ko:'평균적혈구혈색소농도',en:'MCHC'}, unit:'g/dL', category:'cbc', ref:{low:32,high:36},
-    aliases:['mchc','평균적혈구혈색소농도'], related:['MCV','MCH'], pregnancyRelevant:false },
+    aliases:['mchc','평균적혈구혈색소농도','mean corpuscular hemoglobin concentration'], related:['MCV','MCH'], pregnancyRelevant:false },
   RDW:  { name:{ko:'적혈구분포폭',en:'RDW'}, unit:'%', category:'cbc', ref:{low:11.5,high:14.5},
-    aliases:['rdw','적혈구분포폭','rdw-cv','rdw cv'], related:['MCV'], pregnancyRelevant:false },
+    aliases:['rdw','적혈구분포폭','rdw-cv','rdw cv','적혈구분포계수'], related:['MCV'], pregnancyRelevant:false },
   MPV:  { name:{ko:'평균혈소판용적',en:'MPV'}, unit:'fL', category:'cbc', ref:{low:7.5,high:11.5},
     aliases:['mpv','평균혈소판용적','mean platelet volume'], related:['PLT'], pregnancyRelevant:false },
   NEUT: { name:{ko:'호중구',en:'Neutrophil'}, unit:'%', category:'cbc', ref:{low:40,high:70},
@@ -104,17 +113,23 @@ const _CHECKUP_STD_TESTS = {
 
   // ── 간기능 ──
   AST:  { name:{ko:'AST(GOT)',en:'AST'}, unit:'U/L', category:'liver', ref:{low:0,high:40},
-    aliases:['ast','got','sgot','ast(got)','got(ast)','아스파르테이트','s-got','s-ast'], related:['ALT','GGT','ALP','TBIL'], pregnancyRelevant:false },
+    aliases:['ast','sgot','ast(got)','got(ast)','아스파르테이트','s-got','s-ast'], related:['ALT','GGT','ALP','TBIL'], pregnancyRelevant:false },
   ALT:  { name:{ko:'ALT(GPT)',en:'ALT'}, unit:'U/L', category:'liver', ref:{low:0,high:40},
-    aliases:['alt','gpt','sgpt','alt(gpt)','gpt(alt)','알라닌','s-gpt','s-alt'], related:['AST','GGT','ALP','TBIL'], pregnancyRelevant:false },
+    aliases:['alt','sgpt','alt(gpt)','gpt(alt)','알라닌','s-gpt','s-alt'], related:['AST','GGT','ALP','TBIL'], pregnancyRelevant:false },
   GGT:  { name:{ko:'감마지티피',en:'GGT'}, unit:'U/L', category:'liver', ref:{male:{low:0,high:60},female:{low:0,high:40}},
-    aliases:['ggt','γ-gtp','r-gtp','감마지티피','gamma-gtp','gamma gt','r-gt','γgtp','감마gt','감마 지티피'], related:['AST','ALT'], pregnancyRelevant:false },
+    aliases:['ggt','γ-gtp','r-gtp','감마지티피','gamma-gtp','gamma gt','r-gt','γgtp','감마gt','감마 지티피','γ-gtp'], related:['AST','ALT'], pregnancyRelevant:false },
   ALP:  { name:{ko:'알칼리포스파타제',en:'ALP'}, unit:'U/L', category:'liver', ref:{low:40,high:130},
     aliases:['alp','알칼리포스파타제','alkaline phosphatase','알칼리성인산분해효소','alk phos'], related:['AST','ALT','GGT'], pregnancyRelevant:false },
   TBIL: { name:{ko:'총빌리루빈',en:'Total Bilirubin'}, unit:'mg/dL', category:'liver', ref:{low:0.2,high:1.2},
     aliases:['total bilirubin','tbil','t-bil','총빌리루빈','총 빌리루빈','t.bil','bilirubin total'], related:['DBIL','AST','ALT'], pregnancyRelevant:false },
   DBIL: { name:{ko:'직접빌리루빈',en:'Direct Bilirubin'}, unit:'mg/dL', category:'liver', ref:{low:0,high:0.4},
     aliases:['direct bilirubin','dbil','d-bil','직접빌리루빈','직접 빌리루빈','d.bil'], related:['TBIL'], pregnancyRelevant:false },
+  IBIL: { name:{ko:'간접빌리루빈',en:'Indirect Bilirubin'}, unit:'mg/dL', category:'liver', ref:{low:0.1,high:1.0},
+    aliases:['indirect bilirubin','ibil','i-bil','간접빌리루빈','간접 빌리루빈'], related:['TBIL','DBIL'], pregnancyRelevant:false },
+  LDH:  { name:{ko:'젖산탈수소효소',en:'LDH'}, unit:'U/L', category:'liver', ref:{low:120,high:250},
+    aliases:['ldh','젖산탈수소효소','lactate dehydrogenase','젖산탈수소 효소','ld'], related:['AST','ALT'], pregnancyRelevant:false },
+  CPK:  { name:{ko:'크레아틴키나제',en:'CPK'}, unit:'U/L', category:'liver', ref:{male:{low:38,high:174},female:{low:26,high:140}},
+    aliases:['cpk','ck','크레아틴키나제','creatine kinase','creatine phosphokinase'], related:['LDH'], pregnancyRelevant:false },
   ALB:  { name:{ko:'알부민',en:'Albumin'}, unit:'g/dL', category:'liver', ref:{low:3.5,high:5.2},
     aliases:['albumin','alb','알부민','s-albumin'], related:['TP'], pregnancyRelevant:true },
   TP:   { name:{ko:'총단백',en:'Total Protein'}, unit:'g/dL', category:'liver', ref:{low:6.0,high:8.3},
@@ -137,8 +152,8 @@ const _CHECKUP_STD_TESTS = {
   TSH:  { name:{ko:'갑상선자극호르몬',en:'TSH'}, unit:'mIU/L', category:'thyroid', ref:{low:0.35,high:5.50},
     aliases:['tsh','갑상선자극호르몬','thyroid stimulating hormone','갑상선 자극 호르몬','s-tsh'], related:['FT4','FT3'], pregnancyRelevant:true,
     conversions:{'μIU/mL':{factor:1},'uIU/mL':{factor:1}} },
-  FT4:  { name:{ko:'유리T4',en:'Free T4'}, unit:'ng/dL', category:'thyroid', ref:{low:0.8,high:1.8},
-    aliases:['free t4','ft4','유리t4','유리 t4','free thyroxine','f-t4'], related:['TSH','FT3'], pregnancyRelevant:true,
+  FT4:  { name:{ko:'Free T4',en:'Free T4'}, unit:'ng/dL', category:'thyroid', ref:{low:0.8,high:1.8},
+    aliases:['free t4','ft4','유리t4','유리 t4','free thyroxine','f-t4','유리싸이록신'], related:['TSH','FT3'], pregnancyRelevant:true,
     conversions:{'pmol/L':{factor:0.0777}} },
   FT3:  { name:{ko:'유리T3',en:'Free T3'}, unit:'pg/mL', category:'thyroid', ref:{low:2.0,high:4.4},
     aliases:['free t3','ft3','유리t3','유리 t3','free triiodothyronine','f-t3'], related:['TSH','FT4'], pregnancyRelevant:true,
@@ -146,11 +161,11 @@ const _CHECKUP_STD_TESTS = {
   T4:   { name:{ko:'T4',en:'T4'}, unit:'μg/dL', category:'thyroid', ref:{low:4.5,high:12.5},
     aliases:['t4','thyroxine','총t4','total t4'], related:['TSH','T3'], pregnancyRelevant:false },
   T3:   { name:{ko:'T3',en:'T3'}, unit:'ng/dL', category:'thyroid', ref:{low:80,high:200},
-    aliases:['t3','triiodothyronine','총t3','total t3'], related:['TSH','T4'], pregnancyRelevant:false },
+    aliases:['t3','triiodothyronine','총t3','total t3','트리요도타이로닌'], related:['TSH','T4'], pregnancyRelevant:false },
 
   // ── 지질 ──
   TCHOL:{ name:{ko:'총콜레스테롤',en:'Total Cholesterol'}, unit:'mg/dL', category:'lipid', ref:{low:0,high:200},
-    aliases:['total cholesterol','cholesterol','tchol','t-chol','t.chol','총콜레스테롤','총 콜레스테롤','t-cholesterol','콜레스테롤'], related:['TG','HDL','LDL'], pregnancyRelevant:false,
+    aliases:['total cholesterol','cholesterol','tchol','t-chol','t.chol','총콜레스테롤','총 콜레스테롤','t-cholesterol','콜레스테롤','chol'], related:['TG','HDL','LDL'], pregnancyRelevant:false,
     conversions:{'mmol/L':{factor:38.67}} },
   TG:   { name:{ko:'중성지방',en:'Triglyceride'}, unit:'mg/dL', category:'lipid', ref:{low:0,high:150},
     aliases:['triglyceride','tg','중성지방','triglycerides','트리글리세리드','중성 지방'], related:['TCHOL','HDL','LDL'], pregnancyRelevant:false,
@@ -164,8 +179,10 @@ const _CHECKUP_STD_TESTS = {
 
   // ── 당대사 ──
   GLU:  { name:{ko:'공복혈당',en:'Fasting Glucose'}, unit:'mg/dL', category:'glucose', ref:{low:70,high:100},
-    aliases:['glucose','glu','fasting glucose','공복혈당','혈당','blood sugar','fbs','공복 혈당','blood glucose'], related:['HBA1C','INSULIN'], pregnancyRelevant:true,
+    aliases:['glucose','glu','fasting glucose','공복혈당','혈당','blood sugar','fbs','공복 혈당','blood glucose','당검사'], related:['HBA1C','INSULIN'], pregnancyRelevant:true,
     conversions:{'mmol/L':{factor:18.02}} },
+  GLUPP2:{ name:{ko:'식후2시간혈당',en:'2h Postprandial Glucose'}, unit:'mg/dL', category:'glucose', ref:{low:70,high:140},
+    aliases:['glupp2','식후2시간혈당','식후혈당','pp2','postprandial glucose','2hr glucose','pp2hr','당검사(식후)','식후 2시간','2h pp glucose'], related:['GLU','HBA1C'], pregnancyRelevant:true },
   HBA1C:{ name:{ko:'당화혈색소',en:'HbA1c'}, unit:'%', category:'glucose', ref:{low:4.0,high:6.0},
     aliases:['hba1c','a1c','glycated hemoglobin','당화혈색소','당화 혈색소','hemoglobin a1c','glycohemoglobin','hb a1c'], related:['GLU','INSULIN'], pregnancyRelevant:true },
   INSULIN:{ name:{ko:'인슐린',en:'Insulin'}, unit:'μIU/mL', category:'glucose', ref:{low:2,high:25},
@@ -184,17 +201,19 @@ const _CHECKUP_STD_TESTS = {
     aliases:['calcium','ca','칼슘','s-ca','ca2+','총칼슘','total calcium'], related:['P','MG'], pregnancyRelevant:true,
     conversions:{'mmol/L':{factor:4.0}} },
   P:    { name:{ko:'인',en:'Phosphorus'}, unit:'mg/dL', category:'electrolyte', ref:{low:2.5,high:4.5},
-    aliases:['phosphorus','p','인','phosphate','무기인','inorganic phosphorus','s-p'], related:['CA','MG'], pregnancyRelevant:false },
+    aliases:['phosphorus','p','인','phosphate','무기인','inorganic phosphorus','s-p','po4','인산','무기인산'], related:['CA','MG'], pregnancyRelevant:false },
   MG:   { name:{ko:'마그네슘',en:'Magnesium'}, unit:'mg/dL', category:'electrolyte', ref:{low:1.6,high:2.6},
     aliases:['magnesium','mg','마그네슘','s-mg'], related:['CA','P'], pregnancyRelevant:true },
+  ICA:  { name:{ko:'이온화칼슘',en:'Ionized Calcium'}, unit:'mmol/L', category:'electrolyte', ref:{low:1.13,high:1.32},
+    aliases:['ionized calcium','ica','이온화칼슘','이온화 칼슘','ca2+ ionized','ionic calcium'], related:['CA'], pregnancyRelevant:false },
 
   // ── 염증 ──
   CRP:  { name:{ko:'C반응단백',en:'CRP'}, unit:'mg/dL', category:'inflammation', ref:{low:0,high:0.5},
-    aliases:['crp','c-reactive protein','c반응단백','c반응성단백','c-반응단백','crp정량'], related:['HSCRP','ESR'], pregnancyRelevant:false },
+    aliases:['crp','c-reactive protein','c반응단백','c반응성단백','c-반응단백','crp정량','c-반응성단백'], related:['HSCRP','ESR'], pregnancyRelevant:false },
   HSCRP:{ name:{ko:'고감도CRP',en:'hs-CRP'}, unit:'mg/L', category:'inflammation', ref:{low:0,high:3.0},
     aliases:['hs-crp','hscrp','고감도crp','고감도 crp','high sensitivity crp','hs crp'], related:['CRP','ESR'], pregnancyRelevant:false },
   ESR:  { name:{ko:'적혈구침강속도',en:'ESR'}, unit:'mm/hr', category:'inflammation', ref:{male:{low:0,high:15},female:{low:0,high:20}},
-    aliases:['esr','적혈구침강속도','sed rate','erythrocyte sedimentation rate','혈침'], related:['CRP'], pregnancyRelevant:false },
+    aliases:['esr','적혈구침강속도','sed rate','erythrocyte sedimentation rate','혈침','적혈구 침강속도'], related:['CRP'], pregnancyRelevant:false },
 
   // ── 생식호르몬 ──
   FSH:  { name:{ko:'난포자극호르몬',en:'FSH'}, unit:'mIU/mL', category:'reproductive', ref:{female:{low:3.0,high:12.0},male:{low:1.5,high:12.4}},
@@ -214,20 +233,20 @@ const _CHECKUP_STD_TESTS = {
 
   // ── 정액검사 ──
   SEM_VOL: { name:{ko:'정액량',en:'Semen Volume'}, unit:'mL', category:'semen', ref:{low:1.5,high:6.0},
-    aliases:['volume','vol','정액량','semen volume','v'], related:['SEM_CNT','SEM_MOT','SEM_MOR'], pregnancyRelevant:true },
+    aliases:['sem_vol','volume','vol','정액량','semen volume','v'], related:['SEM_CNT','SEM_MOT','SEM_MOR'], pregnancyRelevant:true },
   SEM_CNT: { name:{ko:'정자농도',en:'Sperm Count'}, unit:'M/mL', category:'semen', ref:{low:15,high:200},
-    aliases:['count','concentration','정자수','정자농도','sperm count','sperm concentration','conc'], related:['SEM_VOL','SEM_MOT','SEM_MOR'], pregnancyRelevant:true },
+    aliases:['sem_cnt','count','concentration','정자수','정자농도','sperm count','sperm concentration','conc'], related:['SEM_VOL','SEM_MOT','SEM_MOR'], pregnancyRelevant:true },
   SEM_MOT: { name:{ko:'운동성',en:'Motility'}, unit:'%', category:'semen', ref:{low:42,high:100},
-    aliases:['motility','total motility','운동성','motile_percent','pr+np','total motile'], related:['SEM_VOL','SEM_CNT','SEM_MOR'], pregnancyRelevant:true },
+    aliases:['sem_mot','motility','total motility','운동성','motile_percent','pr+np','total motile'], related:['SEM_VOL','SEM_CNT','SEM_MOR'], pregnancyRelevant:true },
   SEM_MOR: { name:{ko:'형태',en:'Morphology'}, unit:'%', category:'semen', ref:{low:4,high:100},
-    aliases:['morphology','strict morphology','형태','normal morphology','normal forms','morph_pct','정상형태'], related:['SEM_VOL','SEM_CNT','SEM_MOT'], pregnancyRelevant:true },
+    aliases:['sem_mor','morphology','strict morphology','형태','normal morphology','normal forms','morph_pct','정상형태'], related:['SEM_VOL','SEM_CNT','SEM_MOT'], pregnancyRelevant:true },
 
   // ── 비타민/영양 ──
   VITD: { name:{ko:'비타민D',en:'Vitamin D'}, unit:'ng/mL', category:'vitamin', ref:{low:20,high:100},
-    aliases:['vitamin d','vit d','비타민d','25-oh vitamin d','25-oh','25(oh)d','25-hydroxyvitamin d','비타민 d','25-oh-d','calcidiol'], related:['CA'], pregnancyRelevant:true,
+    aliases:['vitd','vitamin d','vit d','비타민d','25-oh vitamin d','25-oh','25(oh)d','25-hydroxyvitamin d','비타민 d','25-oh-d','calcidiol'], related:['CA'], pregnancyRelevant:true,
     conversions:{'nmol/L':{factor:0.4006}} },
   VITB12:{ name:{ko:'비타민B12',en:'Vitamin B12'}, unit:'pg/mL', category:'vitamin', ref:{low:200,high:900},
-    aliases:['vitamin b12','vit b12','비타민b12','cobalamin','b12','비타민 b12'], related:['FOLATE'], pregnancyRelevant:true,
+    aliases:['vitb12','vitamin b12','vit b12','비타민b12','cobalamin','b12','비타민 b12'], related:['FOLATE'], pregnancyRelevant:true,
     conversions:{'pmol/L':{factor:1.355}} },
   FOLATE:{ name:{ko:'엽산',en:'Folate'}, unit:'ng/mL', category:'vitamin', ref:{low:3.0,high:17.0},
     aliases:['folate','folic acid','엽산','폴레이트','serum folate','s-folate'], related:['VITB12'], pregnancyRelevant:true,
@@ -235,37 +254,49 @@ const _CHECKUP_STD_TESTS = {
 
   // ── 철분 ──
   FERRITIN:{ name:{ko:'페리틴',en:'Ferritin'}, unit:'ng/mL', category:'iron', ref:{male:{low:20,high:300},female:{low:10,high:150}},
-    aliases:['ferritin','페리틴','s-ferritin','serum ferritin'], related:['FE','TIBC'], pregnancyRelevant:true },
+    aliases:['ferritin','ferr','페리틴','훼리틴','s-ferritin','serum ferritin'], related:['FE','TIBC'], pregnancyRelevant:true },
   FE:   { name:{ko:'철',en:'Iron'}, unit:'μg/dL', category:'iron', ref:{male:{low:60,high:170},female:{low:40,high:150}},
     aliases:['iron','fe','철','s-iron','serum iron','s-fe','혈청철'], related:['FERRITIN','TIBC'], pregnancyRelevant:true },
   TIBC: { name:{ko:'총철결합능',en:'TIBC'}, unit:'μg/dL', category:'iron', ref:{low:250,high:400},
-    aliases:['tibc','총철결합능','total iron binding capacity','총철결합력'], related:['FERRITIN','FE'], pregnancyRelevant:false },
+    aliases:['tibc','총철결합능','total iron binding capacity','총철결합력','철결합능'], related:['FERRITIN','FE'], pregnancyRelevant:false },
+  UIBC: { name:{ko:'불포화철결합능',en:'UIBC'}, unit:'μg/dL', category:'iron', ref:{low:110,high:330},
+    aliases:['uibc','불포화철결합능','unsaturated iron binding capacity','불포화 철결합능'], related:['TIBC','FE','FERRITIN'], pregnancyRelevant:false },
+  TRANSF:{ name:{ko:'트랜스페린',en:'Transferrin'}, unit:'mg/dL', category:'iron', ref:{low:200,high:360},
+    aliases:['transf','transferrin','transfe','트랜스페린','트랜스훼린'], related:['FE','TIBC','FERRITIN'], pregnancyRelevant:true },
 
   // ── 종양표지자 ──
   CEA:  { name:{ko:'CEA',en:'CEA'}, unit:'ng/mL', category:'tumor', ref:{low:0,high:5.0},
-    aliases:['cea','carcinoembryonic antigen','암태아성항원'], related:['AFP'], pregnancyRelevant:false },
+    aliases:['cea','carcinoembryonic antigen','암태아성항원','태아성암항원cea','태아성암항원'], related:['AFP'], pregnancyRelevant:false },
   AFP:  { name:{ko:'알파태아단백',en:'AFP'}, unit:'ng/mL', category:'tumor', ref:{low:0,high:10.0},
-    aliases:['afp','alpha fetoprotein','알파태아단백','알파태아 단백','α-fetoprotein'], related:['CEA'], pregnancyRelevant:true },
+    aliases:['afp','alpha fetoprotein','알파태아단백','알파태아 단백','α-fetoprotein','알파피토프로테인'], related:['CEA'], pregnancyRelevant:true },
   PSA:  { name:{ko:'전립선특이항원',en:'PSA'}, unit:'ng/mL', category:'tumor', ref:{low:0,high:4.0},
-    aliases:['psa','전립선특이항원','prostate specific antigen','전립선 특이항원'], related:[], pregnancyRelevant:false },
+    aliases:['psa','전립선특이항원','prostate specific antigen','전립선 특이항원','전립선특이항원psa'], related:[], pregnancyRelevant:false },
   CA125:{ name:{ko:'CA-125',en:'CA-125'}, unit:'U/mL', category:'tumor', ref:{low:0,high:35},
     aliases:['ca-125','ca125','ca 125'], related:['CA199'], pregnancyRelevant:true },
   CA199:{ name:{ko:'CA19-9',en:'CA19-9'}, unit:'U/mL', category:'tumor', ref:{low:0,high:37},
     aliases:['ca19-9','ca199','ca 19-9','ca19 9'], related:['CA125','CEA'], pregnancyRelevant:false },
+  CA153:{ name:{ko:'CA15-3',en:'CA15-3'}, unit:'U/mL', category:'tumor', ref:{low:0,high:30},
+    aliases:['ca15-3','ca153','ca 15-3','씨에이15-3'], related:['CA125','CEA'], pregnancyRelevant:false },
 
   // ── 감염 / 면역 ──
   HBSAG:{ name:{ko:'B형간염표면항원',en:'HBsAg'}, unit:'Index', category:'infection', ref:{low:0,high:1},
-    aliases:['hbsag','b형간염표면항원','hepatitis b surface antigen','b형간염 표면항원','hbs ag','hbs-ag'], related:['HBSAB'], pregnancyRelevant:true },
+    aliases:['hbsag','b형간염표면항원','hepatitis b surface antigen','b형간염 표면항원','hbs ag','hbs-ag','b형간염표면항원정성검사'], related:['HBSAB'], pregnancyRelevant:true },
   HBSAB:{ name:{ko:'B형간염표면항체',en:'HBs Ab'}, unit:'IU/L', category:'infection', ref:{low:10,high:999},
     aliases:['hbsab','b형간염표면항체','hepatitis b surface antibody','b형간염 표면항체','hbs ab','anti-hbs','hbs-ab','hbs_ab'], related:['HBSAG'], pregnancyRelevant:true, higherIsBetter:true },
+  HBEAG:{ name:{ko:'B형간염e항원',en:'HBeAg'}, unit:'Index', category:'infection', ref:{low:0,high:1},
+    aliases:['hbeag','b형간염e항원','hepatitis b e antigen','hbe ag','hbe-ag','hbeag'], related:['HBEAB','HBSAG'], pregnancyRelevant:true },
+  HBEAB:{ name:{ko:'B형간염e항체',en:'HBe Ab'}, unit:'Index', category:'infection', ref:{low:0,high:1},
+    aliases:['hbeab','b형간염e항체','hepatitis b e antibody','hbe ab','hbe-ab','anti-hbe'], related:['HBEAG','HBSAG'], pregnancyRelevant:true },
+  HBCIGG:{ name:{ko:'B형간염핵심항체(IgG)',en:'HBc IgG'}, unit:'Index', category:'infection', ref:{low:0,high:1},
+    aliases:['hbcigg','hbc igg','hbc','b형간염핵심항체','hepatitis b core antibody','anti-hbc','hbc-igg','anti-hbc igg'], related:['HBSAG','HBSAB'], pregnancyRelevant:true },
   HAVIGG:{ name:{ko:'A형간염항체(IgG)',en:'HAV IgG'}, unit:'Index', category:'infection', ref:{low:1,high:999},
-    aliases:['hav igg','a형간염항체','hepatitis a igg','a형간염 igg','hav-igg','hav_igg','a형간염igg'], related:[], pregnancyRelevant:true, higherIsBetter:true },
+    aliases:['havigg','hav igg','a형간염항체','hepatitis a igg','a형간염 igg','hav-igg','hav_igg','a형간염igg'], related:[], pregnancyRelevant:true, higherIsBetter:true },
   HAVIGM:{ name:{ko:'A형간염항체(IgM)',en:'HAV IgM'}, unit:'Index', category:'infection', ref:{low:0,high:1},
-    aliases:['hav igm','a형간염igm','hepatitis a igm','hav-igm','hav_igm'], related:['HAVIGG'], pregnancyRelevant:true },
+    aliases:['havigm','hav igm','a형간염igm','hepatitis a igm','hav-igm','hav_igm'], related:['HAVIGG'], pregnancyRelevant:true },
   RUBELLAIGG:{ name:{ko:'풍진항체(IgG)',en:'Rubella IgG'}, unit:'IU/mL', category:'infection', ref:{low:10,high:999},
-    aliases:['rubella igg','풍진igg','풍진 igg','rubella-igg','rubella_igg','풍진항체'], related:['RUBELLAIGM'], pregnancyRelevant:true, higherIsBetter:true },
+    aliases:['rubellaigg','rubella igg','풍진igg','풍진 igg','rubella-igg','rubella_igg','풍진항체'], related:['RUBELLAIGM'], pregnancyRelevant:true, higherIsBetter:true },
   RUBELLAIGM:{ name:{ko:'풍진항체(IgM)',en:'Rubella IgM'}, unit:'Index', category:'infection', ref:{low:0,high:0.8},
-    aliases:['rubella igm','풍진igm','풍진 igm','rubella-igm','rubella_igm'], related:['RUBELLAIGG'], pregnancyRelevant:true },
+    aliases:['rubellaigm','rubella igm','풍진igm','풍진 igm','rubella-igm','rubella_igm'], related:['RUBELLAIGG'], pregnancyRelevant:true },
   HCVAB:{ name:{ko:'C형간염항체',en:'HCV Ab'}, unit:'Index', category:'infection', ref:{low:0,high:1},
     aliases:['hcv ab','hcvab','c형간염항체','hepatitis c antibody','c형간염 항체','anti-hcv','hcv-ab','hcv_ab'], related:[], pregnancyRelevant:true },
   HIVAGAB:{ name:{ko:'HIV항원항체',en:'HIV Ag/Ab'}, unit:'Index', category:'infection', ref:{low:0,high:1},
@@ -279,21 +310,21 @@ const _CHECKUP_STD_TESTS = {
   APTT: { name:{ko:'aPTT',en:'aPTT'}, unit:'sec', category:'coagulation', ref:{low:25,high:35},
     aliases:['aptt','활성부분트롬보플라스틴시간','activated partial thromboplastin time','ptt'], related:['PT','INR'], pregnancyRelevant:false },
   INR:  { name:{ko:'INR',en:'INR'}, unit:'ratio', category:'coagulation', ref:{low:0.8,high:1.2},
-    aliases:['inr','international normalized ratio','pt-inr','pt/inr'], related:['PT','APTT'], pregnancyRelevant:false },
+    aliases:['inr','international normalized ratio','pt-inr','pt/inr','국제표준화비율'], related:['PT','APTT'], pregnancyRelevant:false },
 
   // ── 소변검사 ──
   UPROT:{ name:{ko:'소변단백',en:'Urine Protein'}, unit:'qualitative', category:'urine', ref:{low:0,high:0},
-    aliases:['urine protein','u-protein','소변단백','요단백','소변 단백','protein(urine)','u-prot'], related:['UBLOOD'], pregnancyRelevant:true },
+    aliases:['uprot','urine protein','u-protein','소변단백','요단백','소변 단백','protein(urine)','u-prot','upro','upro1'], related:['UBLOOD'], pregnancyRelevant:true },
   UBLOOD:{ name:{ko:'소변잠혈',en:'Urine Blood'}, unit:'qualitative', category:'urine', ref:{low:0,high:0},
-    aliases:['urine blood','u-blood','소변잠혈','요잠혈','소변 잠혈','occult blood','u-ob'], related:['UPROT'], pregnancyRelevant:false },
+    aliases:['ublood','urine blood','u-blood','소변잠혈','요잠혈','소변 잠혈','occult blood','u-ob'], related:['UPROT'], pregnancyRelevant:false },
   UGLU: { name:{ko:'소변당',en:'Urine Glucose'}, unit:'qualitative', category:'urine', ref:{low:0,high:0},
-    aliases:['urine glucose','u-glucose','소변당','요당','소변 당','u-glu','glucose(urine)'], related:[], pregnancyRelevant:true },
+    aliases:['uglu','urine glucose','u-glucose','소변당','요당','소변 당','u-glu','glucose(urine)'], related:[], pregnancyRelevant:true },
   UPH:  { name:{ko:'소변pH',en:'Urine pH'}, unit:'', category:'urine', ref:{low:4.5,high:8.0},
-    aliases:['urine ph','u-ph','소변ph','요ph','ph(urine)'], related:[], pregnancyRelevant:false },
+    aliases:['uph','urine ph','u-ph','소변ph','요ph','ph(urine)'], related:[], pregnancyRelevant:false },
   USG:  { name:{ko:'소변비중',en:'Urine SG'}, unit:'', category:'urine', ref:{low:1.005,high:1.030},
-    aliases:['urine sg','u-sg','소변비중','요비중','specific gravity','비중'], related:[], pregnancyRelevant:false },
+    aliases:['usg','urine sg','u-sg','소변비중','요비중','specific gravity','비중'], related:[], pregnancyRelevant:false },
   UWBC: { name:{ko:'소변백혈구',en:'Urine WBC'}, unit:'qualitative', category:'urine', ref:{low:0,high:0},
-    aliases:['urine wbc','u-wbc','소변백혈구','요백혈구','소변 백혈구','wbc(urine)','leukocyte'], related:[], pregnancyRelevant:false },
+    aliases:['uwbc','urine wbc','u-wbc','소변백혈구','요백혈구','소변 백혈구','wbc(urine)','leukocyte'], related:[], pregnancyRelevant:false },
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -2141,6 +2172,7 @@ function renderCheckupArchive() {
       <span style="font-size:.88rem;font-weight:700;color:var(--domain-color)">검사 아카이브</span>
       <button onclick="aiCheckupInterpretation()" style="margin-left:auto;background:none;border:1px solid #10b981;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#10b981;cursor:pointer;font-family:var(--font)">💡 AI 종합 해석</button>
       <button onclick="aiReclassifyAll()" style="background:none;border:1px solid #8b5cf6;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#8b5cf6;cursor:pointer;font-family:var(--font)">🤖 재분류</button>
+      <button onclick="openBatchInstitution()" style="background:none;border:1px solid #f59e0b;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#f59e0b;cursor:pointer;font-family:var(--font)">🏥 기관명</button>
       <span style="font-size:.62rem;color:var(--mu)">${allCheckups.length}건 · ${totalItems}항목</span>
     </div>
     <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${tabBar}</div>
@@ -2150,10 +2182,19 @@ function renderCheckupArchive() {
 }
 
 // 타임라인 뷰
+function _isValidDate(d) { return d && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d+'T00:00').getTime()); }
+
 function _renderCheckupTimeline(checkups) {
   if (!checkups.length) return '<div style="font-size:.72rem;color:var(--mu);text-align:center;padding:20px">검진 기록이 없습니다. 위에서 사진을 업로드하세요.</div>';
+  // 잘못된 날짜 경고 (YYYY-MM-DD 등)
+  const invalidDateEntries = checkups.filter(c => !_isValidDate(c.date));
+  const invalidWarn = invalidDateEntries.length
+    ? `<div style="padding:6px 8px;margin-bottom:6px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;font-size:.68rem;color:#dc2626">
+        ⚠️ 날짜 오류 ${invalidDateEntries.length}건 — 편집 버튼(✏️)으로 올바른 날짜 입력 필요
+        ${invalidDateEntries.map(c => '<span style="background:#fee2e2;padding:1px 4px;border-radius:3px;margin-left:4px">' + esc(c.date||'없음') + ' (' + esc(c.institution||'기관미상') + ')</span>').join('')}
+      </div>` : '';
 
-  return checkups.map(c => {
+  return invalidWarn + checkups.map(c => {
     const results = c.results || [];
     const abnormal = results.filter(r => _isAbnormal(r.status));
     const normal = results.filter(r => r.status === 'normal' || r.status === 'positive');
@@ -2315,55 +2356,97 @@ function _renderCheckupTrends(who, checkups) {
 function _renderCheckupCategories(who, checkups) {
   if (!checkups.length) return '<div style="font-size:.72rem;color:var(--mu);text-align:center;padding:20px">검진 기록이 없습니다.</div>';
 
-  // 각 표준코드의 최신 값 수집
-  const latestByCode = {};
+  // 각 표준코드별 시계열 데이터 수집 (최신 → 과거 순)
+  const historyByCode = {};
   checkups.forEach(c => {
     (c.results || []).forEach(r => {
-      if (r.stdCode && (!latestByCode[r.stdCode] || c.date > latestByCode[r.stdCode].date)) {
-        latestByCode[r.stdCode] = { ...r, date: c.date, institution: c.institution };
+      if (!r.stdCode) return;
+      if (!historyByCode[r.stdCode]) historyByCode[r.stdCode] = { latest: null, history: [], category: r.category || 'other', displayName: r.displayName, unit: r.unit, ref: r.ref };
+      historyByCode[r.stdCode].history.push({ value: r.value, date: c.date, status: r.status, institution: c.institution });
+      if (!historyByCode[r.stdCode].latest || c.date > historyByCode[r.stdCode].latest.date) {
+        historyByCode[r.stdCode].latest = { value: r.value, date: c.date, status: r.status, institution: c.institution };
       }
     });
   });
+  // 시계열 정렬
+  Object.values(historyByCode).forEach(h => h.history.sort((a, b) => a.date.localeCompare(b.date)));
 
-  // 카테고리별 그룹
+  // 세부 카테고리별 그룹
   const grouped = {};
-  Object.entries(latestByCode).forEach(([code, r]) => {
-    const cat = r.category || 'other';
+  Object.entries(historyByCode).forEach(([code, h]) => {
+    const cat = h.category;
     if (!grouped[cat]) grouped[cat] = [];
-    grouped[cat].push({ code, ...r });
+    grouped[cat].push({ code, ...h });
   });
 
-  return Object.entries(grouped)
-    .sort((a, b) => (_CHECKUP_CATEGORIES[a[0]]?.order || 99) - (_CHECKUP_CATEGORIES[b[0]]?.order || 99))
-    .map(([cat, items]) => {
-      const catDef = _CHECKUP_CATEGORIES[cat] || _CHECKUP_CATEGORIES.other;
-      const abnCount = items.filter(r => _isAbnormal(r.status)).length;
-      const rows = items.map(r => {
-        const statusColor = _statusColor(r.status);
-        const trend = getCheckupTrend(who, r.code);
-        const dir = _trendDirection(trend);
-        const trendIcon = trend.length >= 2 ? (dir === 'up' ? '📈' : dir === 'down' ? '📉' : '➡️') : '';
-        const refStr = r.ref ? `${r.ref.low}-${r.ref.high}` : '-';
-        return `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;font-size:.68rem;border-bottom:1px solid var(--sf)">
-          <span style="flex:1">${esc(r.displayName)}</span>
-          <span style="font-weight:600;color:${statusColor};font-family:var(--mono)">${esc(String(r.value))}</span>
-          <span style="font-size:.58rem;color:var(--mu)">${esc(r.unit || '')}</span>
-          <span style="font-size:.55rem;color:var(--mu2)">${esc(refStr)}</span>
-          <span style="font-size:.55rem">${trendIcon}</span>
-          <span style="font-size:.5rem;color:var(--mu2)">${esc(r.date?.slice(5) || '')}</span>
-        </div>`;
+  // 대분류별 묶기
+  const majorGroups = {};
+  Object.entries(grouped).forEach(([cat, items]) => {
+    const majorKey = _CHECKUP_CATEGORIES[cat]?.major || 'other';
+    if (!majorGroups[majorKey]) majorGroups[majorKey] = {};
+    majorGroups[majorKey][cat] = items;
+  });
+
+  // 사용자 커스텀 대분류 또는 기본 대분류
+  const effectiveMajor = _getEffectiveMajorCategories();
+
+  // 대분류 편집 버튼
+  const editBtn = '<div style="text-align:right;margin-bottom:6px"><button onclick="openEditMajorCategories()" style="font-size:.6rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">🏷 대분류 편집</button></div>';
+
+  return editBtn + effectiveMajor.filter(mc => majorGroups[mc.key] || (mc.subcats && mc.subcats.some(sc => grouped[sc]))).map(mc => {
+    // 커스텀 대분류의 경우 subcats 기반 OR major 기반 매칭
+    if (!majorGroups[mc.key]) {
+      majorGroups[mc.key] = {};
+      (mc.subcats || []).forEach(sc => { if (grouped[sc]) majorGroups[mc.key][sc] = grouped[sc]; });
+    }
+    const subcats = majorGroups[mc.key];
+    const totalItems = Object.values(subcats).reduce((s, items) => s + items.length, 0);
+    const totalAbn = Object.values(subcats).reduce((s, items) => s + items.filter(r => _isAbnormal(r.latest?.status)).length, 0);
+
+    const subcatHtml = Object.entries(subcats)
+      .sort((a, b) => (_CHECKUP_CATEGORIES[a[0]]?.order || 99) - (_CHECKUP_CATEGORIES[b[0]]?.order || 99))
+      .map(([cat, items]) => {
+        const catDef = _CHECKUP_CATEGORIES[cat] || _CHECKUP_CATEGORIES.other;
+        const abnCount = items.filter(r => _isAbnormal(r.latest?.status)).length;
+        const rows = items.map(r => {
+          const statusColor = _statusColor(r.latest?.status);
+          const trend = r.history.length >= 2 ? _trendDirection(r.history.map(h => ({ value: h.value, date: h.date }))) : '';
+          const trendIcon = trend === 'up' ? '📈' : trend === 'down' ? '📉' : (r.history.length >= 2 ? '➡️' : '');
+          const refStr = r.ref ? (r.ref.low !== undefined ? r.ref.low + '-' + r.ref.high : '-') : '-';
+          // 시계열 미니 표시 (최근 4건)
+          const histMini = r.history.slice(-4).map(h => {
+            const c = _statusColor(h.status);
+            return '<span style="font-size:.5rem;color:' + c + '">' + h.value + '</span>';
+          }).join('<span style="color:var(--bd)">→</span>');
+          return '<div style="display:flex;align-items:center;gap:4px;padding:3px 0;font-size:.68rem;border-bottom:1px solid var(--sf)">'
+            + '<span style="flex:1;color:var(--ink)">' + esc(r.displayName) + '</span>'
+            + '<span style="font-weight:600;color:' + statusColor + ';font-family:var(--mono);min-width:40px;text-align:right">' + esc(String(r.latest?.value)) + '</span>'
+            + '<span style="font-size:.55rem;color:var(--mu);min-width:30px">' + esc(r.unit || '') + '</span>'
+            + '<span style="font-size:.52rem;color:var(--mu2);min-width:50px">' + esc(refStr) + '</span>'
+            + '<span style="font-size:.52rem;min-width:14px">' + trendIcon + '</span>'
+            + (r.history.length >= 2 ? '<span style="font-size:.5rem;min-width:60px;text-align:right">' + histMini + '</span>' : '<span style="min-width:60px"></span>')
+            + '<span style="font-size:.48rem;color:var(--mu2);min-width:32px;text-align:right">' + esc(r.latest?.date?.slice(2) || '') + '</span>'
+            + '</div>';
+        }).join('');
+
+        return '<div style="margin-bottom:4px">'
+          + '<div style="display:flex;align-items:center;gap:4px;padding:2px 0">'
+          + '<span style="font-size:.7rem">' + catDef.icon + '</span>'
+          + '<span style="font-size:.68rem;font-weight:600;color:var(--mu)">' + catDef.name + '</span>'
+          + '<span style="font-size:.55rem;color:var(--mu2)">' + items.length + '항목</span>'
+          + (abnCount ? '<span style="font-size:.5rem;padding:1px 4px;border-radius:3px;background:#fee2e2;color:#dc2626">이상 ' + abnCount + '</span>' : '')
+          + '</div>'
+          + rows + '</div>';
       }).join('');
 
-      return `<div style="padding:6px 8px;background:var(--sf2);border:1.5px solid ${abnCount ? '#fca5a580' : 'var(--bd)'};border-radius:8px;margin-bottom:5px">
-        <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
-          <span>${catDef.icon}</span>
-          <span style="font-size:.75rem;font-weight:600">${catDef.name}</span>
-          <span style="font-size:.6rem;color:var(--mu);margin-left:auto">${items.length}항목</span>
-          ${abnCount ? `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:#fee2e2;color:#dc2626">이상 ${abnCount}</span>` : ''}
-        </div>
-        ${rows}
-      </div>`;
-    }).join('');
+    return '<div style="padding:8px 10px;background:var(--sf2);border:1.5px solid ' + (totalAbn ? '#fca5a580' : 'var(--bd)') + ';border-radius:8px;margin-bottom:6px">'
+      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid var(--bd)">'
+      + '<span style="font-size:.82rem;font-weight:700">' + mc.name + '</span>'
+      + '<span style="font-size:.6rem;color:var(--mu)">' + totalItems + '항목</span>'
+      + (totalAbn ? '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:#fee2e2;color:#dc2626;font-weight:600">⚠ 이상 ' + totalAbn + '</span>' : '<span style="font-size:.55rem;color:#10b981">✅ 정상</span>')
+      + '</div>'
+      + subcatHtml + '</div>';
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2617,6 +2700,30 @@ level: danger/warning/caution/info. JSON만.`;
   }
 }
 
+let _drugAlertExpanded = false;
+let _drugAlertSearch = '';
+
+function _filterDrugAlerts(q) {
+  _drugAlertSearch = q.toLowerCase().trim();
+  const body = document.getElementById('drug-alert-body');
+  if (!body) return;
+  body.querySelectorAll('[data-drug-alert]').forEach(function(el) {
+    var drugs = el.dataset.drugAlert.toLowerCase();
+    if (!_drugAlertSearch) { el.style.display = ''; return; }
+    var terms = _drugAlertSearch.split(/[+,\s]+/).filter(Boolean);
+    var match = terms.every(function(t) { return drugs.includes(t); });
+    el.style.display = match ? '' : 'none';
+  });
+}
+
+function toggleDrugAlerts() {
+  _drugAlertExpanded = !_drugAlertExpanded;
+  var body = document.getElementById('drug-alert-body');
+  var arrow = document.getElementById('drug-alert-arrow');
+  if (body) body.style.display = _drugAlertExpanded ? 'block' : 'none';
+  if (arrow) arrow.textContent = _drugAlertExpanded ? '▾' : '▸';
+}
+
 function renderDrugAlerts() {
   const dm = DM();
   const alerts = dm?.settings?.lastDrugAlerts;
@@ -2627,24 +2734,39 @@ function renderDrugAlerts() {
   const levelColors = { danger:'#dc2626', warning:'#f59e0b', caution:'#3b82f6', info:'#6b7280' };
   const typeLabels = { hepato:'🫁 간독성', nephro:'🫘 신독성', ddi:'💊 상호작용', lactose:'🥛 유당' };
 
+  const dangerCount = alerts.alerts.filter(a => a.level === 'danger').length;
+  const warnCount = alerts.alerts.filter(a => a.level === 'warning').length;
+  const summaryBadge = (dangerCount ? `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:#fee2e2;color:#dc2626">🚨${dangerCount}</span>` : '')
+    + (warnCount ? `<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:#fef3c7;color:#92400e">⚠️${warnCount}</span>` : '');
+
   const html = alerts.alerts.map(a => {
     const color = levelColors[a.level] || '#f59e0b';
     const drug = a.drugs ? a.drugs.join('+') : (a.drug || '');
-    return `<div style="padding:5px 8px;background:${color}08;border-left:3px solid ${color};border-radius:0 6px 6px 0;margin-bottom:2px;font-size:.68rem">
+    return `<div data-drug-alert="${esc(drug)}" style="padding:5px 8px;background:${color}08;border-left:3px solid ${color};border-radius:0 6px 6px 0;margin-bottom:2px;font-size:.68rem">
       <span style="font-weight:600;color:${color}">${levelIcons[a.level]||'⚠️'} ${typeLabels[a.type]||a.type}</span>
-      <span style="margin-left:4px">${esc(drug)}</span>
+      <span style="margin-left:4px;font-weight:500">${esc(drug)}</span>
       <div style="color:var(--mu);margin-top:1px">${esc(a.msg)}</div>
     </div>`;
   }).join('');
 
   return `<div style="margin-bottom:8px;padding:8px;background:var(--sf2);border:1.5px solid #f59e0b30;border-radius:8px">
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+    <div onclick="toggleDrugAlerts()" style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+      <span id="drug-alert-arrow" style="font-size:.7rem;color:var(--mu)">${_drugAlertExpanded?'▾':'▸'}</span>
       <span style="font-size:.78rem;font-weight:700;color:#f59e0b">💊 약물 안전 경고</span>
+      ${summaryBadge}
+      <span style="font-size:.58rem;color:var(--mu)">${alerts.alerts.length}건</span>
       <span style="font-size:.55rem;color:var(--mu);margin-left:auto">${alerts.checkedAt||''}</span>
-      <button onclick="_refreshDrugAlerts()" style="font-size:.58rem;padding:2px 6px;border:1px solid var(--bd);border-radius:4px;background:none;cursor:pointer;color:var(--ac);font-family:var(--font)">🔄</button>
+      <button onclick="event.stopPropagation();_refreshDrugAlerts()" style="font-size:.58rem;padding:2px 6px;border:1px solid var(--bd);border-radius:4px;background:none;cursor:pointer;color:var(--ac);font-family:var(--font)">🔄</button>
     </div>
-    ${html}
-    ${alerts.summary ? `<div style="font-size:.62rem;color:var(--mu);margin-top:3px;padding-top:3px;border-top:1px solid var(--bd)">${esc(alerts.summary)}</div>` : ''}
+    <div id="drug-alert-body" style="display:${_drugAlertExpanded?'block':'none'};margin-top:6px">
+      <div style="margin-bottom:6px;display:flex;gap:4px">
+        <input type="text" placeholder="🔍 약 이름 검색 (예: 리튬, 부프로피온+아토목세틴)" oninput="_filterDrugAlerts(this.value)"
+          style="flex:1;padding:4px 8px;font-size:.68rem;border:1px solid var(--bd);border-radius:6px;background:var(--sf);color:var(--ink);font-family:var(--font)">
+      </div>
+      <div style="font-size:.58rem;color:var(--mu2);margin-bottom:4px">약 하나만 입력하면 관련 경고 전체, 두 개를 +로 연결하면 해당 조합만 필터</div>
+      ${html}
+      ${alerts.summary ? `<div style="font-size:.62rem;color:var(--mu);margin-top:3px;padding-top:3px;border-top:1px solid var(--bd)">${esc(alerts.summary)}</div>` : ''}
+    </div>
   </div>`;
 }
 
@@ -2652,4 +2774,155 @@ async function _refreshDrugAlerts() {
   const result = await generateDrugSafetyAlerts();
   showToast(result.alerts?.length ? '✅ ' + result.alerts.length + '건 경고' : '✅ 이슈 없음');
   renderView('meds');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BATCH INSTITUTION NAME — 기관명 일괄 입력
+// ═══════════════════════════════════════════════════════════════
+
+function openBatchInstitution() {
+  const who = DC().user;
+  const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
+  const noInst = allCheckups.filter(c => !c.institution || c.institution.trim() === '');
+  const withInst = allCheckups.filter(c => c.institution && c.institution.trim());
+  // 기존 기관명 목록 (자동완성)
+  const existingInsts = [...new Set(withInst.map(c => c.institution.trim()))];
+
+  const listHtml = noInst.length
+    ? noInst.map(c => {
+      const items = (c.results || []).slice(0, 3).map(r => esc(r.displayName)).join(', ');
+      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd)">'
+        + '<input type="checkbox" class="batch-inst-cb" data-ck-id="' + c.id + '" data-ck-source="' + (c._source || '') + '" data-ck-legacy="' + (c._legacyLab || false) + '" checked>'
+        + '<span style="font-size:.7rem;font-family:var(--mono);min-width:80px">' + esc(c.date || '날짜없음') + '</span>'
+        + '<span style="font-size:.65rem;color:var(--mu)">' + (c.results?.length || 0) + '항목</span>'
+        + '<span style="font-size:.6rem;color:var(--mu2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + items + '</span>'
+        + '</div>';
+    }).join('')
+    : '<div style="font-size:.72rem;color:var(--mu);text-align:center;padding:10px">✅ 모든 검진에 기관명이 입력되어 있습니다.</div>';
+
+  const instOptions = existingInsts.map(n => '<option value="' + esc(n) + '">').join('');
+
+  showConfirmModal('🏥 기관명 일괄 입력',
+    '<div style="font-size:.72rem">'
+    + '<div style="margin-bottom:8px">'
+    + '<label>기관명 <input type="text" id="batch-inst-name" list="batch-inst-list" placeholder="예: 한국의료재단, 세브란스 등" class="dx-form-input" style="width:100%"></label>'
+    + '<datalist id="batch-inst-list">' + instOptions + '</datalist>'
+    + '</div>'
+    + '<div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">기관명 없는 검진 ' + noInst.length + '건:</div>'
+    + '<div style="max-height:250px;overflow-y:auto">' + listHtml + '</div>'
+    + '</div>',
+    [
+      { label: '💾 선택 항목에 적용', primary: true, action: async () => {
+        const name = (document.getElementById('batch-inst-name')?.value || '').trim();
+        if (!name) { showToast('기관명을 입력하세요'); return; }
+        const checked = [];
+        document.querySelectorAll('.batch-inst-cb:checked').forEach(cb => {
+          checked.push({ id: parseInt(cb.dataset.ckId), source: cb.dataset.ckSource, legacy: cb.dataset.ckLegacy === 'true' });
+        });
+        if (!checked.length) { showToast('선택된 항목 없음'); return; }
+        let updated = 0;
+        for (const item of checked) {
+          if (item.legacy) {
+            const brkDs = S.domainState['bungruki'];
+            const entry = brkDs?.master?.labResults?.find(l => l.id === item.id);
+            if (entry) { entry.institution = name; updated++; }
+          } else {
+            const ds = S.domainState[item.source];
+            const entry = ds?.master?.healthCheckups?.find(c => c.id === item.id);
+            if (entry) { entry.institution = name; updated++; }
+          }
+        }
+        if (updated) { await saveMaster(); showToast('✅ ' + updated + '건 기관명 입력됨: ' + name); }
+        closeConfirmModal();
+        renderView('meds');
+      }},
+      { label: '취소', action: closeConfirmModal },
+    ]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAJOR CATEGORY EDIT — 대분류 편집/추가/삭제
+// ═══════════════════════════════════════════════════════════════
+
+function _getCustomMajorCategories() {
+  const dm = DM();
+  return dm?.settings?.customMajorCategories || null;
+}
+
+function _getEffectiveMajorCategories() {
+  const custom = _getCustomMajorCategories();
+  if (custom) return custom;
+  return _CHECKUP_MAJOR_CATEGORIES.map(c => ({ key: c.key, name: c.name, subcats: Object.entries(_CHECKUP_CATEGORIES).filter(([k, v]) => v.major === c.key).map(([k]) => k) }));
+}
+
+function openEditMajorCategories() {
+  const current = _getEffectiveMajorCategories();
+  const allSubcats = Object.entries(_CHECKUP_CATEGORIES).map(([k, v]) => ({ key: k, name: v.icon + ' ' + v.name }));
+
+  const listHtml = current.map((mc, i) => {
+    return '<div style="padding:6px 8px;border:1px solid var(--bd);border-radius:6px;margin-bottom:4px;background:var(--sf)">'
+      + '<div style="display:flex;align-items:center;gap:6px">'
+      + '<span style="cursor:grab;color:var(--mu)">☰</span>'
+      + '<input type="text" data-mc-idx="' + i + '" value="' + esc(mc.name) + '" style="flex:1;font-size:.72rem;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;font-family:var(--font);color:var(--ink);background:var(--sf2)">'
+      + '<button onclick="this.closest(\'div\').closest(\'div\').remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.7rem">✕</button>'
+      + '</div>'
+      + '<div style="font-size:.58rem;color:var(--mu);margin-top:3px">포함: '
+      + (mc.subcats || []).map(sc => { const def = _CHECKUP_CATEGORIES[sc]; return def ? def.icon + def.name : sc; }).join(', ')
+      + '</div></div>';
+  }).join('');
+
+  showConfirmModal('🏷 검사 대분류 편집',
+    '<div style="font-size:.72rem">'
+    + '<div style="max-height:300px;overflow-y:auto" id="mc-edit-list">' + listHtml + '</div>'
+    + '<button onclick="_addMajorCategoryRow()" style="margin-top:6px;font-size:.68rem;padding:4px 12px;border:1.5px dashed var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font);width:100%">+ 대분류 추가</button>'
+    + '<div style="font-size:.58rem;color:var(--mu2);margin-top:6px">이름 변경/삭제 후 저장하면 카테고리 뷰에 반영됩니다.</div>'
+    + '</div>',
+    [
+      { label: '💾 저장', primary: true, action: async () => {
+        const items = [];
+        document.querySelectorAll('[data-mc-idx]').forEach(inp => {
+          const name = inp.value.trim();
+          if (!name) return;
+          const idx = parseInt(inp.dataset.mcIdx);
+          const orig = current[idx];
+          items.push({ key: orig?.key || ('custom_' + Date.now() + '_' + items.length), name, subcats: orig?.subcats || [] });
+        });
+        // 새로 추가된 항목 (data-mc-new)
+        document.querySelectorAll('[data-mc-new]').forEach(inp => {
+          const name = inp.value.trim();
+          if (!name) return;
+          items.push({ key: 'custom_' + Date.now() + '_' + items.length, name, subcats: [] });
+        });
+        if (!items.length) { showToast('최소 1개 대분류 필요'); return; }
+        const dm = DM();
+        if (!dm.settings) dm.settings = {};
+        dm.settings.customMajorCategories = items;
+        await saveMaster();
+        closeConfirmModal();
+        showToast('✅ 대분류 저장됨');
+        renderView('meds');
+      }},
+      { label: '초기화', action: async () => {
+        const dm = DM();
+        if (dm.settings) delete dm.settings.customMajorCategories;
+        await saveMaster();
+        closeConfirmModal();
+        showToast('🔄 기본 대분류로 복원');
+        renderView('meds');
+      }},
+      { label: '취소', action: closeConfirmModal },
+    ]);
+}
+
+function _addMajorCategoryRow() {
+  const list = document.getElementById('mc-edit-list');
+  if (!list) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'padding:6px 8px;border:1px solid var(--ac);border-radius:6px;margin-bottom:4px;background:var(--sf)';
+  div.innerHTML = '<div style="display:flex;align-items:center;gap:6px">'
+    + '<span style="color:var(--ac)">✨</span>'
+    + '<input type="text" data-mc-new="1" placeholder="새 대분류 이름" style="flex:1;font-size:.72rem;padding:3px 6px;border:1px solid var(--ac);border-radius:4px;font-family:var(--font);color:var(--ink);background:var(--sf2)">'
+    + '<button onclick="this.closest(\'div\').closest(\'div\').remove()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.7rem">✕</button>'
+    + '</div>';
+  list.appendChild(div);
 }

@@ -252,10 +252,10 @@ function renderQuickLogBanner() {
       var timeStr=dt[1]==='시간미상'?'시간미상':dt[1];
       var nrsHtml=l.nrs>=0?'<span class="log-item-nrs" style="background:'+nrsColor(l.nrs)+'20;color:'+nrsColor(l.nrs)+'">'+_scoreLabel()+' '+l.nrs+'</span>':'';
       var tags=[].concat(
-        (l.sites||[]).map(function(s){return '<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">'+esc(s)+'</span>';}),
-        (l.symptoms||[]).map(function(s){return '<span class="log-tag" style="background:#faf5ff;color:#7c3aed">'+esc(s)+'</span>';}),
-        (l.meds||[]).map(function(s){return '<span class="log-tag" style="background:#fff7ed;color:#c2410c">'+esc(s)+'</span>';}),
-        (l.treatments||[]).map(function(s){return '<span class="log-tag" style="background:#f0fdf4;color:#15803d">'+esc(s)+'</span>';})
+        (l.sites||[]).map(function(s){return '<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">'+esc(s)+'</span>';}),
+        (l.symptoms||[]).map(function(s){return '<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">'+esc(s)+'</span>';}),
+        (l.meds||[]).map(function(s){return '<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">'+esc(s)+'</span>';}),
+        (l.treatments||[]).map(function(s){return '<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">'+esc(s)+'</span>';})
       ).join('');
       return '<div class="qlb-item" id="qlb-'+l.id+'">'
         +'<div class="qlb-item-head">'
@@ -538,6 +538,8 @@ function renderLog() {
         <input type="checkbox" id="journal-nrs-skip" checked onchange="const r=document.getElementById('journal-nrs');r.disabled=this.checked;document.getElementById('journal-nrs-val').textContent=this.checked?'-':r.value"> 기록 안 함
       </label>
       <div id="journal-medcheck-container" style="margin-top:12px"></div>
+      ${_renderOtherDomainSections(dateStr)}
+      ${_renderLogDailyExtras(dateStr)}
       <input type="hidden" id="log-edit-idx" value="-1">
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px">
         <button class="btn-cancel" id="log-cancel-edit" style="display:none;font-size:.78rem" onclick="cancelLogEdit()">편집 취소</button>
@@ -701,6 +703,7 @@ function renderLog() {
       </div>
     </div>`:''}
     ${treatmentHtml}
+    ${_renderOtherDomainSections(dateStr)}
     ${_renderLogDailyExtras(dateStr)}
     <div class="log-section-title">메모</div>
     <textarea class="log-memo" id="log-memo" rows="2" placeholder="특이사항..."></textarea>
@@ -727,15 +730,15 @@ function renderRecentLogs() {
     todayLogs.map(l=>`<div class="log-item">
       <div class="log-item-time">${l.datetime.slice(11,16)!=='00:00'?l.datetime.slice(11,16):''}</div>
       <div class="log-item-body">
-        ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
+        ${l.mood?`<span class="log-item-nrs" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(l.mood)}</span>`:
           (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()} ${l.nrs}</span>`:'')}
-        ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
+        ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(s)}</span>`).join('')}
         <div class="log-item-tags">
-          ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
-          ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
-          ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-          ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:#f0f9ff;color:#0369a1;font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
-          ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'#f0fdf4':'#fef2f2'};color:${v?'#15803d':'#dc2626'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
+          ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`).join('')}
+          ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}</span>`).join('')}
+          ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
+          ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:var(--tag-dc-bg);color:var(--tag-dc);font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
+          ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'var(--ok-bg)':'var(--err-bg)'};color:${v?'var(--ok)':'var(--err)'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
         </div>
         ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px">${esc(l.memo)}</div>`:''}
       </div>
@@ -810,16 +813,16 @@ function renderLogList() {
       return `<div class="log-item">
         <div class="log-item-time">${timeStr!=='00:00'?timeStr:''}</div>
         <div class="log-item-body">
-          ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
+          ${l.mood?`<span class="log-item-nrs" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(l.mood)}</span>`:
             (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()} ${l.nrs}</span>`:'')}
-          ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
+          ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(s)}</span>`).join('')}
           <div class="log-item-tags">
-            ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`).join('')}
-            ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
-            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
-            ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
-            ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:#f0f9ff;color:#0369a1;font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
-            ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'#f0fdf4':'#fef2f2'};color:${v?'#15803d':'#dc2626'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
+            ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:var(--tag-trigger-bg);color:var(--tag-trigger)">⚡${esc(t)}</span>`).join('')}
+            ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`).join('')}
+            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}</span>`).join('')}
+            ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
+            ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:var(--tag-dc-bg);color:var(--tag-dc);font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
+            ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'var(--ok-bg)':'var(--err-bg)'};color:${v?'var(--ok)':'var(--err)'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
             ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
@@ -880,14 +883,14 @@ function renderLogListInner() {
       return `<div class="log-item">
         <div class="log-item-time">${timeStr!=='00:00'?timeStr:''}</div>
         <div class="log-item-body">
-          ${l.mood?`<span class="log-item-nrs" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:
+          ${l.mood?`<span class="log-item-nrs" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(l.mood)}</span>`:
             (l.nrs>=0?`<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()} ${l.nrs}</span>`:'')}
-          ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(s)}</span>`).join('')}
+          ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(s)}</span>`).join('')}
           <div class="log-item-tags">
-            ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`).join('')}
-            ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`).join('')}
-            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(s)}</span>`).join('')}
-            ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:#f0fdf4;color:#15803d">${esc(s)}</span>`).join('')}
+            ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:var(--tag-trigger-bg);color:var(--tag-trigger)">⚡${esc(t)}</span>`).join('')}
+            ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`).join('')}
+            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}</span>`).join('')}
+            ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
             ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
@@ -1296,7 +1299,10 @@ async function saveLogEntry() {
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   } else {
     ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-    try{await saveLogData();_markQuickSynced();sendLogNotification(entry);showToast('✅ 기록 저장됨');_clearLogAutoSave();renderView('log');}
+    try{await saveLogData();_markQuickSynced();sendLogNotification(entry);showToast('✅ 기록 저장됨');_clearLogAutoSave();
+      var _timeStr=timeUnknown?'00:00':(document.getElementById('log-time')?.value||'00:00');
+      _saveOtherDomainData(date,_timeStr).catch(function(e){console.warn('Unified save:',e);});
+      renderView('log');}
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   }
   if(btn)btn.disabled=false;if(sp)sp.style.display='none';
@@ -1665,7 +1671,9 @@ async function saveJournalLog() {
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   } else {
     ds.logData.push(entry);ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-    try{await saveLogData();showToast('✅ 기록 저장됨');_clearLogAutoSave();renderView('log');}
+    try{await saveLogData();showToast('✅ 기록 저장됨');_clearLogAutoSave();
+      _saveOtherDomainData(date,'00:00').catch(function(e){console.warn('Unified save:',e);});
+      renderView('log');}
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   }
   if(btn)btn.disabled=false;if(sp)sp.style.display='none';
@@ -1709,7 +1717,7 @@ function renderJournalLogs() {
       return `<div class="log-item">
         <div class="log-item-time">${l.datetime.slice(5,10)}${who?'<br><span style="color:'+(whoColors[who]||'var(--mu)')+'">'+((whoEmoji[who]||'')+' '+who)+'</span>':''}</div>
         <div class="log-item-body">
-          ${(l.categories||[]).map(c=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(c)}</span>`).join('')}
+          ${(l.categories||[]).map(c=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(c)}</span>`).join('')}
           <div style="font-size:.82rem;margin-top:4px;line-height:1.65">${esc(l.memo||'')}</div>
         </div>
         <button class="log-del" onclick="editJournalEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
@@ -2010,7 +2018,7 @@ async function migrateMedCheck() {
 // 증상 기록 폼 — 운동/영양제/체중/음주 (건강관리 도메인용)
 // ═══════════════════════════════════════════════════════════════
 function _renderLogDailyExtras(dateStr) {
-  if (!S.currentDomain?.endsWith('-health')) return '';
+  if (S.currentDomain === 'bungruki') return '';
   const brkDs = S.domainState['bungruki'];
   if (!brkDs?.master) return '';
   const m = brkDs.master;
@@ -2023,7 +2031,7 @@ function _renderLogDailyExtras(dateStr) {
   // 영양제
   const oKeys = typeof BRK_SUPPL_ORANGI !== 'undefined' ? BRK_SUPPL_ORANGI : [];
   const bKeys = typeof BRK_SUPPL_BUNG !== 'undefined' ? BRK_SUPPL_BUNG : [];
-  const supplLabels = {folicAcid:'엽산',iron:'철분',vitaminD:'비타민D',multivitamin:'멀티비타민',magnesium:'마그네슘',arginine:'아르기닌',coq10:'CoQ10',silymarin:'실리마린'};
+  const supplLabels = Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(([k,v])=>[k,v.label]));
   let supplKeys = who === 'orangi' ? [...oKeys] : [...bKeys];
   if (m.customSuppl?.[who]) m.customSuppl[who].forEach(c => { if (!supplKeys.includes(c.key)) { supplKeys.push(c.key); supplLabels[c.key] = c.label; } });
   const hidden = m.hiddenSuppl?.[who] || [];
@@ -2082,4 +2090,239 @@ function _saveLogAlcohol(dateStr, checked) {
   const brkDs = S.domainState['bungruki']; if (!brkDs?.master) return;
   brkDs.master.dailyChecks['bung'] && (brkDs.master.dailyChecks[dateStr].bung.alcohol = checked);
   saveBrkMaster();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UNIFIED FORM — 통합 기록 (다른 도메인 축약 기록 섹션)
+// ═══════════════════════════════════════════════════════════════
+
+let _ufExpanded = {};
+
+function toggleUfSection(domId) {
+  _ufExpanded[domId] = !_ufExpanded[domId];
+  const body = document.getElementById('uf-' + domId);
+  const arrow = document.getElementById('uf-arrow-' + domId);
+  if (body) body.style.display = _ufExpanded[domId] ? 'block' : 'none';
+  if (arrow) arrow.textContent = _ufExpanded[domId] ? '▾' : '▸';
+}
+
+function selectUfMood(el, domId) {
+  document.querySelectorAll('[data-group="uf-mood-' + domId + '"]').forEach(function(c) { c.classList.remove('sel','sel-sym'); });
+  el.classList.add('sel', 'sel-sym');
+}
+
+function _getUfConditionMeds(domainId, date) {
+  var all = getAllUserConditions().filter(function(c){ return c.status==='active'||c.status==='remission'; });
+  var result = [];
+  all.forEach(function(c) {
+    if (c._domainId !== domainId) return;
+    var meds = (date && c.medHistory && c.medHistory.length) ? getMedsAtDate(c, date) : (c.medsList || []);
+    if (meds.length) result.push({ condition: c.name, icon: c._domainIcon, meds: meds });
+  });
+  return result;
+}
+
+function _renderUfMedCheckHtml(domainId, dateStr) {
+  var condMeds = _getUfConditionMeds(domainId, dateStr);
+  if (!condMeds.length) return '';
+  return '<div style="margin-top:8px"><div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">💊 복용 체크</div>'
+    + condMeds.map(function(cm) {
+      return '<div style="border:1px solid var(--bd);border-radius:6px;padding:6px 8px;margin-bottom:4px;background:var(--sf)">'
+        + '<div style="font-size:.65rem;font-weight:600;color:var(--ink);margin-bottom:3px">' + cm.icon + ' ' + esc(cm.condition) + '</div>'
+        + cm.meds.filter(function(m){ return !_isProcedure(m); }).map(function(m) {
+          return '<label style="display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer;font-size:.72rem">'
+            + '<input type="checkbox" class="uf-mc-cb" data-domain="' + domainId + '" data-med="' + esc(m) + '" style="accent-color:var(--ac)"> ' + esc(m)
+            + (m.includes('(PRN)') ? ' <span style="font-size:.5rem;color:#f59e0b">PRN</span>' : '')
+            + '</label>';
+        }).join('')
+        + '</div>';
+    }).join('')
+    + '</div>';
+}
+
+function _renderUfMoodContent(domId, dom, dateStr) {
+  var lc = dom.logConfig;
+  var allMoodOpts = ['😞 우울','😶 무감정','😐 보통','🙂 양호','😊 좋음'];
+  var html = '<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">기분</div>'
+    + '<div class="log-chips" style="margin-bottom:6px">'
+    + allMoodOpts.map(function(s) { return '<div class="log-chip" data-group="uf-mood-' + domId + '" data-val="' + s + '" onclick="selectUfMood(this,\'' + domId + '\')">' + s + '</div>'; }).join('')
+    + '</div>';
+
+  if (lc.dailyChecks && lc.dailyChecks.length) {
+    html += '<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px;margin-top:8px">컨디션 체크</div>';
+    lc.dailyChecks.forEach(function(item) {
+      html += '<div style="display:flex;align-items:center;gap:6px;padding:2px 0">'
+        + '<span style="font-size:.68rem;min-width:48px;color:var(--mu)">' + item + '</span>'
+        + '<div class="log-chips" style="flex:1;gap:2px">'
+        + ['1','2','3','4','5'].map(function(v) { return '<div class="log-chip" data-group="uf-dc-' + domId + '-' + item + '" data-val="' + v + '" onclick="toggleChip(this,\'sel-sym\')" style="min-width:24px;text-align:center;font-size:.68rem;padding:3px 5px">' + v + '</div>'; }).join('')
+        + '</div></div>';
+    });
+  }
+
+  if (lc.symptoms && lc.symptoms.length) {
+    html += '<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px;margin-top:8px">증상</div>'
+      + '<div class="log-chips" style="gap:3px">'
+      + lc.symptoms.slice(0, 8).map(function(s) { return '<div class="log-chip" data-group="uf-sym-' + domId + '" data-val="' + s + '" onclick="toggleChip(this,\'sel-sym\')" style="font-size:.68rem;padding:3px 8px">' + s + '</div>'; }).join('')
+      + '</div>';
+  }
+
+  html += _renderUfMedCheckHtml(domId, dateStr);
+  return html;
+}
+
+function _renderUfHealthContent(domId, dom, dateStr) {
+  var lc = dom.logConfig;
+  var cats = (lc.journalCategories || []).filter(function(s) { return s !== '|'; });
+  var html = '<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">카테고리</div>'
+    + '<div class="log-chips" style="gap:3px;margin-bottom:6px">'
+    + cats.map(function(s) { return '<div class="log-chip" data-group="uf-cat-' + domId + '" data-val="' + s + '" onclick="toggleChip(this,\'sel-sym\')" style="font-size:.68rem;padding:3px 8px">' + s + '</div>'; }).join('')
+    + '</div>'
+    + '<textarea id="uf-memo-' + domId + '" rows="2" class="log-memo" placeholder="' + esc(dom.label) + ' 기록..." style="font-size:.72rem;margin-bottom:4px"></textarea>'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-top:4px">'
+    + '<span style="font-size:.68rem;color:var(--mu)">컨디션</span>'
+    + '<span style="font-size:1rem;font-weight:700;min-width:22px;text-align:center" id="uf-nrs-val-' + domId + '">-</span>'
+    + '<input type="range" id="uf-nrs-' + domId + '" min="0" max="10" value="5" disabled style="flex:1;accent-color:var(--ac);height:20px" oninput="document.getElementById(\'uf-nrs-val-' + domId + '\').textContent=this.value;document.getElementById(\'uf-nrs-skip-' + domId + '\').checked=false">'
+    + '<label style="font-size:.62rem;color:var(--mu);display:flex;align-items:center;gap:3px;cursor:pointer">'
+    + '<input type="checkbox" id="uf-nrs-skip-' + domId + '" checked onchange="var r=document.getElementById(\'uf-nrs-' + domId + '\');r.disabled=this.checked;document.getElementById(\'uf-nrs-val-' + domId + '\').textContent=this.checked?\'-\':r.value"> 안함</label></div>';
+  html += _renderUfMedCheckHtml(domId, dateStr);
+  return html;
+}
+
+function _renderUfStandardContent(domId, dom, dateStr) {
+  var lc = dom.logConfig;
+  var html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+    + '<span style="font-size:.68rem;color:var(--mu)">' + (lc.nrsLabel || 'NRS') + '</span>'
+    + '<span style="font-size:1rem;font-weight:700;min-width:22px;text-align:center" id="uf-nrs-val-' + domId + '">-</span>'
+    + '<input type="range" id="uf-nrs-' + domId + '" min="0" max="10" value="5" disabled style="flex:1;accent-color:var(--ac);height:20px" oninput="document.getElementById(\'uf-nrs-val-' + domId + '\').textContent=this.value;document.getElementById(\'uf-nrs-skip-' + domId + '\').checked=false">'
+    + '<label style="font-size:.62rem;color:var(--mu);display:flex;align-items:center;gap:3px;cursor:pointer">'
+    + '<input type="checkbox" id="uf-nrs-skip-' + domId + '" checked onchange="var r=document.getElementById(\'uf-nrs-' + domId + '\');r.disabled=this.checked;document.getElementById(\'uf-nrs-val-' + domId + '\').textContent=this.checked?\'-\':r.value"> 안함</label></div>';
+  if (lc.symptoms && lc.symptoms.length) {
+    html += '<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">증상</div>'
+      + '<div class="log-chips" style="gap:3px">'
+      + lc.symptoms.slice(0, 6).map(function(s) { return '<div class="log-chip" data-group="uf-sym-' + domId + '" data-val="' + s + '" onclick="toggleChip(this,\'sel-sym\')" style="font-size:.68rem;padding:3px 8px">' + s + '</div>'; }).join('')
+      + '</div>';
+  }
+  if (lc.meds && lc.meds.length) {
+    html += '<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px;margin-top:6px">투약</div>'
+      + '<div class="log-chips" style="gap:3px">'
+      + lc.meds.filter(function(m){ return m !== '기타'; }).map(function(m) { return '<div class="log-chip" data-group="uf-med-' + domId + '" data-val="' + m + '" onclick="toggleChip(this,\'sel-med\')" style="font-size:.68rem;padding:3px 8px">' + m + '</div>'; }).join('')
+      + '</div>';
+  }
+  return html;
+}
+
+function _renderOtherDomainSections(dateStr) {
+  var currentUser = DC().user;
+  var otherDomains = Object.entries(DOMAINS).filter(function(e) {
+    return e[1].user === currentUser && e[0] !== S.currentDomain && e[0] !== 'bungruki';
+  });
+  if (!otherDomains.length) return '';
+  var html = '<div style="margin-top:14px;border-top:2px solid var(--bd);padding-top:12px">'
+    + '<div style="font-size:.72rem;font-weight:700;color:var(--mu);margin-bottom:8px;display:flex;align-items:center;gap:6px">📋 다른 도메인 빠른 기록 <span style="font-size:.58rem;font-weight:400;color:var(--mu2)">펼쳐서 함께 기록</span></div>';
+  otherDomains.forEach(function(e) {
+    var domId = e[0], dom = e[1];
+    var expanded = _ufExpanded[domId] || false;
+    var lc = dom.logConfig;
+    var content = '';
+    if (lc.moodMode) content = _renderUfMoodContent(domId, dom, dateStr);
+    else if (lc.customFields) content = _renderUfHealthContent(domId, dom, dateStr);
+    else content = _renderUfStandardContent(domId, dom, dateStr);
+    html += '<div style="margin-bottom:6px;border:1.5px solid var(--bd);border-radius:8px;overflow:hidden">'
+      + '<div onclick="toggleUfSection(\'' + domId + '\')" style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;user-select:none;background:var(--sf2)">'
+      + '<span id="uf-arrow-' + domId + '" style="font-size:.7rem;color:var(--mu)">' + (expanded ? '▾' : '▸') + '</span>'
+      + '<span style="font-size:.82rem">' + dom.icon + '</span>'
+      + '<span style="font-size:.78rem;font-weight:600;color:' + dom.color + '">' + dom.label + '</span>'
+      + '</div>'
+      + '<div id="uf-' + domId + '" style="display:' + (expanded ? 'block' : 'none') + ';padding:8px 12px;border-top:1px solid var(--bd)">' + content + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function _collectUfDomainData(domId) {
+  var dom = DOMAINS[domId]; if (!dom) return null;
+  var lc = dom.logConfig;
+  var body = document.getElementById('uf-' + domId);
+  if (!body || body.style.display === 'none') return null;
+  if (lc.moodMode) {
+    var moodEl = body.querySelector('[data-group="uf-mood-' + domId + '"].sel');
+    var mood = moodEl ? moodEl.dataset.val : '';
+    var dailyChecks = {};
+    (lc.dailyChecks || []).forEach(function(item) {
+      var sel = body.querySelector('[data-group="uf-dc-' + domId + '-' + item + '"].sel');
+      if (sel) dailyChecks[item] = parseInt(sel.dataset.val);
+    });
+    var symptoms = [];
+    body.querySelectorAll('[data-group="uf-sym-' + domId + '"].sel').forEach(function(el) { symptoms.push(el.dataset.val); });
+    var medCheck = {};
+    body.querySelectorAll('.uf-mc-cb[data-domain="' + domId + '"]').forEach(function(cb) { medCheck[cb.dataset.med] = cb.checked; });
+    if (!mood && !Object.keys(dailyChecks).length && !symptoms.length && !Object.keys(medCheck).length) return null;
+    return { nrs: -1, mood: mood, symptoms: symptoms, meds: [], treatments: [], sites: [],
+      dailyChecks: Object.keys(dailyChecks).length ? dailyChecks : undefined,
+      medCheck: Object.keys(medCheck).length ? medCheck : undefined, memo: '' };
+  }
+  if (lc.customFields) {
+    var cats = [];
+    body.querySelectorAll('[data-group="uf-cat-' + domId + '"].sel').forEach(function(el) { cats.push(el.dataset.val); });
+    var memo = (document.getElementById('uf-memo-' + domId) || {}).value || '';
+    memo = memo.trim();
+    var nrsSkip = (document.getElementById('uf-nrs-skip-' + domId) || {}).checked;
+    var nrs = nrsSkip ? -1 : parseInt((document.getElementById('uf-nrs-' + domId) || {}).value || '-1');
+    var medCheck2 = {};
+    body.querySelectorAll('.uf-mc-cb[data-domain="' + domId + '"]').forEach(function(cb) { medCheck2[cb.dataset.med] = cb.checked; });
+    if (!cats.length && !memo && nrs < 0 && !Object.keys(medCheck2).length) return null;
+    return { categories: cats, memo: memo, nrs: nrs, medCheck: Object.keys(medCheck2).length ? medCheck2 : undefined,
+      sites: [], symptoms: [], meds: [], treatments: [] };
+  }
+  // Standard (migraine-like)
+  var nrsSkip2 = (document.getElementById('uf-nrs-skip-' + domId) || {}).checked;
+  var nrs2 = nrsSkip2 ? -1 : parseInt((document.getElementById('uf-nrs-' + domId) || {}).value || '-1');
+  var symptoms2 = [];
+  body.querySelectorAll('[data-group="uf-sym-' + domId + '"].sel').forEach(function(el) { symptoms2.push(el.dataset.val); });
+  var meds2 = [];
+  body.querySelectorAll('[data-group="uf-med-' + domId + '"].sel').forEach(function(el) { meds2.push(el.dataset.val); });
+  if (nrs2 < 0 && !symptoms2.length && !meds2.length) return null;
+  return { nrs: nrs2, mood: '', symptoms: symptoms2, meds: meds2, treatments: [], sites: [], memo: '' };
+}
+
+async function _saveOtherDomainData(dateStr, timeStr) {
+  var currentUser = DC().user;
+  var otherDomains = Object.entries(DOMAINS).filter(function(e) {
+    return e[1].user === currentUser && e[0] !== S.currentDomain && e[0] !== 'bungruki';
+  });
+  // 저장 대상 먼저 수집
+  var toSave = [];
+  for (var i = 0; i < otherDomains.length; i++) {
+    var domId = otherDomains[i][0], dom = otherDomains[i][1];
+    var data = _collectUfDomainData(domId);
+    if (!data) continue;
+    var ds = S.domainState[domId];
+    if (!ds || !ds.folderId) continue;
+    toSave.push({ domId: domId, dom: dom, data: data, ds: ds });
+  }
+  if (!toSave.length) return;
+  var saved = 0, failed = 0;
+  for (var j = 0; j < toSave.length; j++) {
+    var t = toSave[j];
+    var ym = dateStr.slice(0, 7);
+    var logFn = t.dom.logPrefix + '_' + ym + '.json';
+    try {
+      if (!t.ds.logData || t.ds.logMonth !== ym) {
+        var files = await driveSearch(logFn, t.ds.folderId);
+        if (files.length > 0) { t.ds.logFileId = files[0].id; var d = await driveRead(t.ds.logFileId); t.ds.logData = Array.isArray(d) ? d : []; }
+        else { t.ds.logData = []; t.ds.logFileId = null; }
+        t.ds.logMonth = ym;
+      }
+      var entry = Object.assign({ id: Date.now() + j + 1, datetime: dateStr + 'T' + timeStr }, t.data);
+      t.ds.logData.push(entry);
+      t.ds.logData.sort(function(a, b) { return a.datetime.localeCompare(b.datetime); });
+      if (t.ds.logFileId) await driveUpdate(t.ds.logFileId, t.ds.logData);
+      else t.ds.logFileId = await driveCreate(logFn, t.ds.logData, t.ds.folderId);
+      saved++;
+    } catch (e) { console.warn('Other domain save failed:', t.domId, e); failed++; }
+  }
+  if (saved && !failed) showToast('📋 다른 도메인 ' + saved + '건도 저장됨');
+  else if (saved && failed) showToast('⚠️ 다른 도메인 ' + saved + '건 저장, ' + failed + '건 실패', 4000);
+  else if (failed) showToast('❌ 다른 도메인 저장 실패 ' + failed + '건', 4000);
 }

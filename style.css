@@ -10,12 +10,44 @@
   --mono:'IBM Plex Mono',monospace;
   --serif:'DM Serif Display',serif;
   --domain-color:#c96442;
+  /* Semantic tag colors */
+  --tag-site-bg:#eff6ff;--tag-site:#1d4ed8;
+  --tag-sym-bg:#faf5ff;--tag-sym:#7c3aed;
+  --tag-med-bg:#fff7ed;--tag-med:#c2410c;
+  --tag-tx-bg:#f0fdf4;--tag-tx:#15803d;
+  --tag-dc-bg:#f0f9ff;--tag-dc:#0369a1;
+  --tag-trigger-bg:#fef3c7;--tag-trigger:#92400e;
+  /* Status colors */
+  --ok-bg:#f0fdf4;--ok:#15803d;
+  --warn-bg:#fffbeb;--warn:#92400e;
+  --err-bg:#fef2f2;--err:#dc2626;
+  --info-bg:#eff6ff;--info:#1d4ed8;
+  /* NRS/severity */
+  --nrs-lo:#2d8a5a;--nrs-mid:#e67e22;--nrs-hi:#c03030;
+  /* Accent status */
+  --a-green:#10b981;--a-yellow:#f59e0b;--a-red:#ef4444;--a-blue:#3b82f6;--a-purple:#8b5cf6;--a-pink:#ec4899;
 }
 [data-theme="dark"]{
   --bg:#0f1118;--sf:#1a1d28;--sf2:#22262f;
   --bd:#2a2e3a;--bd2:#353a48;
   --ink:#e4e2dd;--mu:#8a8682;--mu2:#5a5854;
   --ac:#5a9fd4;--gr:#4a9a7a;--re:#e05050;
+  /* Semantic tag colors — dark */
+  --tag-site-bg:#1e3050;--tag-site:#93c5fd;
+  --tag-sym-bg:#3b1f60;--tag-sym:#d8b4fe;
+  --tag-med-bg:#4a2e14;--tag-med:#fed7aa;
+  --tag-tx-bg:#1a3528;--tag-tx:#86efac;
+  --tag-dc-bg:#0f2744;--tag-dc:#7dd3fc;
+  --tag-trigger-bg:#3a2e14;--tag-trigger:#fcd34d;
+  /* Status colors — dark */
+  --ok-bg:#1a3528;--ok:#86efac;
+  --warn-bg:#3a2e14;--warn:#fcd34d;
+  --err-bg:#3a1a1a;--err:#fca5a5;
+  --info-bg:#1e3050;--info:#93c5fd;
+  /* NRS/severity — dark */
+  --nrs-lo:#4a9a7a;--nrs-mid:#f5a623;--nrs-hi:#e05050;
+  /* Accent status — dark */
+  --a-green:#4ade80;--a-yellow:#fbbf24;--a-red:#f87171;--a-blue:#60a5fa;--a-purple:#a78bfa;--a-pink:#f472b6;
 }
 html,body{height:100%;overflow:hidden}
 body{font-family:var(--font);background:var(--bg);color:var(--ink);display:flex;font-size:14px;transition:background .3s,color .3s}

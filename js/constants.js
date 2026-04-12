@@ -339,8 +339,18 @@ const DOMAINS = {
       treatments: [],
       nrsLabel: '컨디션 (0=최악 10=최상)',
       customFields: true,
+      journalCategories: ['🏥 병원비교','📋 검사기록','❤️ 시도/관계','💊 약물변경','📊 컨디션','|','🍼 출산준비','💊 영양제','기타'],
     },
   },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// SUPPLEMENT LABELS — 영양제 라벨 일원화 (bungruki/log/views 공유)
+// ═══════════════════════════════════════════════════════════════
+const BRK_SUPPL_LABELS = {
+  folicAcid:{label:'엽산',icon:'💊'}, iron:{label:'철분',icon:'🩸'}, vitaminD:{label:'비타민D',icon:'☀️'},
+  multivitamin:{label:'멀티비타민',icon:'💊'}, magnesium:{label:'마그네슘',icon:'🧲'},
+  arginine:{label:'아르기닌',icon:'💪'}, coq10:{label:'CoQ10',icon:'⚡'}, silymarin:{label:'실리마린',icon:'🌿'},
 };
 
 // ═══════════════════════════════════════════════════════════════
