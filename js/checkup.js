@@ -2174,6 +2174,8 @@ function renderCheckupArchive() {
       <button onclick="aiReclassifyAll()" style="background:none;border:1px solid #8b5cf6;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#8b5cf6;cursor:pointer;font-family:var(--font)">🤖 재분류</button>
       <button onclick="openBatchInstitution()" style="background:none;border:1px solid #f59e0b;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#f59e0b;cursor:pointer;font-family:var(--font)">🏥 기관명</button>
       <button onclick="_detectDuplicateCheckups()" style="background:none;border:1px solid #dc2626;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#dc2626;cursor:pointer;font-family:var(--font)">🔗 중복 정리</button>
+      <button onclick="_toggleCkSelectMode()" style="background:none;border:1px solid ${_ckSelectMode?'#dc2626':'#8b5cf6'};border-radius:5px;padding:2px 8px;font-size:.6rem;color:${_ckSelectMode?'#dc2626':'#8b5cf6'};cursor:pointer;font-family:var(--font)">${_ckSelectMode?'✕ 선택 해제':'☑️ 선택 병합'}</button>
+      <button id="ck-ai-merge-btn" onclick="_aiMergeSelected()" style="display:${_ckSelectMode&&_ckSelectedIds.size>=2?'inline':'none'};background:#8b5cf6;border:none;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#fff;cursor:pointer;font-family:var(--font)">🤖 AI 병합 (${_ckSelectedIds.size}건)</button>
       <span style="font-size:.62rem;color:var(--mu)">${allCheckups.length}건 · ${totalItems}항목</span>
     </div>
     <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${tabBar}</div>
@@ -2222,8 +2224,11 @@ function _renderCheckupTimeline(checkups) {
 
     const sourceTag = c._legacyLab ? `<span style="font-size:.5rem;padding:1px 4px;border-radius:3px;background:#ede9fe;color:#7c3aed">임신준비 연계</span>` : '';
 
-    return `<div style="padding:8px 10px;background:var(--sf2);border:1.5px solid ${abnormal.length ? '#fca5a580' : 'var(--bd)'};border-radius:8px;margin-bottom:5px">
+    const selKey = c.id + '|' + (c._source||'') + '|' + (c._legacyLab||false);
+    const isSel = _ckSelectMode && _ckSelectedIds.has(selKey);
+    return `<div style="padding:8px 10px;background:var(--sf2);border:1.5px solid ${isSel?'#8b5cf6':abnormal.length ? '#fca5a580' : 'var(--bd)'};border-radius:8px;margin-bottom:5px${isSel?';outline:2px solid #8b5cf6':''}">
       <div style="display:flex;align-items:center;gap:6px">
+        ${_ckSelectMode?`<input type="checkbox" id="ck-sel-${c.id}" ${isSel?'checked':''} onchange="_toggleCkSelect(${c.id},'${c._source||''}',${c._legacyLab||false})" style="accent-color:#8b5cf6;flex-shrink:0">`:''}
         <span style="font-size:.78rem;font-weight:600">${esc(c.date || '')}</span>
         <span style="font-size:.6rem;color:var(--mu)">${esc(c.who || '')}</span>
         ${c.institution ? `<span style="font-size:.6rem;color:var(--ac)">${esc(c.institution)}</span>` : ''}
@@ -3088,5 +3093,134 @@ async function _mergeAllDuplicates() {
     renderView('meds');
   } else {
     showToast('중복 없음');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AI MERGE — 수동 선택 → AI 중복 검토 + 병합
+// ═══════════════════════════════════════════════════════════════
+
+let _ckSelectMode = false;
+let _ckSelectedIds = new Set();
+
+function _toggleCkSelectMode() {
+  _ckSelectMode = !_ckSelectMode;
+  _ckSelectedIds.clear();
+  renderView('meds');
+}
+
+function _toggleCkSelect(id, source, legacy) {
+  const key = id + '|' + source + '|' + legacy;
+  if (_ckSelectedIds.has(key)) _ckSelectedIds.delete(key);
+  else _ckSelectedIds.add(key);
+  // Update UI without full re-render
+  const el = document.getElementById('ck-sel-' + id);
+  if (el) el.checked = _ckSelectedIds.has(key);
+  // Show/hide merge button
+  const btn = document.getElementById('ck-ai-merge-btn');
+  if (btn) btn.style.display = _ckSelectedIds.size >= 2 ? 'inline' : 'none';
+}
+
+async function _aiMergeSelected() {
+  if (_ckSelectedIds.size < 2) { showToast('2건 이상 선택하세요'); return; }
+
+  const aiId = S.keys?.claude ? 'claude' : (S.keys?.gemini ? 'gemini' : (S.keys?.gpt ? 'gpt' : null));
+  if (!aiId) { showToast('⚠️ AI API 키 필요'); return; }
+
+  const who = DC().user;
+  const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
+
+  // Collect selected checkups
+  const selected = [];
+  _ckSelectedIds.forEach(key => {
+    const [id, source, legacy] = key.split('|');
+    const c = allCheckups.find(x => String(x.id) === id);
+    if (c) selected.push(c);
+  });
+
+  if (selected.length < 2) { showToast('선택된 검진을 찾을 수 없습니다'); return; }
+
+  // Build comparison text for AI
+  const compText = selected.map((c, i) => {
+    const items = (c.results || []).map(r => r.displayName + ': ' + r.value + ' ' + (r.unit || '')).join(', ');
+    const vals = c.values ? JSON.stringify(c.values) : '';
+    return '검진 ' + (i + 1) + ': ' + (c.date || '?') + ' ' + (c.institution || '') + ' ' + (c.results?.length || 0) + '항목\n' + (items || vals);
+  }).join('\n\n');
+
+  showToast('🤖 AI 중복 분석 중...', 8000);
+
+  const prompt = '다음 ' + selected.length + '건의 검진 결과가 중복인지 분석하세요.\n\n' + compText + '\n\n'
+    + 'JSON으로 응답:\n'
+    + '{"isDuplicate":true/false,"reason":"이유","recommendation":"keep_first"|"keep_last"|"merge"|"keep_all","mergedResults":[...]}\n'
+    + '- isDuplicate: 같은 검사인지 여부\n'
+    + '- recommendation: keep_first(1번 유지), keep_last(마지막 유지), merge(병합), keep_all(다른 검사)\n'
+    + '- mergedResults: merge인 경우 통합 결과 [{code,name,value,unit,refLow,refHigh,status,category}]\n'
+    + 'JSON만.';
+
+  try {
+    const resp = await callAI(aiId, '의료 데이터 중복 분석 전문가. JSON만 응답.', prompt);
+    const match = resp.match(/\{[\s\S]*\}/);
+    if (!match) { showToast('⚠️ AI 응답 파싱 실패'); return; }
+    const result = JSON.parse(match[0]);
+
+    const actionLabels = { keep_first: '첫 번째 유지 + 나머지 삭제', keep_last: '마지막 유지 + 나머지 삭제', merge: '통합 결과로 병합', keep_all: '모두 유지 (중복 아님)' };
+
+    showConfirmModal('🤖 AI 중복 분석 결과',
+      '<div style="font-size:.72rem">'
+      + '<div style="margin-bottom:8px;padding:6px 8px;background:' + (result.isDuplicate ? 'var(--err-bg)' : 'var(--ok-bg)') + ';border-radius:6px;color:' + (result.isDuplicate ? 'var(--err)' : 'var(--ok)') + ';font-weight:600">'
+      + (result.isDuplicate ? '⚠️ 중복 감지' : '✅ 중복 아님') + '</div>'
+      + '<div style="margin-bottom:6px"><b>판단 근거:</b> ' + esc(result.reason || '') + '</div>'
+      + '<div style="margin-bottom:8px"><b>권장:</b> ' + esc(actionLabels[result.recommendation] || result.recommendation) + '</div>'
+      + '</div>',
+      result.isDuplicate ? [
+        { label: '✅ ' + (actionLabels[result.recommendation] || '실행'), primary: true, action: async () => {
+          _pushUndo('AI 중복 병합');
+          if (result.recommendation === 'keep_first' || result.recommendation === 'keep_last') {
+            const keepIdx = result.recommendation === 'keep_first' ? 0 : selected.length - 1;
+            for (let i = 0; i < selected.length; i++) {
+              if (i === keepIdx) continue;
+              _deleteCheckupEntry(selected[i]);
+            }
+          } else if (result.recommendation === 'merge' && result.mergedResults?.length) {
+            const keep = selected[0];
+            // Update first entry with merged results
+            if (keep._legacyLab) {
+              const brkDs = S.domainState['bungruki'];
+              const orig = brkDs?.master?.labResults?.find(l => l.id === keep.id);
+              if (orig) { orig._aiNormalized = true; orig.results = normalizeFromAI(result.mergedResults, who); }
+            } else {
+              const ds = S.domainState[keep._source];
+              const orig = ds?.master?.healthCheckups?.find(c => c.id === keep.id);
+              if (orig) { orig.results = normalizeFromAI(result.mergedResults, who); }
+            }
+            // Delete the rest
+            for (let i = 1; i < selected.length; i++) _deleteCheckupEntry(selected[i]);
+          }
+          await saveMaster();
+          _ckSelectMode = false; _ckSelectedIds.clear();
+          closeConfirmModal();
+          showToast('✅ 병합 완료');
+          renderView('meds');
+        }},
+        { label: '취소', action: closeConfirmModal },
+      ] : [{ label: '확인', action: closeConfirmModal }]);
+  } catch (e) {
+    showToast('⚠️ AI 분석 실패: ' + e.message);
+  }
+}
+
+function _deleteCheckupEntry(c) {
+  if (c._legacyLab) {
+    const brkDs = S.domainState['bungruki'];
+    if (brkDs?.master?.labResults) {
+      const idx = brkDs.master.labResults.findIndex(l => l.id === c.id);
+      if (idx >= 0) brkDs.master.labResults.splice(idx, 1);
+    }
+  } else {
+    const ds = S.domainState[c._source];
+    if (ds?.master?.healthCheckups) {
+      const idx = ds.master.healthCheckups.findIndex(h => h.id === c.id);
+      if (idx >= 0) ds.master.healthCheckups.splice(idx, 1);
+    }
   }
 }

@@ -1792,6 +1792,7 @@ function renderLabResults() {
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<div><div class="dx-form-label">날짜 *</div><input type="date" id="brk-lab-date" class="dx-form-input" style="width:140px"></div>'
     + '<div><div class="dx-form-label">누구</div><select id="brk-lab-who" class="dx-form-input" style="width:90px"><option value="붕쌤">붕쌤</option><option value="오랑이">오랑이</option><option value="붕룩이">🍼 붕룩이</option></select></div>'
+    + '<div><div class="dx-form-label">기관</div><input type="text" id="brk-lab-inst" class="dx-form-input" placeholder="검사 기관명" style="width:130px"></div>'
     + '<div><div class="dx-form-label">검사 종류</div><select id="brk-lab-type" class="dx-form-input" style="width:120px" onchange="brkLabTypeChange()">'
     + '<option value="semen">🔬 정액검사</option><option value="blood">🩸 혈액검사</option><option value="hormone">⚗️ 호르몬</option><option value="ultrasound">📷 초음파</option><option value="other">📋 기타</option>'
     + '</select></div></div>'
@@ -1901,6 +1902,15 @@ async function _brkEditLabType(labId){
       await saveBrkMaster();closeConfirmModal();showToast('✅ 수정됨');renderView('meds');
     },primary:true}]);
 }
+async function _brkEditLabInst(labId) {
+  const m=getBrkMaster();if(!m)return;
+  const l=m.labResults.find(x=>x.id===labId);if(!l)return;
+  const name=prompt('기관명 입력:', l.institution||'');
+  if(name===null) return;
+  l.institution=name.trim()||undefined;
+  await saveBrkMaster();showToast('✅ 기관명 수정됨');renderView('meds');
+}
+
 async function _brkToggleLabLock(labId){
   const m=getBrkMaster();if(!m)return;
   const l=m.labResults.find(x=>x.id===labId);if(!l)return;
@@ -1949,6 +1959,7 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
       <span style="font-size:.72rem">${typeIcons[l.type]||'📋'}</span>
       <span style="font-size:.75rem;font-weight:600">${esc(displayName)}</span>
       ${isLocked?'<span style="font-size:.6rem">🔒</span>':''}
+      ${l.institution?`<span style="font-size:.58rem;color:var(--ac)">${esc(l.institution)}</span>`:''}
       <span style="font-size:.65rem;color:var(--mu);margin-left:auto">${esc(l.date)}</span>
       <span style="font-size:.6rem;color:var(--mu2)">▾</span>
     </div>
@@ -1970,13 +1981,14 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
         <button onclick="_brkEditLabValues(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">✏️ 수치 수정</button>
         <button onclick="_brkToggleLabLock(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid ${isLocked?'#15803d':'var(--bd)'};border-radius:4px;background:${isLocked?'#dcfce7':'none'};color:${isLocked?'#15803d':'var(--mu)'};cursor:pointer;font-family:var(--font)">${isLocked?'🔓 잠금 해제':'🔒 잠금'}</button>
         ${!isLocked?`<button onclick="brkDeleteLab(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid #dc2626;border-radius:4px;background:none;color:#dc2626;cursor:pointer;font-family:var(--font)">🗑 삭제</button>`:''}
-        ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>
+        <button onclick="_brkEditLabInst(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid #f59e0b;border-radius:4px;background:none;color:#f59e0b;cursor:pointer;font-family:var(--font)">🏥 기관명</button>
+        ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>`:''}
         <select onchange="if(this.value){_brkReanalyzeLab(${labId},this.value);this.value='';}" style="font-size:.56rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);font-family:var(--font)">
           <option value="">AI 선택</option>
           ${S.keys?.gemini?'<option value="gemini">Gemini</option>':''}
           ${S.keys?.gpt?'<option value="gpt">GPT</option>':''}
           ${S.keys?.claude?'<option value="claude">Claude</option>':''}
-        </select>`:''}
+        </select>
       </div>
     </div>
   </div>`;
@@ -2047,7 +2059,8 @@ async function brkSaveLab() {
     if (textEl && textEl.value) values.text = textEl.value;
   }
 
-  const labEntry3={ id: Date.now(), date: date, who: who, type: type, values: values, memo: memo };
+  var institution = (document.getElementById('brk-lab-inst')?.value || '').trim();
+  const labEntry3={ id: Date.now(), date: date, who: who, type: type, values: values, memo: memo, institution: institution || undefined };
   m.labResults.push(labEntry3);
   if(typeof _checkAntibodyAndSyncVax==='function')_checkAntibodyAndSyncVax(labEntry3);
   await saveBrkMaster();
