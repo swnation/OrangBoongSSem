@@ -1117,6 +1117,61 @@ async function sendNtfyFollowup(entry) {
   try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',headers:{'At':'2h'},body:body});}catch(e){console.warn('ntfy followup:',e);}
 }
 
+// ── 처방 소진 ntfy 알림 ──
+async function checkRxRefillAlerts() {
+  const today = kstToday();
+  const currentUser = DC()?.user;
+  if (!currentUser) return;
+
+  const allConds = typeof getAllUserConditions === 'function' ? getAllUserConditions() : [];
+  const alerts = [];
+
+  allConds.forEach(c => {
+    if (c.status === 'resolved' || !c.medsDetail) return;
+    Object.entries(c.medsDetail).forEach(([med, detail]) => {
+      if (!detail.rxStartDate || !detail.rxDays || detail.freq === 'PRN') return;
+      const endDate = new Date(detail.rxStartDate + 'T00:00:00');
+      endDate.setDate(endDate.getDate() + detail.rxDays);
+      const end = endDate.toISOString().slice(0, 10);
+      const daysLeft = Math.ceil((endDate - new Date(today + 'T00:00:00')) / 86400000);
+      if (daysLeft === 3 || daysLeft === 1 || daysLeft === 0) {
+        const who = DOMAINS[c._domainId]?.user || '';
+        alerts.push({ med, daysLeft, who, condition: c.name, endDate: end });
+      }
+    });
+  });
+
+  if (!alerts.length) return;
+
+  // 오늘 이미 보냈는지 체크 (중복 방지)
+  const sentKey = 'om_rx_alert_' + today;
+  const sent = JSON.parse(localStorage.getItem(sentKey) || '[]');
+
+  for (const a of alerts) {
+    const alertId = a.med + '_' + a.daysLeft;
+    if (sent.includes(alertId)) continue;
+
+    const topicKey = a.who === '오랑이' ? 'om_ntfy_orangi' : 'om_ntfy_bung';
+    const topic = localStorage.getItem(topicKey);
+    if (!topic) continue;
+
+    const emoji = a.daysLeft === 0 ? '🚨' : '⚠️';
+    const dayText = a.daysLeft === 0 ? '오늘 소진' : a.daysLeft + '일 후 소진';
+    const body = emoji + ' 처방 소진 알림\n' + a.who + ' · ' + a.condition + '\n💊 ' + a.med + ' — ' + dayText + ' (' + a.endDate + ')\n병원 재방문 예약 확인하세요!';
+
+    try {
+      await fetch('https://ntfy.sh/' + encodeURIComponent(topic), { method: 'POST', body: body });
+      sent.push(alertId);
+    } catch (e) { console.warn('rx alert ntfy failed:', e); }
+  }
+
+  localStorage.setItem(sentKey, JSON.stringify(sent));
+}
+
+// 앱 시작 시 + 매 6시간마다 체크
+setTimeout(function() { if (S.token) checkRxRefillAlerts(); }, 5000);
+setInterval(function() { if (S.token) checkRxRefillAlerts(); }, 6 * 3600 * 1000);
+
 // ── 날씨 자동 수집 (OpenWeatherMap) ──
 const _WEATHER_LAT=37.5326;const _WEATHER_LON=127.1378;
 async function fetchWeather() {
