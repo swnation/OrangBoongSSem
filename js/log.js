@@ -1274,11 +1274,17 @@ async function saveLogEntry() {
   }
   // Daily med check (moodMode)
   const medCheck={};
+  const medCheckDetail={};
   document.querySelectorAll('.med-check-cb').forEach(cb=>{
     medCheck[cb.dataset.med]=cb.checked;
   });
+  // PRN/추가복용 이유 수집
+  document.querySelectorAll('.med-reason').forEach(inp=>{
+    const med=inp.dataset.med;const reason=(inp.value||'').trim();
+    if(reason&&medCheck[med]) medCheckDetail[med]={reason};
+  });
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
-  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo,dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined,medCheck:Object.keys(medCheck).length?medCheck:undefined};
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo,dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined,medCheck:Object.keys(medCheck).length?medCheck:undefined,medCheckDetail:Object.keys(medCheckDetail).length?medCheckDetail:undefined};
   // 날씨 자동 첨부 (편두통 도메인, 2초 타임아웃)
   if(S.currentDomain==='orangi-migraine'&&editIdx<0){
     try{const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),2000))]);if(w)entry.weather=w;}catch(e){console.warn('Weather attachment failed:',e);}
