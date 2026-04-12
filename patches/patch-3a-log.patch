@@ -1,0 +1,100 @@
+diff --git a/js/log.js b/js/log.js
+index 897482d..b42f9e5 100644
+--- a/js/log.js
++++ b/js/log.js
+@@ -758,33 +758,49 @@ function renderRecentLogs() {
+       <button class="log-del" onclick="deleteLogEntry(${D().logData.indexOf(l)})">✕</button>
+     </div>`).join(''):'';
+ 
+-  // 다른 도메인 기록 (도메인별 그룹)
++  // 다른 도메인 기록 (도메인별 그룹) — 오늘 + 최근 3일 메모
+   let crossHtml='';
+-  if(crossDomainLogs.length){
++  const recentCrossDays=3;
++  const recentCrossLogs=[];
++  Object.entries(S.domainState).forEach(([domId,dds])=>{
++    if(domId===S.currentDomain) return;
++    const dd=DOMAINS[domId];
++    if(!dd||dd.user!==currentUser||!dds.logData) return;
++    const cutoff=kstDaysAgo(recentCrossDays);
++    dds.logData.filter(l=>l.datetime?.slice(0,10)>=cutoff).forEach(l=>{
++      recentCrossLogs.push({log:l,domain:dd,isToday:l.datetime?.slice(0,10)===today});
++    });
++  });
++  if(recentCrossLogs.length){
+     const byDomain={};
+-    crossDomainLogs.forEach(({log,domain})=>{
++    recentCrossLogs.forEach(({log,domain,isToday})=>{
+       const key=domain.label;
+       if(!byDomain[key]) byDomain[key]={domain,logs:[]};
+-      byDomain[key].logs.push(log);
++      byDomain[key].logs.push({log,isToday});
+     });
+     crossHtml='<div style="margin-top:8px;padding-top:8px;border-top:1.5px dashed var(--bd)">'
+-      +'<div style="font-size:.65rem;font-weight:600;color:var(--mu);margin-bottom:4px">📋 다른 도메인 오늘 기록</div>'
++      +'<div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">📋 마음관리 · 건강관리 메모</div>'
+       +Object.values(byDomain).map(({domain,logs})=>{
+-        const items=logs.map(l=>{
++        const items=logs.reverse().map(({log:l,isToday})=>{
++          const dateLabel=isToday?'':l.datetime?.slice(5,10)+' ';
+           const time=l.datetime?.slice(11,16);
+           const parts=[];
+           if(l.mood) parts.push('<span style="color:var(--tag-sym)">'+esc(l.mood)+'</span>');
+           if(l.nrs>=0) parts.push('<span style="color:'+nrsColor(l.nrs)+'">'+_scoreLabel()+' '+l.nrs+'</span>');
+-          if(l.categories?.length) parts.push(l.categories.map(c=>'<span style="color:var(--tag-site)">'+esc(c)+'</span>').join(' '));
+-          if(l.symptoms?.length) parts.push(l.symptoms.slice(0,3).map(s=>esc(s)).join(', '));
+-          const memo=l.memo?'<div style="font-size:.68rem;color:var(--mu);margin-top:1px;padding-left:40px">'+esc(l.memo.substring(0,100))+(l.memo.length>100?'…':'')+'</div>':'';
+-          return '<div style="padding:2px 0;font-size:.7rem">'
+-            +(time&&time!=='00:00'?'<span style="font-family:var(--mono);color:var(--mu);min-width:36px;display:inline-block">'+time+'</span>':'')
++          if(l.categories?.length) parts.push(l.categories.map(c=>'<span style="color:var(--tag-site);font-size:.65rem">'+esc(c)+'</span>').join(' '));
++          if(l.symptoms?.length) parts.push(l.symptoms.slice(0,4).map(s=>esc(s)).join(', '));
++          if(l.dailyChecks) parts.push(Object.entries(l.dailyChecks).map(([k,v])=>'<span style="font-size:.6rem;color:var(--mu2)">'+esc(k)+':'+v+'</span>').join(' '));
++          // 메모 전문 표시 (접히기 가능)
++          const memoFull=l.memo?'<div style="font-size:.75rem;color:var(--ink);margin-top:3px;line-height:1.6;padding:4px 8px;background:var(--sf);border-radius:6px;white-space:pre-wrap">'+esc(l.memo)+'</div>':'';
++          return '<div style="padding:4px 0;border-bottom:1px solid var(--sf);'+(isToday?'':'opacity:.75')+'">'
++            +'<div style="font-size:.7rem">'
++            +'<span style="font-family:var(--mono);color:var(--mu2);font-size:.62rem">'+dateLabel+(time&&time!=='00:00'?time:'')+' </span>'
+             +parts.join(' · ')
+-            +memo+'</div>';
++            +'</div>'
++            +memoFull+'</div>';
+         }).join('');
+-        return '<div style="margin-bottom:4px">'
+-          +'<div style="font-size:.62rem;font-weight:600;color:'+domain.color+'">'+domain.icon+' '+domain.label+'</div>'
++        return '<div style="margin-bottom:6px;padding:6px 8px;border:1.5px solid '+domain.color+'30;border-radius:8px;background:'+domain.color+'08">'
++          +'<div style="font-size:.72rem;font-weight:600;color:'+domain.color+';margin-bottom:4px">'+domain.icon+' '+domain.label+'</div>'
+           +items+'</div>';
+       }).join('')
+       +'</div>';
+@@ -1862,19 +1878,21 @@ function renderJournalLogs() {
+       if(!byDate[d]) byDate[d]=[];
+       byDate[d].push({log,domain});
+     });
+-    crossHtml='<div class="card" style="border-style:dashed"><div class="card-title" style="font-size:.8rem">📋 다른 도메인 최근 기록 (7일)</div>'
+-      +Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,10).map(([date,items])=>{
++    crossHtml='<div class="card" style="border-style:dashed"><div class="card-title" style="font-size:.8rem">📋 마음관리 · 건강관리 메모 (7일)</div>'
++      +Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,14).map(([date,items])=>{
+         const dayItems=items.map(({log,domain})=>{
+           const parts=[];
+-          if(log.mood) parts.push(esc(log.mood));
+-          if(log.nrs>=0) parts.push(_scoreLabel()+' '+log.nrs);
+-          if(log.symptoms?.length) parts.push(log.symptoms.slice(0,3).map(s=>esc(s)).join(', '));
+-          const memo=log.memo?'<div style="font-size:.68rem;color:var(--mu);margin-top:1px">'+esc(log.memo.substring(0,80))+(log.memo.length>80?'…':'')+'</div>':'';
+-          return '<div style="display:flex;gap:4px;align-items:flex-start;padding:1px 0">'
+-            +'<span style="font-size:.58rem;color:'+domain.color+';min-width:50px">'+domain.icon+' '+domain.label+'</span>'
+-            +'<div style="font-size:.68rem;flex:1">'+parts.join(' · ')+memo+'</div></div>';
++          if(log.mood) parts.push('<span style="color:var(--tag-sym)">'+esc(log.mood)+'</span>');
++          if(log.nrs>=0) parts.push('<span style="color:'+nrsColor(log.nrs)+'">'+_scoreLabel()+' '+log.nrs+'</span>');
++          if(log.symptoms?.length) parts.push(log.symptoms.slice(0,4).map(s=>esc(s)).join(', '));
++          if(log.categories?.length) parts.push(log.categories.map(c=>'<span style="color:var(--tag-site);font-size:.6rem">'+esc(c)+'</span>').join(' '));
++          // 메모 전체 표시
++          const memo=log.memo?'<div style="font-size:.75rem;color:var(--ink);margin-top:3px;line-height:1.6;padding:4px 8px;background:'+domain.color+'08;border-radius:6px;white-space:pre-wrap">'+esc(log.memo)+'</div>':'';
++          return '<div style="display:flex;gap:6px;align-items:flex-start;padding:3px 0">'
++            +'<span style="font-size:.62rem;color:'+domain.color+';min-width:52px;font-weight:600">'+domain.icon+' '+domain.label+'</span>'
++            +'<div style="flex:1"><div style="font-size:.72rem">'+parts.join(' · ')+'</div>'+memo+'</div></div>';
+         }).join('');
+-        return '<div style="padding:3px 0;border-bottom:1px solid var(--bd)"><span style="font-size:.6rem;font-family:var(--mono);color:var(--mu)">'+date.slice(5)+'</span>'+dayItems+'</div>';
++        return '<div style="padding:5px 0;border-bottom:1px solid var(--bd)"><div style="font-size:.65rem;font-family:var(--mono);color:var(--mu);font-weight:600;margin-bottom:2px">'+date.slice(5)+'</div>'+dayItems+'</div>';
+       }).join('')+'</div>';
+   }
+ 
