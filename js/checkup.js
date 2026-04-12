@@ -152,7 +152,7 @@ const _CHECKUP_STD_TESTS = {
   TSH:  { name:{ko:'갑상선자극호르몬',en:'TSH'}, unit:'mIU/L', category:'thyroid', ref:{low:0.35,high:5.50},
     aliases:['tsh','갑상선자극호르몬','thyroid stimulating hormone','갑상선 자극 호르몬','s-tsh'], related:['FT4','FT3'], pregnancyRelevant:true,
     conversions:{'μIU/mL':{factor:1},'uIU/mL':{factor:1}} },
-  FT4:  { name:{ko:'유리T4',en:'Free T4'}, unit:'ng/dL', category:'thyroid', ref:{low:0.8,high:1.8},
+  FT4:  { name:{ko:'Free T4',en:'Free T4'}, unit:'ng/dL', category:'thyroid', ref:{low:0.8,high:1.8},
     aliases:['free t4','ft4','유리t4','유리 t4','free thyroxine','f-t4','유리싸이록신'], related:['TSH','FT3'], pregnancyRelevant:true,
     conversions:{'pmol/L':{factor:0.0777}} },
   FT3:  { name:{ko:'유리T3',en:'Free T3'}, unit:'pg/mL', category:'thyroid', ref:{low:2.0,high:4.4},
@@ -201,13 +201,11 @@ const _CHECKUP_STD_TESTS = {
     aliases:['calcium','ca','칼슘','s-ca','ca2+','총칼슘','total calcium'], related:['P','MG'], pregnancyRelevant:true,
     conversions:{'mmol/L':{factor:4.0}} },
   P:    { name:{ko:'인',en:'Phosphorus'}, unit:'mg/dL', category:'electrolyte', ref:{low:2.5,high:4.5},
-    aliases:['phosphorus','p','인','phosphate','무기인','inorganic phosphorus','s-p'], related:['CA','MG'], pregnancyRelevant:false },
+    aliases:['phosphorus','p','인','phosphate','무기인','inorganic phosphorus','s-p','po4','인산','무기인산'], related:['CA','MG'], pregnancyRelevant:false },
   MG:   { name:{ko:'마그네슘',en:'Magnesium'}, unit:'mg/dL', category:'electrolyte', ref:{low:1.6,high:2.6},
     aliases:['magnesium','mg','마그네슘','s-mg'], related:['CA','P'], pregnancyRelevant:true },
   ICA:  { name:{ko:'이온화칼슘',en:'Ionized Calcium'}, unit:'mmol/L', category:'electrolyte', ref:{low:1.13,high:1.32},
     aliases:['ionized calcium','ica','이온화칼슘','이온화 칼슘','ca2+ ionized','ionic calcium'], related:['CA'], pregnancyRelevant:false },
-  PO4:  { name:{ko:'인산',en:'Phosphate'}, unit:'mg/dL', category:'electrolyte', ref:{low:2.5,high:4.5},
-    aliases:['phosphate','po4','인산','무기인산','inorganic phosphorus'], related:['CA','P'], pregnancyRelevant:false },
 
   // ── 염증 ──
   CRP:  { name:{ko:'C반응단백',en:'CRP'}, unit:'mg/dL', category:'inflammation', ref:{low:0,high:0.5},
