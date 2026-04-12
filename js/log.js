@@ -722,12 +722,24 @@ function renderLog() {
 
 function renderRecentLogs() {
   const ds=D();const lc=DC().logConfig;
-  if(!ds.logData?.length) return '<div class="hint" style="padding:14px">오늘 기록 없음</div>';
   const today=kstToday();
-  const todayLogs=ds.logData.filter(l=>l.datetime.slice(0,10)===today).reverse();
-  if(!todayLogs.length) return '<div class="hint" style="padding:14px">오늘 기록 없음</div>';
-  return `<div class="card"><div class="card-title">오늘 (${todayLogs.length}건)</div>`+
-    todayLogs.map(l=>`<div class="log-item">
+  const todayLogs=(ds.logData||[]).filter(l=>l.datetime.slice(0,10)===today).reverse();
+
+  // 같은 유저의 다른 도메인 오늘 기록 수집
+  const currentUser=DC().user;
+  const crossDomainLogs=[];
+  Object.entries(S.domainState).forEach(([domId,dds])=>{
+    if(domId===S.currentDomain) return;
+    const dd=DOMAINS[domId];
+    if(!dd||dd.user!==currentUser||!dds.logData) return;
+    const dLogs=dds.logData.filter(l=>l.datetime?.slice(0,10)===today);
+    dLogs.forEach(l=>crossDomainLogs.push({log:l,domain:dd}));
+  });
+
+  if(!todayLogs.length&&!crossDomainLogs.length) return '<div class="hint" style="padding:14px">오늘 기록 없음</div>';
+
+  // 현재 도메인 기록
+  const currentHtml=todayLogs.length?todayLogs.map(l=>`<div class="log-item">
       <div class="log-item-time">${l.datetime.slice(11,16)!=='00:00'?l.datetime.slice(11,16):''}</div>
       <div class="log-item-body">
         ${l.mood?`<span class="log-item-nrs" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(l.mood)}</span>`:
@@ -744,7 +756,41 @@ function renderRecentLogs() {
       </div>
       <button class="log-del" onclick="editLogEntry(${D().logData.indexOf(l)})" title="편집" style="color:var(--ac)">✏️</button>
       <button class="log-del" onclick="deleteLogEntry(${D().logData.indexOf(l)})">✕</button>
-    </div>`).join('')+'</div>';
+    </div>`).join(''):'';
+
+  // 다른 도메인 기록 (도메인별 그룹)
+  let crossHtml='';
+  if(crossDomainLogs.length){
+    const byDomain={};
+    crossDomainLogs.forEach(({log,domain})=>{
+      const key=domain.label;
+      if(!byDomain[key]) byDomain[key]={domain,logs:[]};
+      byDomain[key].logs.push(log);
+    });
+    crossHtml='<div style="margin-top:8px;padding-top:8px;border-top:1.5px dashed var(--bd)">'
+      +'<div style="font-size:.65rem;font-weight:600;color:var(--mu);margin-bottom:4px">📋 다른 도메인 오늘 기록</div>'
+      +Object.values(byDomain).map(({domain,logs})=>{
+        const items=logs.map(l=>{
+          const time=l.datetime?.slice(11,16);
+          const parts=[];
+          if(l.mood) parts.push('<span style="color:var(--tag-sym)">'+esc(l.mood)+'</span>');
+          if(l.nrs>=0) parts.push('<span style="color:'+nrsColor(l.nrs)+'">'+_scoreLabel()+' '+l.nrs+'</span>');
+          if(l.categories?.length) parts.push(l.categories.map(c=>'<span style="color:var(--tag-site)">'+esc(c)+'</span>').join(' '));
+          if(l.symptoms?.length) parts.push(l.symptoms.slice(0,3).map(s=>esc(s)).join(', '));
+          const memo=l.memo?'<div style="font-size:.68rem;color:var(--mu);margin-top:1px;padding-left:40px">'+esc(l.memo.substring(0,100))+(l.memo.length>100?'…':'')+'</div>':'';
+          return '<div style="padding:2px 0;font-size:.7rem">'
+            +(time&&time!=='00:00'?'<span style="font-family:var(--mono);color:var(--mu);min-width:36px;display:inline-block">'+time+'</span>':'')
+            +parts.join(' · ')
+            +memo+'</div>';
+        }).join('');
+        return '<div style="margin-bottom:4px">'
+          +'<div style="font-size:.62rem;font-weight:600;color:'+domain.color+'">'+domain.icon+' '+domain.label+'</div>'
+          +items+'</div>';
+      }).join('')
+      +'</div>';
+  }
+
+  return `<div class="card"><div class="card-title">오늘 (${todayLogs.length}건${crossDomainLogs.length?' + 다른 도메인 '+crossDomainLogs.length+'건':''})</div>${currentHtml}${crossHtml}</div>`;
 }
 
 let _logFilter={med:'',sym:'',cat:''};
@@ -1790,9 +1836,51 @@ function editJournalEntry(idx) {
 }
 
 function renderJournalLogs() {
-  const ds=D();if(!ds.logData?.length) return '<div class="hint" style="padding:14px">아직 기록이 없어요</div>';
+  const ds=D();
   const whoColors={오랑이:'#ec4899',붕쌤:'#06b6d4',함께:'#8b5cf6'};
   const whoEmoji={오랑이:'🧡',붕쌤:'🩵',함께:'💑'};
+
+  // 같은 유저의 다른 도메인 최근 기록 (최근 7일)
+  const currentUser=DC().user;
+  const weekAgo=kstDaysAgo(7);
+  const crossLogs=[];
+  Object.entries(S.domainState).forEach(([domId,dds])=>{
+    if(domId===S.currentDomain||domId==='bungruki') return;
+    const dd=DOMAINS[domId];
+    if(!dd||dd.user!==currentUser||!dds.logData) return;
+    dds.logData.filter(l=>l.datetime?.slice(0,10)>=weekAgo).forEach(l=>{
+      crossLogs.push({log:l,domain:dd});
+    });
+  });
+
+  // 교차 기록 날짜별 그룹
+  let crossHtml='';
+  if(crossLogs.length){
+    const byDate={};
+    crossLogs.forEach(({log,domain})=>{
+      const d=log.datetime?.slice(0,10)||'';
+      if(!byDate[d]) byDate[d]=[];
+      byDate[d].push({log,domain});
+    });
+    crossHtml='<div class="card" style="border-style:dashed"><div class="card-title" style="font-size:.8rem">📋 다른 도메인 최근 기록 (7일)</div>'
+      +Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,10).map(([date,items])=>{
+        const dayItems=items.map(({log,domain})=>{
+          const parts=[];
+          if(log.mood) parts.push(esc(log.mood));
+          if(log.nrs>=0) parts.push(_scoreLabel()+' '+log.nrs);
+          if(log.symptoms?.length) parts.push(log.symptoms.slice(0,3).map(s=>esc(s)).join(', '));
+          const memo=log.memo?'<div style="font-size:.68rem;color:var(--mu);margin-top:1px">'+esc(log.memo.substring(0,80))+(log.memo.length>80?'…':'')+'</div>':'';
+          return '<div style="display:flex;gap:4px;align-items:flex-start;padding:1px 0">'
+            +'<span style="font-size:.58rem;color:'+domain.color+';min-width:50px">'+domain.icon+' '+domain.label+'</span>'
+            +'<div style="font-size:.68rem;flex:1">'+parts.join(' · ')+memo+'</div></div>';
+        }).join('');
+        return '<div style="padding:3px 0;border-bottom:1px solid var(--bd)"><span style="font-size:.6rem;font-family:var(--mono);color:var(--mu)">'+date.slice(5)+'</span>'+dayItems+'</div>';
+      }).join('')+'</div>';
+  }
+
+  if(!ds.logData?.length&&!crossLogs.length) return '<div class="hint" style="padding:14px">아직 기록이 없어요</div>';
+  if(!ds.logData?.length) return crossHtml;
+
   return `<div class="card"><div class="card-title">📋 기록 (${ds.logData.length}건)</div>`+
     [...ds.logData].reverse().map((l,ri)=>{
       const realIdx=ds.logData.length-1-ri;
@@ -1806,7 +1894,7 @@ function renderJournalLogs() {
         <button class="log-del" onclick="editJournalEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
         <button class="log-del" onclick="deleteLogEntry(${realIdx})">✕</button>
       </div>`;
-    }).join('')+'</div>';
+    }).join('')+'</div>'+crossHtml;
 }
 
 // ═══════════════════════════════════════════════════════════════
