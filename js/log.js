@@ -48,6 +48,13 @@ async function saveLogData() {
 
 function nrsColor(n){if(n<=3)return'#2d8a5a';if(n<=6)return'#e67e22';return'#c03030';}
 function toggleChip(el,cls){el.classList.toggle('sel');el.classList.toggle(cls,el.classList.contains('sel'));}
+// dailyChecks(수면/집중력 등) 전용 — 같은 항목 내 단일 선택
+function toggleDcChip(el){
+  const parent=el.parentElement;
+  const wasSel=el.classList.contains('sel');
+  parent.querySelectorAll('.log-chip.sel').forEach(c=>{c.classList.remove('sel','sel-sym');});
+  if(!wasSel){el.classList.add('sel','sel-sym');}
+}
 
 async function setLogView(v){S.logView=v;await ensureLogLoaded();renderView('log');}
 
@@ -227,8 +234,38 @@ async function _syncReloadCurrentMonth(){
     const files=await driveSearch(logFileName(ds.logMonth),ds.folderId);
     if(files.length>0){ds.logFileId=files[0].id;const d=await driveRead(ds.logFileId);ds.logData=Array.isArray(d)?d:[];}
     else{ds.logData=[];ds.logFileId=null;}
-    if(document.querySelector('.log-month')||document.querySelector('.cal-grid')) renderView(S.currentView||'log');
+    // 로그 폼이 열려있으면 medCheck+dailyChecks만 갱신 (폼 입력 보존)
+    const mcContainer=document.getElementById('med-check-container');
+    if(mcContainer){
+      const dateInput=document.getElementById('log-date');
+      if(dateInput){
+        const lc=DC().logConfig;
+        mcContainer.innerHTML=lc.moodMode?renderDailyMedCheck(dateInput.value):renderConditionMedSelector(dateInput.value);
+        _prefillDailyChecksFromExisting(dateInput.value);
+      }
+    } else if(document.querySelector('.log-month')||document.querySelector('.cal-grid')){
+      renderView(S.currentView||'log');
+    }
   }catch(e){console.error('Sync reload:',e);}
+}
+
+// 오늘 기존 엔트리(데일리체크앱 등)의 dailyChecks를 새 기록 폼에 자동 반영
+function _prefillDailyChecksFromExisting(date) {
+  if(!date) return;
+  // 편집 모드면 이미 editLogEntry에서 복원되므로 스킵
+  const editIdx=document.getElementById('log-edit-idx');
+  if(editIdx&&editIdx.value!=='-1') return;
+  const ds=D(); if(!ds?.logData) return;
+  const todayEntries=(ds.logData||[]).filter(l=>l.datetime?.slice(0,10)===date);
+  if(!todayEntries.length) return;
+  // 가장 최근 엔트리의 dailyChecks 값을 적용
+  const latest=[...todayEntries].reverse().find(l=>l.dailyChecks&&Object.keys(l.dailyChecks).length);
+  if(latest?.dailyChecks) {
+    Object.entries(latest.dailyChecks).forEach(([item,val])=>{
+      const chip=document.querySelector(`#dc-${item} .log-chip[data-val="${val}"]`);
+      if(chip&&!chip.classList.contains('sel')) { chip.classList.add('sel','sel-sym'); }
+    });
+  }
 }
 
 function renderQuickLogBanner() {
@@ -683,7 +720,7 @@ function renderLog() {
       <div style="display:flex;align-items:center;gap:6px;padding:4px 0">
         <span style="font-size:.75rem;min-width:50px;color:var(--mu)">${item}</span>
         <div class="log-chips" style="flex:1;gap:3px" id="dc-${item}">
-          ${['1','2','3','4','5'].map(v=>`<div class="log-chip" data-group="dc-${item}" data-val="${v}" onclick="toggleChip(this,'sel-sym')" style="min-width:28px;text-align:center;font-size:.72rem;padding:4px 6px">${v}</div>`).join('')}
+          ${['1','2','3','4','5'].map(v=>`<div class="log-chip" data-group="dc-${item}" data-val="${v}" onclick="toggleDcChip(this)" style="min-width:28px;text-align:center;font-size:.72rem;padding:4px 6px">${v}</div>`).join('')}
         </div>
       </div>`).join('')}`:''}
     ${sitesHtml}
@@ -890,7 +927,7 @@ function renderLogList() {
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px;white-space:pre-line">${esc(l.memo)}</div>`:''}
           ${l.nrsRange?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${_scoreLabel()} 변화: ${l.nrsRange.min}→${l.nrsRange.max}</div>`:''}
-          ${l.timeline?`<div style="font-size:.62rem;color:var(--ac);margin-top:2px;cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</div>`:''}
+          ${l.timeline?`<div style="font-size:.62rem;margin-top:2px;display:flex;gap:8px;align-items:center"><span style="color:var(--ac);cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</span><span style="color:var(--mu);cursor:pointer;border:1px solid var(--bd);padding:1px 6px;border-radius:3px" onclick="event.stopPropagation();unmergeDayEntry(${realIdx})" title="병합 해제하여 개별 기록으로 복원">↩ 병합해제</span></div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
         <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
@@ -958,7 +995,7 @@ function renderLogListInner() {
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px;white-space:pre-line">${esc(l.memo)}</div>`:''}
           ${l.nrsRange?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${_scoreLabel()} 변화: ${l.nrsRange.min}→${l.nrsRange.max}</div>`:''}
-          ${l.timeline?`<div style="font-size:.62rem;color:var(--ac);margin-top:2px;cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</div>`:''}
+          ${l.timeline?`<div style="font-size:.62rem;margin-top:2px;display:flex;gap:8px;align-items:center"><span style="color:var(--ac);cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</span><span style="color:var(--mu);cursor:pointer;border:1px solid var(--bd);padding:1px 6px;border-radius:3px" onclick="event.stopPropagation();unmergeDayEntry(${realIdx})" title="병합 해제하여 개별 기록으로 복원">↩ 병합해제</span></div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
         <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
@@ -987,21 +1024,39 @@ function toggleAllLogDates() {
   if(el) el.innerHTML=renderLogListInner();
 }
 
-// timeline 상세 보기
+// timeline 상세 보기 (같은 시간 엔트리 자동 병합)
 function _showTimeline(idx){
   const entry=D()?.logData?.[idx];if(!entry?.timeline)return;
-  const html=entry.timeline.map(t=>{
+  // 같은 시간대 엔트리 병합하여 표시
+  const tg={};
+  entry.timeline.forEach(t=>{
+    const k=t.time||'--:--';
+    if(!tg[k]){tg[k]={...t,sites:[...(t.sites||[])],symptoms:[...(t.symptoms||[])],meds:[...(t.meds||[])],treatments:[...(t.treatments||[])],triggers:[...(t.triggers||[])]};return;}
+    const m=tg[k];
+    if(t.nrs>=0)m.nrs=t.nrs;
+    if(t.mood)m.mood=t.mood;
+    m.sites=[...new Set([...m.sites,...(t.sites||[])])];
+    m.meds=[...new Set([...m.meds,...(t.meds||[])])];
+    m.treatments=[...new Set([...m.treatments,...(t.treatments||[])])];
+    m.triggers=[...new Set([...m.triggers,...(t.triggers||[])])];
+    if(t.outcome)m.outcome=t.outcome;
+    if(t.memo&&!m.memo?.includes(t.memo))m.memo=(m.memo?m.memo+'; ':'')+t.memo;
+  });
+  const deduped=Object.values(tg).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+  const html=deduped.map(t=>{
     const parts=[`<b>${t.time||'--:--'}</b>`];
     if(t.nrs>=0)parts.push(`${_scoreLabel()}:${t.nrs}`);
     if(t.mood)parts.push(t.mood);
     if(t.sites?.length)parts.push(t.sites.join('+'));
     if(t.meds?.length)parts.push('💊'+t.meds.join(', '));
     if(t.treatments?.length)parts.push('🏥'+t.treatments.join(', '));
+    if(t.triggers?.length)parts.push('⚡'+t.triggers.join(', '));
     if(t.outcome)parts.push(t.outcome.rating==='better'?'🟢호전':t.outcome.rating==='same'?'🟡비슷':'🔴악화');
     if(t.memo)parts.push('"'+esc(t.memo)+'"');
     return `<div style="font-size:.72rem;padding:4px 0;border-bottom:1px dotted var(--bd)">${parts.join(' · ')}</div>`;
   }).join('');
-  showConfirmModal('📊 Timeline — '+entry.datetime?.slice(0,10),
+  const countNote=deduped.length<entry.timeline.length?` <span style="font-size:.6rem;color:var(--mu)">(중복 ${entry.timeline.length-deduped.length}건 병합)</span>`:'';
+  showConfirmModal('📊 Timeline — '+entry.datetime?.slice(0,10)+countNote,
     `<div style="max-height:300px;overflow-y:auto">${html}</div>`,
     [{label:'닫기',action:closeConfirmModal,primary:true}]);
 }
@@ -1059,8 +1114,8 @@ function mergeDayEntries(date) {
   const entries=ds.logData.filter(l=>l.datetime?.slice(0,10)===date);
   if(entries.length<2){showToast('병합할 기록이 없습니다.');return;}
 
-  // timeline 생성 — 원본 데이터 완전 보존
-  const timeline=entries.map(e=>({
+  // timeline 생성 — 같은 시간 엔트리 병합 (중복 제거)
+  const _rawTimeline=entries.map(e=>({
     time:e.datetime?.slice(11,16)||'',
     nrs:e.nrs,
     mood:e.mood||undefined,
@@ -1068,12 +1123,42 @@ function mergeDayEntries(date) {
     symptoms:[...(e.symptoms||[])],
     meds:[...(e.meds||[])],
     treatments:[...(e.treatments||[])],
+    triggers:[...(e.triggers||[])],
     medCheck:e.medCheck?{...e.medCheck}:undefined,
     dailyChecks:e.dailyChecks?{...e.dailyChecks}:undefined,
     outcome:e.outcome?{...e.outcome}:undefined,
     memo:e.memo||'',
     weather:e.weather?{...e.weather}:undefined,
   }));
+  // 같은 시간대 엔트리 병합
+  const _timeGroups={};
+  _rawTimeline.forEach(t=>{
+    const k=t.time||'--:--';
+    if(!_timeGroups[k])_timeGroups[k]=[];
+    _timeGroups[k].push(t);
+  });
+  const timeline=Object.entries(_timeGroups).sort((a,b)=>a[0].localeCompare(b[0])).map(([time,group])=>{
+    if(group.length===1) return group[0];
+    // 합집합 병합
+    const merged={time};
+    const nrsVals=group.filter(t=>t.nrs>=0).map(t=>t.nrs);
+    merged.nrs=nrsVals.length?nrsVals[nrsVals.length-1]:(group[0].nrs);
+    merged.mood=group.filter(t=>t.mood).pop()?.mood;
+    merged.sites=[...new Set(group.flatMap(t=>t.sites||[]))];
+    merged.symptoms=[...new Set(group.flatMap(t=>t.symptoms||[]))];
+    merged.meds=[...new Set(group.flatMap(t=>t.meds||[]))];
+    merged.treatments=[...new Set(group.flatMap(t=>t.treatments||[]))];
+    merged.triggers=[...new Set(group.flatMap(t=>t.triggers||[]))];
+    const mc={};group.forEach(t=>{if(t.medCheck)Object.assign(mc,t.medCheck);});
+    if(Object.keys(mc).length)merged.medCheck=mc;
+    const dc={};group.forEach(t=>{if(t.dailyChecks)Object.assign(dc,t.dailyChecks);});
+    if(Object.keys(dc).length)merged.dailyChecks=dc;
+    merged.outcome=group.filter(t=>t.outcome).pop()?.outcome;
+    const memos=group.map(t=>t.memo).filter(Boolean);
+    merged.memo=[...new Set(memos)].join('; ');
+    merged.weather=group.filter(t=>t.weather).pop()?.weather;
+    return merged;
+  });
 
   // 병합 엔트리 생성
   const merged={...entries[entries.length-1]};
@@ -1135,6 +1220,35 @@ async function _executeMerge(date,merged){
   ds.logData.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
   try{await saveLogData();showToast('✅ 병합 완료 (되돌리기 가능)');renderView('log');}
   catch(e){showToast('❌ 병합 저장 실패: '+e.message,4000);}
+}
+
+// 병합 해제 — timeline에서 개별 기록 복원
+async function unmergeDayEntry(idx) {
+  const ds=D(); const entry=ds.logData[idx];
+  if(!entry?.timeline?.length){showToast('timeline 데이터가 없어 해제할 수 없습니다.');return;}
+  if(!confirm(`병합을 해제하여 ${entry.timeline.length}건의 개별 기록으로 복원할까요?`))return;
+  _pushUndo('병합해제: '+entry.datetime.slice(0,10));
+  const date=entry.datetime.slice(0,10);
+  // timeline에서 개별 엔트리 복원
+  const restored=entry.timeline.map(t=>({
+    datetime:date+'T'+(t.time||'00:00'),
+    nrs:t.nrs!=null?t.nrs:-1,
+    mood:t.mood||undefined,
+    sites:t.sites||[],
+    symptoms:t.symptoms||[],
+    meds:t.meds||[],
+    treatments:t.treatments||[],
+    triggers:t.triggers||[],
+    medCheck:t.medCheck||undefined,
+    dailyChecks:t.dailyChecks||undefined,
+    outcome:t.outcome||undefined,
+    memo:t.memo||'',
+    weather:t.weather||undefined
+  }));
+  ds.logData.splice(idx,1,...restored);
+  ds.logData.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
+  try{await saveLogData();showToast(`↩ 병합 해제 → ${restored.length}건 복원`);renderView('log');}
+  catch(e){showToast('❌ 병합 해제 실패: '+e.message,4000);}
 }
 
 // ── ntfy 푸시 알림 ──
@@ -1559,6 +1673,9 @@ function refreshMedCheckForDate(date) {
   const container=document.getElementById('med-check-container');
   if(!container) return;
   container.innerHTML=lc.moodMode?renderDailyMedCheck(date):renderConditionMedSelector(date);
+  // dailyChecks도 날짜에 맞게 갱신 (기존 선택 초기화 후 재적용)
+  document.querySelectorAll('[id^="dc-"] .log-chip.sel').forEach(c=>c.classList.remove('sel','sel-sym'));
+  _prefillDailyChecksFromExisting(date);
 }
 
 // ── Mood selector (마음관리용) ──
@@ -1988,7 +2105,16 @@ function getRecentLogSummary() {
   // Standard mode (편두통)
   const outcomeLabel={better:'→호전',same:'→비슷',worse:'→악화',good:'→호전',partial:'→비슷',none:'→악화'};
   const _sl=_scoreLabel();
-  const lines=week.map(l=>`${l.datetime.slice(5,16)} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' '+_sl+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')+(l.outcome?.rating?' '+outcomeLabel[l.outcome.rating]:'')).join('\n');
+  const _fmtEntry=(l,prefix)=>`${prefix} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' '+_sl+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')+(l.treatments?.length?' 🩺'+l.treatments.join('+'):'')+(l.outcome?.rating?' '+outcomeLabel[l.outcome.rating]:'');
+  const lines=week.map(l=>{
+    // 병합 기록: timeline 시간별 변화를 펼쳐서 AI에게 전달
+    if(l.timeline?.length) {
+      const date=l.datetime.slice(5,10);
+      const tLines=l.timeline.map(t=>_fmtEntry(t, '  '+date+' '+(t.time||'??:??')));
+      return `${date} [시간별 ${l.timeline.length}건]\n${tLines.join('\n')}`;
+    }
+    return _fmtEntry(l, l.datetime.slice(5,16));
+  }).join('\n');
   const nrsVals=week.map(l=>l.nrs).filter(n=>n>=0);
   const avg=nrsVals.length?(nrsVals.reduce((a,b)=>a+b,0)/nrsVals.length).toFixed(1):'-';
   // 경과 요약
