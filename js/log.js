@@ -48,6 +48,13 @@ async function saveLogData() {
 
 function nrsColor(n){if(n<=3)return'#2d8a5a';if(n<=6)return'#e67e22';return'#c03030';}
 function toggleChip(el,cls){el.classList.toggle('sel');el.classList.toggle(cls,el.classList.contains('sel'));}
+// dailyChecks(수면/집중력 등) 전용 — 같은 항목 내 단일 선택
+function toggleDcChip(el){
+  const parent=el.parentElement;
+  const wasSel=el.classList.contains('sel');
+  parent.querySelectorAll('.log-chip.sel').forEach(c=>{c.classList.remove('sel','sel-sym');});
+  if(!wasSel){el.classList.add('sel','sel-sym');}
+}
 
 async function setLogView(v){S.logView=v;await ensureLogLoaded();renderView('log');}
 
@@ -713,7 +720,7 @@ function renderLog() {
       <div style="display:flex;align-items:center;gap:6px;padding:4px 0">
         <span style="font-size:.75rem;min-width:50px;color:var(--mu)">${item}</span>
         <div class="log-chips" style="flex:1;gap:3px" id="dc-${item}">
-          ${['1','2','3','4','5'].map(v=>`<div class="log-chip" data-group="dc-${item}" data-val="${v}" onclick="toggleChip(this,'sel-sym')" style="min-width:28px;text-align:center;font-size:.72rem;padding:4px 6px">${v}</div>`).join('')}
+          ${['1','2','3','4','5'].map(v=>`<div class="log-chip" data-group="dc-${item}" data-val="${v}" onclick="toggleDcChip(this)" style="min-width:28px;text-align:center;font-size:.72rem;padding:4px 6px">${v}</div>`).join('')}
         </div>
       </div>`).join('')}`:''}
     ${sitesHtml}
