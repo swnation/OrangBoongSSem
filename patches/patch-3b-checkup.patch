@@ -2,151 +2,23 @@ diff --git a/js/checkup.js b/js/checkup.js
 index ffbb977..f2a3a11 100644
 --- a/js/checkup.js
 +++ b/js/checkup.js
-@@ -686,7 +686,7 @@ ${Object.entries(_CHECKUP_CATEGORIES).map(([k,v])=>k+':'+v.name).join(', ')}
- 비-검사 항목: {"idx":0, "stdCode":null, "reason":"AI 예측값"}`;
- 
+@@ -686,7 +686,7 @@
    try {
 -    const response = await callAI(selectedAi, '의료 검사 표준화 전문가. JSON만 응답.', prompt);
 +    const response = await callAI(selectedAi, '의료 검사 표준화 전문가. JSON만 응답.', prompt, 'lab-normalize');
      const jsonMatch = response.match(/\[[\s\S]*\]/);
-     if (!jsonMatch) return rawResults;
-     const aiMappings = JSON.parse(jsonMatch[0]);
-@@ -1149,7 +1149,7 @@ ${refs ? JSON.stringify(refs, null, 1) : '없음'}
- 5. category: cbc/liver/kidney/thyroid/lipid/glucose/electrolyte/inflammation/reproductive/semen/vitamin/iron/tumor/infection/coagulation/urine/other
- 6. code: 표준 약어 (WBC, RBC, HGB, AST, ALT, TSH 등). 모르면 null`;
- 
+@@ -1149,7 +1149,7 @@
 -  const result = await callAI(aiId, '의료 검사 데이터 표준화 전문가', prompt);
 +  const result = await callAI(aiId, '의료 검사 데이터 표준화 전문가', prompt, 'lab-normalize');
-   const jsonMatch = result.match(/\{[\s\S]*\}/);
-   if (!jsonMatch) throw new Error('JSON 파싱 실패');
-   const parsed = JSON.parse(jsonMatch[0]);
-@@ -1203,7 +1203,7 @@ ${who === '오랑이' ? '6. **임신 준비 관점** — 현재 결과가 임신
- 한국어로 작성하되, 의학적으로 정확하게. 환자가 이해하기 쉬운 용어로.`;
- 
-   try {
+@@ -1203,7 +1203,7 @@
 -    const result = await callAI(aiId, '내과 전문의 + 예방의학 전문가', prompt);
 +    const result = await callAI(aiId, '내과 전문의 + 예방의학 전문가', prompt, 'checkup-interpret');
-     _updateCkProgress(2, 2, '✅ 해석 완료! 결과 저장 중...');
-     // 결과를 모달로 표시 + 마스터에 저장
-     const interpretation = {
-@@ -1830,7 +1830,7 @@ ${text.slice(0, 8000)}
- 6. 중복 항목 제거`;
- 
-   try {
+@@ -1830,7 +1830,7 @@
 -    const result = await callAI(aiId, '의료 검사 결과 분석 전문가', prompt);
 +    const result = await callAI(aiId, '의료 검사 결과 분석 전문가', prompt, 'checkup-interpret');
-     const jsonMatch = result.match(/\{[\s\S]*\}/);
-     if (!jsonMatch) throw new Error('AI 응답 파싱 실패');
-     const parsed = JSON.parse(jsonMatch[0]);
-@@ -2119,6 +2119,7 @@ function renderCheckupArchive() {
-   // 탭 바
-   const tabs = [
-     { id: 'timeline', label: '📅 타임라인', desc: '날짜순 검진 기록' },
-+    { id: 'institution', label: '🏥 기관별', desc: '기관별 검진 정리' },
-     { id: 'trends', label: '📈 추세', desc: '항목별 시계열 차트' },
-     { id: 'categories', label: '🏷 카테고리', desc: '검사 분류별 보기' },
-   ];
-@@ -2160,6 +2161,7 @@ function renderCheckupArchive() {
-   // 콘텐츠
-   let content = '';
-   if (_checkupViewTab === 'timeline') content = _renderCheckupTimeline(allCheckups);
-+  else if (_checkupViewTab === 'institution') content = _renderCheckupByInstitution(allCheckups);
-   else if (_checkupViewTab === 'trends') content = _renderCheckupTrends(who, allCheckups);
-   else if (_checkupViewTab === 'categories') content = _renderCheckupCategories(who, allCheckups);
- 
-@@ -2358,6 +2360,93 @@ function _renderCheckupTrends(who, checkups) {
-   }).join('');
- }
- 
-+// 기관별 뷰 — 기관별로 그룹핑, 대분류(CBC/UA/STD 등)별 정리
-+function _renderCheckupByInstitution(checkups) {
-+  if (!checkups.length) return '<div style="font-size:.72rem;color:var(--mu);text-align:center;padding:20px">검진 기록이 없습니다.</div>';
-+  const byInst = {};
-+  checkups.forEach(c => { const inst = c.institution || '기관 미입력'; if (!byInst[inst]) byInst[inst] = []; byInst[inst].push(c); });
-+  return Object.entries(byInst).sort((a, b) => {
-+    const latestA = a[1].reduce((m, c) => c.date > m ? c.date : m, '');
-+    const latestB = b[1].reduce((m, c) => c.date > m ? c.date : m, '');
-+    return latestB.localeCompare(latestA);
-+  }).map(([inst, checks]) => {
-+    const totalItems = checks.reduce((s, c) => s + (c.results?.length || 0), 0);
-+    const dates = [...new Set(checks.map(c => c.date))].sort().reverse();
-+    const majorCats = {};
-+    checks.forEach(c => {
-+      (c.results || []).forEach(r => {
-+        const cat = r.category || 'other';
-+        const catDef = _CHECKUP_CATEGORIES[cat] || _CHECKUP_CATEGORIES.other;
-+        const major = catDef.major || 'other';
-+        if (!majorCats[major]) majorCats[major] = { items: [], abnormal: 0 };
-+        majorCats[major].items.push({ ...r, _date: c.date });
-+        if (_isAbnormal(r.status)) majorCats[major].abnormal++;
-+      });
-+    });
-+    const majorRows = _CHECKUP_MAJOR_CATEGORIES.filter(mc => majorCats[mc.key]).map(mc => {
-+      const data = majorCats[mc.key];
-+      const uniqueTests = [...new Set(data.items.map(r => r.stdCode || r.displayName))];
-+      const abnormalNames = data.items.filter(r => _isAbnormal(r.status)).map(r => r.displayName);
-+      const uniqueAbnormal = [...new Set(abnormalNames)];
-+      const testByDate = {};
-+      data.items.forEach(r => {
-+        const key = r.stdCode || r.displayName;
-+        if (!testByDate[key]) testByDate[key] = { name: r.displayName, unit: r.unit, entries: {} };
-+        testByDate[key].entries[r._date] = { value: r.value, status: r.status };
-+      });
-+      const testRows = Object.entries(testByDate).map(([, td]) => {
-+        const latestDate = Object.keys(td.entries).sort().reverse()[0];
-+        const latest = td.entries[latestDate];
-+        const statusColor = _statusColor(latest.status);
-+        const statusIcon = _statusIcon(latest.status);
-+        const history = Object.entries(td.entries).sort((a, b) => a[0].localeCompare(b[0])).map(([d, e]) =>
-+          `<span style="font-size:.55rem;color:${_statusColor(e.status)};font-family:var(--mono)">${d.slice(5)}:${e.value}</span>`
-+        ).join(' ');
-+        return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;font-size:.68rem;border-bottom:1px solid var(--sf)">
-+          <span style="color:${statusColor};min-width:12px;font-size:.6rem">${statusIcon}</span>
-+          <span style="flex:1">${esc(td.name)}</span>
-+          <span style="font-weight:600;color:${statusColor};font-family:var(--mono);min-width:40px;text-align:right">${esc(String(latest.value))}</span>
-+          <span style="color:var(--mu);min-width:35px;font-size:.6rem">${esc(td.unit || '')}</span>
-+        </div>
-+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:2px">${history}</div>`;
-+      }).join('');
-+      return `<div style="margin-bottom:8px">
-+        <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1.5px solid var(--bd);cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none';this.querySelector('._inst-arrow').textContent=d.style.display==='none'?'▸':'▾'">
-+          <span class="_inst-arrow" style="font-size:.6rem;color:var(--mu2)">▸</span>
-+          <span style="font-size:.75rem;font-weight:600">${mc.name}</span>
-+          <span style="font-size:.62rem;color:var(--mu)">${uniqueTests.length}항목</span>
-+          ${data.abnormal > 0 ? `<span style="font-size:.6rem;color:#dc2626;font-weight:600">⚠ 이상 ${uniqueAbnormal.length}</span>` : '<span style="font-size:.6rem;color:#10b981">✅</span>'}
-+        </div>
-+        <div style="display:none;padding:4px 0 4px 8px">${testRows}</div>
-+      </div>`;
-+    }).join('');
-+    return `<div style="padding:10px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;margin-bottom:6px">
-+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-+        <span style="font-size:.85rem;font-weight:700;color:var(--ac)">🏥 ${esc(inst)}</span>
-+        <span style="font-size:.62rem;color:var(--mu)">${checks.length}건 · ${totalItems}항목</span>
-+        <span style="font-size:.58rem;color:var(--mu2);margin-left:auto">${dates.slice(0, 3).map(d => d.slice(5)).join(', ')}</span>
-+      </div>
-+      ${majorRows}
-+    </div>`;
-+  }).join('');
-+}
-+
- // 카테고리별 최신 결과 뷰
- function _renderCheckupCategories(who, checkups) {
-   if (!checkups.length) return '<div style="font-size:.72rem;color:var(--mu);text-align:center;padding:20px">검진 기록이 없습니다.</div>';
-@@ -2690,7 +2779,7 @@ ${isLactoseIntolerant ? '4. 유당 함유: 각 약물의 유당(lactose) 포함
- level: danger/warning/caution/info. JSON만.`;
- 
-   try {
+@@ -2690,7 +2779,7 @@
 -    const resp = await callAI(aiId, '임상약학+약물감시 전문가. JSON만.', prompt);
 +    const resp = await callAI(aiId, '임상약학+약물감시 전문가. JSON만.', prompt, 'drug-alert');
-     const match = resp.match(/\{[\s\S]*\}/);
-     if (!match) return { alerts: [] };
-     const result = JSON.parse(match[0]);
-@@ -3158,7 +3247,7 @@ async function _aiMergeSelected() {
-     + 'JSON만.';
- 
-   try {
+@@ -3158,7 +3247,7 @@
 -    const resp = await callAI(aiId, '의료 데이터 중복 분석 전문가. JSON만 응답.', prompt);
 +    const resp = await callAI(aiId, '의료 데이터 중복 분석 전문가. JSON만 응답.', prompt, 'checkup-merge');
-     const match = resp.match(/\{[\s\S]*\}/);
-     if (!match) { showToast('⚠️ AI 응답 파싱 실패'); return; }
-     const result = JSON.parse(match[0]);
