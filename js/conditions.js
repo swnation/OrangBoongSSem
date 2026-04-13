@@ -788,7 +788,8 @@ async function aiSearchMeds() {
   try {
     const answer=await callAI('perp',
       '한국 의료 기준으로 답변. 약품명은 반드시 영문 성분명(generic name)만 사용. 시술/치료법은 별도 구분. 출처 표기.',
-      `"${name}" 질환의 현재 한국 표준 치료약물을 나열해줘.\n\n형식:\n## 약물 치료\n### 1차 치료\n- 성분명 (용량, 빈도)\n### 2차 치료\n- ...\n\n## 비약물 치료/시술\n- ...\n\n최신 한국 가이드라인 기준. 각 약물은 영문 성분명(generic name)만 사용.`
+      `"${name}" 질환의 현재 한국 표준 치료약물을 나열해줘.\n\n형식:\n## 약물 치료\n### 1차 치료\n- 성분명 (용량, 빈도)\n### 2차 치료\n- ...\n\n## 비약물 치료/시술\n- ...\n\n최신 한국 가이드라인 기준. 각 약물은 영문 성분명(generic name)만 사용.`,
+      'drug-search'
     );
     if(result){
       result.innerHTML=DOMPurify.sanitize(marked.parse(answer||'결과 없음'));
@@ -858,6 +859,7 @@ async function processRxPhoto(input) {
         });
         const data=await resp.json();
         result=data.content?.[0]?.text||'';
+        if(data.usage) recordUsage('claude',S.models?.claude||DEFAULT_MODELS.claude,data.usage.input_tokens||0,data.usage.output_tokens||0,'drug-photo');
       } else {
         const resp=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{
           method:'POST',
@@ -869,6 +871,7 @@ async function processRxPhoto(input) {
         });
         const data=await resp.json();
         result=data.choices?.[0]?.message?.content||'';
+        if(data.usage) recordUsage('gpt',S.models?.gpt||DEFAULT_MODELS.gpt,data.usage.prompt_tokens||0,data.usage.completion_tokens||0,'drug-photo');
       }
       // Parse
       const jsonMatch=result.match(/\[[\s\S]*?\]/);
@@ -2153,7 +2156,7 @@ async function aiVerifyDrugName(drugName) {
   if(!aiId) return null;
   const prompt='약물명 "'+drugName+'"의 국제 일반명(INN/generic name)을 영문으로 알려주세요. JSON: {"generic":"영문일반명","korean":"한글명"} JSON만.';
   try{
-    const resp=await callAI(aiId,'약물명 정규화 전문가. JSON만.',prompt);
+    const resp=await callAI(aiId,'약물명 정규화 전문가. JSON만.',prompt,'drug-normalize');
     const m=resp.match(/\{[\s\S]*?\}/);
     if(!m) return null;
     const result=JSON.parse(m[0]);

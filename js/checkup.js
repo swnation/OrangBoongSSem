@@ -2971,10 +2971,11 @@ function _detectDuplicateCheckups() {
   const who = DC().user;
   const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
 
-  // 같은 날짜 + 같은 기관 + 같은 항목수 → 중복 후보
+  // 같은 날짜 + 같은 기관 + 같은 항목수 + 주요 항목명 → 중복 후보
   const groups = {};
   allCheckups.forEach(c => {
-    const key = (c.date || '') + '|' + (c.institution || '') + '|' + (c.results?.length || 0);
+    const topItems = (c.results || []).slice(0, 3).map(r => r.stdCode || r.displayName || '').join(',');
+    const key = (c.date || '') + '|' + (c.institution || '') + '|' + (c.results?.length || 0) + '|' + topItems;
     if (!groups[key]) groups[key] = [];
     groups[key].push(c);
   });
@@ -3023,24 +3024,12 @@ async function _mergeCheckupGroup(key) {
 
   _pushUndo('중복 정리');
 
-  // 첫 건 유지, 나머지 삭제
+  // 첫 건 유지, 나머지 삭제 (_deleteCheckupEntry 공통 함수 활용)
   const keep = group[0];
   let deleted = 0;
   for (let i = 1; i < group.length; i++) {
-    const c = group[i];
-    if (c._legacyLab) {
-      const brkDs = S.domainState['bungruki'];
-      if (brkDs?.master?.labResults) {
-        const idx = brkDs.master.labResults.findIndex(l => l.id === c.id);
-        if (idx >= 0) { brkDs.master.labResults.splice(idx, 1); deleted++; }
-      }
-    } else {
-      const ds = S.domainState[c._source];
-      if (ds?.master?.healthCheckups) {
-        const idx = ds.master.healthCheckups.findIndex(h => h.id === c.id);
-        if (idx >= 0) { ds.master.healthCheckups.splice(idx, 1); deleted++; }
-      }
-    }
+    _deleteCheckupEntry(group[i]);
+    deleted++;
   }
 
   if (deleted) {
@@ -3058,7 +3047,8 @@ async function _mergeAllDuplicates() {
   const allCheckups = getAllHealthCheckups(who, true, { includePregnancy: false });
   const groups = {};
   allCheckups.forEach(c => {
-    const key = (c.date || '') + '|' + (c.institution || '') + '|' + (c.results?.length || 0);
+    const topItems = (c.results || []).slice(0, 3).map(r => r.stdCode || r.displayName || '').join(',');
+    const key = (c.date || '') + '|' + (c.institution || '') + '|' + (c.results?.length || 0) + '|' + topItems;
     if (!groups[key]) groups[key] = [];
     groups[key].push(c);
   });
@@ -3069,20 +3059,8 @@ async function _mergeAllDuplicates() {
   for (const [, group] of Object.entries(groups)) {
     if (group.length < 2) continue;
     for (let i = 1; i < group.length; i++) {
-      const c = group[i];
-      if (c._legacyLab) {
-        const brkDs = S.domainState['bungruki'];
-        if (brkDs?.master?.labResults) {
-          const idx = brkDs.master.labResults.findIndex(l => l.id === c.id);
-          if (idx >= 0) { brkDs.master.labResults.splice(idx, 1); totalDeleted++; }
-        }
-      } else {
-        const ds = S.domainState[c._source];
-        if (ds?.master?.healthCheckups) {
-          const idx = ds.master.healthCheckups.findIndex(h => h.id === c.id);
-          if (idx >= 0) { ds.master.healthCheckups.splice(idx, 1); totalDeleted++; }
-        }
-      }
+      _deleteCheckupEntry(group[i]);
+      totalDeleted++;
     }
   }
 
