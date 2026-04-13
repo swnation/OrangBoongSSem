@@ -836,7 +836,7 @@ async function cleanupAccumulated() {
 반드시 JSON만 출력:
 {"consensus":["합의 항목"],"discarded":["폐기 항목"],"issues":["쟁점 항목"],"protocols":["프로토콜 항목"]}`;
       const user=`[${cat.label}] ${items.length}건:\n${items.map((x,j)=>(j+1)+'. '+x).join('\n')}`;
-      const raw=await callAIStream(aiId,system,user,()=>{},ac.signal);
+      const raw=await callAIStream(aiId,system,user,()=>{},ac.signal,'forecast');
       let clean=raw.replace(/```json|```/g,'').trim();
       const jsonMatch=clean.match(/\{[\s\S]*\}/);
       if(jsonMatch) clean=jsonMatch[0];
@@ -1523,11 +1523,111 @@ function renderUsageView() {
     ${domainRows}
   </div>`:''}
 
+    <div class="card">
+      <div class="card-title">🤖 AI별 이번 달 (전체 통합)</div>
+      ${aiRows||'<div class="hint" style="padding:8px">이번 달 사용 내역 없음</div>'}
+      </div>
+
+  ${_renderUsageCallsBreakdown(monthStr)}`;
+}
+// 모델별/기능별 호출 상세 breakdown
+function _renderUsageCallsBreakdown(monthStr) {
+  const allCalls=[];
+  Object.entries(S.domainState).forEach(([domId,ds])=>{
+    if(!ds.master?.usage_data) return;
+    Object.entries(ds.master.usage_data).forEach(([date,aiMap])=>{
+      if(!date.startsWith(monthStr)) return;
+      Object.entries(aiMap).forEach(([aiId,data])=>{
+        (data.calls||[]).forEach(c=>allCalls.push({date,aiId,...c}));
+      });
+    });
+  });
+  Object.keys(DOMAINS).forEach(domId=>{
+    if(S.domainState[domId]?.master?.usage_data) return;
+    try{
+      const cached=localStorage.getItem('om_usage_'+domId);
+      if(!cached) return;
+      const ud=JSON.parse(cached);
+      Object.entries(ud).forEach(([date,aiMap])=>{
+        if(!date.startsWith(monthStr)) return;
+        Object.entries(aiMap).forEach(([aiId,data])=>{
+          (data.calls||[]).forEach(c=>allCalls.push({date,aiId,...c}));
+        });
+      });
+    }catch(e){}
+  });
+  if(!allCalls.length) return '';
+  const sourceLabels={'session-r1':'🔄 세션 R1','session-r2':'🔄 세션 R2','session-r3':'🔄 세션 R3',
+    'summary':'📝 요약','photo-ocr':'📷 사진 OCR','drug-photo':'💊 약물 사진','lab-normalize':'🧪 검사 표준화',
+    'drug-safety':'🛡️ 약물 안전','drug-search':'🔍 약물 검색','drug-normalize':'💊 약물 정규화',
+    'checkup-interpret':'💡 검진 해석','checkup-merge':'🔗 중복 병합','drug-alert':'⚠️ 약물 경고',
+    'insight':'💡 인사이트','daily-insight':'📊 일간 인사이트','monthly-insight':'📅 월간 인사이트','forecast':'🌤 예보'};
+  const bySource={};
+  allCalls.forEach(c=>{
+    const src=c.source||'기타';
+    if(!bySource[src]) bySource[src]={cost:0,count:0,inT:0,outT:0,models:{}};
+    bySource[src].cost+=c.cost||0; bySource[src].count++; bySource[src].inT+=(c.in||0); bySource[src].outT+=(c.out||0);
+    const m=c.model||'unknown';
+    if(!bySource[src].models[m]) bySource[src].models[m]={cost:0,count:0};
+    bySource[src].models[m].cost+=c.cost||0; bySource[src].models[m].count++;
+  });
+  const sourceRows=Object.entries(bySource).sort((a,b)=>b[1].cost-a[1].cost).map(([src,d])=>{
+    const label=sourceLabels[src]||src;
+    const modelDetail=Object.entries(d.models).map(([m,md])=>
+      `<span style="font-size:.58rem;padding:1px 5px;border-radius:3px;background:var(--sf);color:var(--mu)">${m.replace(/^[a-z]+-/,'')} x${md.count} $${md.cost.toFixed(4)}</span>`
+    ).join(' ');
+    return `<div style="padding:5px 0;border-bottom:1px solid var(--bd)">
+      <div style="display:flex;align-items:center;gap:6px;font-size:.78rem">
+        <span style="flex:2">${label}</span>
+        <span style="font-size:.68rem;color:var(--mu);font-family:var(--mono)">${d.count}회</span>
+        <span style="font-size:.65rem;color:var(--mu);font-family:var(--mono)">${Math.round(d.inT/1000)}K/${Math.round(d.outT/1000)}K</span>
+        <span style="font-family:var(--mono);font-weight:600;min-width:60px;text-align:right">$${d.cost.toFixed(4)}</span>
+      </div>
+      <div style="margin-top:2px;display:flex;gap:3px;flex-wrap:wrap">${modelDetail}</div>
+    </div>`;
+  }).join('');
+  const byModel={};
+  allCalls.forEach(c=>{
+    const m=c.model||'unknown';
+    if(!byModel[m]) byModel[m]={cost:0,count:0,inT:0,outT:0,aiId:c.aiId};
+    byModel[m].cost+=c.cost||0; byModel[m].count++; byModel[m].inT+=(c.in||0); byModel[m].outT+=(c.out||0);
+  });
+  const modelRows=Object.entries(byModel).sort((a,b)=>b[1].cost-a[1].cost).map(([m,d])=>{
+    const def=AI_DEFS[d.aiId];
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd);font-size:.75rem">
+      <div style="width:6px;height:6px;border-radius:50%;background:${def?.color||'#888'}"></div>
+      <span style="flex:2;font-size:.72rem">${m}</span>
+      <span style="font-size:.65rem;color:var(--mu);font-family:var(--mono)">${d.count}회 · ${Math.round(d.inT/1000)}K in / ${Math.round(d.outT/1000)}K out</span>
+      <span style="font-family:var(--mono);font-weight:600;min-width:60px;text-align:right">$${d.cost.toFixed(4)}</span>
+    </div>`;
+  }).join('');
+  const recentCalls=[...allCalls].sort((a,b)=>(b.date+' '+(b.time||'')).localeCompare(a.date+' '+(a.time||''))).slice(0,20);
+  const recentRows=recentCalls.map(c=>{
+    const def=AI_DEFS[c.aiId];
+    const srcLabel=sourceLabels[c.source||'']||c.source||'';
+    return `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid var(--sf);font-size:.68rem">
+      <span style="font-family:var(--mono);color:var(--mu2);min-width:82px">${c.date.slice(5)} ${c.time||''}</span>
+      <div style="width:5px;height:5px;border-radius:50%;background:${def?.color||'#888'}"></div>
+      <span style="min-width:50px;color:var(--mu);font-size:.62rem">${(c.model||'').replace(/^[a-z]+-/,'')}</span>
+      <span style="font-size:.6rem;color:var(--ac)">${srcLabel}</span>
+      <span style="font-family:var(--mono);color:var(--mu);margin-left:auto;font-size:.62rem">${Math.round((c.in||0)/1000)}K/${Math.round((c.out||0)/1000)}K</span>
+      <span style="font-family:var(--mono);font-weight:600;min-width:50px;text-align:right">$${(c.cost||0).toFixed(4)}</span>
+    </div>`;
+  }).join('');
+  return `<div class="card">
+    <div class="card-title">📋 기능별 비용 (이번 달)</div>
+    ${sourceRows}
+  </div>
   <div class="card">
-    <div class="card-title">🤖 AI별 이번 달 (전체 통합)</div>
-    ${aiRows||'<div class="hint" style="padding:8px">이번 달 사용 내역 없음</div>'}
+    <div class="card-title">🏷 모델별 비용 (이번 달)</div>
+    ${modelRows}
+  </div>
+  <div class="card">
+    <div class="card-title">🕐 최근 호출 로그</div>
+    ${recentRows||'<div class="hint" style="padding:8px">호출 기록 없음</div>'}
   </div>`;
 }
+
 
 
 
@@ -2024,7 +2124,7 @@ async function _aiDailySummary(){
   try{
     const aiId=S.keys.claude?'claude':S.keys.gpt?'gpt':S.keys.gemini?'gemini':null;
     if(!aiId){el.innerHTML='<div style="color:var(--re)">AI API 키를 설정하세요.</div>';return;}
-    const result=await callAI(aiId,system,'오늘('+today+') 기록:\n'+data);
+    const result=await callAI(aiId,system,'오늘('+today+') 기록:\n'+data,'daily-insight');
     el.innerHTML='<div style="font-size:.75rem;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd);line-height:1.5">'+renderMD(result)+'</div>';
   }catch(e){el.innerHTML='<div style="color:var(--re);font-size:.72rem">AI 오류: '+esc(e.message)+'</div>';}
 }
@@ -2061,7 +2161,7 @@ async function _aiMonthlyInsight(){
   try{
     const aiId=S.keys.claude?'claude':S.keys.gpt?'gpt':S.keys.gemini?'gemini':null;
     if(!aiId){el.innerHTML='<div style="color:var(--re)">AI API 키를 설정하세요.</div>';return;}
-    const result=await callAI(aiId,system,ds.logMonth+' 월간 기록 ('+logs.length+'건):\n'+summary);
+    const result=await callAI(aiId,system,ds.logMonth+' 월간 기록 ('+logs.length+'건):\n'+summary,'monthly-insight');
     el.innerHTML='<div style="font-size:.75rem;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd);line-height:1.5">'+renderMD(result)+'</div>';
   }catch(e){el.innerHTML='<div style="color:var(--re);font-size:.72rem">AI 오류: '+esc(e.message)+'</div>';}
 }
@@ -2154,7 +2254,9 @@ async function checkWeeklyInsight() {
   try {
     const result=await callAI('claude',
       '당신은 의료 데이터 패턴 분석 전문가입니다. 3줄 이내로 핵심만.',
-      `최근 14일 기록:\n${logSummary}\n\n특이 패턴, 추세 변화, 주의 사항이 있으면 3줄 이내로 알려주세요. 없으면 "특이사항 없음"만.`
+     `최근 14일 기록:\n${logSummary}\n\n특이 패턴, 추세 변화, 주의 사항이 있으면 3줄 이내로 알려주세요. 없으면 "특이사항 없음"만.`,
+                      'insight'
+
     );
     m.lastInsight=result;
     m.lastInsightDate=kstToday();
