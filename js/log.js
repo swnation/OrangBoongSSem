@@ -890,7 +890,7 @@ function renderLogList() {
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px;white-space:pre-line">${esc(l.memo)}</div>`:''}
           ${l.nrsRange?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${_scoreLabel()} 변화: ${l.nrsRange.min}→${l.nrsRange.max}</div>`:''}
-          ${l.timeline?`<div style="font-size:.62rem;color:var(--ac);margin-top:2px;cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</div>`:''}
+          ${l.timeline?`<div style="font-size:.62rem;margin-top:2px;display:flex;gap:8px;align-items:center"><span style="color:var(--ac);cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</span><span style="color:var(--mu);cursor:pointer;border:1px solid var(--bd);padding:1px 6px;border-radius:3px" onclick="event.stopPropagation();unmergeDayEntry(${realIdx})" title="병합 해제하여 개별 기록으로 복원">↩ 병합해제</span></div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
         <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
@@ -958,7 +958,7 @@ function renderLogListInner() {
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px;white-space:pre-line">${esc(l.memo)}</div>`:''}
           ${l.nrsRange?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${_scoreLabel()} 변화: ${l.nrsRange.min}→${l.nrsRange.max}</div>`:''}
-          ${l.timeline?`<div style="font-size:.62rem;color:var(--ac);margin-top:2px;cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</div>`:''}
+          ${l.timeline?`<div style="font-size:.62rem;margin-top:2px;display:flex;gap:8px;align-items:center"><span style="color:var(--ac);cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</span><span style="color:var(--mu);cursor:pointer;border:1px solid var(--bd);padding:1px 6px;border-radius:3px" onclick="event.stopPropagation();unmergeDayEntry(${realIdx})" title="병합 해제하여 개별 기록으로 복원">↩ 병합해제</span></div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
         <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
@@ -997,6 +997,7 @@ function _showTimeline(idx){
     if(t.sites?.length)parts.push(t.sites.join('+'));
     if(t.meds?.length)parts.push('💊'+t.meds.join(', '));
     if(t.treatments?.length)parts.push('🏥'+t.treatments.join(', '));
+    if(t.triggers?.length)parts.push('⚡'+t.triggers.join(', '));
     if(t.outcome)parts.push(t.outcome.rating==='better'?'🟢호전':t.outcome.rating==='same'?'🟡비슷':'🔴악화');
     if(t.memo)parts.push('"'+esc(t.memo)+'"');
     return `<div style="font-size:.72rem;padding:4px 0;border-bottom:1px dotted var(--bd)">${parts.join(' · ')}</div>`;
@@ -1068,6 +1069,7 @@ function mergeDayEntries(date) {
     symptoms:[...(e.symptoms||[])],
     meds:[...(e.meds||[])],
     treatments:[...(e.treatments||[])],
+    triggers:[...(e.triggers||[])],
     medCheck:e.medCheck?{...e.medCheck}:undefined,
     dailyChecks:e.dailyChecks?{...e.dailyChecks}:undefined,
     outcome:e.outcome?{...e.outcome}:undefined,
@@ -1135,6 +1137,35 @@ async function _executeMerge(date,merged){
   ds.logData.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
   try{await saveLogData();showToast('✅ 병합 완료 (되돌리기 가능)');renderView('log');}
   catch(e){showToast('❌ 병합 저장 실패: '+e.message,4000);}
+}
+
+// 병합 해제 — timeline에서 개별 기록 복원
+async function unmergeDayEntry(idx) {
+  const ds=D(); const entry=ds.logData[idx];
+  if(!entry?.timeline?.length){showToast('timeline 데이터가 없어 해제할 수 없습니다.');return;}
+  if(!confirm(`병합을 해제하여 ${entry.timeline.length}건의 개별 기록으로 복원할까요?`))return;
+  _pushUndo('병합해제: '+entry.datetime.slice(0,10));
+  const date=entry.datetime.slice(0,10);
+  // timeline에서 개별 엔트리 복원
+  const restored=entry.timeline.map(t=>({
+    datetime:date+'T'+(t.time||'00:00'),
+    nrs:t.nrs!=null?t.nrs:-1,
+    mood:t.mood||undefined,
+    sites:t.sites||[],
+    symptoms:t.symptoms||[],
+    meds:t.meds||[],
+    treatments:t.treatments||[],
+    triggers:t.triggers||[],
+    medCheck:t.medCheck||undefined,
+    dailyChecks:t.dailyChecks||undefined,
+    outcome:t.outcome||undefined,
+    memo:t.memo||'',
+    weather:t.weather||undefined
+  }));
+  ds.logData.splice(idx,1,...restored);
+  ds.logData.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''));
+  try{await saveLogData();showToast(`↩ 병합 해제 → ${restored.length}건 복원`);renderView('log');}
+  catch(e){showToast('❌ 병합 해제 실패: '+e.message,4000);}
 }
 
 // ── ntfy 푸시 알림 ──
@@ -1988,7 +2019,16 @@ function getRecentLogSummary() {
   // Standard mode (편두통)
   const outcomeLabel={better:'→호전',same:'→비슷',worse:'→악화',good:'→호전',partial:'→비슷',none:'→악화'};
   const _sl=_scoreLabel();
-  const lines=week.map(l=>`${l.datetime.slice(5,16)} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' '+_sl+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')+(l.outcome?.rating?' '+outcomeLabel[l.outcome.rating]:'')).join('\n');
+  const _fmtEntry=(l,prefix)=>`${prefix} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' '+_sl+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')+(l.treatments?.length?' 🩺'+l.treatments.join('+'):'')+(l.outcome?.rating?' '+outcomeLabel[l.outcome.rating]:'');
+  const lines=week.map(l=>{
+    // 병합 기록: timeline 시간별 변화를 펼쳐서 AI에게 전달
+    if(l.timeline?.length) {
+      const date=l.datetime.slice(5,10);
+      const tLines=l.timeline.map(t=>_fmtEntry(t, '  '+date+' '+(t.time||'??:??')));
+      return `${date} [시간별 ${l.timeline.length}건]\n${tLines.join('\n')}`;
+    }
+    return _fmtEntry(l, l.datetime.slice(5,16));
+  }).join('\n');
   const nrsVals=week.map(l=>l.nrs).filter(n=>n>=0);
   const avg=nrsVals.length?(nrsVals.reduce((a,b)=>a+b,0)/nrsVals.length).toFixed(1):'-';
   // 경과 요약
