@@ -155,15 +155,18 @@ function renderMigraineForecast() {
   const today=kstToday();
   const dow=kstNow().getUTCDay(); // 요일 (0=일)
   const factors=[];
+  const details=[]; // 상세 근거
   let riskScore=0; // 0~100
+  const allAvg=nrsLogs.reduce((s,l)=>s+l.nrs,0)/nrsLogs.length;
 
   // 1) 요일 패턴 — 같은 요일의 평균 NRS
+  const dowName=['일','월','화','수','목','금','토'][dow];
   const sameDow=nrsLogs.filter(l=>{const d=new Date(l.datetime.slice(0,10)+'T00:00:00Z');return d.getUTCDay()===dow;});
   if(sameDow.length>=3) {
     const avg=sameDow.reduce((s,l)=>s+l.nrs,0)/sameDow.length;
-    const allAvg=nrsLogs.reduce((s,l)=>s+l.nrs,0)/nrsLogs.length;
-    if(avg>allAvg+1) { riskScore+=20; factors.push(`📅 ${['일','월','화','수','목','금','토'][dow]}요일 평균 ${_scoreLabel()} ${avg.toFixed(1)} (전체 ${allAvg.toFixed(1)})`); }
-    else if(avg>allAvg) { riskScore+=8; }
+    if(avg>allAvg+1) { riskScore+=20; factors.push(`📅 ${dowName}요일 평균 ${_scoreLabel()} ${avg.toFixed(1)} (전체 ${allAvg.toFixed(1)})`);
+      details.push({title:'📅 요일 패턴',score:20,desc:`${dowName}요일 ${sameDow.length}건의 평균 NRS ${avg.toFixed(1)}로, 전체 평균 ${allAvg.toFixed(1)}보다 ${(avg-allAvg).toFixed(1)} 높습니다. 과거 데이터상 이 요일에 편두통이 더 자주/강하게 발생하는 패턴입니다.`}); }
+    else if(avg>allAvg) { riskScore+=8; details.push({title:'📅 요일 패턴',score:8,desc:`${dowName}요일 평균 NRS ${avg.toFixed(1)}로 전체 평균(${allAvg.toFixed(1)})보다 약간 높으나 유의미한 차이는 아닙니다.`}); }
   }
 
   // 2) 최근 3일 패턴 — 연속 고통 후 반동 또는 지속
@@ -173,8 +176,11 @@ function renderMigraineForecast() {
   });
   if(recent3.length) {
     const avg3=recent3.reduce((s,l)=>s+l.nrs,0)/recent3.length;
-    if(avg3>=6) { riskScore+=25; factors.push(`🔥 최근 3일 평균 ${_scoreLabel()} ${avg3.toFixed(1)} — 고통 지속 중`); }
-    else if(avg3>=4) { riskScore+=12; factors.push(`⚠️ 최근 3일 평균 ${_scoreLabel()} ${avg3.toFixed(1)}`); }
+    const r3Dates=recent3.map(l=>l.datetime.slice(5,10)+':NRS'+l.nrs).join(', ');
+    if(avg3>=6) { riskScore+=25; factors.push(`🔥 최근 3일 평균 ${_scoreLabel()} ${avg3.toFixed(1)} — 고통 지속 중`);
+      details.push({title:'🔥 최근 3일 추세',score:25,desc:`최근 3일간 ${recent3.length}건의 평균 NRS가 ${avg3.toFixed(1)}로 높은 수준입니다. 연속적인 고통은 다음날에도 이어질 가능성이 높습니다.\n기록: ${r3Dates}`}); }
+    else if(avg3>=4) { riskScore+=12; factors.push(`⚠️ 최근 3일 평균 ${_scoreLabel()} ${avg3.toFixed(1)}`);
+      details.push({title:'⚠️ 최근 3일 추세',score:12,desc:`최근 3일간 평균 NRS ${avg3.toFixed(1)}로 중간 수준의 통증이 지속 중입니다.\n기록: ${r3Dates}`}); }
   }
 
   // 3) 최근 기록의 트리거 활성 여부
@@ -185,17 +191,21 @@ function renderMigraineForecast() {
   const activeTriggers=new Set(recent7.flatMap(l=>l.triggers||[]));
   const highRiskTriggers=['수면부족','수면분절','스트레스','생리전후','피로'];
   const activeHigh=highRiskTriggers.filter(t=>activeTriggers.has(t));
-  if(activeHigh.length>=2) { riskScore+=20; factors.push(`⚡ 고위험 트리거 활성: ${activeHigh.join(', ')}`); }
-  else if(activeHigh.length===1) { riskScore+=10; factors.push(`⚡ 트리거 활성: ${activeHigh[0]}`); }
+  if(activeHigh.length>=2) { riskScore+=20; factors.push(`⚡ 고위험 트리거 활성: ${activeHigh.join(', ')}`);
+    details.push({title:'⚡ 고위험 트리거',score:20,desc:`최근 7일 기록에서 고위험 트리거 ${activeHigh.length}개가 활성 상태입니다: ${activeHigh.join(', ')}. 이 트리거들은 편두통 발작과 강한 상관관계가 있습니다.`}); }
+  else if(activeHigh.length===1) { riskScore+=10; factors.push(`⚡ 트리거 활성: ${activeHigh[0]}`);
+    details.push({title:'⚡ 트리거 활성',score:10,desc:`최근 7일 기록에서 '${activeHigh[0]}' 트리거가 활성 상태입니다.`}); }
 
   // 4) 날씨 (저기압) — 캐시 + 실시간 비동기 업데이트
   const withWeather=[...nrsLogs].reverse().find(l=>l.weather?.pressure);
   const cachedP=withWeather?.weather?.pressure;
   if(cachedP) {
-    if(cachedP<1005) { riskScore+=20; factors.push(`🌧 저기압 ${cachedP}hPa (기압 민감)`); }
-    else if(cachedP<1010) { riskScore+=10; factors.push(`☁️ 기압 ${cachedP}hPa (약간 낮음)`); }
+    if(cachedP<1005) { riskScore+=20; factors.push(`🌧 저기압 ${cachedP}hPa (기압 민감)`);
+      details.push({title:'🌧 저기압',score:20,desc:`최근 기록 시점의 기압이 ${cachedP}hPa로 매우 낮습니다 (기준: 1013hPa). 저기압은 혈관 확장을 유발하여 편두통을 악화시킬 수 있습니다.`}); }
+    else if(cachedP<1010) { riskScore+=10; factors.push(`☁️ 기압 ${cachedP}hPa (약간 낮음)`);
+      details.push({title:'☁️ 기압',score:10,desc:`기압이 ${cachedP}hPa로 평균보다 약간 낮습니다. 기압 변화에 민감한 경우 편두통 위험이 소폭 상승합니다.`}); }
   }
-  // 실시간 날씨 비동기 업데이트 (forecast 카드 렌더 후 갱신)
+  // 실시간 날씨 비동기 업데이트
   if(typeof fetchWeather==='function') {
     if(window._forecastWeatherTimer) clearTimeout(window._forecastWeatherTimer);
     window._forecastWeatherTimer=setTimeout(async()=>{
@@ -213,11 +223,16 @@ function renderMigraineForecast() {
     const tag=getMenstrualTag(today);
     if(tag&&(tag.includes('생리')||tag.includes('D-'))) {
       riskScore+=15; factors.push(`🩸 ${tag} — 호르몬 변동기`);
+      details.push({title:'🩸 생리주기',score:15,desc:`현재 '${tag}' 시기입니다. 에스트로겐 급감기에는 세로토닌 감소와 혈관 변동이 일어나 편두통 위험이 높아집니다.`});
     }
   }
 
   // 점수 정규화 (0~100)
   riskScore=Math.min(100,riskScore);
+
+  // 상세 근거 데이터를 전역에 저장 (클릭 시 모달용)
+  window._forecastDetails={riskScore,factors,details,nrsCount:nrsLogs.length,allAvg,today,
+    noFactors:!details.length?'분석된 ${nrsLogs.length}건 데이터에서 특별한 위험 요인이 감지되지 않았습니다. 평소와 비슷한 컨디션입니다.':null};
 
   // 위험도 레벨
   let level,emoji,color,bg;
@@ -232,18 +247,48 @@ function renderMigraineForecast() {
     <div style="width:${riskScore}%;height:100%;background:${color};border-radius:4px;transition:width .5s"></div>
   </div>`;
 
-  return `<div class="card" style="background:${bg};border:1.5px solid ${color}30">
+  return `<div class="card" style="background:${bg};border:1.5px solid ${color}30;cursor:pointer" onclick="showForecastDetails()">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
       <span style="font-size:1.8rem">${emoji}</span>
       <div>
         <div style="font-size:.82rem;font-weight:700;color:${color}">오늘의 편두통 일기예보</div>
         <div style="font-size:.68rem;color:var(--mu)">위험도 <b>${riskScore}점</b> · ${level}</div>
       </div>
+      <span style="margin-left:auto;font-size:.6rem;color:var(--mu2)">탭하여 근거 보기</span>
     </div>
     ${gauge}
     ${factorHtml}
     <div id="forecast-weather" style="font-size:.65rem;color:var(--mu2);margin-top:6px"></div>
   </div>`;
+}
+
+function showForecastDetails(){
+  const fd=window._forecastDetails;if(!fd)return;
+  let html=`<div style="font-size:.72rem;color:var(--mu);margin-bottom:10px">분석 데이터: <b>${fd.nrsCount}건</b> · 전체 평균 NRS: <b>${fd.allAvg.toFixed(1)}</b> · 기준일: ${fd.today}</div>`;
+  if(fd.details.length){
+    html+=fd.details.map(d=>
+      `<div style="padding:8px;margin-bottom:6px;background:var(--sf);border-radius:8px;border-left:3px solid ${d.score>=20?'#ef4444':d.score>=10?'#f59e0b':'#10b981'}">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:.78rem;font-weight:600">${d.title}</span>
+          <span style="font-size:.68rem;font-weight:700;color:${d.score>=20?'#ef4444':d.score>=10?'#f59e0b':'#10b981'}">+${d.score}점</span>
+        </div>
+        <div style="font-size:.7rem;color:var(--mu);line-height:1.6;white-space:pre-line">${d.desc}</div>
+      </div>`
+    ).join('');
+  } else {
+    html+=`<div style="padding:12px;background:var(--sf);border-radius:8px;font-size:.75rem;color:var(--mu);text-align:center">
+      분석된 ${fd.nrsCount}건 데이터에서 특별한 위험 요인이 감지되지 않았습니다.<br>평소와 비슷한 컨디션입니다.</div>`;
+  }
+  html+=`<div style="margin-top:10px;padding:8px;background:var(--sf2);border-radius:6px;font-size:.62rem;color:var(--mu2);line-height:1.6">
+    <b>예보 산출 기준</b><br>
+    1. 요일 패턴: 같은 요일 과거 기록 대비 NRS 평균 비교 (최대 +20)<br>
+    2. 최근 3일 추세: 연속 고통 지속 여부 (최대 +25)<br>
+    3. 고위험 트리거: 수면부족·스트레스·생리전후 등 활성 여부 (최대 +20)<br>
+    4. 기압: 저기압(1010hPa 이하) 시 혈관 확장 위험 (최대 +20)<br>
+    5. 생리주기: 호르몬 급감기 감지 (최대 +15)
+  </div>`;
+  showConfirmModal(`🔮 편두통 예보 상세 근거 — ${fd.riskScore}점`,html,
+    [{label:'닫기',action:closeConfirmModal,primary:true}]);
 }
 
 // 홈 대시보드 카드 커스텀
