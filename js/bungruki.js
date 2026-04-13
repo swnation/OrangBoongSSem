@@ -796,11 +796,13 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
   var customs=_getBrkCustomSuppl(who2);
   if(isOrangi) customs.forEach(function(c){orangiItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
   else customs.forEach(function(c){bungItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
-  // 숨긴 항목 필터링
+  // 숨긴 항목 필터링 (1회 순회 + Set)
   var hidden=_getBrkHiddenSuppl(who2);
+  var hiddenSet=new Set(hidden);
   var allItems = isOrangi ? orangiItems : bungItems;
-  var items = allItems.filter(function(it){ return hidden.indexOf(it.key)<0; });
-  var hiddenItems = allItems.filter(function(it){ return hidden.indexOf(it.key)>=0; });
+  var items = [];
+  var hiddenItems = [];
+  allItems.forEach(function(it){ (hiddenSet.has(it.key)?hiddenItems:items).push(it); });
 
   var checkHtml = items.map(function(it) {
     var checked = whoData[it.key] ? true : false;
@@ -862,8 +864,8 @@ function _getBungConditions() {
     ds.master.conditions.forEach(function(c) {
       if (c.status !== 'active' && c.status !== 'remission') return;
       if (!c.medsList?.length) return;
-      var daily = c.medsList.filter(function(m) { return !m.includes('(PRN)'); });
-      var prn = c.medsList.filter(function(m) { return m.includes('(PRN)'); });
+      var daily = [], prn = [];
+      c.medsList.forEach(function(m) { (m.includes('(PRN)') ? prn : daily).push(m); });
       result.push({ id: c.id || c.name, name: c.name, domain: dd.label, icon: dd.icon, daily: daily, prn: prn, domainId: domainId });
     });
   });
@@ -1235,7 +1237,11 @@ function _getBrkHiddenSuppl(who){
 }
 async function _saveBrkHiddenSuppl(who,hidden){
   var m=getBrkMaster();
-  if(m){if(!m.hiddenSuppl)m.hiddenSuppl={};m.hiddenSuppl[who]=hidden;await saveBrkMaster();}
+  if(m){
+    if(!m.hiddenSuppl) m.hiddenSuppl={};
+    m.hiddenSuppl[who]=hidden;
+    await saveBrkMaster();
+  }
 }
 function _brkHideSuppl(key){
   var who=_brkCheckWho==='orangi'?'orangi':'bung';
