@@ -1061,7 +1061,9 @@ async function sendQuickNtfy(entry) {
     const body=['🤕 오랑이 두통 기록 (빠른기록)',((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim(),meds?'💊 '+meds:'',tx?'🩺 '+tx:'',trg?'⚡ '+trg:''].filter(Boolean).join('\n');
     try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
   }
-  // 경과 알림 예약 (클라이언트 타이머 — 새 기록 시 이전 예약 자동 취소)
+  // 새 기록 시 이전 미발송 경과 알림 취소 (새 기록이 곧 경과 데이터가 되므로)
+  _cancelPendingOutcomeNtfy(entry.id);
+  // 경과 알림 예약
   const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||localStorage.getItem('om_outcome_delay')||'120');
   if(outcomeDelay>0) scheduleOutcomeNtfy(entry,outcomeDelay);
   // 약물 미입력 시 복용 확인 알림 (서버사이드, 설정값 사용)
@@ -1070,6 +1072,22 @@ async function sendQuickNtfy(entry) {
 }
 
 let _outcomeTimer=null;
+
+// 새 기록 저장 시 이전 미발송 경과 알림 일괄 취소
+function _cancelPendingOutcomeNtfy(newEntryId){
+  if(_outcomeTimer){clearTimeout(_outcomeTimer);_outcomeTimer=null;}
+  const logs=getQuickLogs();
+  let changed=false;
+  logs.forEach(l=>{
+    if(l._type==='config'||String(l.id)===String(newEntryId)) return;
+    if(l.outcomeNotifyAt&&!l.outcomeNotifySent&&!l.outcome){
+      l.outcomeNotifySent=true; // 서버 ntfy는 취소 불가하지만, 로컬 재발송 방지
+      l._outcomeCancelled=true;
+      changed=true;
+    }
+  });
+  if(changed) saveQuickLogs(logs);
+}
 
 function _setOutcomeTimer(entryId,delayMin){
   if(_outcomeTimer) clearTimeout(_outcomeTimer);
