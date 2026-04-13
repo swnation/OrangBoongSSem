@@ -3958,7 +3958,7 @@ function renderBungrukiTimeline() {
         <div style="font-size:.68rem;font-family:var(--mono);color:var(--mu)">${l.datetime.slice(0,10)}</div>
         <div style="font-size:.62rem;color:${color};font-weight:600">${who}</div>
         ${cats?`<div style="font-size:.65rem;color:var(--ac);margin-top:2px">${esc(cats)}</div>`:''}
-        <div style="font-size:.78rem;margin-top:3px;line-height:1.5">${esc((l.memo||'').substring(0,100))}</div>
+        ${l.memo?`<div style="font-size:.78rem;margin-top:3px;line-height:1.5">${esc(l.memo.substring(0,100))}</div>`:''}
       </div>
       <div style="width:12px;display:flex;flex-direction:column;align-items:center;flex-shrink:0">
         <div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid var(--sf)"></div>

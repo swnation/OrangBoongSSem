@@ -1907,7 +1907,7 @@ function renderJournalLogs() {
         <div class="log-item-time">${l.datetime.slice(5,10)}${who?'<br><span style="color:'+(whoColors[who]||'var(--mu)')+'">'+((whoEmoji[who]||'')+' '+who)+'</span>':''}</div>
         <div class="log-item-body">
           ${(l.categories||[]).map(c=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(c)}</span>`).join('')}
-          <div style="font-size:.82rem;margin-top:4px;line-height:1.65">${esc(l.memo||'')}</div>
+          ${l.memo?`<div style="font-size:.82rem;margin-top:4px;line-height:1.65">${esc(l.memo)}</div>`:''}
         </div>
         <button class="log-del" onclick="editJournalEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
         <button class="log-del" onclick="deleteLogEntry(${realIdx})">✕</button>
