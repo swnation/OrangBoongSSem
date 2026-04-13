@@ -460,6 +460,10 @@ async function importQuickLog(id) {
     entry.synced = true;
     saveQuickLogs(logs);
     markSyncedOnCloud([id]);
+    // 약물→붕룩이 영양제 자동 체크
+    if(typeof syncMedsToBrkSuppl==='function'&&newEntry.meds?.length){
+      syncMedsToBrkSuppl(newEntry.meds,newEntry.datetime.slice(0,10),'orangi');
+    }
     showToast('✅ 반영 완료');
     renderView('log');
   } catch (e) { showToast('❌ 저장 실패: ' + e.message, 4000); }
@@ -1584,6 +1588,11 @@ async function saveLogEntry() {
       var _timeStr=timeUnknown?'00:00':(document.getElementById('log-time')?.value||'00:00');
       _saveOtherDomainData(date,_timeStr).catch(function(e){console.warn('Unified save:',e);});
       _autoDetectOutcomes();
+      // 약물→붕룩이 영양제 자동 체크
+      if(typeof syncMedsToBrkSuppl==='function'&&(entry.meds?.length)){
+        var _who=DC()?.user==='붕쌤'?'bung':'orangi';
+        syncMedsToBrkSuppl(entry.meds,date,_who);
+      }
       renderView('log');}
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   }

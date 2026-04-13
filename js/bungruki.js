@@ -718,6 +718,45 @@ function renderCrossSyncStatus(date, who) {
 var BRK_SUPPL_ORANGI = ['folicAcid','iron','vitaminD','multivitamin','magnesium'];
 var BRK_SUPPL_BUNG = ['arginine','coq10','silymarin','multivitamin'];
 
+// 약물명→영양제 키 매핑 (quick/메인앱 약물 기록 → 붕룩이 영양제 자동 체크)
+var _MED_TO_SUPPL_MAP = {
+  'magnesium':'magnesium','마그네슘':'magnesium','마그네숨':'magnesium','magnesium 350mg':'magnesium',
+  'folic acid':'folicAcid','엽산':'folicAcid',
+  '철분':'iron','iron':'iron',
+  'vitamin d':'vitaminD','비타민d':'vitaminD','비타민D':'vitaminD',
+  'multivitamin':'multivitamin','멀티비타민':'multivitamin',
+  'arginine':'arginine','아르기닌':'arginine',
+  'coq10':'coq10','코큐텐':'coq10',
+  'silymarin':'silymarin','실리마린':'silymarin',
+};
+
+// 약물 기록에서 영양제 자동 체크 (도메인/유저 자동 판별)
+function syncMedsToBrkSuppl(meds, date, who) {
+  if(!meds?.length) return;
+  var m=getBrkMaster(); if(!m) return;
+  if(!m.dailyChecks[date]) m.dailyChecks[date]={};
+  var whoKey=who||'orangi';
+  if(!m.dailyChecks[date][whoKey]) m.dailyChecks[date][whoKey]={};
+  var dayData=m.dailyChecks[date][whoKey];
+  var customs=_getBrkCustomSuppl(whoKey);
+  var changed=false;
+  meds.forEach(function(med){
+    var medLower=med.toLowerCase().trim();
+    // 1) 기본 매핑 테이블
+    var supplKey=_MED_TO_SUPPL_MAP[medLower]||_MED_TO_SUPPL_MAP[med];
+    // 2) 커스텀 영양제 이름 매칭 (부분 일치)
+    if(!supplKey){
+      var found=customs.find(function(c){ return medLower.includes(c.key)||medLower.includes(c.label.toLowerCase())||c.label.toLowerCase().includes(medLower); });
+      if(found) supplKey=found.key;
+    }
+    if(supplKey&&!dayData[supplKey]){
+      dayData[supplKey]=true;
+      changed=true;
+    }
+  });
+  if(changed) saveBrkMaster().catch(function(e){console.warn('syncMedsToBrkSuppl:',e);});
+}
+
 function _getBrkWhoData(m) {
   if (!m) m = getBrkMaster(); if (!m) return null;
   var selDate = _brkCheckDate || kstToday();
@@ -1227,12 +1266,12 @@ function _brkRemoveSuppl(key){
 }
 
 async function brkToggleCheck(key) {
-  var r = _getBrkWhoData(); if (!r) return;
+  var r = _getBrkWhoData(); if (!r) { showToast('⚠️ 데이터를 불러올 수 없습니다'); return; }
   r.whoData[key] = !r.whoData[key];
-  await saveBrkMaster();
-  // 교차 동기화: 건강관리 도메인에 영양제/운동 기록 반영
-  syncBrkToHealth(r.selDate, _brkCheckWho);
+  // 즉시 UI 피드백 후 저장
   renderView('meds');
+  try { await saveBrkMaster(); } catch(e) { console.warn('brkToggleCheck save:', e); showToast('⚠️ 저장 실패 (오프라인?)'); }
+  syncBrkToHealth(r.selDate, _brkCheckWho);
 }
 
 // 붕룩이 체크 → 건강관리 도메인 로그 동기화
