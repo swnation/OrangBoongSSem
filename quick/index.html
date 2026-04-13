@@ -1008,8 +1008,44 @@ async function saveEntry() {
 
   const ok = await cloudSave([entry]);
   await sendQuickNtfy(entry);
+  _autoDetectQuickOutcomes();
   showToast(ok ? '✅ 저장 완료 + ☁️ 붕쌤에게 전송됨' : '✅ 로컬 저장됨 (☁️ 업로드 실패)');
   renderForm();
+}
+
+// ── 자동 경과 감지 (시간대별 NRS + 증상 변화 기반) ──
+function _autoDetectQuickOutcomes() {
+  const now = kstNow();
+  const today = now.date;
+  const logs = getQuickEntries();
+  const todayLogs = logs.filter(l => l.datetime?.slice(0,10) === today && !l.datetime.includes('시간미상') && l.nrs >= 0);
+  if (todayLogs.length < 2) return;
+  todayLogs.sort((a,b) => a.datetime.localeCompare(b.datetime));
+  let changed = false;
+  for (let i = 0; i < todayLogs.length - 1; i++) {
+    const cur = todayLogs[i];
+    const next = todayLogs[i+1];
+    if (cur.outcome && cur.outcome.source !== 'auto') continue;
+    if (!(cur.meds?.length > 0 || cur.treatments?.length > 0)) continue;
+    const nrsDiff = next.nrs - cur.nrs;
+    const symBefore = (cur.symptoms || []).length;
+    const symAfter = (next.symptoms || []).length;
+    let rating, reason;
+    if (nrsDiff <= -2) { rating = 'better'; reason = `NRS ${cur.nrs}→${next.nrs} (${Math.abs(nrsDiff)} 감소)`; }
+    else if (nrsDiff === -1) { rating = symAfter < symBefore ? 'better' : 'same'; reason = `NRS ${cur.nrs}→${next.nrs}` + (symAfter < symBefore ? `, 증상 ${symBefore}→${symAfter}개` : ''); }
+    else if (nrsDiff === 0) { rating = symAfter < symBefore ? 'better' : 'same'; reason = `NRS 변화없음(${cur.nrs})` + (symAfter < symBefore ? `, 증상 ${symBefore}→${symAfter}개` : ''); }
+    else if (nrsDiff >= 2) { rating = 'worse'; reason = `NRS ${cur.nrs}→${next.nrs} (${nrsDiff} 증가)`; }
+    else { rating = 'same'; reason = `NRS ${cur.nrs}→${next.nrs}`; }
+    const timeDiff = Math.round((new Date(next.datetime) - new Date(cur.datetime)) / 60000);
+    reason += ` · ${timeDiff}분 후`;
+    const allLogs = getQuickLogs();
+    const realEntry = allLogs.find(l => l.id === cur.id);
+    if (realEntry) {
+      realEntry.outcome = { rating, source: 'auto', reason, ratedAt: new Date().toISOString() };
+      changed = true;
+    }
+    if (changed) saveQuickLogs(allLogs);
+  }
 }
 
 // ── ntfy 알림 (빠른 기록 → 붕쌤 즉시 알림) ──
@@ -1324,8 +1360,9 @@ function renderList() {
       ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
       ...(l.triggers||[]).map(t => `<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`),
     ].join('');
+    const _oRating=l.outcome?.rating;const _oAuto=l.outcome?.source==='auto';
     const outcomeTag = l.outcome
-      ? `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:${l.outcome.rating==='better'?'#dcfce7':l.outcome.rating==='same'?'#fef3c7':l.outcome.rating==='unknown'?'#f3f4f6':'#fee2e2'};color:${l.outcome.rating==='better'?'#15803d':l.outcome.rating==='same'?'#92400e':l.outcome.rating==='unknown'?'#4b5563':'#b91c1c'}">${l.outcome.rating==='better'?'🟢호전':l.outcome.rating==='same'?'🟡비슷':l.outcome.rating==='unknown'?'🤷모름':'🔴악화'}</span>`
+      ? `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:${_oRating==='better'?'#dcfce7':_oRating==='same'?'#fef3c7':_oRating==='unknown'?'#f3f4f6':'#fee2e2'};color:${_oRating==='better'?'#15803d':_oRating==='same'?'#92400e':_oRating==='unknown'?'#4b5563':'#b91c1c'}" title="${esc(l.outcome.reason||'')}">${_oRating==='better'?'🟢호전':_oRating==='same'?'🟡비슷':_oRating==='unknown'?'🤷모름':'🔴악화'}${_oAuto?' <span style="font-size:.5rem;opacity:.7">자동</span>':''}</span>`
       : `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`;
     const nrsHtml = l.nrs >= 0
       ? `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`

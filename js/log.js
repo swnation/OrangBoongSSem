@@ -922,7 +922,7 @@ function renderLogList() {
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
             ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:var(--tag-dc-bg);color:var(--tag-dc);font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
             ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'var(--ok-bg)':'var(--err-bg)'};color:${v?'var(--ok)':'var(--err)'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
-            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
+            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="${esc(l.outcome.reason||'클릭하여 경과 수정')}">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}${l.outcome.source==='auto'?' <span style="font-size:.5rem;opacity:.7">자동</span>':''}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px;white-space:pre-line">${esc(l.memo)}</div>`:''}
@@ -990,7 +990,7 @@ function renderLogListInner() {
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`).join('')}
             ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}</span>`).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
-            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="클릭하여 경과 수정">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}</span>`
+            ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="${esc(l.outcome.reason||'클릭하여 경과 수정')}">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}${l.outcome.source==='auto'?' <span style="font-size:.5rem;opacity:.7">자동</span>':''}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
           </div>
           ${l.memo?`<div style="font-size:.78rem;color:var(--mu);margin-top:3px;white-space:pre-line">${esc(l.memo)}</div>`:''}
@@ -1436,6 +1436,50 @@ async function updateOutcome(logIdx,rating) {
   catch(e){showToast('⚠️ 저장 실패: '+e.message);}
 }
 
+// ── 자동 경과 감지 (시간대별 NRS + 증상 변화 기반) ──
+function _autoDetectOutcomes() {
+  if(S.currentDomain!=='orangi-migraine') return;
+  const ds=D();if(!ds.logData?.length) return;
+  const today=kstToday();
+  // 오늘 기록 중 시간 정보가 있는 것만 (시간미상 제외)
+  const todayLogs=ds.logData.filter(l=>l.datetime?.slice(0,10)===today&&!l.datetime.includes('시간미상')&&l.nrs>=0);
+  if(todayLogs.length<2) return;
+  todayLogs.sort((a,b)=>a.datetime.localeCompare(b.datetime));
+  let changed=false;
+  for(let i=0;i<todayLogs.length-1;i++){
+    const cur=todayLogs[i];
+    const next=todayLogs[i+1];
+    // 수동 경과가 이미 있으면 건드리지 않음
+    if(cur.outcome&&cur.outcome.source!=='auto') continue;
+    // 약/치료가 있는 기록에만 자동 경과 부여
+    if(!(cur.meds?.length>0||cur.treatments?.length>0)) continue;
+    const nrsDiff=next.nrs-cur.nrs;
+    const symBefore=(cur.symptoms||[]).length;
+    const symAfter=(next.symptoms||[]).length;
+    let rating,reason;
+    if(nrsDiff<=-2){rating='better';reason=`NRS ${cur.nrs}→${next.nrs} (${Math.abs(nrsDiff)} 감소)`;}
+    else if(nrsDiff===-1){
+      rating=symAfter<symBefore?'better':'same';
+      reason=`NRS ${cur.nrs}→${next.nrs}`+(symAfter<symBefore?`, 증상 ${symBefore}→${symAfter}개`:'');
+    }
+    else if(nrsDiff===0){
+      rating=symAfter<symBefore?'better':'same';
+      reason=`NRS 변화 없음 (${cur.nrs})`+(symAfter<symBefore?`, 증상 ${symBefore}→${symAfter}개 감소`:'');
+    }
+    else if(nrsDiff>=2){rating='worse';reason=`NRS ${cur.nrs}→${next.nrs} (${nrsDiff} 증가)`;}
+    else {rating='same';reason=`NRS ${cur.nrs}→${next.nrs}`;}
+    const timeDiff=Math.round((new Date(next.datetime)-new Date(cur.datetime))/60000);
+    reason+=` · ${timeDiff}분 후`;
+    // 실제 logData 엔트리를 찾아서 업데이트
+    const realEntry=ds.logData.find(l=>l.id===cur.id);
+    if(realEntry){
+      realEntry.outcome={rating,source:'auto',reason,ratedAt:new Date().toISOString()};
+      changed=true;
+    }
+  }
+  if(changed) saveLogData().catch(e=>console.warn('Auto outcome save:',e));
+}
+
 // ── 커스텀 트리거 추가 ──
 function addCustomTrigger() {
   const el=document.getElementById('trigger-other');
@@ -1539,6 +1583,7 @@ async function saveLogEntry() {
     try{await saveLogData();_markQuickSynced();sendLogNotification(entry);showToast('✅ 기록 저장됨');_clearLogAutoSave();
       var _timeStr=timeUnknown?'00:00':(document.getElementById('log-time')?.value||'00:00');
       _saveOtherDomainData(date,_timeStr).catch(function(e){console.warn('Unified save:',e);});
+      _autoDetectOutcomes();
       renderView('log');}
     catch(e){showToast('❌ 저장 실패: '+e.message,4000);}
   }
