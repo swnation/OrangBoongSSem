@@ -163,7 +163,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
       <div class="settings-note">기록 저장 시 붕쌤에게 즉시 알림, 오랑이에게 경과 확인 알림을 보냅니다.</div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
         <span style="font-size:.72rem;color:var(--mu)">기본 경과 알림:</span>
-        <input type="number" class="settings-input" id="ntfy-delay-input" style="width:60px;text-align:center" min="10" max="480" value="60"
+        <input type="number" class="settings-input" id="ntfy-delay-input" style="width:60px;text-align:center" min="10" max="480" value="120"
           onchange="localStorage.setItem('om_outcome_delay',this.value);syncNtfyConfig()">
         <span style="font-size:.72rem;color:var(--mu)">분 후</span>
       </div>
@@ -296,7 +296,7 @@ function applyQuickConfig(){
 function syncNtfyConfig(){
   const nb=localStorage.getItem('om_ntfy_bung')||'';
   const no=localStorage.getItem('om_ntfy_orangi')||'';
-  const od=localStorage.getItem('om_outcome_delay')||'60';
+  const od=localStorage.getItem('om_outcome_delay')||'120';
   const md=localStorage.getItem('om_med_reminder_delay')||'30';
   const entry=saveQuickConfig({ntfy_bung:nb,ntfy_orangi:no,outcome_delay:od,med_reminder_delay:md});
   cloudSave([entry]);
@@ -868,10 +868,10 @@ function renderForm(entry) {
 
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:8px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:8px">
       <span style="font-size:.72rem;color:var(--mu)">⏱ 경과 알림</span>
-      <select id="q-outcome-delay" style="border:1px solid var(--bd);border-radius:6px;padding:3px 8px;font-size:.75rem;background:var(--sf);color:var(--ink);font-family:inherit">
+      <select id="q-outcome-delay" onchange="_onOutcomeDelayChange(this.value)" style="border:1px solid var(--bd);border-radius:6px;padding:3px 8px;font-size:.75rem;background:var(--sf);color:var(--ink);font-family:inherit">
         <option value="0">안 보냄</option>
         <option value="30">30분 후</option>
-        <option value="60" selected>1시간 후</option>
+        <option value="60">1시간 후</option>
         <option value="90">1시간 30분</option>
         <option value="120">2시간 후</option>
         <option value="180">3시간 후</option>
@@ -886,10 +886,10 @@ function renderForm(entry) {
   `;
   renderRecentQuickLogs();
   renderHeadDiagram();
-  // 기본 알림 시간 반영
-  const defDelay=localStorage.getItem('om_outcome_delay')||'60';
+  // 기본 알림 시간 반영 (기본 2시간)
+  const defDelay=localStorage.getItem('om_outcome_delay')||'120';
   const delSel=document.getElementById('q-outcome-delay');
-  if(delSel){if([...delSel.options].some(o=>o.value===defDelay))delSel.value=defDelay;else delSel.value='60';}
+  if(delSel){if([...delSel.options].some(o=>o.value===defDelay))delSel.value=defDelay;else delSel.value='120';}
   // Sync diagram with pre-selected chips (edit mode)
   setTimeout(()=>syncHeadDiagram(),50);
 }
@@ -1033,7 +1033,7 @@ function _autoDetectQuickOutcomes() {
     let rating, reason;
     if (nrsDiff <= -2) { rating = 'better'; reason = `NRS ${cur.nrs}→${next.nrs} (${Math.abs(nrsDiff)} 감소)`; }
     else if (nrsDiff === -1) { rating = symAfter < symBefore ? 'better' : 'same'; reason = `NRS ${cur.nrs}→${next.nrs}` + (symAfter < symBefore ? `, 증상 ${symBefore}→${symAfter}개` : ''); }
-    else if (nrsDiff === 0) { rating = symAfter < symBefore ? 'better' : 'same'; reason = `NRS 변화없음(${cur.nrs})` + (symAfter < symBefore ? `, 증상 ${symBefore}→${symAfter}개` : ''); }
+    else if (nrsDiff === 0) { rating = 'same'; reason = `NRS 변화없음(${cur.nrs})` + (symAfter < symBefore ? `, 증상 ${symBefore}→${symAfter}개 감소` : ''); }
     else if (nrsDiff >= 2) { rating = 'worse'; reason = `NRS ${cur.nrs}→${next.nrs} (${nrsDiff} 증가)`; }
     else { rating = 'same'; reason = `NRS ${cur.nrs}→${next.nrs}`; }
     const timeDiff = Math.round((new Date(next.datetime) - new Date(cur.datetime)) / 60000);
@@ -1062,7 +1062,7 @@ async function sendQuickNtfy(entry) {
     try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
   }
   // 경과 알림 예약 (클라이언트 타이머 — 새 기록 시 이전 예약 자동 취소)
-  const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||'0');
+  const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||localStorage.getItem('om_outcome_delay')||'120');
   if(outcomeDelay>0) scheduleOutcomeNtfy(entry,outcomeDelay);
   // 약물 미입력 시 복용 확인 알림 (서버사이드, 설정값 사용)
   const medDelay=parseInt(localStorage.getItem('om_med_reminder_delay')||'30');
@@ -1114,8 +1114,20 @@ async function _sendServerScheduledNtfy(entry,delayMin){
 }
 
 function scheduleOutcomeNtfy(entry,customDelayMin){
-  const delayMin=customDelayMin||parseInt(localStorage.getItem('om_outcome_delay')||'60');
+  const delayMin=customDelayMin||parseInt(localStorage.getItem('om_outcome_delay')||'120');
   _setOutcomeTimer(String(entry.id),delayMin);
+}
+
+// 경과 알림 시간 변경 시 기본값 고정 여부 확인
+function _onOutcomeDelayChange(val){
+  const current=localStorage.getItem('om_outcome_delay')||'120';
+  if(val===current) return;
+  const labels={'0':'안 보냄','30':'30분','60':'1시간','90':'1시간 30분','120':'2시간','180':'3시간'};
+  if(confirm('앞으로도 경과 알림을 '+(labels[val]||val+'분')+' 후로 고정할까요?\n\n확인 → 기본값 변경\n취소 → 이번만 적용')){
+    localStorage.setItem('om_outcome_delay',val);
+    syncNtfyConfig();
+    showToast('⏱ 기본 경과 알림: '+(labels[val]||val+'분'));
+  }
 }
 
 function rescheduleOutcome(entryId,delayMin){
@@ -1498,7 +1510,7 @@ function toggleSettings() {
       ? '<span style="color:#2d6a4f">☁️ 동기화 활성</span>' : '<span style="color:#c03030">동기화 꺼짐</span>';
     document.getElementById('ntfy-bung-input').value = localStorage.getItem('om_ntfy_bung')||'';
     document.getElementById('ntfy-orangi-input').value = localStorage.getItem('om_ntfy_orangi')||'';
-    document.getElementById('ntfy-delay-input').value = localStorage.getItem('om_outcome_delay')||'60';
+    document.getElementById('ntfy-delay-input').value = localStorage.getItem('om_outcome_delay')||'120';
     document.getElementById('ntfy-med-delay-input').value = localStorage.getItem('om_med_reminder_delay')||'30';
   }
 }

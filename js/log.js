@@ -1463,7 +1463,7 @@ function _autoDetectOutcomes() {
       reason=`NRS ${cur.nrs}→${next.nrs}`+(symAfter<symBefore?`, 증상 ${symBefore}→${symAfter}개`:'');
     }
     else if(nrsDiff===0){
-      rating=symAfter<symBefore?'better':'same';
+      rating='same';
       reason=`NRS 변화 없음 (${cur.nrs})`+(symAfter<symBefore?`, 증상 ${symBefore}→${symAfter}개 감소`:'');
     }
     else if(nrsDiff>=2){rating='worse';reason=`NRS ${cur.nrs}→${next.nrs} (${nrsDiff} 증가)`;}
