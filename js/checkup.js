@@ -2105,7 +2105,8 @@ function _showCheckupAnalysisResults(allResults) {
 // ARCHIVE UI RENDERING
 // ═══════════════════════════════════════════════════════════════
 
-var _checkupViewTab = 'timeline'; // timeline | trends | categories
+var _checkupViewTab = 'timeline'; // timeline | trends | categories | search
+var _ckSearchQuery = '';
 
 function renderCheckupArchive() {
   const who = DC().user;
@@ -2118,10 +2119,11 @@ function renderCheckupArchive() {
 
   // 탭 바
   const tabs = [
-    { id: 'timeline', label: '📅 타임라인', desc: '날짜순 검진 기록' },
-    { id: 'institution', label: '🏥 기관별', desc: '기관별 검진 정리' },
-    { id: 'trends', label: '📈 추세', desc: '항목별 시계열 차트' },
-    { id: 'categories', label: '🏷 카테고리', desc: '검사 분류별 보기' },
+    { id: 'timeline', label: '📅 날짜순' },
+    { id: 'institution', label: '🏥 기관별' },
+    { id: 'trends', label: '📈 추세' },
+    { id: 'categories', label: '🏷 분류별' },
+    { id: 'search', label: '🔍 검색' },
   ];
   const tabBar = tabs.map(t => `<button onclick="_checkupViewTab='${t.id}';renderView('meds')"
     style="padding:5px 12px;font-size:.72rem;border:1.5px solid ${_checkupViewTab === t.id ? 'var(--ac)' : 'var(--bd)'};border-radius:6px;
@@ -2164,6 +2166,7 @@ function renderCheckupArchive() {
   else if (_checkupViewTab === 'institution') content = _renderCheckupByInstitution(allCheckups);
   else if (_checkupViewTab === 'trends') content = _renderCheckupTrends(who, allCheckups);
   else if (_checkupViewTab === 'categories') content = _renderCheckupCategories(who, allCheckups);
+  else if (_checkupViewTab === 'search') content = _renderCheckupSearch(who, allCheckups);
 
   // 약물 안전 경고
   const drugAlertsHtml = renderDrugAlerts();
@@ -2525,6 +2528,85 @@ function _renderCheckupCategories(who, checkups) {
       + (totalAbn ? '<span style="font-size:.55rem;padding:1px 6px;border-radius:3px;background:#fee2e2;color:#dc2626;font-weight:600">⚠ 이상 ' + totalAbn + '</span>' : '<span style="font-size:.55rem;color:#10b981">✅ 정상</span>')
       + '</div>'
       + subcatHtml + '</div>';
+  }).join('');
+}
+
+// 검색 뷰 — 특정 검사항목 시계열 검색
+function _renderCheckupSearch(who, checkups) {
+  const searchBox=`<div style="margin-bottom:10px">
+    <input type="text" id="ck-search-input" value="${esc(_ckSearchQuery)}" placeholder="검사 항목명 검색 (예: 콜레스테롤, TSH, 혈색소...)"
+      oninput="_ckSearchQuery=this.value;_renderSearchResults()"
+      style="width:100%;padding:8px 12px;border:1.5px solid var(--bd);border-radius:8px;font-family:var(--font);font-size:.82rem;outline:none;background:var(--sf);color:var(--ink)">
+  </div>
+  <div id="ck-search-results"></div>`;
+  // 초기 렌더 후 검색 결과 표시
+  setTimeout(()=>_renderSearchResults(),50);
+  return searchBox;
+}
+
+function _renderSearchResults(){
+  const el=document.getElementById('ck-search-results');if(!el) return;
+  const q=(_ckSearchQuery||'').trim().toLowerCase();
+  if(!q){
+    // 전체 항목 빠른 네비 (대분류별 칩)
+    const majorCats=Object.entries(_CHECKUP_MAJOR_CATEGORIES);
+    el.innerHTML=`<div style="font-size:.72rem;color:var(--mu);margin-bottom:8px">검사항목을 검색하거나 아래 분류를 선택하세요</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${majorCats.map(([k,mc])=>
+        `<button onclick="_ckSearchQuery='@${k}';document.getElementById('ck-search-input').value='@${k}';_renderSearchResults()"
+          style="padding:4px 10px;font-size:.72rem;border:1.5px solid var(--bd);border-radius:6px;background:var(--sf2);color:var(--ink);cursor:pointer;font-family:var(--font)">${mc.icon||''} ${mc.name}</button>`
+      ).join('')}</div>`;
+    return;
+  }
+  const who=DC().user;
+  const allCheckups=getAllHealthCheckups(who,true,{includePregnancy:false});
+  // 대분류 필터 (@키워드)
+  const isMajorFilter=q.startsWith('@');
+  const codeMap={};
+  allCheckups.forEach(c=>{
+    (c.results||[]).forEach(r=>{
+      if(!r.stdCode) return;
+      const match=isMajorFilter
+        ? (_CHECKUP_STD_TESTS[r.stdCode]?.category&&_CHECKUP_CATEGORIES[_CHECKUP_STD_TESTS[r.stdCode].category]?.major===q.slice(1))
+        : (r.displayName?.toLowerCase().includes(q)||r.stdCode?.toLowerCase().includes(q)||(r.rawName||'').toLowerCase().includes(q));
+      if(!match) return;
+      if(!codeMap[r.stdCode])codeMap[r.stdCode]={displayName:r.displayName,unit:r.unit,ref:r.ref,category:r.category,points:[]};
+      codeMap[r.stdCode].points.push({date:c.date,value:r.value,status:r.status,institution:c.institution});
+    });
+  });
+  const results=Object.entries(codeMap).sort((a,b)=>{
+    const oa=_CHECKUP_CATEGORIES[a[1].category]?.order||99;
+    const ob=_CHECKUP_CATEGORIES[b[1].category]?.order||99;
+    return oa-ob;
+  });
+  if(!results.length){el.innerHTML='<div style="font-size:.72rem;color:var(--mu);text-align:center;padding:16px">검색 결과가 없습니다.</div>';return;}
+  el.innerHTML=results.map(([code,d])=>{
+    const pts=d.points.sort((a,b)=>a.date.localeCompare(b.date));
+    const latest=pts[pts.length-1];
+    const latestColor=_statusColor(latest.status);
+    const catDef=_CHECKUP_CATEGORIES[d.category]||_CHECKUP_CATEGORIES.other;
+    const refStr=d.ref?(d.ref.low+'-'+d.ref.high):'-';
+    // 시계열 표
+    const rows=pts.map(p=>{
+      const c=_statusColor(p.status);
+      return `<div style="display:flex;gap:6px;font-size:.65rem;padding:2px 0;border-bottom:1px solid var(--sf)">
+        <span style="color:var(--mu);min-width:60px;font-family:var(--mono)">${p.date.slice(2)}</span>
+        <span style="font-weight:600;color:${c};min-width:50px;text-align:right;font-family:var(--mono)">${p.value}</span>
+        <span style="color:var(--mu2);min-width:30px">${esc(d.unit||'')}</span>
+        <span style="color:var(--mu2);flex:1">${esc(p.institution||'')}</span>
+      </div>`;
+    }).join('');
+    return `<div style="padding:8px 10px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;margin-bottom:5px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:.6rem;color:var(--mu)">${catDef.icon}</span>
+        <span style="font-size:.78rem;font-weight:600">${esc(d.displayName)}</span>
+        <span style="font-size:.58rem;color:var(--mu2)">${code}</span>
+        <span style="font-size:.7rem;font-weight:700;color:${latestColor};margin-left:auto;font-family:var(--mono)">${latest.value}</span>
+        <span style="font-size:.58rem;color:var(--mu)">${esc(d.unit||'')}</span>
+        <span style="font-size:.52rem;color:var(--mu2)">참고:${refStr}</span>
+      </div>
+      <div style="font-size:.6rem;color:var(--mu);cursor:pointer;margin-top:3px" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">▸ 시계열 ${pts.length}건</div>
+      <div style="display:none;margin-top:3px">${rows}</div>
+    </div>`;
   }).join('');
 }
 

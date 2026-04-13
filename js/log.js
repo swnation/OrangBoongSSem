@@ -1024,10 +1024,26 @@ function toggleAllLogDates() {
   if(el) el.innerHTML=renderLogListInner();
 }
 
-// timeline 상세 보기
+// timeline 상세 보기 (같은 시간 엔트리 자동 병합)
 function _showTimeline(idx){
   const entry=D()?.logData?.[idx];if(!entry?.timeline)return;
-  const html=entry.timeline.map(t=>{
+  // 같은 시간대 엔트리 병합하여 표시
+  const tg={};
+  entry.timeline.forEach(t=>{
+    const k=t.time||'--:--';
+    if(!tg[k]){tg[k]={...t,sites:[...(t.sites||[])],symptoms:[...(t.symptoms||[])],meds:[...(t.meds||[])],treatments:[...(t.treatments||[])],triggers:[...(t.triggers||[])]};return;}
+    const m=tg[k];
+    if(t.nrs>=0)m.nrs=t.nrs;
+    if(t.mood)m.mood=t.mood;
+    m.sites=[...new Set([...m.sites,...(t.sites||[])])];
+    m.meds=[...new Set([...m.meds,...(t.meds||[])])];
+    m.treatments=[...new Set([...m.treatments,...(t.treatments||[])])];
+    m.triggers=[...new Set([...m.triggers,...(t.triggers||[])])];
+    if(t.outcome)m.outcome=t.outcome;
+    if(t.memo&&!m.memo?.includes(t.memo))m.memo=(m.memo?m.memo+'; ':'')+t.memo;
+  });
+  const deduped=Object.values(tg).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+  const html=deduped.map(t=>{
     const parts=[`<b>${t.time||'--:--'}</b>`];
     if(t.nrs>=0)parts.push(`${_scoreLabel()}:${t.nrs}`);
     if(t.mood)parts.push(t.mood);
@@ -1039,7 +1055,8 @@ function _showTimeline(idx){
     if(t.memo)parts.push('"'+esc(t.memo)+'"');
     return `<div style="font-size:.72rem;padding:4px 0;border-bottom:1px dotted var(--bd)">${parts.join(' · ')}</div>`;
   }).join('');
-  showConfirmModal('📊 Timeline — '+entry.datetime?.slice(0,10),
+  const countNote=deduped.length<entry.timeline.length?` <span style="font-size:.6rem;color:var(--mu)">(중복 ${entry.timeline.length-deduped.length}건 병합)</span>`:'';
+  showConfirmModal('📊 Timeline — '+entry.datetime?.slice(0,10)+countNote,
     `<div style="max-height:300px;overflow-y:auto">${html}</div>`,
     [{label:'닫기',action:closeConfirmModal,primary:true}]);
 }
@@ -1097,8 +1114,8 @@ function mergeDayEntries(date) {
   const entries=ds.logData.filter(l=>l.datetime?.slice(0,10)===date);
   if(entries.length<2){showToast('병합할 기록이 없습니다.');return;}
 
-  // timeline 생성 — 원본 데이터 완전 보존
-  const timeline=entries.map(e=>({
+  // timeline 생성 — 같은 시간 엔트리 병합 (중복 제거)
+  const _rawTimeline=entries.map(e=>({
     time:e.datetime?.slice(11,16)||'',
     nrs:e.nrs,
     mood:e.mood||undefined,
@@ -1113,6 +1130,35 @@ function mergeDayEntries(date) {
     memo:e.memo||'',
     weather:e.weather?{...e.weather}:undefined,
   }));
+  // 같은 시간대 엔트리 병합
+  const _timeGroups={};
+  _rawTimeline.forEach(t=>{
+    const k=t.time||'--:--';
+    if(!_timeGroups[k])_timeGroups[k]=[];
+    _timeGroups[k].push(t);
+  });
+  const timeline=Object.entries(_timeGroups).sort((a,b)=>a[0].localeCompare(b[0])).map(([time,group])=>{
+    if(group.length===1) return group[0];
+    // 합집합 병합
+    const merged={time};
+    const nrsVals=group.filter(t=>t.nrs>=0).map(t=>t.nrs);
+    merged.nrs=nrsVals.length?nrsVals[nrsVals.length-1]:(group[0].nrs);
+    merged.mood=group.filter(t=>t.mood).pop()?.mood;
+    merged.sites=[...new Set(group.flatMap(t=>t.sites||[]))];
+    merged.symptoms=[...new Set(group.flatMap(t=>t.symptoms||[]))];
+    merged.meds=[...new Set(group.flatMap(t=>t.meds||[]))];
+    merged.treatments=[...new Set(group.flatMap(t=>t.treatments||[]))];
+    merged.triggers=[...new Set(group.flatMap(t=>t.triggers||[]))];
+    const mc={};group.forEach(t=>{if(t.medCheck)Object.assign(mc,t.medCheck);});
+    if(Object.keys(mc).length)merged.medCheck=mc;
+    const dc={};group.forEach(t=>{if(t.dailyChecks)Object.assign(dc,t.dailyChecks);});
+    if(Object.keys(dc).length)merged.dailyChecks=dc;
+    merged.outcome=group.filter(t=>t.outcome).pop()?.outcome;
+    const memos=group.map(t=>t.memo).filter(Boolean);
+    merged.memo=[...new Set(memos)].join('; ');
+    merged.weather=group.filter(t=>t.weather).pop()?.weather;
+    return merged;
+  });
 
   // 병합 엔트리 생성
   const merged={...entries[entries.length-1]};
