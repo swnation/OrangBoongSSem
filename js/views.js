@@ -123,7 +123,7 @@ function renderView(view) {
   const area=document.getElementById('content');
   if(view==='home') area.innerHTML=renderHome();
   else if(view==='session') area.innerHTML=renderSession();
-  else if(view==='log') { try{area.innerHTML=renderLog();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 로그 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;} if(typeof _updateUndoUI==='function')_updateUndoUI(); }
+  else if(view==='log') { try{area.innerHTML=renderLog();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 로그 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;} if(typeof _updateUndoUI==='function')_updateUndoUI(); if(typeof _prefillDailyChecksFromExisting==='function'){const di=document.getElementById('log-date');if(di)_prefillDailyChecksFromExisting(di.value);} }
   else if(view==='history') area.innerHTML=renderHistory();
   else if(view==='templates') area.innerHTML=renderTemplates();
   else if(view==='meds') { const _renderMedsSafe=()=>{try{area.innerHTML=renderMedsView();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 투약 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;}}; _renderMedsSafe(); loadAllUserDomains().then(()=>{if(S.currentView==='meds')_renderMedsSafe();}); }

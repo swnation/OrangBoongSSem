@@ -227,8 +227,38 @@ async function _syncReloadCurrentMonth(){
     const files=await driveSearch(logFileName(ds.logMonth),ds.folderId);
     if(files.length>0){ds.logFileId=files[0].id;const d=await driveRead(ds.logFileId);ds.logData=Array.isArray(d)?d:[];}
     else{ds.logData=[];ds.logFileId=null;}
-    if(document.querySelector('.log-month')||document.querySelector('.cal-grid')) renderView(S.currentView||'log');
+    // 로그 폼이 열려있으면 medCheck+dailyChecks만 갱신 (폼 입력 보존)
+    const mcContainer=document.getElementById('med-check-container');
+    if(mcContainer){
+      const dateInput=document.getElementById('log-date');
+      if(dateInput){
+        const lc=DC().logConfig;
+        mcContainer.innerHTML=lc.moodMode?renderDailyMedCheck(dateInput.value):renderConditionMedSelector(dateInput.value);
+        _prefillDailyChecksFromExisting(dateInput.value);
+      }
+    } else if(document.querySelector('.log-month')||document.querySelector('.cal-grid')){
+      renderView(S.currentView||'log');
+    }
   }catch(e){console.error('Sync reload:',e);}
+}
+
+// 오늘 기존 엔트리(데일리체크앱 등)의 dailyChecks를 새 기록 폼에 자동 반영
+function _prefillDailyChecksFromExisting(date) {
+  if(!date) return;
+  // 편집 모드면 이미 editLogEntry에서 복원되므로 스킵
+  const editIdx=document.getElementById('log-edit-idx');
+  if(editIdx&&editIdx.value!=='-1') return;
+  const ds=D(); if(!ds?.logData) return;
+  const todayEntries=(ds.logData||[]).filter(l=>l.datetime?.slice(0,10)===date);
+  if(!todayEntries.length) return;
+  // 가장 최근 엔트리의 dailyChecks 값을 적용
+  const latest=[...todayEntries].reverse().find(l=>l.dailyChecks&&Object.keys(l.dailyChecks).length);
+  if(latest?.dailyChecks) {
+    Object.entries(latest.dailyChecks).forEach(([item,val])=>{
+      const chip=document.querySelector(`#dc-${item} .log-chip[data-val="${val}"]`);
+      if(chip&&!chip.classList.contains('sel')) { chip.classList.add('sel','sel-sym'); }
+    });
+  }
 }
 
 function renderQuickLogBanner() {
@@ -1590,6 +1620,9 @@ function refreshMedCheckForDate(date) {
   const container=document.getElementById('med-check-container');
   if(!container) return;
   container.innerHTML=lc.moodMode?renderDailyMedCheck(date):renderConditionMedSelector(date);
+  // dailyChecks도 날짜에 맞게 갱신 (기존 선택 초기화 후 재적용)
+  document.querySelectorAll('[id^="dc-"] .log-chip.sel').forEach(c=>c.classList.remove('sel','sel-sym'));
+  _prefillDailyChecksFromExisting(date);
 }
 
 // ── Mood selector (마음관리용) ──
