@@ -59,12 +59,12 @@ ${_CONCISE}`;
 }
 
 // Non-streaming fallback (used by summary, price update, etc.)
-async function callAI(aiId, system, user) {
-  return await callAIStream(aiId, system, user, ()=>{});
+async function callAI(aiId, system, user, source) {
+  return await callAIStream(aiId, system, user, ()=>{}, undefined, source);
 }
 
 // Streaming AI call — onChunk(accumulatedText) called on each chunk
-async function callAIStream(aiId, system, user, onChunk, signal) {
+async function callAIStream(aiId, system, user, onChunk, signal, source) {
   const key=S.keys[aiId]; const model=S.models[aiId]||DEFAULT_MODELS[aiId];
   if(!key) throw new Error(`${AI_DEFS[aiId]?.name} API 키 미설정. 🔑 설정에서 입력하세요.`);
 
@@ -88,7 +88,7 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
         }catch(e){}
       }
     }
-    recordUsage(aiId,model,inT,outT);
+    recordUsage(aiId,model,inT,outT,source);
     return text;
   }
 
@@ -114,7 +114,7 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
     }
     // 남은 버퍼 처리
     if(buf.trim()){for(const line of buf.split('\n')){if(!line.startsWith('data: ')||line==='data: [DONE]')continue;try{const ev=JSON.parse(line.slice(6));if(ev.usage){inT=ev.usage.prompt_tokens||0;outT=ev.usage.completion_tokens||0;}}catch(e){}}}
-    recordUsage(aiId,model,inT,outT);
+    recordUsage(aiId,model,inT,outT,source);
     return text;
   }
 
@@ -139,7 +139,7 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
         }catch(e){}
       }
     }
-    recordUsage(aiId,model,inT,outT);
+    recordUsage(aiId,model,inT,outT,source);
     return text;
   }
 
@@ -165,7 +165,7 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
     }
     // 남은 버퍼 처리
     if(buf.trim()){for(const line of buf.split('\n')){if(!line.startsWith('data: ')||line==='data: [DONE]')continue;try{const ev=JSON.parse(line.slice(6));if(ev.usage){inT=ev.usage.prompt_tokens||0;outT=ev.usage.completion_tokens||0;}}catch(e){}}}
-    recordUsage(aiId,model,inT,outT);
+    recordUsage(aiId,model,inT,outT,source);
     return text;
   }
   // Grok (xAI — OpenAI 호환)
@@ -203,7 +203,7 @@ async function callAIStream(aiId, system, user, onChunk, signal) {
     }
     // Fallback: usage가 0이면 텍스트 길이로 추정 (Grok 4 등 usage 미반환 시)
     if(!inT&&!outT&&text.length>0){inT=Math.round((system.length+user.length)/4);outT=Math.round(text.length/4);}
-    recordUsage(aiId,model,inT,outT);
+    recordUsage(aiId,model,inT,outT,source);
     return text;
   }
 

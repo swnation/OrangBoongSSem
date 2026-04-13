@@ -418,12 +418,16 @@ const KEY_INFO = {
 };
 
 const DEFAULT_PRICE_TABLE = {
+  // GPT (2026-04 verified)
   'gpt-5.4':{in:2.50,out:15.00},
   'gpt-5.4-mini':{in:0.75,out:4.50},
   'gpt-5.4-nano':{in:0.20,out:1.25},
   'gpt-5.3-chat-latest':{in:2.50,out:10.00},
   'gpt-4.1':{in:2.00,out:8.00},
   'gpt-4.1-mini':{in:0.40,out:1.60},
+  'gpt-4.1-nano':{in:0.05,out:0.20},
+  'gpt-4o':{in:2.50,out:10.00},
+  'gpt-4o-mini':{in:0.15,out:0.60},
   'o3':{in:2.00,out:8.00},
   'o3-mini':{in:1.10,out:4.40},
   'o4-mini':{in:0.55,out:2.20},

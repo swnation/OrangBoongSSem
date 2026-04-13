@@ -444,7 +444,7 @@ async function reorganizeCtx() {
     const raw=await callAIStream(aiId,system,user,(chunk)=>{
       chunkLen=chunk.length;
       if(progressText) progressText.textContent=`${AI_DEFS[aiId].name} 생성 중... ${chunkLen}자`;
-    },ac.signal);
+    },ac.signal,'insight');
 
     if(progressText) progressText.textContent='결과 파싱 중...';
     const jsonMatch=raw.match(/\{[\s\S]*\}/);
@@ -548,7 +548,7 @@ async function upgradeCtxFromRecent() {
     const raw=await callAIStream(aiId,system,userParts,(chunk)=>{
       chunkLen=chunk.length;
       if(progressText) progressText.textContent=`${AI_DEFS[aiId].name} 생성 중... ${chunkLen}자`;
-    },ac.signal);
+    },ac.signal,'insight');
 
     if(progressText) progressText.textContent='결과 파싱 중...';
     const jsonMatch=raw.match(/\{[\s\S]*\}/);

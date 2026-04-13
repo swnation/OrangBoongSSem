@@ -1,0 +1,24 @@
+diff --git a/js/checkup.js b/js/checkup.js
+index ffbb977..f2a3a11 100644
+--- a/js/checkup.js
++++ b/js/checkup.js
+@@ -686,7 +686,7 @@
+   try {
+-    const response = await callAI(selectedAi, '의료 검사 표준화 전문가. JSON만 응답.', prompt);
++    const response = await callAI(selectedAi, '의료 검사 표준화 전문가. JSON만 응답.', prompt, 'lab-normalize');
+     const jsonMatch = response.match(/\[[\s\S]*\]/);
+@@ -1149,7 +1149,7 @@
+-  const result = await callAI(aiId, '의료 검사 데이터 표준화 전문가', prompt);
++  const result = await callAI(aiId, '의료 검사 데이터 표준화 전문가', prompt, 'lab-normalize');
+@@ -1203,7 +1203,7 @@
+-    const result = await callAI(aiId, '내과 전문의 + 예방의학 전문가', prompt);
++    const result = await callAI(aiId, '내과 전문의 + 예방의학 전문가', prompt, 'checkup-interpret');
+@@ -1830,7 +1830,7 @@
+-    const result = await callAI(aiId, '의료 검사 결과 분석 전문가', prompt);
++    const result = await callAI(aiId, '의료 검사 결과 분석 전문가', prompt, 'checkup-interpret');
+@@ -2690,7 +2779,7 @@
+-    const resp = await callAI(aiId, '임상약학+약물감시 전문가. JSON만.', prompt);
++    const resp = await callAI(aiId, '임상약학+약물감시 전문가. JSON만.', prompt, 'drug-alert');
+@@ -3158,7 +3247,7 @@
+-    const resp = await callAI(aiId, '의료 데이터 중복 분석 전문가. JSON만 응답.', prompt);
++    const resp = await callAI(aiId, '의료 데이터 중복 분석 전문가. JSON만 응답.', prompt, 'checkup-merge');

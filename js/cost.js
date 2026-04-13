@@ -5,13 +5,17 @@
 // ═══════════════════════════════════════════════════════════════
 function getPriceTable() { return {...DEFAULT_PRICE_TABLE, ...(DM()?.price_table||{})}; }
 function calcCost(model,inT,outT) { const p=DEFAULT_PRICE_TABLE[model]||getPriceTable()[model]||{in:0,out:0}; return (inT/1e6)*p.in+(outT/1e6)*p.out; }
-function recordUsage(aiId,model,inT,outT) {
+function recordUsage(aiId,model,inT,outT,source) {
   const m=DM(); if(!m?.usage_data) return;
   const today=kstToday();
   if(!m.usage_data[today]) m.usage_data[today]={};
-  if(!m.usage_data[today][aiId]) m.usage_data[today][aiId]={in:0,out:0,cost:0,model};
+  if(!m.usage_data[today][aiId]) m.usage_data[today][aiId]={in:0,out:0,cost:0,model,calls:[]};
+  const callCost=calcCost(model,inT,outT);
   m.usage_data[today][aiId].in+=inT; m.usage_data[today][aiId].out+=outT;
-  m.usage_data[today][aiId].cost+=calcCost(model,inT,outT); m.usage_data[today][aiId].model=model;
+  m.usage_data[today][aiId].cost+=callCost; m.usage_data[today][aiId].model=model;
+  // 개별 호출 기록 (모델별/시간대별 추적)
+  if(!m.usage_data[today][aiId].calls) m.usage_data[today][aiId].calls=[];
+  m.usage_data[today][aiId].calls.push({time:kstTime().slice(0,5),model,in:inT,out:outT,cost:callCost,source:source||''});
   try { localStorage.setItem('om_usage_'+S.currentDomain, JSON.stringify(m.usage_data)); } catch(e) {}
 }
 // 저장된 cost가 0이지만 토큰이 있으면 재계산
