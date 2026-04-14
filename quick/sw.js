@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orangi-quick-v19';
+const CACHE_NAME = 'orangi-quick-v20';
 const PRECACHE = [
   './',
   './index.html',
