@@ -43,23 +43,26 @@ Migrate `OrangBoongSSem` to a Firebase-first architecture incrementally, without
 - crypto/om_keys: 6사이트
 - **전체 프로젝트 localStorage 직접 호출: 0건** (storage.js 래퍼 3줄 제외)
 
-### 9. ⏳ Migrate logs, sessions, and accumulated data — 다음 단계
-- Firebase 프로젝트 실제 설정 후 진행
-- `_storageGet/Set` 내부를 Firestore로 교체
-- 로그는 월 단위 페이지네이션 (비용 최적화)
+### 9. ✅ Firestore 실제 연결 — PR #189, #190, #191, #192, #193, #194, #195
+- Firebase 프로젝트: `fam-med-service` (asia-northeast3)
+- CDN compat SDK 로드 (firebase-app/auth/firestore 10.14.1)
+- `initFirebase()` 앱 시작 시 호출 + Firestore 오프라인 persistence
+- Write-through 패턴: setAppSetting/setCustomItems → localStorage + Firestore
+- `syncFromFirestore()`: 양방향 동기화 (빈 Firestore → 초기 업로드 포함)
+- Drive 로그인 → Firebase Auth 자동 연동 (수동 클릭 경로만, 팝업 차단 방지)
+- 보안규칙: `request.auth.uid == userId` (본인 데이터만)
+- Gemini 리뷰 반영: race condition 방지, 중복 체크 제거
 
-### 10. ⏳ Harden security and backend — 다음 단계
+### 10. ⏳ Harden security and backend — 향후
 - AI 키를 Cloud Functions로 이전
-- Firebase Auth로 기존 Google OAuth 교체
-- Firestore 보안규칙 강화
+- 로그/세션/마스터 데이터 Firestore 이관 (현재 Google Drive에서 동작 중)
 
-## PR grouping (완료)
+## PR grouping (전체 완료)
 - ✅ PR A: audit (#181) + adapter (#182) + Firebase scaffold (#183)
 - ✅ PR B: settings (#184)
 - ✅ PR C: custom items + templates (#185)
-- ✅ PR D: domain data (#186)
-- ✅ PR D+: quick/bung 앱 (#187)
-- ✅ PR E: crypto/keys (#188)
+- ✅ PR D: domain data (#186) + quick/bung (#187) + crypto (#188)
+- ✅ PR F: Firebase 연결 (#189~#195) — config, Auth, write-through, 초기 업로드, Gemini 리뷰
 
 ## First milestone — ✅ 달성
 - ✅ localStorage audit completed
@@ -69,3 +72,5 @@ Migrate `OrangBoongSSem` to a Firebase-first architecture incrementally, without
 - ✅ settings/customItems/templates migration path is live
 - ✅ no new direct localStorage usage is added
 - ✅ **전체 프로젝트 localStorage 직접 호출 0건**
+- ✅ **Firestore 실제 연결 + 양방향 동기화 동작 확인**
+- ✅ **보안규칙 적용 (본인 데이터만 접근)**

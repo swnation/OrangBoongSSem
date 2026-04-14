@@ -2,11 +2,17 @@
 
 ## 현재 상태: v9.7+ (main)
 - 브랜치: main
-- SW CACHE_NAME: v99l (메인), v21 (quick)
+- SW CACHE_NAME: v99m (메인), v21 (quick)
 - APP_VERSION: v9.7
 - backup/v9.7 브랜치 유지
-- PR #166~#188 머지 완료
-- **Firebase 마이그레이션 1차 완료**: localStorage 직접 호출 0건 (storage.js adapter 경유)
+- PR #166~#195 머지 완료 (이번 세션 PR 31건)
+- **Firebase 마이그레이션 완료**:
+  - localStorage 직접 호출 0건 (storage.js adapter 경유)
+  - Firebase 프로젝트: `fam-med-service` (Firestore + Auth)
+  - Write-through 패턴: localStorage 즉시 + Firestore 백그라운드 저장
+  - 양방향 동기화: Firestore↔localStorage (로그인 시 자동)
+  - Drive 로그인 → Firebase Auth 자동 연동 (팝업 방식)
+  - 보안규칙: 본인 데이터만 읽기/쓰기 허용
 
 ## 세션 C 완료 (2026-04-14) — 편두통 예보·경과자동·약물관리·검사개선
 
