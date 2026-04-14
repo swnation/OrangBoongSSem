@@ -2490,35 +2490,40 @@ function _renderCheckupCategories(who, checkups) {
       .map(([cat, items]) => {
         const catDef = _CHECKUP_CATEGORIES[cat] || _CHECKUP_CATEGORIES.other;
         const abnCount = items.filter(r => _isAbnormal(r.latest?.status)).length;
+        // 이 소분류의 전체 검사일 수집 (최근 6건)
+        const allDates=[...new Set(items.flatMap(r=>r.history.map(h=>h.date)))].sort().slice(-6);
+        // 테이블 헤더 (항목명 | 참고 | 날짜1 | 날짜2 | ...)
+        const thDates=allDates.map(d=>'<th style="font-size:.48rem;color:var(--mu);padding:2px 3px;font-family:var(--mono);min-width:36px">'+d.slice(2)+'</th>').join('');
+        const tableHeader='<tr><th style="text-align:left;font-size:.6rem;color:var(--mu);padding:2px 4px;min-width:80px">항목</th><th style="font-size:.5rem;color:var(--mu2);padding:2px 3px;min-width:36px">참고</th>'+thDates+'</tr>';
         const rows = items.map(r => {
-          const statusColor = _statusColor(r.latest?.status);
-          const trend = r.history.length >= 2 ? _trendDirection(r.history.map(h => ({ value: h.value, date: h.date }))) : '';
-          const trendIcon = trend === 'up' ? '📈' : trend === 'down' ? '📉' : (r.history.length >= 2 ? '➡️' : '');
+          const def=_CHECKUP_STD_TESTS[r.code];
+          const enName=def?.name?.en||r.code||'';
           const refStr = r.ref ? (r.ref.low !== undefined ? r.ref.low + '-' + r.ref.high : '-') : '-';
-          // 시계열 미니 표시 (최근 4건)
-          const histMini = r.history.slice(-4).map(h => {
-            const c = _statusColor(h.status);
-            return '<span style="font-size:.5rem;color:' + c + '">' + h.value + '</span>';
-          }).join('<span style="color:var(--bd)">→</span>');
-          return '<div style="display:flex;align-items:center;gap:4px;padding:3px 0;font-size:.68rem;border-bottom:1px solid var(--sf)">'
-            + '<span style="flex:1;color:var(--ink)">' + esc(r.displayName) + '</span>'
-            + '<span style="font-weight:600;color:' + statusColor + ';font-family:var(--mono);min-width:40px;text-align:right">' + esc(String(r.latest?.value)) + '</span>'
-            + '<span style="font-size:.55rem;color:var(--mu);min-width:30px">' + esc(r.unit || '') + '</span>'
-            + '<span style="font-size:.52rem;color:var(--mu2);min-width:50px">' + esc(refStr) + '</span>'
-            + '<span style="font-size:.52rem;min-width:14px">' + trendIcon + '</span>'
-            + (r.history.length >= 2 ? '<span style="font-size:.5rem;min-width:60px;text-align:right">' + histMini + '</span>' : '<span style="min-width:60px"></span>')
-            + '<span style="font-size:.48rem;color:var(--mu2);min-width:32px;text-align:right">' + esc(r.latest?.date?.slice(2) || '') + '</span>'
-            + '</div>';
+          const trend = r.history.length >= 2 ? _trendDirection(r.history.map(h => ({ value: h.value, date: h.date }))) : '';
+          const trendIcon = trend === 'up' ? ' 📈' : trend === 'down' ? ' 📉' : '';
+          // 날짜별 값 셀
+          const dateCells=allDates.map(d=>{
+            const h=r.history.find(x=>x.date===d);
+            if(!h) return '<td style="padding:2px 3px;text-align:center;font-size:.55rem;color:var(--mu2)">-</td>';
+            const c=_statusColor(h.status);
+            return '<td style="padding:2px 3px;text-align:center;font-size:.58rem;font-weight:600;color:'+c+';font-family:var(--mono)">'+h.value+'</td>';
+          }).join('');
+          return '<tr style="border-bottom:1px solid var(--sf)">'
+            + '<td style="padding:3px 4px;font-size:.65rem"><span style="color:var(--ink)">' + esc(r.displayName) + '</span>'
+            + (enName?'<span style="font-size:.5rem;color:var(--mu2);margin-left:3px">' + esc(enName) + '</span>':'')
+            + trendIcon + '</td>'
+            + '<td style="padding:2px 3px;font-size:.48rem;color:var(--mu2);text-align:center">' + esc(refStr) + '</td>'
+            + dateCells + '</tr>';
         }).join('');
 
-        return '<div style="margin-bottom:4px">'
+        return '<div style="margin-bottom:6px">'
           + '<div style="display:flex;align-items:center;gap:4px;padding:2px 0">'
           + '<span style="font-size:.7rem">' + catDef.icon + '</span>'
           + '<span style="font-size:.68rem;font-weight:600;color:var(--mu)">' + catDef.name + '</span>'
           + '<span style="font-size:.55rem;color:var(--mu2)">' + items.length + '항목</span>'
           + (abnCount ? '<span style="font-size:.5rem;padding:1px 4px;border-radius:3px;background:#fee2e2;color:#dc2626">이상 ' + abnCount + '</span>' : '')
           + '</div>'
-          + rows + '</div>';
+          + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' + tableHeader + rows + '</table></div></div>';
       }).join('');
 
     return '<div style="padding:8px 10px;background:var(--sf2);border:1.5px solid ' + (totalAbn ? '#fca5a580' : 'var(--bd)') + ';border-radius:8px;margin-bottom:6px">'
