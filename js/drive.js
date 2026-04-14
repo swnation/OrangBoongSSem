@@ -96,12 +96,12 @@ function handleToken(resp) {
   S.token = resp.access_token;
   setAppSetting('autoLogin','true');
   scheduleTokenRefresh(resp.expires_in || 3600);
-  // Firebase Auth 로그인 (최초 Drive 로그인 시만 — 토큰 갱신 시 생략)
-  if(!isRefresh&&typeof firebase!=='undefined'&&firebase.auth&&isFirebaseReady()&&!getFirebaseUid()){
-    firebaseSignInWithGoogle().catch(e=>console.warn('[Firebase Auth] 로그인 실패:',e));
-  }
   if (_tokenRefreshResolve) { _tokenRefreshResolve(true); _tokenRefreshResolve = null; return; }
   if (isRefresh) return; // silent refresh from timer — no UI reload needed
+  // Firebase Auth 로그인 (수동 로그인 시만 — 사용자 클릭 컨텍스트에서 팝업 허용)
+  if (isFirebaseReady() && !getFirebaseUid() && typeof firebaseSignInWithGoogle === 'function') {
+    firebaseSignInWithGoogle();
+  }
   setDriveStatus(true);
   _initAutoLoginToggle();
   const dc = document.getElementById('default-connect'); if(dc) dc.style.display='none';
