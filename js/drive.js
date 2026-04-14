@@ -94,8 +94,15 @@ function handleToken(resp) {
   }
   const isRefresh = !!S.token; // already had a token = this is a refresh
   S.token = resp.access_token;
-  setAppSetting('autoLogin','true'); // 다음 방문 시 자동 로그인
+  setAppSetting('autoLogin','true');
   scheduleTokenRefresh(resp.expires_in || 3600);
+  // Firebase Auth 자동 로그인 (Google OAuth 토큰 활용)
+  if(typeof firebase!=='undefined'&&firebase.auth&&isFirebaseReady()&&!getFirebaseUid()){
+    try{
+      const cred=firebase.auth.GoogleAuthProvider.credential(null,resp.access_token);
+      firebase.auth().signInWithCredential(cred).catch(e=>console.warn('[Firebase Auth] credential 로그인 실패:',e));
+    }catch(e){}
+  }
   if (_tokenRefreshResolve) { _tokenRefreshResolve(true); _tokenRefreshResolve = null; return; }
   if (isRefresh) return; // silent refresh from timer — no UI reload needed
   setDriveStatus(true);
