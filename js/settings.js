@@ -61,11 +61,11 @@ function openKeys() {
   <div class="key-group">
     <div class="key-row">
       <div class="key-label">🌤️ 날씨 API 키 (OpenWeatherMap)
-        ${localStorage.getItem('om_weather_key')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
+        ${getAppSetting('weatherKey')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
       </div><a class="key-link" href="https://openweathermap.org/api" target="_blank">발급 →</a>
     </div>
     <div class="key-input-row">
-      <input class="key-input ${localStorage.getItem('om_weather_key')?'set':''}" type="password" id="key-weather" value="${localStorage.getItem('om_weather_key')||''}" placeholder="OpenWeatherMap API 키">
+      <input class="key-input ${getAppSetting('weatherKey')?'set':''}" type="password" id="key-weather" value="${getAppSetting('weatherKey')||''}" placeholder="OpenWeatherMap API 키">
       <button class="btn-vis" onclick="toggleVis('key-weather',this)">표시</button>
     </div>
     <div class="key-note">💡 무료 (1000회/일). 기록 시 날씨가 자동 첨부됩니다 (서울 강동구).</div>
@@ -117,13 +117,12 @@ async function saveKeys() {
     if(!S.keys[id]) delete S.keysSetAt[id];
   });
   localStorage.setItem('keysSetAt',JSON.stringify(S.keysSetAt));
-  localStorage.setItem('om_models',JSON.stringify(S.models));
+  setAppSetting('models',S.models);
   const syncUrl=(document.getElementById('key-sync-url')?.value||'').trim();
   if(syncUrl) localStorage.setItem('om_quick_sync_url',syncUrl);
   else localStorage.removeItem('om_quick_sync_url');
   const weatherKey=(document.getElementById('key-weather')?.value||'').trim();
-  if(weatherKey) localStorage.setItem('om_weather_key',weatherKey);
-  else localStorage.removeItem('om_weather_key');
+  setAppSetting('weatherKey',weatherKey||null);
   const ntfyOrangi=(document.getElementById('key-ntfy-orangi')?.value||'').trim();
   if(ntfyOrangi) localStorage.setItem('om_ntfy_orangi',ntfyOrangi);
   else localStorage.removeItem('om_ntfy_orangi');
@@ -178,7 +177,7 @@ function _getSettingsPayload() {
   return {keys:S.keys,models:S.models,
     ntfyOrangi:localStorage.getItem('om_ntfy_orangi')||'',
     ntfyBung:localStorage.getItem('om_ntfy_bung')||'',
-    weatherKey:localStorage.getItem('om_weather_key')||'',
+    weatherKey:getAppSetting('weatherKey')||'',
     syncUrl:localStorage.getItem('om_quick_sync_url')||''};
 }
 function _restoreSettings(parsed) {
@@ -186,7 +185,7 @@ function _restoreSettings(parsed) {
   if(parsed.models) Object.assign(S.models,parsed.models);
   if(parsed.ntfyOrangi) localStorage.setItem('om_ntfy_orangi',parsed.ntfyOrangi);
   if(parsed.ntfyBung) localStorage.setItem('om_ntfy_bung',parsed.ntfyBung);
-  if(parsed.weatherKey) localStorage.setItem('om_weather_key',parsed.weatherKey);
+  if(parsed.weatherKey) setAppSetting('weatherKey',parsed.weatherKey);
   if(parsed.syncUrl) localStorage.setItem('om_quick_sync_url',parsed.syncUrl);
 }
 
@@ -230,7 +229,7 @@ async function importKeysFromDrive() {
     _restoreSettings(parsed);
     if(S._keyPin) await saveKeysEncrypted();
     else localStorage.setItem('om_keys',JSON.stringify(S.keys));
-    localStorage.setItem('om_models',JSON.stringify(S.models));
+    setAppSetting('models',S.models);
     renderSidebarAIs();
     closeModal('keys-modal');openKeys();
     showToast('☁️ Drive에서 설정 복원 완료!');
@@ -253,7 +252,7 @@ async function importKeysEncrypted() {
       const parsed=JSON.parse(new TextDecoder().decode(decrypted));
       _restoreSettings(parsed);
       localStorage.setItem('om_keys',JSON.stringify(S.keys));
-      localStorage.setItem('om_models',JSON.stringify(S.models));
+      setAppSetting('models',S.models);
       renderSidebarAIs();
       closeModal('keys-modal');openKeys();
       showToast('🔐 키 복원 완료!');
@@ -597,7 +596,7 @@ function restoreCtxBackup() {
 
 function changeAIModel(aiId,newModel) {
   S.models[aiId]=newModel;
-  localStorage.setItem('om_models',JSON.stringify(S.models));
+  setAppSetting('models',S.models);
   showToast(`${AI_DEFS[aiId].name} → ${newModel}`);
 }
 

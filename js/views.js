@@ -4,7 +4,7 @@
 // THEME
 // ═══════════════════════════════════════════════════════════════
 function initTheme() {
-  const t = localStorage.getItem('om_theme') || 'light';
+  const t = getAppSetting('theme') || 'light';
   if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
   updateThemeBtn();
 }
@@ -12,7 +12,7 @@ function toggleTheme() {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   if (isDark) document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme','dark');
-  localStorage.setItem('om_theme', isDark ? 'light' : 'dark');
+  setAppSetting('theme', isDark ? 'light' : 'dark');
   updateThemeBtn();
 }
 function updateThemeBtn() {
@@ -81,7 +81,7 @@ async function switchDomain(domainId) {
   S._dirty = false;
   S.viewingHistIdx = null;
   S.logView = 'form';
-  localStorage.setItem('om_domain', domainId);
+  setAppSetting('lastDomain', domainId);
   document.getElementById('domain-dropdown').classList.remove('show');
   updateDomainUI();
   renderDomainDropdown();
@@ -310,7 +310,7 @@ function _getHomeCards(){
   const master=DM();
   const cloud=master?.settings?.homeCards;
   if(cloud)return cloud;
-  return JSON.parse(localStorage.getItem('om_home_cards')||'{}');
+  return getAppSettingJSON('homeCards', {});
 }
 function _homeCardVisible(id){
   const saved=_getHomeCards();
@@ -321,7 +321,7 @@ function _toggleHomeCard(id){
   const saved=_getHomeCards();
   saved[id]=!_homeCardVisible(id);
   // 클라우드 + localStorage 양쪽 저장
-  localStorage.setItem('om_home_cards',JSON.stringify(saved));
+  setAppSetting('homeCards', saved);
   const master=DM();
   if(master){if(!master.settings)master.settings={};master.settings.homeCards=saved;saveMaster();}
   renderView('home');
@@ -346,7 +346,7 @@ function _renderHomeSettings(){
 }
 function _getHomeCardOrder() {
   const m = DM();
-  return m?.settings?.homeCardOrder || JSON.parse(localStorage.getItem('om_home_card_order') || '[]');
+  return m?.settings?.homeCardOrder || getAppSettingJSON('homeCardOrder', []);
 }
 function _moveHomeCard(id, dir) {
   const order = _getHomeCardOrder();
@@ -357,7 +357,7 @@ function _moveHomeCard(id, dir) {
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= order.length) return;
   [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
-  localStorage.setItem('om_home_card_order', JSON.stringify(order));
+  setAppSetting('homeCardOrder', order);
   const m = DM();
   if (m) { if (!m.settings) m.settings = {}; m.settings.homeCardOrder = order; saveMaster(); }
   renderView('home');
@@ -2397,7 +2397,7 @@ function getRating(aiId) {
 function toggleAIEnabled(aiId, checked) {
   if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,grok:true,perp:true};
   S.aiEnabled[aiId]=checked;
-  try { localStorage.setItem('aiEnabled',JSON.stringify(S.aiEnabled)); } catch(e){}
+  setAppSetting('aiEnabled', S.aiEnabled);
   renderSidebarAIs();
 }
 
@@ -2933,8 +2933,8 @@ function stampVersion(master) {
 }
 
 function getDeviceId() {
-  let id=localStorage.getItem('om_device_id');
-  if(!id) { id='dev_'+Math.random().toString(36).slice(2,10); localStorage.setItem('om_device_id',id); }
+  let id=getAppSetting('deviceId');
+  if(!id) { id='dev_'+Math.random().toString(36).slice(2,10); setAppSetting('deviceId',id); }
   return id;
 }
 
