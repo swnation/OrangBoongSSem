@@ -27,6 +27,8 @@ function setupFirebaseAuth() {
     _firebaseUser = user;
     if (user) {
       console.info('[Firebase Auth] 로그인:', user.email || user.uid);
+      // Firestore → localStorage 동기화 (로그인 시 1회)
+      if (typeof syncFromFirestore === 'function') syncFromFirestore();
     } else {
       console.info('[Firebase Auth] 로그아웃 상태');
     }
