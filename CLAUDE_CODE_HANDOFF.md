@@ -1,5 +1,68 @@
 # Claude Code Handoff — Family-Health-system-by-BoongSSem
 
+## 0. Claude Code 세션 피드백 (2026-04-14)
+
+> 아래는 Claude Code가 현재 OrangBoongSSem 코드베이스를 12건 PR로 개선한 뒤,
+> 이 핸드오프 문서를 검토하고 남기는 피드백입니다.
+
+### 현재 시스템 현황 (OrangBoongSSem)
+- **15개 JS 모듈, 80K+ 라인**, 3개 앱 (메인/quick/bung)
+- 이번 세션(PR #169~#180)에서 추가된 검증 완료 기능:
+  - 편두통 일기예보 (5요소 위험도 분석 + 상세 근거)
+  - 경과 자동 감지 (NRS 시간대별 변화 기반)
+  - 약물 복용량 추적 + 24시간 과량 경고
+  - 약물→영양제 자동 연동
+  - 검사 아카이브 검색/영문명/날짜표
+  - quick↔메인 양방향 커스텀 항목 동기화
+
+### 핵심 피드백
+
+#### 1. 점진적 마이그레이션 권장 (새 레포 X, 이 레포에서 전환)
+- 현재 80K+ 라인을 새 레포로 포팅하면 기능 손실 위험이 큼
+- **이 레포 안에서** Firebase adapter를 추가하고, 기존 코드를 점진적으로 교체하는 방식 권장
+- 기존 기능이 동작하는 상태에서 한 모듈씩 전환 → 안전
+
+#### 2. Storage Adapter가 최우선
+- 현재 `localStorage.getItem/setItem` 직접 호출이 수백 군데
+- `src/storage/adapter.ts` 인터페이스를 먼저 만들고
+- `memory.ts` (현재 세션) → `firestore.ts` (영속) 로 교체하는 구조
+- 기존 코드의 localStorage 호출을 adapter 호출로 점진적 교체
+
+#### 3. Phase 2 (settings/customItems)부터 시작하면 즉시 효과
+- settings, customItems, notification preferences는 Firestore 이관이 쉬움
+- 이것만 해도 **기기 간 동기화** 문제 해결 (현재 최대 페인포인트)
+- 로그/세션은 나중에 (데이터량이 크고 마이그레이션 복잡)
+
+#### 4. ntfy는 제외
+- 현재 ntfy 알림 시스템은 이 아키텍처 전환에서 제외
+- 나중에 Cloud Functions로 알림 시스템을 재설계할 때 다시 고려
+
+#### 5. 다중 사용자 확장 고려
+- 현재 `DOMAINS` 구조 (orangi-migraine, bung-mental 등)는 이미 **유저별 도메인 분리** 패턴
+- Firebase에서 `users/{uid}/domains/{domainId}` 로 자연스럽게 매핑
+- 향후 가족 건강관리 → 병원 환자 관리로 확장 시:
+  - `roles: {doctor, patient, caregiver}` 추가
+  - Firestore 보안규칙으로 접근 제어
+  - Cloud Functions로 AI 키 서버사이드 관리
+
+#### 6. 재활용 가능한 핵심 모듈
+| 모듈 | 파일 | 재활용 가치 |
+|------|------|------------|
+| AI 협진 | ai-api.js | SSE 스트리밍, 5개 프로바이더, 비용 추적 |
+| 검사 표준화 | checkup.js | 200+ 표준 검사 사전, AI-first 정규화, 대분류 |
+| 약물 안전 | bungruki.js | 임신 안전등급, 남성 가임력, 상호작용 |
+| 약물 사전 | conditions.js | 식약처 API, 한영 매핑 310쌍, 질환→약물 추천 |
+| 비용 추적 | cost.js | 모델별 가격, source 태깅, breakdown UI |
+
+### 제안하는 첫 번째 작업 순서
+1. `src/storage/adapter.ts` 인터페이스 정의
+2. `src/storage/memory.ts` 구현 (현재 동작과 동일)
+3. Firebase 프로젝트 설정 + `src/storage/firestore.ts` 스캐폴드
+4. settings/customItems를 adapter 경유로 변경
+5. 기존 15개 모듈의 localStorage 호출을 점진적으로 adapter로 교체
+
+---
+
 ## 1. Project intent
 This repository will become the **personal-use main codebase** for a family health system.
 
