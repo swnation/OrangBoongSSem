@@ -225,6 +225,7 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     pollCloudQuickLogs();
     _syncReloadCurrentMonth();
+    _syncCustomItemsBidirectional();
   }
 });
 async function _syncReloadCurrentMonth(){
@@ -247,6 +248,25 @@ async function _syncReloadCurrentMonth(){
       renderView(S.currentView||'log');
     }
   }catch(e){console.error('Sync reload:',e);}
+}
+
+// 메인앱↔quick 양방향 커스텀 항목 동기화
+function _syncCustomItemsBidirectional(){
+  if(S.currentDomain!=='orangi-migraine') return;
+  const keys=['meds','syms','tx','sites_left','sites_right','pain','triggers'];
+  let changed=false;
+  keys.forEach(k=>{
+    const lsKey='om_custom_'+k+'_'+S.currentDomain;
+    const local=JSON.parse(localStorage.getItem(lsKey)||'[]');
+    const master=D()?.master?._customItems?.[k]||[];
+    if(!master.length&&!local.length) return;
+    const merged=[...new Set([...local,...master])];
+    if(merged.length>local.length){localStorage.setItem(lsKey,JSON.stringify(merged));changed=true;}
+  });
+  if(changed&&typeof _syncCustomItemsToMaster==='function'){
+    _syncCustomItemsToMaster();
+    saveMaster().catch(e=>console.warn('Custom sync save:',e));
+  }
 }
 
 // 오늘 기존 엔트리(데일리체크앱 등)의 dailyChecks를 새 기록 폼에 자동 반영

@@ -271,6 +271,72 @@ function syncCustomsToCloud() {
   },500);
 }
 
+// ── 메인앱↔quick 양방향 커스텀 항목 동기화 ──
+function _syncCustomsFromMain(){
+  // 메인앱에서 추가된 항목을 localStorage에서 읽어 머지
+  // (같은 origin이므로 localStorage 공유)
+  const labels={'med':'약물','sym':'증상','tx':'치료','pain':'통증종류','trigger':'트리거','site-left':'부위(왼)','site-right':'부위(오)'};
+  const newItems=[];
+  Object.keys(_QC_KEY_MAP).forEach(k=>{
+    const mk=_QC_KEY_MAP[k];
+    try{
+      const items=JSON.parse(localStorage.getItem(mk)||'[]');
+      const current=getCustom(k);
+      const added=items.filter(i=>!current.includes(i));
+      if(added.length) newItems.push({key:k,label:labels[k]||k,items:added});
+    }catch(e){}
+  });
+  if(newItems.length){
+    const msg=newItems.map(n=>`${n.label}: ${n.items.join(', ')}`).join('\n');
+    showToast('🔄 메인앱에서 '+newItems.reduce((s,n)=>s+n.items.length,0)+'개 항목 동기화됨');
+  }
+}
+
+// ── 식약처 약 검색 API (메인앱과 동일) ──
+const _DRUG_API_URL='https://apis.data.go.kr/1471000/DrugPrdtPrmsnInfoService07/getDrugPrdtPrmsnInq07';
+const _DRUG_API_KEY='e2e1a2277cd6d60badb822ca35b3a1147b0d13dacec0f374b8684b85af4dac78';
+const _drugCache={};
+async function searchDrugAPI(query){
+  if(query.length<2) return [];
+  if(_drugCache[query]) return _drugCache[query];
+  const results=[];
+  try{
+    const url=`${_DRUG_API_URL}?serviceKey=${_DRUG_API_KEY}&item_name=${encodeURIComponent(query)}&type=json&numOfRows=10`;
+    const r=await fetch(url,{signal:AbortSignal.timeout(3000)});
+    if(r.ok){const d=await r.json();(d?.body?.items||[]).forEach(item=>{if(item.ITEM_NAME)results.push(item.ITEM_NAME);});}
+  }catch(e){}
+  const unique=[...new Set(results)].slice(0,12);
+  _drugCache[query]=unique;
+  return unique;
+}
+
+let _drugSearchTimer=null;
+function setupDrugAutocomplete(inputId){
+  const input=document.getElementById(inputId);if(!input||input._acSetup) return;
+  input._acSetup=true;
+  const dlId=inputId+'-dl';
+  let dl=document.getElementById(dlId);
+  if(!dl){dl=document.createElement('datalist');dl.id=dlId;document.body.appendChild(dl);}
+  input.setAttribute('list',dlId);
+  const allMeds=[...MEDS,...getCustom('med')];
+  input.addEventListener('input',function(){
+    const q=input.value.toLowerCase().trim();
+    if(q.length<1){dl.innerHTML='';return;}
+    const local=allMeds.filter(m=>m.toLowerCase().includes(q)).slice(0,8);
+    dl.innerHTML=local.map(m=>`<option value="${esc(m)}">`).join('');
+    if(q.length>=2){
+      clearTimeout(_drugSearchTimer);
+      _drugSearchTimer=setTimeout(async()=>{
+        const api=await searchDrugAPI(q);
+        if(api.length){
+          const combined=[...new Set([...local,...api])].slice(0,15);
+          dl.innerHTML=combined.map(m=>`<option value="${esc(m)}">`).join('');
+        }
+      },300);
+    }
+  });
+}
+
 // ── 설정(ntfy 등)을 quickLogs 안에 특수 항목으로 저장 → 기존 클라우드 동기화로 기기간 공유 ──
 const _CONFIG_ID='_quick_config';
 function getQuickConfig(){
@@ -892,6 +958,8 @@ function renderForm(entry) {
   if(delSel){if([...delSel.options].some(o=>o.value===defDelay))delSel.value=defDelay;else delSel.value='120';}
   // Sync diagram with pre-selected chips (edit mode)
   setTimeout(()=>syncHeadDiagram(),50);
+  // 약물 검색 자동완성 셋업
+  setTimeout(()=>setupDrugAutocomplete('med-other'),100);
 }
 
 function renderRecentQuickLogs() {
@@ -1665,9 +1733,12 @@ fetchCloudStatus();
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     fetchCloudStatus(); checkPendingOutcome();
+    // 메인앱에서 추가된 커스텀 항목 자동 머지 (localStorage 공유)
+    _syncCustomsFromMain();
     // 탭 복귀 시 현재 탭 데이터 갱신 (rate.html에서 경과 저장 후 돌아왔을 때)
     const tabs=document.querySelectorAll('.tab');
-    if(tabs[2].classList.contains('active')) renderList();
+    if(tabs[0].classList.contains('active')) renderForm(); // 폼 리렌더 (새 항목 반영)
+    else if(tabs[2].classList.contains('active')) renderList();
     else if(tabs[1].classList.contains('active')) renderOutcomeTab();
   }
 });
