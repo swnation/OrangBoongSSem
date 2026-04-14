@@ -108,6 +108,20 @@ async function syncFromFirestore() {
       }
     }
 
+    // 3) Presets: 모든 도메인
+    for (const dom of domains) {
+      const lsPresets = _storageGetJSON('om_presets_' + dom, []);
+      if (lsPresets.length) {
+        const path = fsCustomItemsPath(dom, 'presets');
+        if (path) {
+          const existing = await firestoreGet(path);
+          if (!existing?.items?.length) {
+            await firestoreSet(path, { items: lsPresets, updatedAt: new Date().toISOString(), _migratedFrom: 'localStorage' });
+          }
+        }
+      }
+    }
+
     console.info('[Storage] Firestore 동기화 완료');
   } catch(e) {
     console.warn('[Storage] Firestore 동기화 실패 (오프라인?):', e);
