@@ -738,6 +738,9 @@ function renderLog() {
   const _hiddenMood=_hidden.mood||[];
   const _hiddenSym=_hidden.sym||[];
   const _hiddenMed=_hidden.med||[];
+  const _hiddenPain=_hidden.pain||[];
+  const _hiddenTx=_hidden.tx||[];
+  const _hiddenTrigger=_hidden.trigger||[];
 
   // ── 마음관리 모드 (moodMode) ──
   const allMoodOpts=['😞 우울','😶 무감정','😐 보통','🙂 양호','😊 좋음'];
@@ -778,8 +781,8 @@ function renderLog() {
 
   const customPainTypes = getCustomItems(S.currentDomain,'pain');
   const painTypesHtml = lc.painTypes ? `
-    <div class="log-section-title">통증 종류</div>
-    <div class="log-chips">${[...lc.painTypes,...customPainTypes].map(p=>`<div class="log-chip" data-group="pain" data-val="${p}" onclick="toggleChip(this,'sel-pain')">${p}</div>`).join('')}
+    <div class="log-section-title">통증 종류 <button onclick="openChipManager('pain')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
+    <div class="log-chips">${[...lc.painTypes.filter(p=>!_hiddenPain.includes(p)),...customPainTypes].map(p=>`<div class="log-chip" data-group="pain" data-val="${p}" onclick="toggleChip(this,'sel-pain')">${p}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="pain-other" placeholder="직접 입력" style="width:80px">
         <button onclick="addCustomPainType()" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
@@ -816,9 +819,9 @@ function renderLog() {
   const customSyms = getCustomItems(S.currentDomain,'syms');
   const allSyms = [...(lc.symptoms||[]).filter(s=>!_hiddenSym.includes(s)), ...customSyms];
 
-  // 치료: 기본 + 커스텀
+  // 치료: 기본(숨김 제외) + 커스텀
   const customTx = getCustomItems(S.currentDomain,'tx');
-  const allTx = [...(lc.treatments||[]), ...customTx];
+  const allTx = [...(lc.treatments||[]).filter(t=>!_hiddenTx.includes(t)), ...customTx];
 
   const treatmentHtml = lc.treatments === null
     ? `<div class="log-section-title">치료/시술</div>
@@ -840,7 +843,7 @@ function renderLog() {
   let customTriggers=getCustomItems(S.currentDomain,'triggers');
   const triggersHtml=lc.triggers?`
     <div class="log-section-title">추정 트리거 <button onclick="openChipManager('triggers')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
-    <div class="log-chips">${[...lc.triggers,...customTriggers].map(t=>`<div class="log-chip" data-group="trigger" data-val="${t}" onclick="toggleChip(this,'sel-trigger')">${t}</div>`).join('')}
+    <div class="log-chips">${[...lc.triggers.filter(t=>!_hiddenTrigger.includes(t)),...customTriggers].map(t=>`<div class="log-chip" data-group="trigger" data-val="${t}" onclick="toggleChip(this,'sel-trigger')">${t}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="trigger-other" placeholder="직접 입력" style="width:80px">
         <button onclick="addCustomTrigger()" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
@@ -2070,12 +2073,21 @@ function openChipManager(type) {
     );
     return;
   }
-  const customList=getCustomItems(S.currentDomain,type==='meds'?'meds':type==='tx'?'tx':'syms');
+  // type→customGroup, hiddenGroup, defaults, label 매핑
+  const _cmMap={
+    meds:{cg:'meds',hg:'med',def:(lc.meds||[]).filter(m=>m!=='기타'),label:'투약'},
+    syms:{cg:'syms',hg:'sym',def:lc.symptoms||[],label:'증상'},
+    tx:{cg:'tx',hg:'tx',def:lc.treatments||[],label:'치료/시술'},
+    pain:{cg:'pain',hg:'pain',def:lc.painTypes||[],label:'통증 종류'},
+    triggers:{cg:'triggers',hg:'trigger',def:lc.triggers||[],label:'추정 트리거'},
+  };
+  const cm=_cmMap[type]||_cmMap.syms;
+  const customList=getCustomItems(S.currentDomain,cm.cg);
   const hidden=getHiddenChips();
-  const group=type==='meds'?'med':type==='tx'?'tx':'sym';
+  const group=cm.hg;
   const hiddenList=hidden[group]||[];
-  const defaultList=type==='meds'?(lc.meds||[]).filter(m=>m!=='기타'):type==='tx'?(lc.treatments||[]):(lc.symptoms||[]);
-  const label=type==='meds'?'투약':type==='tx'?'치료/시술':'증상';
+  const defaultList=cm.def;
+  const label=cm.label;
   const defaultRows=defaultList.map(item=>{
     const isHidden=hiddenList.includes(item);
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
