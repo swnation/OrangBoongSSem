@@ -50,7 +50,7 @@ async function ensureValidToken() {
 
 function _tryAutoLogin() {
   if(S.token||!window.google?.accounts?.oauth2) return;
-  if(localStorage.getItem('om_auto_login')!=='true') return;
+  if(getAppSetting('autoLogin')!=='true') return;
   try {
     if(!tokenClient) {
       tokenClient = google.accounts.oauth2.initTokenClient({
@@ -94,7 +94,7 @@ function handleToken(resp) {
   }
   const isRefresh = !!S.token; // already had a token = this is a refresh
   S.token = resp.access_token;
-  localStorage.setItem('om_auto_login','true'); // 다음 방문 시 자동 로그인
+  setAppSetting('autoLogin','true'); // 다음 방문 시 자동 로그인
   scheduleTokenRefresh(resp.expires_in || 3600);
   if (_tokenRefreshResolve) { _tokenRefreshResolve(true); _tokenRefreshResolve = null; return; }
   if (isRefresh) return; // silent refresh from timer — no UI reload needed
@@ -120,7 +120,7 @@ function signOut() {
     google.accounts.oauth2.revoke(S.token,()=>{});
   }
   S.token=null;
-  localStorage.removeItem('om_auto_login');
+  setAppSetting('autoLogin',null);
   if(_tokenRefreshTimer)clearTimeout(_tokenRefreshTimer);
   _tokenExpiresAt=0;
   setDriveStatus(false);
@@ -129,14 +129,13 @@ function signOut() {
 }
 
 function toggleAutoLogin(enabled) {
-  if(enabled) localStorage.setItem('om_auto_login','true');
-  else localStorage.removeItem('om_auto_login');
+  setAppSetting('autoLogin',enabled?'true':null);
   showToast(enabled?'✅ 자동 로그인 켜짐':'⬜ 자동 로그인 꺼짐');
 }
 
 function _initAutoLoginToggle() {
   const cb=document.getElementById('auto-login-toggle');
-  if(cb) cb.checked=localStorage.getItem('om_auto_login')==='true';
+  if(cb) cb.checked=getAppSetting('autoLogin')==='true';
 }
 
 function setDriveStatus(ok) {
@@ -270,7 +269,7 @@ async function loadDomainData(domainId) {
           if(saved.keys) Object.keys(saved.keys).forEach(id=>{if(!S.keys[id]&&saved.keys[id])S.keys[id]=saved.keys[id];});
           if(saved.models) Object.keys(saved.models).forEach(id=>{if(saved.models[id])S.models[id]=saved.models[id];});
           localStorage.setItem('om_keys',JSON.stringify(S.keys));
-          localStorage.setItem('om_models',JSON.stringify(S.models));
+          setAppSetting('models',S.models);
         } catch(e) {}
         // Remove insecure key storage from Drive
         delete ds.master._keys_encrypted;

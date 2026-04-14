@@ -1375,7 +1375,7 @@ setInterval(function() { if (S.token) checkRxRefillAlerts(); }, 6 * 3600 * 1000)
 // ── 날씨 자동 수집 (OpenWeatherMap) ──
 const _WEATHER_LAT=37.5326;const _WEATHER_LON=127.1378;
 async function fetchWeather() {
-  const key=localStorage.getItem('om_weather_key')||'';
+  const key=getAppSetting('weatherKey')||'';
   if(!key) return null;
   try {
     const url=`https://api.openweathermap.org/data/2.5/weather?lat=${_WEATHER_LAT}&lon=${_WEATHER_LON}&appid=${key}&units=metric&lang=kr`;

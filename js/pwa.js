@@ -267,8 +267,8 @@ function toggleNotifications() {
   const perm = Notification.permission;
   if(perm==='granted') {
     // 알림 켜짐/꺼짐 토글
-    const muted=localStorage.getItem('om_notif_muted')==='1';
-    localStorage.setItem('om_notif_muted',muted?'0':'1');
+    const muted=getAppSetting('notifMuted')==='1';
+    setAppSetting('notifMuted',muted?'0':'1');
     showToast(muted?'🔔 알림 켜짐':'🔕 알림 꺼짐 — 기록 알림이 표시되지 않습니다');
     updateNotifButton();
   } else if(perm==='denied') {
@@ -279,7 +279,7 @@ function toggleNotifications() {
 }
 
 function isNotifEnabled() {
-  return ('Notification' in window) && Notification.permission==='granted' && localStorage.getItem('om_notif_muted')!=='1';
+  return ('Notification' in window) && Notification.permission==='granted' && getAppSetting('notifMuted')!=='1';
 }
 
 function updateNotifButton() {
@@ -288,7 +288,7 @@ function updateNotifButton() {
   if(!('Notification' in window)) { btn.textContent='🔕 알림 미지원'; return; }
   const perm=Notification.permission;
   if(perm==='granted') {
-    const muted=localStorage.getItem('om_notif_muted')==='1';
+    const muted=getAppSetting('notifMuted')==='1';
     btn.textContent=muted?'🔕 알림 꺼짐':'🔔 알림 켜짐';
   }
   else if(perm==='denied') btn.textContent='🔕 알림 차단됨';
