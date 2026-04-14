@@ -55,6 +55,18 @@ function toggleChip(el,cls){
 
 // ── 약물 수량 + 24시간 경고 시스템 (메인앱) ──
 const _logMedQty = {}; // {medName: {qty:1, unit:'T'}}
+// 제형별 단위 + 스텝 설정
+const _LOG_MED_UNIT_CFG = {
+  'T':{step:0.5,min:0.5,max:20},
+  'C':{step:1,min:1,max:20},
+  'mL':{step:1,min:1,max:100},
+  '포':{step:1,min:1,max:10},
+  '회':{step:1,min:1,max:10},
+  '매':{step:1,min:1,max:5},
+  '방울':{step:1,min:1,max:20},
+  '개':{step:1,min:1,max:5},
+  'puff':{step:1,min:1,max:10},
+};
 const _LOG_MED_INGREDIENT_LIMITS = {
   'acetaminophen': {maxMg:4000, warn:'간독성 위험', meds:{'AAP 500mg':500,'AAP 1000mg':1000}},
   'loxoprofen': {maxMg:180, warn:'위장관 부작용', meds:{'Loxoprofen':60}},
@@ -62,16 +74,28 @@ const _LOG_MED_INGREDIENT_LIMITS = {
 };
 
 function _getLogMedUnit(name){
-  if(/시럽|건조시럽/.test(name)) return /건조시럽/.test(name)?'포':'mL';
+  if(/건조시럽/.test(name)) return '포';
+  if(/시럽|액$|액\s|용액|현탁|리퀴드/.test(name)) return 'mL';
+  if(/주사|주$|앰플|앰퓰|바이알|inj/i.test(name)) return '회';
+  if(/캡슐|캡$|cap/i.test(name)) return 'C';
+  if(/패치|첩부/.test(name)) return '매';
+  if(/크림|연고|겔$|겔\s|로션|외용/.test(name)) return '회';
+  if(/스프레이|흡입|네뷸/.test(name)) return 'puff';
+  if(/점안|점비|점이|안약/.test(name)) return '방울';
+  if(/좌약|좌제|좌$/.test(name)) return '개';
   return 'T';
 }
 function _getOrInitLogQty(med){
-  if(!_logMedQty[med]) _logMedQty[med]={qty:1, unit:_getLogMedUnit(med)};
+  if(!_logMedQty[med]){
+    const unit=_getLogMedUnit(med);
+    _logMedQty[med]={qty:1, unit};
+  }
   return _logMedQty[med];
 }
 function _adjLogMedQty(med, delta){
   const q=_getOrInitLogQty(med);
-  q.qty=Math.max(0.5, Math.min(20, q.qty+delta));
+  const cfg=_LOG_MED_UNIT_CFG[q.unit]||_LOG_MED_UNIT_CFG['T'];
+  q.qty=Math.max(cfg.min, Math.min(cfg.max, q.qty+(delta>0?cfg.step:-cfg.step)));
   _renderLogMedQtyUI();
   _updateLogMedWarnings();
 }
