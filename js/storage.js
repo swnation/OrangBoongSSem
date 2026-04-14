@@ -49,12 +49,13 @@ function _fsWriteThrough(path, data) {
 // ═══════════════════════════════════════════════════════════════
 async function syncFromFirestore() {
   if (!isFirebaseReady() || !getFirebaseUid()) return;
-  console.info('[Storage] Firestore → localStorage 동기화 시작');
+  console.info('[Storage] Firestore 동기화 시작');
 
   try {
-    // 1) Settings 동기화
+    // 1) Settings: Firestore 확인 → 없으면 localStorage → Firestore 업로드
     const settings = await fsGetSettings();
-    if (settings) {
+    if (settings && Object.keys(settings).length > 1) {
+      // Firestore에 데이터 있음 → localStorage에 반영
       let count = 0;
       Object.entries(_SETTINGS_KEYS).forEach(([name, lsKey]) => {
         if (settings[name] !== undefined && settings[name] !== null) {
@@ -63,24 +64,51 @@ async function syncFromFirestore() {
           count++;
         }
       });
-      console.info(`[Storage] Settings ${count}개 동기화`);
-    }
-
-    // 2) Custom Items 동기화 (현재 도메인)
-    const dom = _storageGet('om_domain') || 'orangi-migraine';
-    let customCount = 0;
-    for (const group of _CUSTOM_GROUPS) {
-      const items = await fsGetCustomItems(dom, group);
-      if (items && items.length) {
-        const existing = _storageGetJSON(_customKey(dom, group), []);
-        const merged = [...new Set([...existing, ...items])];
-        _storageSetJSON(_customKey(dom, group), merged);
-        customCount += items.length;
+      console.info(`[Storage] Settings ${count}개 Firestore → local`);
+    } else {
+      // Firestore 비어있음 → localStorage → Firestore 초기 업로드
+      const localSettings = {};
+      let uploadCount = 0;
+      Object.entries(_SETTINGS_KEYS).forEach(([name, lsKey]) => {
+        const v = _storageGet(lsKey);
+        if (v !== null) { localSettings[name] = v; uploadCount++; }
+      });
+      if (uploadCount) {
+        localSettings.updatedAt = new Date().toISOString();
+        localSettings._migratedFrom = 'localStorage';
+        const path = fsSettingsPath();
+        if (path) await firestoreSet(path, localSettings, true);
+        console.info(`[Storage] Settings ${uploadCount}개 local → Firestore (초기 업로드)`);
       }
     }
-    if (customCount) console.info(`[Storage] CustomItems ${customCount}개 동기화 (${dom})`);
 
-    console.info('[Storage] Firestore → localStorage 동기화 완료');
+    // 2) Custom Items: 모든 도메인
+    const domains = ['orangi-migraine','orangi-mental','orangi-health','bung-mental','bung-health','bungruki'];
+    for (const dom of domains) {
+      for (const group of _CUSTOM_GROUPS) {
+        const fsItems = await fsGetCustomItems(dom, group);
+        const lsItems = _storageGetJSON(_customKey(dom, group), []);
+
+        if (fsItems && fsItems.length && lsItems.length) {
+          // 양쪽 다 있음 → 병합
+          const merged = [...new Set([...lsItems, ...fsItems])];
+          _storageSetJSON(_customKey(dom, group), merged);
+          if (merged.length > fsItems.length) {
+            const path = fsCustomItemsPath(dom, group);
+            if (path) await firestoreSet(path, { items: merged, updatedAt: new Date().toISOString() });
+          }
+        } else if (fsItems && fsItems.length) {
+          // Firestore만 있음 → localStorage에 반영
+          _storageSetJSON(_customKey(dom, group), fsItems);
+        } else if (lsItems.length) {
+          // localStorage만 있음 → Firestore 업로드
+          const path = fsCustomItemsPath(dom, group);
+          if (path) await firestoreSet(path, { items: lsItems, updatedAt: new Date().toISOString(), _migratedFrom: 'localStorage' });
+        }
+      }
+    }
+
+    console.info('[Storage] Firestore 동기화 완료');
   } catch(e) {
     console.warn('[Storage] Firestore 동기화 실패 (오프라인?):', e);
   }
