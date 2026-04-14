@@ -152,25 +152,25 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
         <div style="flex:1">
           <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">붕쌤 (즉시 알림)</div>
           <input class="settings-input" id="ntfy-bung-input" placeholder="붕쌤 ntfy 토픽"
-            onchange="localStorage.setItem('om_ntfy_bung',this.value.trim());syncNtfyConfig()">
+            onchange="setAppSetting('ntfyBung',this.value.trim());syncNtfyConfig()">
         </div>
         <div style="flex:1">
           <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">오랑이 (경과 알림)</div>
           <input class="settings-input" id="ntfy-orangi-input" placeholder="오랑이 ntfy 토픽"
-            onchange="localStorage.setItem('om_ntfy_orangi',this.value.trim());syncNtfyConfig()">
+            onchange="setAppSetting('ntfyOrangi',this.value.trim());syncNtfyConfig()">
         </div>
       </div>
       <div class="settings-note">기록 저장 시 붕쌤에게 즉시 알림, 오랑이에게 경과 확인 알림을 보냅니다.</div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
         <span style="font-size:.72rem;color:var(--mu)">기본 경과 알림:</span>
         <input type="number" class="settings-input" id="ntfy-delay-input" style="width:60px;text-align:center" min="10" max="480" value="120"
-          onchange="localStorage.setItem('om_outcome_delay',this.value);syncNtfyConfig()">
+          onchange="setAppSetting('outcomeDelay',this.value);syncNtfyConfig()">
         <span style="font-size:.72rem;color:var(--mu)">분 후</span>
       </div>
       <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
         <span style="font-size:.72rem;color:var(--mu)">💊 약물 복용 알림:</span>
         <select id="ntfy-med-delay-input" class="settings-input" style="width:80px;text-align:center"
-          onchange="localStorage.setItem('om_med_reminder_delay',this.value);syncNtfyConfig()">
+          onchange="setAppSetting('medReminderDelay',this.value);syncNtfyConfig()">
           <option value="0">끄기</option>
           <option value="15">15분</option>
           <option value="30">30분</option>
@@ -197,6 +197,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="../js/storage.js"></script>
 <script>
 'use strict';
 
@@ -224,16 +225,16 @@ function getCustom(key) {
   const mk=_QC_KEY_MAP[key];
   // 메인 앱 키에서 먼저 읽고, 없으면 구 키(om_qc_)도 병합
   try {
-    const main=mk?JSON.parse(localStorage.getItem(mk)||'[]'):[];
-    const old=JSON.parse(localStorage.getItem('om_qc_'+key)||'[]');
-    if(old.length&&mk) { const merged=[...new Set([...main,...old])]; localStorage.setItem(mk,JSON.stringify(merged)); localStorage.removeItem('om_qc_'+key); return merged; }
+    const main=mk?_storageGetJSON(mk,[]):[];
+    const old=_storageGetJSON('om_qc_'+key,[]);
+    if(old.length&&mk) { const merged=[...new Set([...main,...old])]; _storageSetJSON(mk,merged); _storageRemove('om_qc_'+key); return merged; }
     return main.length?main:old;
   } catch { return []; }
 }
 function saveCustom(key, arr) {
   const mk=_QC_KEY_MAP[key];
-  if(mk) localStorage.setItem(mk, JSON.stringify(arr));
-  else localStorage.setItem('om_qc_'+key, JSON.stringify(arr));
+  if(mk) _storageSetJSON(mk,arr);
+  else _storageSetJSON('om_qc_'+key,arr);
   // 클라우드에도 커스텀 항목 동기화
   syncCustomsToCloud();
 }
@@ -241,15 +242,15 @@ function getAllCustoms() {
   const result={};
   Object.keys(_QC_KEY_MAP).forEach(k=>{result[k]=getCustom(k);});
   // ntfy 토픽도 포함 (기기간 공유)
-  const nb=localStorage.getItem('om_ntfy_bung');if(nb) result._ntfy_bung=nb;
-  const no=localStorage.getItem('om_ntfy_orangi');if(no) result._ntfy_orangi=no;
+  const nb=getAppSetting('ntfyBung');if(nb) result._ntfy_bung=nb;
+  const no=getAppSetting('ntfyOrangi');if(no) result._ntfy_orangi=no;
   return result;
 }
 function setAllCustoms(obj) {
   if(!obj) return;
   // ntfy 토픽 복원
-  if(obj._ntfy_bung&&!localStorage.getItem('om_ntfy_bung')) localStorage.setItem('om_ntfy_bung',obj._ntfy_bung);
-  if(obj._ntfy_orangi&&!localStorage.getItem('om_ntfy_orangi')) localStorage.setItem('om_ntfy_orangi',obj._ntfy_orangi);
+  if(obj._ntfy_bung&&!getAppSetting('ntfyBung')) setAppSetting('ntfyBung',obj._ntfy_bung);
+  if(obj._ntfy_orangi&&!getAppSetting('ntfyOrangi')) setAppSetting('ntfyOrangi',obj._ntfy_orangi);
   // 커스텀 칩 복원
   Object.entries(obj).forEach(([k,arr])=>{
     if(k.startsWith('_')) return; // skip settings keys
@@ -257,8 +258,8 @@ function setAllCustoms(obj) {
     const existing=getCustom(k);
     const merged=[...new Set([...existing,...arr])];
     const mk=_QC_KEY_MAP[k];
-    if(mk) localStorage.setItem(mk, JSON.stringify(merged));
-    else localStorage.setItem('om_qc_'+k, JSON.stringify(merged));
+    if(mk) _storageSetJSON(mk, merged);
+    else _storageSetJSON('om_qc_'+k,merged);
   });
 }
 let _customSyncTimer=null;
@@ -280,7 +281,7 @@ function _syncCustomsFromMain(){
   Object.keys(_QC_KEY_MAP).forEach(k=>{
     const mk=_QC_KEY_MAP[k];
     try{
-      const items=JSON.parse(localStorage.getItem(mk)||'[]');
+      const items=_storageGetJSON(mk,[]);
       const current=getCustom(k);
       const added=items.filter(i=>!current.includes(i));
       if(added.length) newItems.push({key:k,label:labels[k]||k,items:added});
@@ -354,16 +355,16 @@ function saveQuickConfig(cfg){
 function applyQuickConfig(){
   const cfg=getQuickConfig();
   // 클라우드 → localStorage 복원 (클라우드가 진실)
-  if(cfg.ntfy_bung) localStorage.setItem('om_ntfy_bung',cfg.ntfy_bung);
-  if(cfg.ntfy_orangi) localStorage.setItem('om_ntfy_orangi',cfg.ntfy_orangi);
-  if(cfg.outcome_delay) localStorage.setItem('om_outcome_delay',cfg.outcome_delay);
-  if(cfg.med_reminder_delay!==undefined) localStorage.setItem('om_med_reminder_delay',String(cfg.med_reminder_delay));
+  if(cfg.ntfy_bung) setAppSetting('ntfyBung',cfg.ntfy_bung);
+  if(cfg.ntfy_orangi) setAppSetting('ntfyOrangi',cfg.ntfy_orangi);
+  if(cfg.outcome_delay) setAppSetting('outcomeDelay',cfg.outcome_delay);
+  if(cfg.med_reminder_delay!==undefined) setAppSetting('medReminderDelay',String(cfg.med_reminder_delay));
 }
 function syncNtfyConfig(){
-  const nb=localStorage.getItem('om_ntfy_bung')||'';
-  const no=localStorage.getItem('om_ntfy_orangi')||'';
-  const od=localStorage.getItem('om_outcome_delay')||'120';
-  const md=localStorage.getItem('om_med_reminder_delay')||'30';
+  const nb=getAppSetting('ntfyBung')||'';
+  const no=getAppSetting('ntfyOrangi')||'';
+  const od=getAppSetting('outcomeDelay')||'120';
+  const md=getAppSetting('medReminderDelay')||'30';
   const entry=saveQuickConfig({ntfy_bung:nb,ntfy_orangi:no,outcome_delay:od,med_reminder_delay:md});
   cloudSave([entry]);
 }
@@ -376,7 +377,7 @@ function kstNow() {
 
 // 날씨 자동 수집 (메인앱과 동일)
 async function fetchWeather(){
-  const key=localStorage.getItem('om_weather_key')||'';
+  const key=getAppSetting('weatherKey')||'';
   if(!key) return null;
   try{
     const r=await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=37.5326&lon=127.1378&appid=${key}&units=metric&lang=kr`,{signal:AbortSignal.timeout(2000)});
@@ -516,7 +517,7 @@ function esc(s) {
 }
 
 function getQuickLogs() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }
+  try { return _storageGetJSON(LS_KEY,[]); }
   catch { return []; }
 }
 // 기록만 반환 (설정 항목 제외)
@@ -526,7 +527,7 @@ function getQuickEntries() {
 
 // v9.0 부위명 마이그레이션
 (function migrateSiteNames(){
-  if(localStorage.getItem('om_site_migrated')) return;
+  if(_storageGet('om_site_migrated')) return;
   const logs=getQuickLogs();
   const renames={'미간':'이마','눈썹위':'눈썹부위'};
   let changed=false;
@@ -539,8 +540,8 @@ function getQuickEntries() {
       return s;
     });
   });
-  if(changed) localStorage.setItem(LS_KEY,JSON.stringify(logs));
-  localStorage.setItem('om_site_migrated','1');
+  if(changed) _storageSetJSON(LS_KEY,logs);
+  _storageSet('om_site_migrated','1');
 })();
 
 // 커스텀 항목 자동 복구: 기록에 쓰인 항목 중 기본 목록에 없는 것을 커스텀에 추가
@@ -576,7 +577,7 @@ function getQuickEntries() {
 })();
 
 function saveQuickLogs(logs) {
-  localStorage.setItem(LS_KEY, JSON.stringify(logs));
+  _storageSetJSON(LS_KEY,logs);
   updatePendingCount();
 }
 
@@ -1064,7 +1065,7 @@ function renderForm(entry) {
   renderRecentQuickLogs();
   renderHeadDiagram();
   // 기본 알림 시간 반영 (기본 2시간)
-  const defDelay=localStorage.getItem('om_outcome_delay')||'120';
+  const defDelay=getAppSetting('outcomeDelay')||'120';
   const delSel=document.getElementById('q-outcome-delay');
   if(delSel){if([...delSel.options].some(o=>o.value===defDelay))delSel.value=defDelay;else delSel.value='120';}
   // Sync diagram with pre-selected chips (edit mode)
@@ -1235,7 +1236,7 @@ function _autoDetectQuickOutcomes() {
 // ── ntfy 알림 (빠른 기록 → 붕쌤 즉시 알림) ──
 async function sendQuickNtfy(entry) {
   // 붕쌤 즉시 알림 (토픽 독립 — 붕쌤 토픽 없어도 경과 알림은 별도 예약)
-  const topic=localStorage.getItem('om_ntfy_bung');
+  const topic=getAppSetting('ntfyBung');
   if(topic){
     const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
     const sites=(entry.sites||[]).join(', ');
@@ -1248,10 +1249,10 @@ async function sendQuickNtfy(entry) {
   // 새 기록 시 이전 미발송 경과 알림 취소 (새 기록이 곧 경과 데이터가 되므로)
   _cancelPendingOutcomeNtfy(entry.id);
   // 경과 알림 예약
-  const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||localStorage.getItem('om_outcome_delay')||'120');
+  const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||getAppSetting('outcomeDelay')||'120');
   if(outcomeDelay>0) scheduleOutcomeNtfy(entry,outcomeDelay);
   // 약물 미입력 시 복용 확인 알림 (서버사이드, 설정값 사용)
-  const medDelay=parseInt(localStorage.getItem('om_med_reminder_delay')||'30');
+  const medDelay=parseInt(getAppSetting('medReminderDelay')||'30');
   if(medDelay>0&&!(entry.meds||[]).length&&!entry._medReminderSent) _sendMedReminder(entry, medDelay);
 }
 
@@ -1295,7 +1296,7 @@ function _markOutcomeSent(entryId){
   if(idx>=0&&!logs[idx].outcomeNotifySent){logs[idx].outcomeNotifySent=true;saveQuickLogs(logs);cloudSave([logs[idx]]);}
 }
 async function _sendServerScheduledNtfy(entry,delayMin){
-  const orangiTopic=localStorage.getItem('om_ntfy_orangi');
+  const orangiTopic=getAppSetting('ntfyOrangi');
   if(!orangiTopic||entry.outcome) return;
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
   const meds=(entry.meds||[]).join(', ');
@@ -1316,17 +1317,17 @@ async function _sendServerScheduledNtfy(entry,delayMin){
 }
 
 function scheduleOutcomeNtfy(entry,customDelayMin){
-  const delayMin=customDelayMin||parseInt(localStorage.getItem('om_outcome_delay')||'120');
+  const delayMin=customDelayMin||parseInt(getAppSetting('outcomeDelay')||'120');
   _setOutcomeTimer(String(entry.id),delayMin);
 }
 
 // 경과 알림 시간 변경 시 기본값 고정 여부 확인
 function _onOutcomeDelayChange(val){
-  const current=localStorage.getItem('om_outcome_delay')||'120';
+  const current=getAppSetting('outcomeDelay')||'120';
   if(val===current) return;
   const labels={'0':'안 보냄','30':'30분','60':'1시간','90':'1시간 30분','120':'2시간','180':'3시간'};
   if(confirm('앞으로도 경과 알림을 '+(labels[val]||val+'분')+' 후로 고정할까요?\n\n확인 → 기본값 변경\n취소 → 이번만 적용')){
-    localStorage.setItem('om_outcome_delay',val);
+    setAppSetting('outcomeDelay',val);
     syncNtfyConfig();
     showToast('⏱ 기본 경과 알림: '+(labels[val]||val+'분'));
   }
@@ -1349,7 +1350,7 @@ async function sendOutcomeNtfy(entryId){
   const allLogs=getQuickLogs();
   const idx=allLogs.findIndex(l=>String(l.id)===String(entryId));
   if(idx>=0){allLogs[idx].outcomeNotifySent=true;saveQuickLogs(allLogs);cloudSave([allLogs[idx]]);}
-  const orangiTopic=localStorage.getItem('om_ntfy_orangi');
+  const orangiTopic=getAppSetting('ntfyOrangi');
   if(!orangiTopic) return;
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
   const meds=(entry.meds||[]).join(', ');
@@ -1382,7 +1383,7 @@ function checkPendingOutcome(){
 
 // ── 약물 복용 확인 알림 (서버사이드 스케줄링) ──
 async function _sendMedReminder(entry, delayMin){
-  const orangiTopic=localStorage.getItem('om_ntfy_orangi');
+  const orangiTopic=getAppSetting('ntfyOrangi');
   if(!orangiTopic) return;
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
   const baseUrl=location.href.split('#')[0].split('?')[0];
@@ -1406,7 +1407,7 @@ function quickAddMeds(entryId){
   const entry=logs[idx];
   const existing=(entry.meds||[]);
   // 자주 쓰는 약물 목록
-  const allMeds=[...new Set([...MEDS,...(JSON.parse(localStorage.getItem('om_custom_meds_orangi-migraine')||'[]'))])];
+  const allMeds=[...new Set([...MEDS,...(getCustomItems('orangi-migraine','meds'))])];
   const chips=allMeds.map(m=>{
     const sel=existing.includes(m);
     return '<span class="chip'+(sel?' sel':'')+'" data-val="'+esc(m)+'" onclick="this.classList.toggle(\'sel\')" style="font-size:.72rem;padding:4px 10px;border:1.5px solid var(--bd);border-radius:16px;cursor:pointer;background:'+(sel?'var(--ac)':'var(--sf)')+';color:'+(sel?'#fff':'var(--ink)')+'">'+esc(m)+'</span>';
@@ -1538,7 +1539,7 @@ function clearQuickOutcome(idx) {
 }
 
 async function testFollowupNtfy() {
-  var topic=localStorage.getItem('om_ntfy_orangi');
+  var topic=getAppSetting('ntfyOrangi');
   if(!topic){showToast('⚠️ 오랑이 경과 알림 토픽이 설정되지 않았습니다');return;}
   var baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   var rateUrl=baseUrl+'rate.html';
@@ -1549,7 +1550,7 @@ async function testFollowupNtfy() {
     if(r.ok) showToast('✅ 경과 테스트 알림 전송됨!');
     else showToast('❌ 실패: HTTP '+r.status,4000);
   }catch(e){showToast('❌ 네트워크 오류: '+e.message,4000);}
-  var bungTopic=localStorage.getItem('om_ntfy_bung');
+  var bungTopic=getAppSetting('ntfyBung');
   if(bungTopic){
     try{await fetch('https://ntfy.sh/'+encodeURIComponent(bungTopic),{method:'POST',body:'🔔 붕쌤 알림 테스트\n이 알림이 보이면 정상 작동합니다!'});}catch(e){}
   }
@@ -1700,8 +1701,8 @@ async function cloudSaveAll(logs) {
 const SYNC_URL_KEY = 'om_quick_sync_url';
 const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzYF46qeLJRGIQsqfXbic6ITRGKr1eA9chrVJ8Fu5_gM7TDSYUFlpaWQGmSR9RdAACjzw/exec';
 
-function getSyncUrl() { return localStorage.getItem(SYNC_URL_KEY) || DEFAULT_SYNC_URL; }
-function saveSyncUrl(url) { localStorage.setItem(SYNC_URL_KEY, url.trim()); }
+function getSyncUrl() { return _storageGet(SYNC_URL_KEY) || DEFAULT_SYNC_URL; }
+function saveSyncUrl(url) { _storageSet(SYNC_URL_KEY, url.trim()); }
 
 function toggleSettings() {
   const panel = document.getElementById('settings-panel');
@@ -1710,10 +1711,10 @@ function toggleSettings() {
     document.getElementById('sync-url-input').value = getSyncUrl();
     document.getElementById('sync-indicator').innerHTML = getSyncUrl()
       ? '<span style="color:#2d6a4f">☁️ 동기화 활성</span>' : '<span style="color:#c03030">동기화 꺼짐</span>';
-    document.getElementById('ntfy-bung-input').value = localStorage.getItem('om_ntfy_bung')||'';
-    document.getElementById('ntfy-orangi-input').value = localStorage.getItem('om_ntfy_orangi')||'';
-    document.getElementById('ntfy-delay-input').value = localStorage.getItem('om_outcome_delay')||'120';
-    document.getElementById('ntfy-med-delay-input').value = localStorage.getItem('om_med_reminder_delay')||'30';
+    document.getElementById('ntfy-bung-input').value = getAppSetting('ntfyBung')||'';
+    document.getElementById('ntfy-orangi-input').value = getAppSetting('ntfyOrangi')||'';
+    document.getElementById('ntfy-delay-input').value = getAppSetting('outcomeDelay')||'120';
+    document.getElementById('ntfy-med-delay-input').value = getAppSetting('medReminderDelay')||'30';
   }
 }
 
@@ -1866,8 +1867,8 @@ if ('serviceWorker' in navigator) {
 
 // ── Quick 프리셋 ──
 function _qPresetKey() { return 'om_presets_orangi-migraine'; } // quick은 편두통 전용
-function _loadQPresets() { try{return JSON.parse(localStorage.getItem(_qPresetKey())||'[]');}catch(e){return [];} }
-function _saveQPresets(list) { localStorage.setItem(_qPresetKey(),JSON.stringify(list)); }
+function _loadQPresets() { try{return _storageGetJSON(_qPresetKey(),[]);}catch(e){return [];} }
+function _saveQPresets(list) { _storageSetJSON(_qPresetKey(),list); }
 
 function saveQuickPreset() {
   var chips=[];
