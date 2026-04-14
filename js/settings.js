@@ -50,11 +50,11 @@ function openKeys() {
   }).join('') + `<div class="key-group">
     <div class="key-row">
       <div class="key-label">📱 빠른 기록 동기화 URL
-        ${localStorage.getItem('om_quick_sync_url')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
+        ${getAppSetting('quickSyncUrl')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
       </div>
     </div>
     <div class="key-input-row">
-      <input class="key-input ${localStorage.getItem('om_quick_sync_url')?'set':''}" type="url" id="key-sync-url" value="${localStorage.getItem('om_quick_sync_url')||''}" placeholder="Google Apps Script 배포 URL">
+      <input class="key-input ${getAppSetting('quickSyncUrl')?'set':''}" type="url" id="key-sync-url" value="${getAppSetting('quickSyncUrl')||''}" placeholder="Google Apps Script 배포 URL">
     </div>
     <div class="key-note">💡 오랑이 빠른 기록(quick.html)을 다른 기기에서도 받아볼 수 있습니다. gas-quicklog.js를 Apps Script에 배포 후 URL을 입력하세요.</div>
   </div><hr style="border:none;border-top:1px solid var(--bd);margin:4px 0">
@@ -73,22 +73,22 @@ function openKeys() {
   <div class="key-group">
     <div class="key-row">
       <div class="key-label">🔔 ntfy 토픽 — 오랑이 경과 알림
-        ${localStorage.getItem('om_ntfy_orangi')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
+        ${getAppSetting('ntfyOrangi')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
       </div>
     </div>
     <div class="key-input-row">
-      <input class="key-input ${localStorage.getItem('om_ntfy_orangi')?'set':''}" type="text" id="key-ntfy-orangi" value="${localStorage.getItem('om_ntfy_orangi')||''}" placeholder="예: orangi-ha-7x9k2m">
+      <input class="key-input ${getAppSetting('ntfyOrangi')?'set':''}" type="text" id="key-ntfy-orangi" value="${getAppSetting('ntfyOrangi')||''}" placeholder="예: orangi-ha-7x9k2m">
     </div>
     <div class="key-note">💡 두통 기록 2시간 후 경과 확인 알림 (호전/비슷/악화). 오랑이 폰 ntfy 앱에서 같은 토픽 구독 필요.</div>
   </div><hr style="border:none;border-top:1px solid var(--bd);margin:4px 0">
   <div class="key-group">
     <div class="key-row">
       <div class="key-label">🔔 ntfy 토픽 — 붕쌤 즉시 알림
-        ${localStorage.getItem('om_ntfy_bung')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
+        ${getAppSetting('ntfyBung')?`<span class="key-masked">설정됨</span>`:`<span style="font-size:.68rem;color:#8a5a2d">미설정</span>`}
       </div>
     </div>
     <div class="key-input-row">
-      <input class="key-input ${localStorage.getItem('om_ntfy_bung')?'set':''}" type="text" id="key-ntfy-bung" value="${localStorage.getItem('om_ntfy_bung')||''}" placeholder="예: bung-notify-3k8m">
+      <input class="key-input ${getAppSetting('ntfyBung')?'set':''}" type="text" id="key-ntfy-bung" value="${getAppSetting('ntfyBung')||''}" placeholder="예: bung-notify-3k8m">
     </div>
     <div class="key-note">💡 오랑이 두통 기록 시 붕쌤에게 즉시 알림. 붕쌤 폰 ntfy 앱에서 같은 토픽 구독 필요.</div>
     <button class="btn-cancel" onclick="testNtfy()" style="font-size:.68rem;margin-top:8px">🔔 ntfy 테스트 알림 보내기</button>
@@ -111,24 +111,21 @@ async function saveKeys() {
     if(m) S.models[id]=m;
   });
   // #19 키 설정 시간 기록
-  if(!S.keysSetAt) try { S.keysSetAt=JSON.parse(localStorage.getItem('keysSetAt'))||{}; } catch(e){ S.keysSetAt={}; }
+  if(!S.keysSetAt) try { S.keysSetAt=_storageGetJSON('keysSetAt',null)||{}; } catch(e){ S.keysSetAt={}; }
   Object.keys(KEY_INFO).forEach(id=>{
     if(S.keys[id]&&!S.keysSetAt[id]) S.keysSetAt[id]=Date.now();
     if(!S.keys[id]) delete S.keysSetAt[id];
   });
-  localStorage.setItem('keysSetAt',JSON.stringify(S.keysSetAt));
+  _storageSetJSON('keysSetAt',S.keysSetAt);
   setAppSetting('models',S.models);
   const syncUrl=(document.getElementById('key-sync-url')?.value||'').trim();
-  if(syncUrl) localStorage.setItem('om_quick_sync_url',syncUrl);
-  else localStorage.removeItem('om_quick_sync_url');
+  setAppSetting('quickSyncUrl',syncUrl||null);
   const weatherKey=(document.getElementById('key-weather')?.value||'').trim();
   setAppSetting('weatherKey',weatherKey||null);
   const ntfyOrangi=(document.getElementById('key-ntfy-orangi')?.value||'').trim();
-  if(ntfyOrangi) localStorage.setItem('om_ntfy_orangi',ntfyOrangi);
-  else localStorage.removeItem('om_ntfy_orangi');
+  setAppSetting('ntfyOrangi',ntfyOrangi||null);
   const ntfyBung=(document.getElementById('key-ntfy-bung')?.value||'').trim();
-  if(ntfyBung) localStorage.setItem('om_ntfy_bung',ntfyBung);
-  else localStorage.removeItem('om_ntfy_bung');
+  setAppSetting('ntfyBung',ntfyBung||null);
   // 키 암호화 저장
   if(S._keyPin) {
     await saveKeysEncrypted();
@@ -175,18 +172,18 @@ async function exportKeysEncrypted() {
 
 function _getSettingsPayload() {
   return {keys:S.keys,models:S.models,
-    ntfyOrangi:localStorage.getItem('om_ntfy_orangi')||'',
-    ntfyBung:localStorage.getItem('om_ntfy_bung')||'',
+    ntfyOrangi:getAppSetting('ntfyOrangi')||'',
+    ntfyBung:getAppSetting('ntfyBung')||'',
     weatherKey:getAppSetting('weatherKey')||'',
-    syncUrl:localStorage.getItem('om_quick_sync_url')||''};
+    syncUrl:getAppSetting('quickSyncUrl')||''};
 }
 function _restoreSettings(parsed) {
   if(parsed.keys) Object.assign(S.keys,parsed.keys);
   if(parsed.models) Object.assign(S.models,parsed.models);
-  if(parsed.ntfyOrangi) localStorage.setItem('om_ntfy_orangi',parsed.ntfyOrangi);
-  if(parsed.ntfyBung) localStorage.setItem('om_ntfy_bung',parsed.ntfyBung);
+  if(parsed.ntfyOrangi) setAppSetting('ntfyOrangi',parsed.ntfyOrangi);
+  if(parsed.ntfyBung) setAppSetting('ntfyBung',parsed.ntfyBung);
   if(parsed.weatherKey) setAppSetting('weatherKey',parsed.weatherKey);
-  if(parsed.syncUrl) localStorage.setItem('om_quick_sync_url',parsed.syncUrl);
+  if(parsed.syncUrl) setAppSetting('quickSyncUrl',parsed.syncUrl);
 }
 
 // API 키 Google Drive 백업/복원
@@ -606,7 +603,7 @@ function changeAIModel(aiId,newModel) {
 // ═══════════════════════════════════════════════════════════════
 function checkKeyAge() {
   if(!S.keysSetAt) {
-    try { S.keysSetAt=JSON.parse(localStorage.getItem('keysSetAt'))||{}; } catch(e){ S.keysSetAt={}; }
+    try { S.keysSetAt=_storageGetJSON('keysSetAt',null)||{}; } catch(e){ S.keysSetAt={}; }
   }
   const now=Date.now();
   const warns=[];
@@ -617,7 +614,7 @@ function checkKeyAge() {
     const days=Math.floor((now-setAt)/(1000*60*60*24));
     if(days>=90) warns.push({id,days});
   });
-  try { localStorage.setItem('keysSetAt',JSON.stringify(S.keysSetAt)); } catch(e){}
+  try { _storageSetJSON('keysSetAt',S.keysSetAt); } catch(e){}
   return warns;
 }
 

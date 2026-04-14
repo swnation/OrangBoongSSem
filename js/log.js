@@ -92,17 +92,17 @@ let _quickLogCache = null; // 클라우드+로컬 병합 캐시
 
 function getQuickLogs() {
   if (_quickLogCache) return _quickLogCache;
-  try { return JSON.parse(localStorage.getItem('om_quick_logs') || '[]').filter(l=>l._type!=='config'); } catch { return []; }
+  try { return _storageGetJSON('om_quick_logs',[]).filter(l=>l._type!=='config'); } catch { return []; }
 }
 function getPendingQuickLogs() { return getQuickLogs().filter(l => !l.synced); }
 function saveQuickLogs(logs) {
-  localStorage.setItem('om_quick_logs', JSON.stringify(logs));
+  _storageSetJSON('om_quick_logs',logs);
   _quickLogCache = logs;
   updateQuickLogBadge();
 }
 
 const _DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzYF46qeLJRGIQsqfXbic6ITRGKr1eA9chrVJ8Fu5_gM7TDSYUFlpaWQGmSR9RdAACjzw/exec';
-function getQuickSyncUrl() { return localStorage.getItem('om_quick_sync_url') || _DEFAULT_SYNC_URL; }
+function getQuickSyncUrl() { return getAppSetting('quickSyncUrl') || _DEFAULT_SYNC_URL; }
 
 async function fetchQuickLogsFromCloud() {
   const url = getQuickSyncUrl();
@@ -200,7 +200,7 @@ function sendQuickLogNotification(entry) {
 async function pollCloudQuickLogs() {
   const cloud = await fetchQuickLogsFromCloud();
   if (!cloud || !cloud.length) return;
-  const local = JSON.parse(localStorage.getItem('om_quick_logs') || '[]');
+  const local = _storageGetJSON('om_quick_logs',[]);
   const merged = mergeQuickLogs(local, cloud);
   const localIds = new Set(local.map(l=>String(l.id)));
   const newFromCloud = merged.filter(l=>!localIds.has(String(l.id)));
@@ -211,7 +211,7 @@ async function pollCloudQuickLogs() {
   });
   if (merged.length !== local.length || newFromCloud.length > 0 || outcomeChanged) {
     _quickLogCache = null; // 캐시 초기화
-    localStorage.setItem('om_quick_logs', JSON.stringify(merged));
+    _storageSetJSON('om_quick_logs',merged);
     updateQuickLogBadge();
   }
   checkQuickLogUpdates();
@@ -256,12 +256,11 @@ function _syncCustomItemsBidirectional(){
   const keys=['meds','syms','tx','sites_left','sites_right','pain','triggers'];
   let changed=false;
   keys.forEach(k=>{
-    const lsKey='om_custom_'+k+'_'+S.currentDomain;
-    const local=JSON.parse(localStorage.getItem(lsKey)||'[]');
+    const local=getCustomItems(S.currentDomain,k);
     const master=D()?.master?._customItems?.[k]||[];
     if(!master.length&&!local.length) return;
     const merged=[...new Set([...local,...master])];
-    if(merged.length>local.length){localStorage.setItem(lsKey,JSON.stringify(merged));changed=true;}
+    if(merged.length>local.length){setCustomItems(S.currentDomain,k,merged);changed=true;}
   });
   if(changed&&typeof _syncCustomItemsToMaster==='function'){
     _syncCustomItemsToMaster();
@@ -1297,7 +1296,7 @@ async function testNtfy() {
 }
 
 async function sendNtfyBung(entry) {
-  const topic=localStorage.getItem('om_ntfy_bung');
+  const topic=getAppSetting('ntfyBung');
   if(!topic||S.currentDomain!=='orangi-migraine') return;
   const nrs=entry.nrs>=0?`${_scoreLabel()} ${entry.nrs}`:'';
   const sites=(entry.sites||[]).join(', ');
@@ -1308,7 +1307,7 @@ async function sendNtfyBung(entry) {
 }
 
 async function sendNtfyFollowup(entry) {
-  const topic=localStorage.getItem('om_ntfy_orangi');
+  const topic=getAppSetting('ntfyOrangi');
   if(!topic||S.currentDomain!=='orangi-migraine') return;
   const nrs=entry.nrs>=0?`${_scoreLabel()} ${entry.nrs}`:'';
   const tx=[...(entry.meds||[]),...(entry.treatments||[])].join(', ');
@@ -1345,14 +1344,13 @@ async function checkRxRefillAlerts() {
 
   // 오늘 이미 보냈는지 체크 (중복 방지)
   const sentKey = 'om_rx_alert_' + today;
-  const sent = JSON.parse(localStorage.getItem(sentKey) || '[]');
+  const sent = _storageGetJSON(sentKey, []);
 
   for (const a of alerts) {
     const alertId = a.med + '_' + a.daysLeft;
     if (sent.includes(alertId)) continue;
 
-    const topicKey = a.who === '오랑이' ? 'om_ntfy_orangi' : 'om_ntfy_bung';
-    const topic = localStorage.getItem(topicKey);
+    const topic = getAppSetting(a.who === '오랑이' ? 'ntfyOrangi' : 'ntfyBung');
     if (!topic) continue;
 
     const emoji = a.daysLeft === 0 ? '🚨' : '⚠️';
@@ -1365,7 +1363,7 @@ async function checkRxRefillAlerts() {
     } catch (e) { console.warn('rx alert ntfy failed:', e); }
   }
 
-  localStorage.setItem(sentKey, JSON.stringify(sent));
+  _storageSetJSON(sentKey, sent);
 }
 
 // 앱 시작 시 + 매 6시간마다 체크
@@ -1962,10 +1960,10 @@ function openChipManager(type) {
 }
 
 function _removeCustomChip(type,idx) {
-  const key=`om_custom_${type}_`+S.currentDomain;
-  const list=JSON.parse(localStorage.getItem(key)||'[]');
+  const group=type;
+  const list=getCustomItems(S.currentDomain,group);
   const removed=list.splice(idx,1)[0];
-  localStorage.setItem(key,JSON.stringify(list));
+  setCustomItems(S.currentDomain,group,list);
   showToast(`🗑 "${removed}" 삭제됨`);
   closeConfirmModal();
   renderView('log');
@@ -2285,9 +2283,8 @@ function exportLogCSV() {
 // ═══════════════════════════════════════════════════════════════
 // LOG PRESET (프리셋 — 자주 쓰는 칩 조합 원탭 입력)
 // ═══════════════════════════════════════════════════════════════
-function _getPresetKey() { return `om_presets_${S.currentDomain}`; }
-function _loadPresets() { try { return JSON.parse(localStorage.getItem(_getPresetKey())||'[]'); } catch(e) { return []; } }
-function _savePresets(list) { localStorage.setItem(_getPresetKey(), JSON.stringify(list)); }
+function _loadPresets() { return getPresets(S.currentDomain); }
+function _savePresets(list) { setPresets(S.currentDomain, list); }
 
 function saveLogPreset() {
   const chips=[];

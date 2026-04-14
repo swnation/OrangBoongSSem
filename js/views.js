@@ -1400,7 +1400,7 @@ function renderUsageView() {
   Object.entries(DOMAINS).forEach(([domainId,dd])=>{
     if(processedDomains.has(domainId)) return;
     try {
-      const cached=localStorage.getItem('om_usage_'+domainId);
+      const cached=_storageGet('om_usage_'+domainId);
       if(!cached) return;
       const usageData=JSON.parse(cached);
       let dToday=0, dMonth=0, dAll=0;
@@ -1590,7 +1590,7 @@ function _renderUsageCallsBreakdown(monthStr) {
   Object.keys(DOMAINS).forEach(domId=>{
     if(S.domainState[domId]?.master?.usage_data) return;
     try{
-      const cached=localStorage.getItem('om_usage_'+domId);
+      const cached=_storageGet('om_usage_'+domId);
       if(!cached) return;
       const ud=JSON.parse(cached);
       Object.entries(ud).forEach(([date,aiMap])=>{
@@ -2889,7 +2889,7 @@ async function decryptData(encrypted, password) {
 }
 
 function isEncryptionEnabled() {
-  return localStorage.getItem('om_encrypt_enabled')==='true';
+  return getAppSetting('encryptEnabled')==='true';
 }
 
 function getEncryptionPassword() {
@@ -2903,11 +2903,11 @@ function toggleEncryption(enabled) {
     const confirm=prompt('비밀번호를 다시 입력하세요:');
     if(pass!==confirm) { showToast('비밀번호가 일치하지 않습니다.'); return; }
     S._encryptPass=pass;
-    localStorage.setItem('om_encrypt_enabled','true');
+    setAppSetting('encryptEnabled','true');
     showToast('🔐 데이터 암호화가 활성화되었습니다');
   } else {
     S._encryptPass=null;
-    localStorage.removeItem('om_encrypt_enabled');
+    setAppSetting('encryptEnabled',null);
     showToast('🔓 데이터 암호화가 비활성화되었습니다');
   }
 }

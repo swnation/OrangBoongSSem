@@ -16,7 +16,7 @@ function recordUsage(aiId,model,inT,outT,source) {
   // 개별 호출 기록 (모델별/시간대별 추적)
   if(!m.usage_data[today][aiId].calls) m.usage_data[today][aiId].calls=[];
   m.usage_data[today][aiId].calls.push({time:kstTime().slice(0,5),model,in:inT,out:outT,cost:callCost,source:source||''});
-  try { localStorage.setItem('om_usage_'+S.currentDomain, JSON.stringify(m.usage_data)); } catch(e) {}
+  setUsageCache(S.currentDomain, m.usage_data);
 }
 // 저장된 cost가 0이지만 토큰이 있으면 재계산
 function recalcCost(data) {
@@ -37,9 +37,9 @@ function getSidebarCostToday() {
   Object.keys(DOMAINS).forEach(domId=>{
     if(loadedDomains.has(domId)) return;
     try {
-      const cached=localStorage.getItem('om_usage_'+domId);
+      const cached=getUsageCache(domId);
       if(!cached) return;
-      const usageData=JSON.parse(cached);
+      const usageData=cached;
       const usage=usageData?.[today];
       if(usage) total+=Object.values(usage).reduce((s,v)=>s+recalcCost(v),0);
     } catch(e){}

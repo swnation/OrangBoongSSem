@@ -1210,11 +1210,11 @@ function _getBrkCustomSuppl(who){
   const m=getBrkMaster();
   const cloud=m?.customSuppl?.[who];
   if(cloud?.length) return cloud;
-  return JSON.parse(localStorage.getItem('om_brk_suppl_'+who)||'[]');
+  return _storageGetJSON('om_brk_suppl_'+who,[]);
 }
 async function _saveBrkCustomSuppl(who,customs){
   // localStorage + 클라우드(마스터) 양쪽 저장
-  localStorage.setItem('om_brk_suppl_'+who,JSON.stringify(customs));
+  _storageSetJSON('om_brk_suppl_'+who,customs);
   const m=getBrkMaster();
   if(m){if(!m.customSuppl)m.customSuppl={};m.customSuppl[who]=customs;await saveBrkMaster();}
 }
@@ -2894,7 +2894,7 @@ function _lookupDrugSafety(name) {
   }
   // 2) localStorage 캐시
   try {
-    var cache = JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
+    var cache = _storageGetJSON('om_preg_drug_db',{});
     for (var j=0; j<candidates.length; j++) {
       if (cache[candidates[j]]) return {...cache[candidates[j]], source:'AI검색'};
       var eng2 = _DRUG_NAMES[candidates[j]];
@@ -2917,9 +2917,9 @@ function _cacheDrugSafety(name, data) {
   } catch(e){}
   // localStorage 폴백
   try {
-    var cache=JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
+    var cache=_storageGetJSON('om_preg_drug_db',{});
     cache[name]={...data,searchedAt:new Date().toISOString()};
-    localStorage.setItem('om_preg_drug_db',JSON.stringify(cache));
+    _storageSetJSON('om_preg_drug_db',cache);
   } catch(e){}
 }
 
@@ -3367,7 +3367,7 @@ function renderDrugSafety() {
   // Cache stats
   var cacheStats='';
   try {
-    var cache=JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
+    var cache=_storageGetJSON('om_preg_drug_db',{});
     var cacheCount=Object.keys(cache).length;
     var cacheSize=new Blob([JSON.stringify(cache)]).size;
     if(cacheCount) cacheStats='<div style="font-size:.62rem;color:var(--mu2);margin-top:8px;text-align:right">💾 캐시: '+cacheCount+'개 약물 · '+Math.round(cacheSize/1024)+'KB</div>';
