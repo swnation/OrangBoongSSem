@@ -31,7 +31,7 @@ let _fsWriteTimer = null;
 const _fsPendingWrites = {};
 
 function _fsWriteThrough(path, data) {
-  if (!isFirebaseReady() || !getFirebaseUid()) return;
+  if (typeof isFirebaseReady !== 'function' || !isFirebaseReady() || typeof getFirebaseUid !== 'function' || !getFirebaseUid()) return;
   // 디바운스: 같은 경로 연속 쓰기 500ms 병합
   _fsPendingWrites[path] = data;
   clearTimeout(_fsWriteTimer);
@@ -48,7 +48,7 @@ function _fsWriteThrough(path, data) {
 // FIRESTORE → localStorage 동기화 (로그인 시 1회)
 // ═══════════════════════════════════════════════════════════════
 async function syncFromFirestore() {
-  if (!isFirebaseReady() || !getFirebaseUid()) return;
+  if (typeof isFirebaseReady !== 'function' || !isFirebaseReady() || typeof getFirebaseUid !== 'function' || !getFirebaseUid()) return;
   console.info('[Storage] Firestore 동기화 시작');
 
   try {
@@ -169,11 +169,13 @@ function setAppSetting(name, value) {
   // localStorage (즉시)
   if (value === null || value === undefined) _storageRemove(key);
   else _storageSet(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
-  // Firestore (백그라운드 write-through)
-  const path = fsSettingsPath();
-  if (path) {
-    const fsVal = value === null || value === undefined ? null : value;
-    _fsWriteThrough(path, { [name]: fsVal, updatedAt: new Date().toISOString() });
+  // Firestore (백그라운드 write-through — firebase-store.js 로드된 경우만)
+  if (typeof fsSettingsPath === 'function') {
+    const path = fsSettingsPath();
+    if (path) {
+      const fsVal = value === null || value === undefined ? null : value;
+      _fsWriteThrough(path, { [name]: fsVal, updatedAt: new Date().toISOString() });
+    }
   }
 }
 
@@ -204,8 +206,10 @@ function getCustomItems(domainId, group) {
 function setCustomItems(domainId, group, items) {
   _storageSetJSON(_customKey(domainId, group), items);
   // Firestore write-through
-  const path = fsCustomItemsPath(domainId, group);
-  if (path) _fsWriteThrough(path, { items, updatedAt: new Date().toISOString() });
+  if (typeof fsCustomItemsPath === 'function') {
+    const path = fsCustomItemsPath(domainId, group);
+    if (path) _fsWriteThrough(path, { items, updatedAt: new Date().toISOString() });
+  }
 }
 
 function addCustomItem(domainId, group, item) {
@@ -240,8 +244,10 @@ function getPresets(domainId) {
 
 function setPresets(domainId, presets) {
   _storageSetJSON(_presetKey(domainId), presets);
-  const path = fsCustomItemsPath(domainId, 'presets');
-  if (path) _fsWriteThrough(path, { items: presets, updatedAt: new Date().toISOString() });
+  if (typeof fsCustomItemsPath === 'function') {
+    const path = fsCustomItemsPath(domainId, 'presets');
+    if (path) _fsWriteThrough(path, { items: presets, updatedAt: new Date().toISOString() });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
