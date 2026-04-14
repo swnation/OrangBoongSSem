@@ -362,7 +362,7 @@ function _syncCustomItemsToMaster() {
   const ds=D(); const dom=S.currentDomain;
   const customs={};
   _CUSTOM_KEYS.forEach(k=>{
-    const val=JSON.parse(localStorage.getItem(`om_custom_${k}_${dom}`)||'[]');
+    const val=getCustomItems(dom,k);
     if(val.length) customs[k]=val;
   });
   if(Object.keys(customs).length) ds.master._customItems=customs;
@@ -374,10 +374,9 @@ function _restoreCustomItemsFromMaster(ds, domainId) {
   if(!customs) return;
   _CUSTOM_KEYS.forEach(k=>{
     if(!customs[k]?.length) return;
-    const lsKey=`om_custom_${k}_${domainId}`;
-    const existing=JSON.parse(localStorage.getItem(lsKey)||'[]');
+    const existing=getCustomItems(domainId,k);
     const merged=[...new Set([...existing,...customs[k]])];
-    localStorage.setItem(lsKey,JSON.stringify(merged));
+    setCustomItems(domainId,k,merged);
   });
 }
 

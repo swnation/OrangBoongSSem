@@ -650,10 +650,10 @@ function renderLog() {
     ${skipNrsHtml}`;
 
   // 부위: 기본 + 커스텀
-  const customSitesL = JSON.parse(localStorage.getItem('om_custom_sites_left_'+S.currentDomain) || '[]');
-  const customSitesR = JSON.parse(localStorage.getItem('om_custom_sites_right_'+S.currentDomain) || '[]');
+  const customSitesL = getCustomItems(S.currentDomain,'sites_left');
+  const customSitesR = getCustomItems(S.currentDomain,'sites_right');
 
-  const customPainTypes = JSON.parse(localStorage.getItem('om_custom_pain_'+S.currentDomain) || '[]');
+  const customPainTypes = getCustomItems(S.currentDomain,'pain');
   const painTypesHtml = lc.painTypes ? `
     <div class="log-section-title">통증 종류</div>
     <div class="log-chips">${[...lc.painTypes,...customPainTypes].map(p=>`<div class="log-chip" data-group="pain" data-val="${p}" onclick="toggleChip(this,'sel-pain')">${p}</div>`).join('')}
@@ -686,15 +686,15 @@ function renderLog() {
     </div>` : '';
 
   // 투약: 기본(숨김 제외) + 커스텀
-  const customMeds = JSON.parse(localStorage.getItem('om_custom_meds_'+S.currentDomain) || '[]');
+  const customMeds = getCustomItems(S.currentDomain,'meds');
   const allMeds = [...(lc.meds||[]).filter(m=>m!=='기타'&&!_hiddenMed.includes(m)), ...customMeds];
 
   // 증상: 기본(숨김 제외) + 커스텀
-  const customSyms = JSON.parse(localStorage.getItem('om_custom_syms_'+S.currentDomain) || '[]');
+  const customSyms = getCustomItems(S.currentDomain,'syms');
   const allSyms = [...(lc.symptoms||[]).filter(s=>!_hiddenSym.includes(s)), ...customSyms];
 
   // 치료: 기본 + 커스텀
-  const customTx = JSON.parse(localStorage.getItem('om_custom_tx_'+S.currentDomain) || '[]');
+  const customTx = getCustomItems(S.currentDomain,'tx');
   const allTx = [...(lc.treatments||[]), ...customTx];
 
   const treatmentHtml = lc.treatments === null
@@ -714,7 +714,7 @@ function renderLog() {
        </div>` : '');
 
   // 트리거 칩 (triggers가 있는 도메인만)
-  let customTriggers=[];try{customTriggers=JSON.parse(localStorage.getItem('om_custom_triggers_'+S.currentDomain)||'[]');}catch(e){}
+  let customTriggers=getCustomItems(S.currentDomain,'triggers');
   const triggersHtml=lc.triggers?`
     <div class="log-section-title">추정 트리거 <button onclick="openChipManager('triggers')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
     <div class="log-chips">${[...lc.triggers,...customTriggers].map(t=>`<div class="log-chip" data-group="trigger" data-val="${t}" onclick="toggleChip(this,'sel-trigger')">${t}</div>`).join('')}
@@ -1508,9 +1508,7 @@ function _autoDetectOutcomes() {
 function addCustomTrigger() {
   const el=document.getElementById('trigger-other');
   const val=(el?.value||'').trim();if(!val) return;
-  const key='om_custom_triggers_'+S.currentDomain;
-  let list=[];try{list=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
-  if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
+  addCustomItem(S.currentDomain,'triggers',val);
   el.value='';
   _syncCustomItemsToMaster();saveMaster();
   const saved=_saveLogFormState();renderView('log');_restoreLogFormState(saved);
@@ -1774,13 +1772,13 @@ function selectMood(el, level) {
 // ── Custom chips (meds & symptoms) ──
 // ── 기본 칩 숨김 관리 ──
 function getHiddenChips() {
-  try { return JSON.parse(localStorage.getItem('om_hidden_chips_'+S.currentDomain)||'{}'); } catch(e) { return {}; }
+  return getCustomItems(S.currentDomain,'hidden')||{};
 }
 function _hideDefaultChip(group, val) {
   const h=getHiddenChips();
   if(!h[group]) h[group]=[];
   if(!h[group].includes(val)) h[group].push(val);
-  localStorage.setItem('om_hidden_chips_'+S.currentDomain, JSON.stringify(h));
+  setCustomItems(S.currentDomain,'hidden',h);
   showToast(`"${val}" 숨김 처리됨`);
   closeConfirmModal();
   renderView('log');
@@ -1788,7 +1786,7 @@ function _hideDefaultChip(group, val) {
 function _restoreDefaultChip(group, val) {
   const h=getHiddenChips();
   if(h[group]) h[group]=h[group].filter(v=>v!==val);
-  localStorage.setItem('om_hidden_chips_'+S.currentDomain, JSON.stringify(h));
+  setCustomItems(S.currentDomain,'hidden',h);
   showToast(`"${val}" 복원됨`);
   closeConfirmModal();
   renderView('log');
@@ -1877,9 +1875,7 @@ function addCustomChip(type) {
   const el=document.getElementById(inputId);
   const val=(el?.value||'').trim();
   if(!val) return;
-  const key=`om_custom_${type}_`+S.currentDomain;
-  const list=JSON.parse(localStorage.getItem(key)||'[]');
-  if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
+  addCustomItem(S.currentDomain,type,val);
   el.value='';
   _syncCustomItemsToMaster();saveMaster();
   const saved=_saveLogFormState();
@@ -1892,9 +1888,7 @@ function addCustomSite(side) {
   const el=document.getElementById('site-'+side+'-other');
   const val=(el?.value||'').trim();
   if(!val) return;
-  const key='om_custom_sites_'+side+'_'+S.currentDomain;
-  const list=JSON.parse(localStorage.getItem(key)||'[]');
-  if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
+  addCustomItem(S.currentDomain,'sites_'+side,val);
   el.value='';
   _syncCustomItemsToMaster();saveMaster();
   const saved=_saveLogFormState();
@@ -1907,9 +1901,7 @@ function addCustomPainType() {
   const el=document.getElementById('pain-other');
   const val=(el?.value||'').trim();
   if(!val) return;
-  const key='om_custom_pain_'+S.currentDomain;
-  const list=JSON.parse(localStorage.getItem(key)||'[]');
-  if(!list.includes(val)){list.push(val);localStorage.setItem(key,JSON.stringify(list));}
+  addCustomItem(S.currentDomain,'pain',val);
   el.value='';
   _syncCustomItemsToMaster();saveMaster();
   const saved=_saveLogFormState();
@@ -1940,8 +1932,7 @@ function openChipManager(type) {
     );
     return;
   }
-  const customKey=`om_custom_${type}_`+S.currentDomain;
-  const customList=JSON.parse(localStorage.getItem(customKey)||'[]');
+  const customList=getCustomItems(S.currentDomain,type==='meds'?'meds':type==='tx'?'tx':'syms');
   const hidden=getHiddenChips();
   const group=type==='meds'?'med':type==='tx'?'tx':'sym';
   const hiddenList=hidden[group]||[];
