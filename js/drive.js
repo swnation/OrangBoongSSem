@@ -96,12 +96,9 @@ function handleToken(resp) {
   S.token = resp.access_token;
   setAppSetting('autoLogin','true');
   scheduleTokenRefresh(resp.expires_in || 3600);
-  // Firebase Auth 자동 로그인 (Google OAuth 토큰 활용)
-  if(typeof firebase!=='undefined'&&firebase.auth&&isFirebaseReady()&&!getFirebaseUid()){
-    try{
-      const cred=firebase.auth.GoogleAuthProvider.credential(null,resp.access_token);
-      firebase.auth().signInWithCredential(cred).catch(e=>console.warn('[Firebase Auth] credential 로그인 실패:',e));
-    }catch(e){}
+  // Firebase Auth 로그인 (최초 Drive 로그인 시만 — 토큰 갱신 시 생략)
+  if(!isRefresh&&typeof firebase!=='undefined'&&firebase.auth&&isFirebaseReady()&&!getFirebaseUid()){
+    firebaseSignInWithGoogle().catch(e=>console.warn('[Firebase Auth] 로그인 실패:',e));
   }
   if (_tokenRefreshResolve) { _tokenRefreshResolve(true); _tokenRefreshResolve = null; return; }
   if (isRefresh) return; // silent refresh from timer — no UI reload needed
