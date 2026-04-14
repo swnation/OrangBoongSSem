@@ -92,6 +92,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 </div>
 <div class="toast" id="toast"></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="../js/storage.js"></script>
 <script>
 const CLIENT_ID='103056429713-6ne324793lgc09nl9rkjqonlg4pcd12i.apps.googleusercontent.com';
 const SCOPES='https://www.googleapis.com/auth/drive.file';
@@ -124,12 +125,12 @@ function isTokenExpired(){return _tokenExpiresAt>0&&Date.now()>_tokenExpiresAt;}
 async function ensureValidToken(){if(!token)return false;if(!isTokenExpired())return true;if(!tokenClient)return false;return new Promise(r=>{_tokenRefreshResolve=r;tokenClient.requestAccessToken({prompt:''});});}
 function handleToken(resp){
   if(resp.error){if(_tokenRefreshResolve){_tokenRefreshResolve(false);_tokenRefreshResolve=null;}showToast('❌ 로그인 실패',3000);return;}
-  const isR=!!token;token=resp.access_token;localStorage.setItem('om_auto_login','true');scheduleTokenRefresh(resp.expires_in||3600);
+  const isR=!!token;token=resp.access_token;setAppSetting('autoLogin','true');scheduleTokenRefresh(resp.expires_in||3600);
   if(_tokenRefreshResolve){_tokenRefreshResolve(true);_tokenRefreshResolve=null;return;}if(isR)return;
   document.getElementById('status-dot').style.background='#2d8a5a';document.getElementById('tab-bar').style.display='flex';
   selectedDate=kstToday();loadAllDomains().then(()=>_syncOfflinePending());
 }
-function checkGSI(n){if(!n)n=0;if(window.google?.accounts?.oauth2){document.getElementById('gsi-status').textContent='✓ 준비됨';document.getElementById('gsi-status').style.color='#2d6a4f';if(localStorage.getItem('om_auto_login')==='true'){try{if(!tokenClient)tokenClient=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:handleToken});tokenClient.requestAccessToken({prompt:''});}catch(e){console.error('Auto-login failed:',e);}}}else if(n<20){setTimeout(()=>checkGSI(n+1),500);}else{document.getElementById('gsi-status').textContent='⚠️ 인증 실패';}}
+function checkGSI(n){if(!n)n=0;if(window.google?.accounts?.oauth2){document.getElementById('gsi-status').textContent='✓ 준비됨';document.getElementById('gsi-status').style.color='#2d6a4f';if(getAppSetting('autoLogin')==='true'){try{if(!tokenClient)tokenClient=google.accounts.oauth2.initTokenClient({client_id:CLIENT_ID,scope:SCOPES,callback:handleToken});tokenClient.requestAccessToken({prompt:''});}catch(e){console.error('Auto-login failed:',e);}}}else if(n<20){setTimeout(()=>checkGSI(n+1),500);}else{document.getElementById('gsi-status').textContent='⚠️ 인증 실패';}}
 checkGSI(0);
 
 // DRIVE
@@ -143,11 +144,11 @@ async function getOrCreateFolder(n){if(isTokenExpired())await ensureValidToken()
 // ── 오프라인 임시저장 + 온라인 동기화 ──
 function _offlineSave(domId,month,entry){
   const key='om_bung_offline';
-  const pending=JSON.parse(localStorage.getItem(key)||'[]');
+  const pending=_storageGetJSON(key,[]);
   pending.push({domId,month,entry,savedAt:Date.now()});
-  localStorage.setItem(key,JSON.stringify(pending));
+  _storageSetJSON(key,pending);
 }
-function _getOfflinePending(){return JSON.parse(localStorage.getItem('om_bung_offline')||'[]');}
+function _getOfflinePending(){return _storageGetJSON('om_bung_offline',[]);}
 async function _syncOfflinePending(){
   const pending=_getOfflinePending();
   if(!pending.length||!token)return;
@@ -166,7 +167,7 @@ async function _syncOfflinePending(){
       synced++;
     }catch(e){console.error('Offline sync error:',e);}
   }
-  if(synced>0){localStorage.setItem('om_bung_offline','[]');showToast('☁️ 오프라인 '+synced+'건 동기화 완료');}
+  if(synced>0){_storageSetJSON('om_bung_offline',[]);showToast('☁️ 오프라인 '+synced+'건 동기화 완료');}
 }
 window.addEventListener('online',()=>{if(token)_syncOfflinePending();});
 
