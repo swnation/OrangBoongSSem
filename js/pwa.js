@@ -30,10 +30,10 @@ window.addEventListener('beforeunload', e => {
 // OFFLINE FALLBACK — save to localStorage when Drive unavailable
 // ═══════════════════════════════════════════════════════════════
 function saveOffline(key, data) {
-  try { localStorage.setItem('om_offline_'+key, JSON.stringify(data)); } catch(e) {}
+  setOfflineCache(key, data);
 }
 function loadOffline(key) {
-  try { return JSON.parse(localStorage.getItem('om_offline_'+key)||'null'); } catch(e) { return null; }
+  return getOfflineCache(key);
 }
 // On Drive save failure, fallback to offline
 // ═══════════════════════════════════════════════════════════════
@@ -134,7 +134,7 @@ window.addEventListener('beforeinstallprompt',(e)=>{
 
 function showInstallBanner() {
   if(!deferredPrompt) return;
-  if(localStorage.getItem('pwa-install-dismissed')) return;
+  if(_storageGet('pwa-install-dismissed')) return;
   let banner=document.getElementById('install-banner');
   if(banner) return;
   banner=document.createElement('div');
@@ -159,7 +159,7 @@ function installApp() {
 function dismissInstall() {
   const banner=document.getElementById('install-banner');
   if(banner) banner.remove();
-  try { localStorage.setItem('pwa-install-dismissed','1'); } catch(e){}
+  _storageSet('pwa-install-dismissed','1');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -167,16 +167,16 @@ function dismissInstall() {
 // ═══════════════════════════════════════════════════════════════
 function savePendingEdit(entry) {
   try {
-    const queue=JSON.parse(localStorage.getItem('om_pending_edits')||'[]');
+    const queue=_storageGetJSON('om_pending_edits',[]);
     queue.push({...entry, timestamp:Date.now(), domain:S.currentDomain});
-    localStorage.setItem('om_pending_edits',JSON.stringify(queue));
+    _storageSetJSON('om_pending_edits',queue);
   } catch(e){}
 }
 
 async function syncPendingEdits() {
   if(!navigator.onLine||!S.token) return;
   let queue;
-  try { queue=JSON.parse(localStorage.getItem('om_pending_edits')||'[]'); } catch(e){ return; }
+  try { queue=_storageGetJSON('om_pending_edits',[]); } catch(e){ return; }
   if(!queue.length) return;
   const synced=[];
   for(const edit of queue) {
@@ -197,7 +197,7 @@ async function syncPendingEdits() {
   }
   if(synced.length) {
     const remaining=queue.filter(q=>!synced.includes(q));
-    localStorage.setItem('om_pending_edits',JSON.stringify(remaining));
+    _storageSetJSON('om_pending_edits',remaining);
     showToast(`✅ ${synced.length}건 오프라인 편집 동기화됨`);
   }
 }

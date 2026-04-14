@@ -220,7 +220,7 @@ async function loadAllDomainsForCost() {
         for(const k of Object.keys(def)){if(!(k in ds.master))ds.master[k]=def[k];}
         // localStorage 비용 캐시 동기화
         if(ds.master.usage_data) {
-          try{localStorage.setItem('om_usage_'+domainId,JSON.stringify(ds.master.usage_data));}catch(e){}
+          try{setUsageCache(domainId,ds.master.usage_data);}catch(e){}
         }
       }
     } catch(e) { /* 조용히 실패 */ }
@@ -250,7 +250,7 @@ async function loadDomainData(domainId) {
       if (!ds.master.accumulated) ds.master.accumulated = def.accumulated;
       // localStorage 비용 캐시 병합 (Drive 저장 전 페이지 갱신 시 손실 복구)
       try {
-        const localUsage=JSON.parse(localStorage.getItem('om_usage_'+domainId)||'null');
+        const localUsage=getUsageCache(domainId);
         if(localUsage) {
           if(!ds.master.usage_data) ds.master.usage_data={};
           Object.entries(localUsage).forEach(([date,aiMap])=>{
@@ -463,11 +463,11 @@ async function codeBackupToDrive() {
 async function autoCodeBackup() {
   const ver = APP_VERSION[0]?.v;
   if (!ver) return;
-  const lastBackupVer = localStorage.getItem('om_last_code_backup');
+  const lastBackupVer = _storageGet('om_last_code_backup');
   if (lastBackupVer === ver) return; // 이미 이 버전 백업함
   try {
     await codeBackupToDrive();
-    localStorage.setItem('om_last_code_backup', ver);
+    _storageSet('om_last_code_backup', ver);
   } catch(e) {}
 }
 
@@ -481,16 +481,16 @@ function cacheToLocal(domainId) {
     const ds = S.domainState[domainId];
     if (!ds?.master) return;
     const key = OFFLINE_PREFIX + domainId;
-    localStorage.setItem(key, JSON.stringify({
+    setOfflineCache(domainId, {
       master: ds.master,
       timestamp: Date.now(),
-    }));
+    });
   } catch(e) { /* quota exceeded etc */ }
 }
 
 function loadFromLocal(domainId) {
   try {
-    const data = JSON.parse(localStorage.getItem(OFFLINE_PREFIX + domainId) || 'null');
+    const data = getOfflineCache(domainId);
     return data;
   } catch(e) { return null; }
 }
