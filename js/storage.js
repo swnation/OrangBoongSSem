@@ -1,17 +1,11 @@
-// js/storage.js — Storage Adapter (Firebase Migration Phase A2)
-// 목적: localStorage 직접 호출을 추상화하여 Firestore 전환 준비
-// 현재: localStorage 래퍼 (기존 동작 유지)
-// 향후: Firestore adapter로 교체
+// js/storage.js — Storage Adapter (Firestore Write-Through)
+// 패턴: localStorage = 읽기 캐시 (sync) + Firestore = 영속 저장 (async write-through)
+// 로그인 시 Firestore → localStorage 동기화 (cloud is truth)
 
 'use strict';
 
 // ═══════════════════════════════════════════════════════════════
-// BACKEND 선택 (현재: localStorage, 향후: firestore)
-// ═══════════════════════════════════════════════════════════════
-const _STORAGE_BACKEND = 'localStorage'; // 'localStorage' | 'firestore'
-
-// ═══════════════════════════════════════════════════════════════
-// LOW-LEVEL: 현재 localStorage 래퍼 (향후 firestore로 교체 지점)
+// LOW-LEVEL: localStorage 래퍼
 // ═══════════════════════════════════════════════════════════════
 function _storageGet(key) {
   try { return localStorage.getItem(key); } catch(e) { return null; }
@@ -28,6 +22,68 @@ function _storageGetJSON(key, fallback) {
 }
 function _storageSetJSON(key, value) {
   _storageSet(key, JSON.stringify(value));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FIRESTORE WRITE-THROUGH (비동기 백그라운드 저장)
+// ═══════════════════════════════════════════════════════════════
+let _fsWriteTimer = null;
+const _fsPendingWrites = {};
+
+function _fsWriteThrough(path, data) {
+  if (!isFirebaseReady() || !getFirebaseUid()) return;
+  // 디바운스: 같은 경로 연속 쓰기 500ms 병합
+  _fsPendingWrites[path] = data;
+  clearTimeout(_fsWriteTimer);
+  _fsWriteTimer = setTimeout(() => {
+    const writes = { ..._fsPendingWrites };
+    Object.keys(_fsPendingWrites).forEach(k => delete _fsPendingWrites[k]);
+    Object.entries(writes).forEach(([p, d]) => {
+      firestoreSet(p, d, true).catch(e => console.warn('[Storage] Firestore write failed:', p, e));
+    });
+  }, 500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FIRESTORE → localStorage 동기화 (로그인 시 1회)
+// ═══════════════════════════════════════════════════════════════
+async function syncFromFirestore() {
+  if (!isFirebaseReady() || !getFirebaseUid()) return;
+  console.info('[Storage] Firestore → localStorage 동기화 시작');
+
+  try {
+    // 1) Settings 동기화
+    const settings = await fsGetSettings();
+    if (settings) {
+      let count = 0;
+      Object.entries(_SETTINGS_KEYS).forEach(([name, lsKey]) => {
+        if (settings[name] !== undefined && settings[name] !== null) {
+          const val = typeof settings[name] === 'object' ? JSON.stringify(settings[name]) : String(settings[name]);
+          _storageSet(lsKey, val);
+          count++;
+        }
+      });
+      console.info(`[Storage] Settings ${count}개 동기화`);
+    }
+
+    // 2) Custom Items 동기화 (현재 도메인)
+    const dom = _storageGet('om_domain') || 'orangi-migraine';
+    let customCount = 0;
+    for (const group of _CUSTOM_GROUPS) {
+      const items = await fsGetCustomItems(dom, group);
+      if (items && items.length) {
+        const existing = _storageGetJSON(_customKey(dom, group), []);
+        const merged = [...new Set([...existing, ...items])];
+        _storageSetJSON(_customKey(dom, group), merged);
+        customCount += items.length;
+      }
+    }
+    if (customCount) console.info(`[Storage] CustomItems ${customCount}개 동기화 (${dom})`);
+
+    console.info('[Storage] Firestore → localStorage 동기화 완료');
+  } catch(e) {
+    console.warn('[Storage] Firestore 동기화 실패 (오프라인?):', e);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -68,8 +124,15 @@ function getAppSettingJSON(name, fallback) {
 function setAppSetting(name, value) {
   const key = _SETTINGS_KEYS[name];
   if (!key) { console.warn('Unknown setting:', name); return; }
+  // localStorage (즉시)
   if (value === null || value === undefined) _storageRemove(key);
   else _storageSet(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+  // Firestore (백그라운드 write-through)
+  const path = fsSettingsPath();
+  if (path) {
+    const fsVal = value === null || value === undefined ? null : value;
+    _fsWriteThrough(path, { [name]: fsVal, updatedAt: new Date().toISOString() });
+  }
 }
 
 function getAllAppSettings() {
@@ -98,6 +161,9 @@ function getCustomItems(domainId, group) {
 
 function setCustomItems(domainId, group, items) {
   _storageSetJSON(_customKey(domainId, group), items);
+  // Firestore write-through
+  const path = fsCustomItemsPath(domainId, group);
+  if (path) _fsWriteThrough(path, { items, updatedAt: new Date().toISOString() });
 }
 
 function addCustomItem(domainId, group, item) {
@@ -132,6 +198,8 @@ function getPresets(domainId) {
 
 function setPresets(domainId, presets) {
   _storageSetJSON(_presetKey(domainId), presets);
+  const path = fsCustomItemsPath(domainId, 'presets');
+  if (path) _fsWriteThrough(path, { items: presets, updatedAt: new Date().toISOString() });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -148,7 +216,7 @@ function setUsageCache(month, data) {
 
 // ═══════════════════════════════════════════════════════════════
 // OFFLINE CACHE (도메인별)
-// 향후: Firestore 오프라인 persistence로 대체
+// Firestore 오프라인 persistence가 이 역할을 대체
 // ═══════════════════════════════════════════════════════════════
 function getOfflineCache(domainId) {
   return _storageGetJSON('om_offline_' + domainId, null);
