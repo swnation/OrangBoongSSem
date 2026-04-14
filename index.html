@@ -256,6 +256,8 @@ try { const ae=localStorage.getItem('aiEnabled'); if(ae) S.aiEnabled=JSON.parse(
 
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Firebase 초기화
+  initFirebase().then(() => { if(isFirebaseReady()) setupFirebaseAuth(); });
   // API 키 로드: 암호화 저장이 있으면 PIN 요청, 없으면 평문 마이그레이션
   if(localStorage.getItem(_KEY_STORAGE)) {
     showPinPrompt(false);
