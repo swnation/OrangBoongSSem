@@ -2,10 +2,71 @@
 
 ## 현재 상태: v9.7+ (main)
 - 브랜치: main
-- SW CACHE_NAME: v99d
+- SW CACHE_NAME: v99k (메인), v20 (quick)
 - APP_VERSION: v9.7
 - backup/v9.7 브랜치 유지
-- PR #166 (통합폼·통계·타임라인), #167 (비용추적), #168 (복용주기·알림로그·교차메모) 머지 완료
+- PR #166~#180 머지 완료
+
+## 세션 C 완료 (2026-04-14) — 편두통 예보·경과자동·약물관리·검사개선
+
+### PR 목록 (12건)
+| PR | 내용 |
+|----|------|
+| #169 | 편두통 일기예보 quick 앱 추가 + 빈 메모 렌더링 버그 수정 |
+| #170 | 데일리체크↔메인앱 동기화 + 컨디션 단일선택 + 타임라인 중복 병합 + 검사 검색 탭 |
+| #171 | 편두통 일기예보 탭→상세 근거 모달 표시 |
+| #172 | 경과 자동 감지 (NRS·증상 시간대별 변화 기반) |
+| #173 | NRS동일→비슷 + 경과알림 기본 2시간 + 시간고정 옵션 |
+| #174 | 새 기록 시 이전 경과 알림 자동 취소 |
+| #175 | 영양제 버튼 수정 + 약물→영양제 자동 연동 (syncMedsToBrkSuppl) |
+| #176 | Gemini 리뷰 #165 반영 (코드 품질: Set필터/단일순회/가독성) |
+| #177 | quick↔메인앱 커스텀 항목 양방향 동기화 + quick 약 검색 API |
+| #178 | 알림 로그 복원 + 비우기 자기참조 버그 수정 |
+| #179 | 약물 복용량 기록 (0.5T 단위) + 24시간 누적 과량 경고 |
+| #180 | 검사 카테고리: 영문명 병기 + 날짜별 표 형태 |
+
+### 주요 신규 기능
+
+#### 1. 편두통 일기예보 (quick + 메인)
+- `renderQuickForecast()` / `renderMigraineForecast()`: 5가지 위험 요소 분석
+- 카드 탭 → 상세 근거 모달 (각 요소별 점수+설명+산출기준)
+- `window._forecastDetails`: 전역 저장 → `showForecastDetails()` 모달
+
+#### 2. 경과 자동 감지
+- `_autoDetectOutcomes()` / `_autoDetectQuickOutcomes()`: 같은 날 시간대별 NRS 변화 자동 분석
+- 약/치료 후 다음 기록 NRS 비교 → better/same/worse 자동 판정
+- `outcome.source:'auto'` + `outcome.reason` 필드로 수동/자동 구분
+- NRS 동일+증상만 감소 → 'same' (not 'better')
+- 새 기록 시 이전 미발송 경과 알림 자동 취소 (`_cancelPendingOutcomeNtfy`)
+
+#### 3. 약물 복용량 추적 (quick)
+- 약 선택 시 수량 스테퍼 (−/+ 0.5T 단위, 시럽은 mL/포)
+- `medsQty: {medName: {qty, unit}}` 저장
+- `_MED_INGREDIENT_LIMITS`: 성분별 24시간 한도 (아세트아미노펜 4000mg 등)
+- 80%→주의, 100%→과량경고 표시
+
+#### 4. 약물→영양제 자동 연동
+- `syncMedsToBrkSuppl()`: 메인앱/quick에서 magnesium 복용 → 붕룩이 마그네슘 체크
+- `_MED_TO_SUPPL_MAP`: 한영 매핑 + 커스텀 영양제 부분일치
+
+#### 5. quick↔메인앱 항목 동기화
+- `_syncCustomItemsBidirectional()`: localStorage↔Drive 마스터 머지
+- `_syncCustomsFromMain()`: quick 탭 복귀 시 자동 머지
+- quick 약물 입력에 식약처 API 검색 (`searchDrugAPI`, `setupDrugAutocomplete`)
+
+#### 6. 검사 아카이브 개선
+- 🔍 검색 탭: 항목명/코드 실시간 검색 + 대분류 바로가기
+- 카테고리 뷰: 영문명 병기 (예: 백혈구 WBC) + 날짜별 표 형태
+- 소분류별 테이블: 항목 | 참고 | 날짜1 | 날짜2 | ... (최근 6회)
+
+### 버그 수정
+- 빈 메모 렌더링 (`log.js`, `bungruki.js`) — 조건부 렌더링
+- 컨디션 체크 다중선택 → 단일선택 (`toggleDcChip`)
+- 타임라인 중복 시간 자동 병합 (`_showTimeline`, `mergeDayEntries`)
+- 데일리체크앱 데이터 → 메인앱 폼 미반영 (`_prefillDailyChecksFromExisting`)
+- 영양제 버튼 안 눌림 → try-catch + 즉시 UI 갱신
+- 알림 로그 비우기 → 1건 남는 버그 + 복원 기능 추가
+- 경과알림 기본값 60분→120분, 시간변경 시 고정 confirm
 
 ## 세션 B 완료 (2026-04-13) — 복용주기·검사사전·교차메모
 
@@ -109,35 +170,44 @@
 
 ## 다음 세션 TODO
 
+### 아키텍처 전환 (CLAUDE_CODE_HANDOFF.md 참조)
+- [ ] Firebase 초기 설정 (Auth + Firestore 스키마)
+- [ ] Storage adapter 추상화 (`adapter.ts`, `firestore.ts`, `memory.ts`)
+- [ ] settings + customItems를 Firestore로 이관 (Phase 2)
+- [ ] localStorage 의존도 점진적 제거
+
 ### 약물 시스템 후속
-- [ ] bung/index.html에 medsDetail 빈도 체크 반영 (현재 메인앱만)
+- [ ] 메인앱 log.js에도 medsQty 수량 스테퍼 + 24시간 경고 추가 (현재 quick만)
+- [ ] bung/index.html에 medsDetail 빈도 체크 반영
 - [ ] 처방 소진 알림 ntfy 토픽 설정 UI
 - [ ] 약물 변경 시 medsDetail 자동 초기화
+- [ ] _MED_INGREDIENT_LIMITS 확장 (NSAIDs 교차 한도 등)
+
+### 경과 시스템 후속
+- [ ] 하루 중 간편 NRS 추적 (ntfy 체크인 알림 + 원탭 기록)
+- [ ] 위치 변화도 자동 경과에 반영
 
 ### 비용 추적 후속
 - [ ] 1~2주 후 calls 배열로 추정 vs 실제 재비교
-- [ ] OpenAI 실제 호출 모델 확인 (gpt-5.4 vs 다른 모델?)
+- [ ] OpenAI 실제 호출 모델 확인
 - [ ] Gemini/Perplexity 비용도 앱 내 추적과 대조
 
-### 통합 폼 개선
-- [ ] 편집 모드 (다른 도메인 섹션도 로드)
-- [ ] auto-save/restore
-- [ ] 붕룩이 축약 섹션 추가
-
 ### 검사 아카이브 개선
+- [x] 검색 탭 + 영문명 병기 + 날짜별 표 (세션 C 완료)
 - [ ] AI Vision 프롬프트에 institution 추출 추가
 - [ ] 미분류(other) 비율 줄이기 — AI 재분류 + 사전 확장
+- [ ] 검사 기록 중복 항목 정리 + UI 간소화
 
 ### 기존 미완료
 - [ ] AI 건강 인사이트 (검진+약물+운동+체중 종합)
 - [ ] 붕룩이 통계 관계/가임기 분석 강화
 
 ### 정리
-- [ ] patches/ 폴더 삭제 (main에 머지됨, 더 이상 불필요)
+- [ ] patches/ 폴더 삭제
 - [ ] review/base-post166, tmp-tree-test-vision-cost 브랜치 정리
 
 ## 주의사항
-- sw.js CACHE_NAME 현재 **v99d**
+- sw.js CACHE_NAME 현재 **v99k** (메인), quick **v20**
 - 약물 체크: **빈도 인식** — `medsDetail.cycle` (daily/weekly/monthly/prn)
 - 약물명 정규화: `_normalizeDrugName()` 3단계 + `customDrugMappings`
 - 검사 대분류: `_getEffectiveMajorCategories()` — 커스텀 or 기본
