@@ -214,7 +214,7 @@
 - [ ] review/base-post166, tmp-tree-test-vision-cost 브랜치 정리
 
 ## 주의사항
-- sw.js CACHE_NAME 현재 **v99k** (메인), quick **v20**
+- sw.js CACHE_NAME 현재 **v99m** (메인), quick **v21**
 - 약물 체크: **빈도 인식** — `medsDetail.cycle` (daily/weekly/monthly/prn)
 - 약물명 정규화: `_normalizeDrugName()` 3단계 + `customDrugMappings`
 - 검사 대분류: `_getEffectiveMajorCategories()` — 커스텀 or 기본
@@ -224,6 +224,11 @@
 - 검사 정규화: **AI-first** (규칙 #37)
 - NRS 표시: `_scoreLabel()` (하드코딩 금지)
 - `node --check js/*.js` 구문 검사 필수 (규칙 #39)
+- **localStorage 직접 호출 금지** — 반드시 `storage.js` adapter 경유
+- **Firebase 프로젝트**: `fam-med-service` (Firestore + Auth)
+- **Storage 패턴**: localStorage(읽기 캐시) + Firestore(write-through) — `js/storage.js`
+- **Drive vs Firestore 역할**: Drive=로그/세션/마스터, Firestore=설정/커스텀/프리셋
+- **JS 파일 20개** (기존 15 + storage, firebase-init/auth/store, checkup)
 
 ## 신규 프로젝트 구상
 
