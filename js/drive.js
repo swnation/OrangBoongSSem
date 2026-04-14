@@ -268,7 +268,7 @@ async function loadDomainData(domainId) {
           const saved = JSON.parse(atob(ds.master._keys_encrypted));
           if(saved.keys) Object.keys(saved.keys).forEach(id=>{if(!S.keys[id]&&saved.keys[id])S.keys[id]=saved.keys[id];});
           if(saved.models) Object.keys(saved.models).forEach(id=>{if(saved.models[id])S.models[id]=saved.models[id];});
-          localStorage.setItem('om_keys',JSON.stringify(S.keys));
+          _storageSetJSON('om_keys',S.keys);
           setAppSetting('models',S.models);
         } catch(e) {}
         // Remove insecure key storage from Drive

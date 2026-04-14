@@ -11,103 +11,61 @@ Migrate `OrangBoongSSem` to a Firebase-first architecture incrementally, without
 
 ## Work order
 
-### 1. Audit localStorage usage
-Create a full inventory of localStorage keys and usage sites.
-Classify each key as:
-- migrate now
-- migrate later
-- remove / redesign later
+### 1. ✅ Audit localStorage usage — PR #181
+- `LOCALSTORAGE_AUDIT.md`: 186회 호출, 37개 키, Phase별 분류
 
-Deliverable:
-- `LOCALSTORAGE_AUDIT.md`
+### 2. ✅ Introduce a storage adapter — PR #182
+- `js/storage.js` (Vanilla JS, 빌드 불필요)
+- Practical Notes에 따라 `src/` 대신 `js/` 트리 유지
 
-### 2. Introduce a storage adapter
-Add:
-- `src/storage/adapter.ts`
-- `src/storage/memory.ts`
-- `src/storage/firestore.ts`
-- `src/storage/index.ts`
+### 3. ✅ Implement memory adapter first — PR #182
+- 내부는 localStorage 래퍼 → 기존 동작 100% 유지
 
-All new code must go through the adapter.
+### 4. ✅ Add Firebase scaffold — PR #183
+- `js/firebase-init.js`, `js/firebase-auth.js`, `js/firebase-store.js`
+- `FIRESTORE_SCHEMA.md`
+- config 미설정 시 graceful fallback
 
-### 3. Implement memory adapter first
-Preserve current behavior with an in-memory adapter before switching persistence.
-This separates architecture change from backend migration.
-
-### 4. Add Firebase scaffold
-Add Firebase init, Auth bootstrap, and Firestore wiring.
-Do not commit secrets.
-
-Suggested files:
-- `src/firebase/init.ts`
-- `src/firebase/auth.ts`
-- `src/firebase/firestore.ts`
-- `FIREBASE_SCHEMA.md`
-
-### 5. Lock first-pass Firestore schema
-Start with:
+### 5. ✅ Lock first-pass Firestore schema — PR #183
 - `users/{uid}/settings/app`
-- `users/{uid}/domains/{domainId}/meta/main`
 - `users/{uid}/domains/{domainId}/customItems/{group}`
 - `users/{uid}/domains/{domainId}/templates/{templateId}`
+- `users/{uid}/usage/{yyyy-mm}`
 
-### 6. Migrate settings first
-Move settings through the adapter to Firestore.
-Priority:
-- app settings
-- dashboard/home settings
-- model preferences
-- UI/view preferences
-- notification preferences data only
+### 6. ✅ Migrate settings first — PR #184 (33사이트)
 
-### 7. Migrate custom items and templates
-Move:
-- custom meds
-- custom symptoms
-- custom procedures
-- custom sites/pain labels
-- presets/templates
+### 7. ✅ Migrate custom items and templates — PR #185 (13사이트)
 
-This should solve the main multi-device sync pain point.
+### 8. ✅ Remove direct localStorage calls module by module — PR #186, #187, #188
+- 메인앱 js/*.js: 106사이트
+- quick/index.html: 51사이트
+- bung/index.html: 6사이트
+- crypto/om_keys: 6사이트
+- **전체 프로젝트 localStorage 직접 호출: 0건** (storage.js 래퍼 3줄 제외)
 
-### 8. Remove direct localStorage calls module by module
-Suggested order:
-1. settings modules
-2. custom item modules
-3. template/preset modules
-4. dashboard/home modules
-5. usage cache modules
-6. session/log modules
+### 9. ⏳ Migrate logs, sessions, and accumulated data — 다음 단계
+- Firebase 프로젝트 실제 설정 후 진행
+- `_storageGet/Set` 내부를 Firestore로 교체
+- 로그는 월 단위 페이지네이션 (비용 최적화)
 
-### 9. Migrate logs, sessions, and accumulated data later
-Second wave only:
-- accumulated knowledge
-- sessions
-- logs
-- domain metadata
-- monthly derived docs
+### 10. ⏳ Harden security and backend — 다음 단계
+- AI 키를 Cloud Functions로 이전
+- Firebase Auth로 기존 Google OAuth 교체
+- Firestore 보안규칙 강화
 
-Keep Firestore reads narrow and cost-aware.
+## PR grouping (완료)
+- ✅ PR A: audit (#181) + adapter (#182) + Firebase scaffold (#183)
+- ✅ PR B: settings (#184)
+- ✅ PR C: custom items + templates (#185)
+- ✅ PR D: domain data (#186)
+- ✅ PR D+: quick/bung 앱 (#187)
+- ✅ PR E: crypto/keys (#188)
 
-### 10. Harden security and backend later
-After the migration stabilizes:
-- redesign browser key handling
-- move AI calls behind Cloud Functions
-- redesign notification scheduling
-- add stronger Firestore security rules
-
-## PR grouping
-- PR A: audit + adapter + memory + Firebase scaffold
-- PR B: settings
-- PR C: custom items + templates
-- PR D: domain data
-- PR E: hardening
-
-## First milestone
-Success means:
-- localStorage audit completed
-- storage adapter exists
-- memory adapter works
-- Firebase scaffold exists
-- settings/customItems/templates migration path is live
-- no new direct localStorage usage is added
+## First milestone — ✅ 달성
+- ✅ localStorage audit completed
+- ✅ storage adapter exists
+- ✅ memory adapter works
+- ✅ Firebase scaffold exists
+- ✅ settings/customItems/templates migration path is live
+- ✅ no new direct localStorage usage is added
+- ✅ **전체 프로젝트 localStorage 직접 호출 0건**

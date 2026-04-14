@@ -2,10 +2,11 @@
 
 ## 현재 상태: v9.7+ (main)
 - 브랜치: main
-- SW CACHE_NAME: v99k (메인), v20 (quick)
+- SW CACHE_NAME: v99l (메인), v21 (quick)
 - APP_VERSION: v9.7
 - backup/v9.7 브랜치 유지
-- PR #166~#180 머지 완료
+- PR #166~#188 머지 완료
+- **Firebase 마이그레이션 1차 완료**: localStorage 직접 호출 0건 (storage.js adapter 경유)
 
 ## 세션 C 완료 (2026-04-14) — 편두통 예보·경과자동·약물관리·검사개선
 

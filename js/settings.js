@@ -131,7 +131,7 @@ async function saveKeys() {
     await saveKeysEncrypted();
   } else {
     // PIN 미설정 시 설정 유도
-    localStorage.setItem('om_keys',JSON.stringify(S.keys)); // 임시 평문
+    _storageSetJSON('om_keys',S.keys); // 임시 평문
   }
   renderSidebarAIs();
   closeModal('keys-modal');
@@ -225,7 +225,7 @@ async function importKeysFromDrive() {
     const parsed=JSON.parse(new TextDecoder().decode(decrypted));
     _restoreSettings(parsed);
     if(S._keyPin) await saveKeysEncrypted();
-    else localStorage.setItem('om_keys',JSON.stringify(S.keys));
+    else _storageSetJSON('om_keys',S.keys);
     setAppSetting('models',S.models);
     renderSidebarAIs();
     closeModal('keys-modal');openKeys();
@@ -248,7 +248,7 @@ async function importKeysEncrypted() {
       const decrypted=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,encrypted);
       const parsed=JSON.parse(new TextDecoder().decode(decrypted));
       _restoreSettings(parsed);
-      localStorage.setItem('om_keys',JSON.stringify(S.keys));
+      _storageSetJSON('om_keys',S.keys);
       setAppSetting('models',S.models);
       renderSidebarAIs();
       closeModal('keys-modal');openKeys();
