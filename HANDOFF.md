@@ -177,11 +177,17 @@
 
 ## 다음 세션 TODO
 
-### 아키텍처 전환 (CLAUDE_CODE_HANDOFF.md 참조)
-- [ ] Firebase 초기 설정 (Auth + Firestore 스키마)
-- [ ] Storage adapter 추상화 (`adapter.ts`, `firestore.ts`, `memory.ts`)
-- [ ] settings + customItems를 Firestore로 이관 (Phase 2)
-- [ ] localStorage 의존도 점진적 제거
+### 아키텍처 전환 — 완료 (Phase 1~2)
+- [x] Firebase 초기 설정 (`firebase-init.js`, `firebase-auth.js`, `firebase-store.js`)
+- [x] Storage adapter 추상화 (`storage.js` — localStorage 직접 호출 0건)
+- [x] settings + customItems Firestore write-through 이관
+- [x] localStorage 의존도 제거 (전량 adapter 경유)
+
+### 아키텍처 전환 — 후속 (Phase 3~5)
+- [ ] 로그/세션/마스터 데이터 Firestore 이관 검토 (현재 Drive 의존 — Phase 3)
+- [ ] 통계/타임라인 뷰 Firestore 직접 쿼리 전환 (Phase 4)
+- [ ] Cloud Functions: AI 키 서버사이드 관리 (Phase 5)
+- [ ] Cloud Functions: 알림(ntfy) 백엔드 스케줄링 (Phase 5)
 
 ### 약물 시스템 후속
 - [ ] 메인앱 log.js에도 medsQty 수량 스테퍼 + 24시간 경고 추가 (현재 quick만)
