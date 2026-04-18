@@ -1905,7 +1905,9 @@ function selectMood(el, level) {
 // ── Custom chips (meds & symptoms) ──
 // ── 기본 칩 숨김 관리 ──
 function getHiddenChips() {
-  return getCustomItems(S.currentDomain,'hidden')||{};
+  const v=getCustomItems(S.currentDomain,'hidden');
+  // 'hidden'은 객체 {group:[items]} 구조. 빈 배열([])로 저장되었던 레거시/첫 사용 케이스 방어.
+  return (v && typeof v==='object' && !Array.isArray(v)) ? v : {};
 }
 function _hideDefaultChip(group, val) {
   const h=getHiddenChips();
