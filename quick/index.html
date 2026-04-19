@@ -197,6 +197,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div id="q-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;justify-content:center;align-items:center" onclick="if(event.target===this)this.style.display='none'">
+  <div id="q-modal-content" style="background:var(--sf);border-radius:14px;padding:16px;max-width:360px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.3)"></div>
+</div>
 
 <script src="../js/storage.js"></script>
 <script>
@@ -622,7 +625,18 @@ function switchTab(tab) {
 
 // ── 약물 수량 + 24시간 경고 시스템 ──
 const _medQty = {}; // {medName: {qty:1, unit:'T'}}
-const _MED_UNITS = {'T':'정','포':'포','mL':'mL','mg':'mg'};
+// 제형별 단위 + 스텝 설정
+const _MED_UNIT_CFG = {
+  'T':{step:0.5,min:0.5,max:20},
+  'C':{step:1,min:1,max:20},
+  'mL':{step:1,min:1,max:100},
+  '포':{step:1,min:1,max:10},
+  '회':{step:1,min:1,max:10},
+  '매':{step:1,min:1,max:5},
+  '방울':{step:1,min:1,max:20},
+  '개':{step:1,min:1,max:5},
+  'puff':{step:1,min:1,max:10},
+};
 // 성분별 24시간 한도 (mg)
 const _MED_INGREDIENT_LIMITS = {
   'acetaminophen': {maxMg:4000, warn:'간독성 위험', meds:{'AAP 500mg':500,'AAP 1000mg':1000}},
@@ -631,18 +645,31 @@ const _MED_INGREDIENT_LIMITS = {
 };
 
 function _getMedUnit(name){
-  if(/시럽|건조시럽/.test(name)) return /건조시럽/.test(name)?'포':'mL';
+  if(/건조시럽/.test(name)) return '포';
+  if(/시럽|액$|액\s|용액|현탁|리퀴드/.test(name)) return 'mL';
+  if(/주사|주$|앰플|앰퓰|바이알|inj/i.test(name)) return '회';
+  if(/캡슐|캡$|cap/i.test(name)) return 'C';
+  if(/패치|첩부/.test(name)) return '매';
+  if(/크림|연고|겔$|겔\s|로션|외용/.test(name)) return '회';
+  if(/스프레이|흡입|네뷸/.test(name)) return 'puff';
+  if(/점안|점비|점이|안약/.test(name)) return '방울';
+  if(/좌약|좌제|좌$/.test(name)) return '개';
   return 'T';
 }
 
 function _getOrInitQty(med){
-  if(!_medQty[med]) _medQty[med]={qty:1, unit:_getMedUnit(med)};
+  if(!_medQty[med]){
+    const unit=_getMedUnit(med);
+    _medQty[med]={qty:1, unit};
+  }
   return _medQty[med];
 }
 
 function _adjMedQty(med, delta){
   const q=_getOrInitQty(med);
-  q.qty=Math.max(0.5, Math.min(20, q.qty+delta));
+  const cfg=_MED_UNIT_CFG[q.unit]||_MED_UNIT_CFG['T'];
+  const step=cfg.step;
+  q.qty=Math.max(cfg.min, Math.min(cfg.max, q.qty+(delta>0?step:-step)));
   _renderMedQtyUI();
   _updateMedWarnings();
 }
@@ -890,6 +917,115 @@ function addSiteChip(inputId, containerId, side) {
   if (!customs.includes(val)) { customs.push(val); saveCustom('site-' + side, customs); }
 }
 
+// ── 칩 숨기기/관리 (메인앱과 동일 키 공유) ──
+const _Q_HIDDEN_KEY = 'om_hidden_chips_orangi-migraine';
+function _qGetHidden(){ return _storageGetJSON(_Q_HIDDEN_KEY,{}); }
+function _qSaveHidden(h){ _storageSetJSON(_Q_HIDDEN_KEY,h); }
+
+// 기본 칩 이름→그룹 매핑 (default arrays)
+const _Q_DEFAULT_MAP = {
+  sym: SYMPTOMS, pain: PAIN_TYPES, med: MEDS, tx: TREATMENTS, trigger: TRIGGERS
+};
+const _Q_GROUP_LABEL = {sym:'증상',pain:'통증 종류',med:'약물',tx:'시술',trigger:'트리거'};
+
+function _qOpenChipManager(group){
+  const defaults=_Q_DEFAULT_MAP[group]||[];
+  const customs=getCustom(group);
+  const hidden=_qGetHidden();
+  const hiddenList=hidden[group]||[];
+
+  // 전역 참조 (Rule #7 — onclick에 텍스트 직접 삽입 방지)
+  window._qcmDefaults=defaults;
+  window._qcmCustoms=customs;
+  window._qcmGroup=group;
+
+  let html=`<div style="font-weight:700;font-size:.9rem;margin-bottom:10px">${_Q_GROUP_LABEL[group]||group} 관리</div>`;
+
+  // 기본 항목
+  if(defaults.length){
+    html+=`<div style="font-size:.72rem;color:var(--mu);font-weight:600;margin-bottom:4px">기본 항목</div>`;
+    html+=defaults.map((v,i)=>{
+      const isHidden=hiddenList.includes(v);
+      return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bd)">
+        <span style="flex:1;font-size:.78rem;color:${isHidden?'var(--mu2)':'var(--ink)'};${isHidden?'text-decoration:line-through':''};">${esc(v)}</span>
+        ${isHidden
+          ?`<button onclick="_qRestoreChip(window._qcmGroup,window._qcmDefaults[${i}])" style="font-size:.65rem;padding:3px 8px;border:1px solid var(--gr);border-radius:5px;background:none;color:var(--gr);cursor:pointer">복원</button>`
+          :`<button onclick="_qHideChip(window._qcmGroup,window._qcmDefaults[${i}])" style="font-size:.65rem;padding:3px 8px;border:1px solid var(--mu2);border-radius:5px;background:none;color:var(--mu2);cursor:pointer">숨기기</button>`
+        }
+      </div>`;
+    }).join('');
+  }
+
+  // 커스텀 항목
+  if(customs.length){
+    html+=`<div style="font-size:.72rem;color:var(--mu);font-weight:600;margin:10px 0 4px">추가 항목</div>`;
+    window._qcmCustoms=[...customs];
+    html+=customs.map((v,i)=>
+      `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bd)">
+        <span style="flex:1;font-size:.78rem;color:var(--ink)">${esc(v)}</span>
+        <button onclick="_qRemoveCustom(window._qcmGroup,${i})" style="font-size:.65rem;padding:3px 8px;border:1px solid var(--re);border-radius:5px;background:none;color:var(--re);cursor:pointer">삭제</button>
+      </div>`
+    ).join('');
+  }
+
+  html+=`<button onclick="document.getElementById('q-modal-overlay').style.display='none'" style="margin-top:12px;width:100%;padding:8px;border:1.5px solid var(--bd);border-radius:8px;background:var(--sf2);font-size:.78rem;cursor:pointer;color:var(--ink)">닫기</button>`;
+
+  document.getElementById('q-modal-content').innerHTML=html;
+  document.getElementById('q-modal-overlay').style.display='flex';
+}
+
+function _qHideChip(group,val){
+  const h=_qGetHidden();
+  if(!h[group])h[group]=[];
+  if(!h[group].includes(val))h[group].push(val);
+  _qSaveHidden(h);
+  showToast(`"${val}" 숨김`);
+  _qOpenChipManager(group); // 모달 갱신
+  _qRerender();
+}
+function _qRestoreChip(group,val){
+  const h=_qGetHidden();
+  if(h[group])h[group]=h[group].filter(v=>v!==val);
+  _qSaveHidden(h);
+  showToast(`"${val}" 복원됨`);
+  _qOpenChipManager(group);
+  _qRerender();
+}
+function _qRemoveCustom(group,idx){
+  const customs=getCustom(group);
+  const removed=customs.splice(idx,1)[0];
+  saveCustom(group,customs);
+  showToast(`"${removed}" 삭제됨`);
+  _qOpenChipManager(group);
+  _qRerender();
+}
+function _qRerender(){
+  // 현재 폼 데이터 수집 후 리렌더
+  const formData=_collectFormData();
+  renderForm(formData);
+}
+function _collectFormData(){
+  const data={};
+  data.datetime=(document.getElementById('q-date')?.value||'')+'T'+(document.getElementById('q-time-unknown')?.checked?'시간미상':(document.getElementById('q-time')?.value||''));
+  const skipNrs=document.getElementById('q-skip-nrs')?.checked;
+  data.nrs=skipNrs?-1:parseInt(document.getElementById('q-nrs')?.value||'5');
+  data.sites=[];
+  document.querySelectorAll('.chip.sel[data-side]').forEach(el=>{
+    const side=el.dataset.side==='left'?'왼쪽':'오른쪽';
+    data.sites.push(side+' '+el.dataset.val);
+  });
+  data.painType=[];document.querySelectorAll('.chip.sel[data-group="pain"]').forEach(el=>data.painType.push(el.dataset.val));
+  data.symptoms=[];document.querySelectorAll('.chip.sel[data-group="sym"]').forEach(el=>data.symptoms.push(el.dataset.val));
+  data.meds=[];document.querySelectorAll('.chip.sel[data-group="med"]').forEach(el=>data.meds.push(el.dataset.val));
+  data.medsQty=JSON.parse(JSON.stringify(_medQty));
+  data.treatments=[];document.querySelectorAll('.chip.sel[data-group="tx"]').forEach(el=>data.treatments.push(el.dataset.val));
+  data.triggers=[];document.querySelectorAll('.chip.sel[data-group="trigger"]').forEach(el=>data.triggers.push(el.dataset.val));
+  data.memo=document.getElementById('q-memo')?.value||'';
+  const editId=document.getElementById('q-edit-id')?.value;
+  if(editId) data.id=parseInt(editId);
+  return data;
+}
+
 // ── Form render ──
 function renderForm(entry) {
   const now = kstNow();
@@ -910,38 +1046,41 @@ function renderForm(entry) {
     }).join('');
   };
 
-  // 기본 + 커스텀(영구 저장) + 편집 시 항목 복원
+  // 기본(숨김 제외) + 커스텀(영구 저장) + 편집 시 항목 복원
+  const _qh=_qGetHidden();
+  const _hSym=_qh.sym||[]; const _hPain=_qh.pain||[]; const _hMed=_qh.med||[]; const _hTx=_qh.tx||[]; const _hTrig=_qh.trigger||[];
+
   const customSyms = getCustom('sym');
   const extraSyms = (e.symptoms||[]).filter(s => !SYMPTOMS.includes(s) && !customSyms.includes(s));
-  const symChips = [...SYMPTOMS, ...customSyms, ...extraSyms].map(s => {
+  const symChips = [...SYMPTOMS.filter(s=>!_hSym.includes(s)), ...customSyms, ...extraSyms].map(s => {
     const sel = e.symptoms?.includes(s);
     return `<span class="chip ${sel?'sel sel-sym':''}" data-val="${esc(s)}" data-group="sym" onclick="toggleChip(this,'sel-sym')">${esc(s)}</span>`;
   }).join('');
 
   const customPain = getCustom('pain');
   const extraPain = (e.painType||[]).filter(p => !PAIN_TYPES.includes(p) && !customPain.includes(p));
-  const painTypeChips = [...PAIN_TYPES, ...customPain, ...extraPain].map(p => {
+  const painTypeChips = [...PAIN_TYPES.filter(p=>!_hPain.includes(p)), ...customPain, ...extraPain].map(p => {
     const sel = e.painType?.includes(p);
     return `<span class="chip ${sel?'sel sel-pain':''}" data-val="${esc(p)}" data-group="pain" onclick="toggleChip(this,'sel-pain')">${esc(p)}</span>`;
   }).join('');
 
   const customMeds = getCustom('med');
   const extraMeds = (e.meds||[]).filter(m => !MEDS.includes(m) && !customMeds.includes(m));
-  const medChips = [...MEDS, ...customMeds, ...extraMeds].map(m => {
+  const medChips = [...MEDS.filter(m=>!_hMed.includes(m)), ...customMeds, ...extraMeds].map(m => {
     const sel = e.meds?.includes(m);
     return `<span class="chip ${sel?'sel sel-med':''}" data-val="${esc(m)}" data-group="med" onclick="toggleChip(this,'sel-med')">${esc(m)}</span>`;
   }).join('');
 
   const customTx = getCustom('tx');
   const extraTx = (e.treatments||[]).filter(t => !TREATMENTS.includes(t) && !customTx.includes(t));
-  const txChips = [...TREATMENTS, ...customTx, ...extraTx].map(t => {
+  const txChips = [...TREATMENTS.filter(t=>!_hTx.includes(t)), ...customTx, ...extraTx].map(t => {
     const sel = e.treatments?.includes(t);
     return `<span class="chip ${sel?'sel sel-tx':''}" data-val="${esc(t)}" data-group="tx" onclick="toggleChip(this,'sel-tx')">${esc(t)}</span>`;
   }).join('');
 
   const customTriggers = getCustom('trigger');
   const extraTriggers = (e.triggers||[]).filter(t => !TRIGGERS.includes(t) && !customTriggers.includes(t));
-  const triggerChips = [...TRIGGERS, ...customTriggers, ...extraTriggers].map(t => {
+  const triggerChips = [...TRIGGERS.filter(t=>!_hTrig.includes(t)), ...customTriggers, ...extraTriggers].map(t => {
     const sel = e.triggers?.includes(t);
     return `<span class="chip ${sel?'sel sel-trigger':''}" data-val="${esc(t)}" data-group="trigger" onclick="toggleChip(this,'sel-trigger')">${esc(t)}</span>`;
   }).join('');
@@ -994,7 +1133,7 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
-      <div class="section-title">통증 종류</div>
+      <div class="section-title">통증 종류 <button onclick="_qOpenChipManager('pain')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
       <div class="chips" id="pain-chips">${painTypeChips}</div>
       <div class="other-row">
         <input class="other-input" id="pain-other" placeholder="기타 통증">
@@ -1003,7 +1142,7 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
-      <div class="section-title">증상</div>
+      <div class="section-title">증상 <button onclick="_qOpenChipManager('sym')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
       <div class="chips" id="sym-chips">${symChips}</div>
       <div class="other-row">
         <input class="other-input" id="sym-other" placeholder="기타 증상">
@@ -1012,7 +1151,7 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
-      <div class="section-title">약물</div>
+      <div class="section-title">약물 <button onclick="_qOpenChipManager('med')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
       <div class="chips" id="med-chips">${medChips}</div>
       <div class="other-row">
         <input class="other-input" id="med-other" placeholder="기타 약물">
@@ -1023,7 +1162,7 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
-      <div class="section-title">시술</div>
+      <div class="section-title">시술 <button onclick="_qOpenChipManager('tx')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
       <div class="chips" id="tx-chips">${txChips}</div>
       <div class="other-row">
         <input class="other-input" id="tx-other" placeholder="직접 입력">
@@ -1032,7 +1171,7 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
-      <div class="section-title">⚡ 추정 트리거</div>
+      <div class="section-title">⚡ 추정 트리거 <button onclick="_qOpenChipManager('trigger')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
       <div class="chips" id="trigger-chips">${triggerChips}</div>
       <div class="other-row">
         <input class="other-input" id="trigger-other" placeholder="직접 입력">

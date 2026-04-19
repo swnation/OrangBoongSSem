@@ -47,7 +47,126 @@ async function saveLogData() {
 }
 
 function nrsColor(n){if(n<=3)return'#2d8a5a';if(n<=6)return'#e67e22';return'#c03030';}
-function toggleChip(el,cls){el.classList.toggle('sel');el.classList.toggle(cls,el.classList.contains('sel'));}
+function toggleChip(el,cls){
+  el.classList.toggle('sel');el.classList.toggle(cls,el.classList.contains('sel'));
+  // 약물 칩 변경 시 수량 UI + 24시간 경고 갱신
+  if(el.dataset.group==='med'){_renderLogMedQtyUI();_updateLogMedWarnings();}
+}
+
+// ── 약물 수량 + 24시간 경고 시스템 (메인앱) ──
+const _logMedQty = {}; // {medName: {qty:1, unit:'T'}}
+// 제형별 단위 + 스텝 설정
+const _LOG_MED_UNIT_CFG = {
+  'T':{step:0.5,min:0.5,max:20},
+  'C':{step:1,min:1,max:20},
+  'mL':{step:1,min:1,max:100},
+  '포':{step:1,min:1,max:10},
+  '회':{step:1,min:1,max:10},
+  '매':{step:1,min:1,max:5},
+  '방울':{step:1,min:1,max:20},
+  '개':{step:1,min:1,max:5},
+  'puff':{step:1,min:1,max:10},
+};
+const _LOG_MED_INGREDIENT_LIMITS = {
+  'acetaminophen': {maxMg:4000, warn:'간독성 위험', meds:{'AAP 500mg':500,'AAP 1000mg':1000}},
+  'loxoprofen': {maxMg:180, warn:'위장관 부작용', meds:{'Loxoprofen':60}},
+  'metoclopramide': {maxMg:30, warn:'추체외로 증상', meds:{'Metoclopramide':10}},
+};
+
+function _getLogMedUnit(name){
+  if(/건조시럽/.test(name)) return '포';
+  if(/시럽|액$|액\s|용액|현탁|리퀴드/.test(name)) return 'mL';
+  if(/주사|주$|앰플|앰퓰|바이알|inj/i.test(name)) return '회';
+  if(/캡슐|캡$|cap/i.test(name)) return 'C';
+  if(/패치|첩부/.test(name)) return '매';
+  if(/크림|연고|겔$|겔\s|로션|외용/.test(name)) return '회';
+  if(/스프레이|흡입|네뷸/.test(name)) return 'puff';
+  if(/점안|점비|점이|안약/.test(name)) return '방울';
+  if(/좌약|좌제|좌$/.test(name)) return '개';
+  return 'T';
+}
+function _getOrInitLogQty(med){
+  if(!_logMedQty[med]){
+    const unit=_getLogMedUnit(med);
+    _logMedQty[med]={qty:1, unit};
+  }
+  return _logMedQty[med];
+}
+function _adjLogMedQty(med, delta){
+  const q=_getOrInitLogQty(med);
+  const cfg=_LOG_MED_UNIT_CFG[q.unit]||_LOG_MED_UNIT_CFG['T'];
+  q.qty=Math.max(cfg.min, Math.min(cfg.max, q.qty+(delta>0?cfg.step:-cfg.step)));
+  _renderLogMedQtyUI();
+  _updateLogMedWarnings();
+}
+function _renderLogMedQtyUI(){
+  const area=document.getElementById('log-med-qty-area'); if(!area) return;
+  const selMeds=[];
+  document.querySelectorAll('.log-chip.sel[data-group="med"]').forEach(el=>selMeds.push(el.dataset.val));
+  if(!selMeds.length){area.innerHTML='';return;}
+  // 전역 참조용 배열 (onclick에 직접 텍스트 삽입 방지 — Rule #7)
+  window._logMedQtyList=selMeds;
+  area.innerHTML=selMeds.map((m,i)=>{
+    const q=_getOrInitLogQty(m);
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.75rem">
+      <span style="flex:1;color:var(--ink)">${esc(m)}</span>
+      <button onclick="_adjLogMedQty(window._logMedQtyList[${i}],-0.5)" style="width:26px;height:26px;border:1.5px solid var(--bd);border-radius:6px;background:var(--sf2);font-size:.8rem;cursor:pointer;color:var(--ink)">−</button>
+      <span style="min-width:32px;text-align:center;font-weight:700;font-family:var(--mono)">${q.qty}</span>
+      <button onclick="_adjLogMedQty(window._logMedQtyList[${i}],0.5)" style="width:26px;height:26px;border:1.5px solid var(--bd);border-radius:6px;background:var(--sf2);font-size:.8rem;cursor:pointer;color:var(--ink)">+</button>
+      <span style="font-size:.65rem;color:var(--mu);min-width:20px">${q.unit}</span>
+    </div>`;
+  }).join('');
+}
+function _updateLogMedWarnings(){
+  const area=document.getElementById('log-med-warn-area'); if(!area) return;
+  const selMeds=[];
+  document.querySelectorAll('.log-chip.sel[data-group="med"]').forEach(el=>selMeds.push(el.dataset.val));
+  if(!selMeds.length){area.innerHTML='';return;}
+  const dateVal=document.getElementById('log-date')?.value;
+  const timeVal=document.getElementById('log-time')?.value||'00:00';
+  const selDt=new Date(dateVal+'T'+timeVal);
+  const ds=D();
+  const editIdx=parseInt(document.getElementById('log-edit-idx')?.value??-1);
+  const editId=editIdx>=0?ds.logData[editIdx]?.id:null;
+  const recent24=(ds.logData||[]).filter(l=>{
+    if(!l.datetime||!l.meds?.length) return false;
+    const dt=new Date(l.datetime);
+    const diff=Math.abs(selDt-dt);
+    return diff<24*3600000 && l.id!==editId;
+  });
+  const warnings=[];
+  Object.entries(_LOG_MED_INGREDIENT_LIMITS).forEach(([ingr,limit])=>{
+    let totalMg=0;
+    recent24.forEach(l=>{
+      (l.meds||[]).forEach(m=>{
+        const mgPer=limit.meds[m];
+        if(mgPer){totalMg+=mgPer*(l.medsQty?.[m]?.qty||1);}
+      });
+    });
+    let currentMg=0;
+    selMeds.forEach(m=>{
+      const mgPer=limit.meds[m];
+      if(mgPer){currentMg+=mgPer*_getOrInitLogQty(m).qty;}
+    });
+    if(currentMg===0) return;
+    const grandTotal=totalMg+currentMg;
+    const pct=Math.round(grandTotal/limit.maxMg*100);
+    if(pct>=80){
+      const prevCount=recent24.reduce((s,l)=>{let c=0;(l.meds||[]).forEach(m=>{if(limit.meds[m])c+=(l.medsQty?.[m]?.qty||1);});return s+c;},0);
+      warnings.push({pct,
+        detail:`24시간 이내 ${grandTotal}mg / ${limit.maxMg}mg (${pct}%)${prevCount?` — 이전 ${prevCount}T 복용`:''}`,
+        warn:limit.warn});
+    }
+  });
+  if(!warnings.length){area.innerHTML='';return;}
+  area.innerHTML=warnings.map(w=>
+    `<div style="margin-top:6px;padding:8px 10px;border-radius:8px;background:${w.pct>=100?'var(--err-bg,#fee2e2)':'var(--warn-bg,#fffbeb)'};border:1.5px solid ${w.pct>=100?'var(--err,#fca5a5)':'var(--warn,#fde68a)'};font-size:.72rem">
+      <div style="font-weight:700;color:${w.pct>=100?'#dc2626':'#b45309'}">⚠️ ${w.pct>=100?'과량 경고':'주의'}: ${w.detail}</div>
+      <div style="font-size:.65rem;color:${w.pct>=100?'#991b1b':'#92400e'};margin-top:2px">${w.warn}</div>
+    </div>`
+  ).join('');
+}
+
 // dailyChecks(수면/집중력 등) 전용 — 같은 항목 내 단일 선택
 function toggleDcChip(el){
   const parent=el.parentElement;
@@ -428,6 +547,10 @@ function reviewQuickLog(id) {
       if(!matched) _unmatchedMed.push(m);
     });
     const mo=document.getElementById('med-other');if(mo&&_unmatchedMed.length)mo.value=_unmatchedMed.join(', ');
+    // medsQty 복원 (quick → 메인)
+    Object.keys(_logMedQty).forEach(k=>delete _logMedQty[k]);
+    if(entry.medsQty) Object.entries(entry.medsQty).forEach(([m,q])=>{_logMedQty[m]={qty:q.qty,unit:q.unit||'T'};});
+    _renderLogMedQtyUI();_updateLogMedWarnings();
     // 칩 선택: 시술
     const _unmatchedTx=[];
     (entry.treatments || []).forEach(t => {
@@ -468,6 +591,7 @@ async function importQuickLog(id) {
     sites: entry.sites || [],
     symptoms: entry.symptoms || [],
     meds: entry.meds || [],
+    medsQty: entry.medsQty || undefined,
     treatments: entry.treatments || [],
     triggers: entry.triggers || [],
     memo: entry.memo || ''
@@ -614,6 +738,9 @@ function renderLog() {
   const _hiddenMood=_hidden.mood||[];
   const _hiddenSym=_hidden.sym||[];
   const _hiddenMed=_hidden.med||[];
+  const _hiddenPain=_hidden.pain||[];
+  const _hiddenTx=_hidden.tx||[];
+  const _hiddenTrigger=_hidden.trigger||[];
 
   // ── 마음관리 모드 (moodMode) ──
   const allMoodOpts=['😞 우울','😶 무감정','😐 보통','🙂 양호','😊 좋음'];
@@ -654,8 +781,8 @@ function renderLog() {
 
   const customPainTypes = getCustomItems(S.currentDomain,'pain');
   const painTypesHtml = lc.painTypes ? `
-    <div class="log-section-title">통증 종류</div>
-    <div class="log-chips">${[...lc.painTypes,...customPainTypes].map(p=>`<div class="log-chip" data-group="pain" data-val="${p}" onclick="toggleChip(this,'sel-pain')">${p}</div>`).join('')}
+    <div class="log-section-title">통증 종류 <button onclick="openChipManager('pain')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
+    <div class="log-chips">${[...lc.painTypes.filter(p=>!_hiddenPain.includes(p)),...customPainTypes].map(p=>`<div class="log-chip" data-group="pain" data-val="${p}" onclick="toggleChip(this,'sel-pain')">${p}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="pain-other" placeholder="직접 입력" style="width:80px">
         <button onclick="addCustomPainType()" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
@@ -692,12 +819,12 @@ function renderLog() {
   const customSyms = getCustomItems(S.currentDomain,'syms');
   const allSyms = [...(lc.symptoms||[]).filter(s=>!_hiddenSym.includes(s)), ...customSyms];
 
-  // 치료: 기본 + 커스텀
+  // 치료: 기본(숨김 제외) + 커스텀
   const customTx = getCustomItems(S.currentDomain,'tx');
-  const allTx = [...(lc.treatments||[]), ...customTx];
+  const allTx = [...(lc.treatments||[]).filter(t=>!_hiddenTx.includes(t)), ...customTx];
 
   const treatmentHtml = lc.treatments === null
-    ? `<div class="log-section-title">치료/시술</div>
+    ? `<div class="log-section-title">치료/시술${customTx.length?' <button onclick="openChipManager(\'tx\')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button>':''}</div>
        <input class="dx-form-input" id="log-treatment" placeholder="예: 상담, CBT, 명상 등 자유 입력">
        <div style="display:flex;gap:4px;align-items:center;margin-top:4px">
          <button onclick="addCustomChip('tx')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
@@ -716,7 +843,7 @@ function renderLog() {
   let customTriggers=getCustomItems(S.currentDomain,'triggers');
   const triggersHtml=lc.triggers?`
     <div class="log-section-title">추정 트리거 <button onclick="openChipManager('triggers')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
-    <div class="log-chips">${[...lc.triggers,...customTriggers].map(t=>`<div class="log-chip" data-group="trigger" data-val="${t}" onclick="toggleChip(this,'sel-trigger')">${t}</div>`).join('')}
+    <div class="log-chips">${[...lc.triggers.filter(t=>!_hiddenTrigger.includes(t)),...customTriggers].map(t=>`<div class="log-chip" data-group="trigger" data-val="${t}" onclick="toggleChip(this,'sel-trigger')">${t}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="trigger-other" placeholder="직접 입력" style="width:80px">
         <button onclick="addCustomTrigger()" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
@@ -762,6 +889,8 @@ function renderLog() {
         <button onclick="addCustomChip('meds')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
       </div>
     </div>`:''}
+    <div id="log-med-qty-area" style="margin-top:6px"></div>
+    <div id="log-med-warn-area"></div>
     ${treatmentHtml}
     ${_renderOtherDomainSections(dateStr)}
     ${_renderLogDailyExtras(dateStr)}
@@ -807,7 +936,7 @@ function renderRecentLogs() {
         ${(l.sites||[]).map(s=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(s)}</span>`).join('')}
         <div class="log-item-tags">
           ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`).join('')}
-          ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}</span>`).join('')}
+          ${(l.meds||[]).map(s=>{const q=l.medsQty?.[s];return `<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}${q&&q.qty!==1?' ×'+q.qty+q.unit:''}</span>`;}).join('')}
           ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
           ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:var(--tag-dc-bg);color:var(--tag-dc);font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
           ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'var(--ok-bg)':'var(--err-bg)'};color:${v?'var(--ok)':'var(--err)'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
@@ -941,7 +1070,7 @@ function renderLogList() {
           <div class="log-item-tags">
             ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:var(--tag-trigger-bg);color:var(--tag-trigger)">⚡${esc(t)}</span>`).join('')}
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`).join('')}
-            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}</span>`).join('')}
+            ${(l.meds||[]).map(s=>{const q=l.medsQty?.[s];return `<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}${q&&q.qty!==1?' ×'+q.qty+q.unit:''}</span>`;}).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
             ${l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>`<span class="log-tag" style="background:var(--tag-dc-bg);color:var(--tag-dc);font-size:.6rem">${esc(k)}:${v}</span>`).join(''):''}
             ${l.medCheck?Object.entries(l.medCheck).map(([k,v])=>`<span class="log-tag" style="background:${v?'var(--ok-bg)':'var(--err-bg)'};color:${v?'var(--ok)':'var(--err)'};font-size:.6rem">${v?'✓':'✗'} ${esc(k)}</span>`).join(''):''}
@@ -1011,7 +1140,7 @@ function renderLogListInner() {
           <div class="log-item-tags">
             ${(l.triggers||[]).map(t=>`<span class="log-tag" style="background:var(--tag-trigger-bg);color:var(--tag-trigger)">⚡${esc(t)}</span>`).join('')}
             ${(l.symptoms||[]).map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`).join('')}
-            ${(l.meds||[]).map(s=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}</span>`).join('')}
+            ${(l.meds||[]).map(s=>{const q=l.medsQty?.[s];return `<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(s)}${q&&q.qty!==1?' ×'+q.qty+q.unit:''}</span>`;}).join('')}
             ${(l.treatments||[]).map(s=>`<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx)">${esc(s)}</span>`).join('')}
             ${l.outcome?`<span class="log-tag outcome-${l.outcome.rating}" onclick="editOutcome(${realIdx})" style="cursor:pointer" title="${esc(l.outcome.reason||'클릭하여 경과 수정')}">${l.outcome.rating==='better'||l.outcome.rating==='good'?'🟢호전':l.outcome.rating==='same'||l.outcome.rating==='partial'?'🟡비슷':l.outcome.rating==='unknown'?'🤷기억안남':'🔴악화'}${l.outcome.source==='auto'?' <span style="font-size:.5rem;opacity:.7">자동</span>':''}</span>`
             :`<span class="log-tag" onclick="editOutcome(${realIdx})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`}
@@ -1553,6 +1682,9 @@ async function saveLogEntry() {
   const symOther=document.getElementById('sym-other')?.value.trim();if(symOther)symptoms.push(symOther);
   const meds=[];document.querySelectorAll('.log-chip.sel[data-group="med"]').forEach(el=>meds.push(el.dataset.val));
   const medOther=document.getElementById('med-other')?.value.trim();if(medOther)meds.push(medOther);
+  // 약물 수량 수집
+  const medsQty={};
+  meds.forEach(m=>{const q=_logMedQty[m];if(q)medsQty[m]={qty:q.qty,unit:q.unit||'T'};else medsQty[m]={qty:1,unit:_getLogMedUnit(m)};});
   const treatments=[];
   document.querySelectorAll('.log-chip.sel[data-group="tx"]').forEach(el=>treatments.push(el.dataset.val));
   const txInput=document.getElementById('log-treatment');
@@ -1579,7 +1711,7 @@ async function saveLogEntry() {
     if(reason&&medCheck[med]) medCheckDetail[med]={reason};
   });
   const editIdx=parseInt(document.getElementById('log-edit-idx')?.value ?? -1);
-  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,treatments,memo,dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined,medCheck:Object.keys(medCheck).length?medCheck:undefined,medCheckDetail:Object.keys(medCheckDetail).length?medCheckDetail:undefined};
+  const entry={id:editIdx>=0?(D().logData[editIdx]?.id||Date.now()):Date.now(),datetime:`${date}T${time}`,nrs,mood,sites,painType,triggers,symptoms,meds,medsQty:Object.keys(medsQty).length?medsQty:undefined,treatments,memo,dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined,medCheck:Object.keys(medCheck).length?medCheck:undefined,medCheckDetail:Object.keys(medCheckDetail).length?medCheckDetail:undefined};
   // 날씨 자동 첨부 (편두통 도메인, 2초 타임아웃)
   if(S.currentDomain==='orangi-migraine'&&editIdx<0){
     try{const w=await Promise.race([fetchWeather(),new Promise(r=>setTimeout(()=>r(null),2000))]);if(w)entry.weather=w;}catch(e){console.warn('Weather attachment failed:',e);}
@@ -1678,12 +1810,15 @@ function editLogEntry(idx) {
         if(c.dataset.val===s) c.classList.add('sel','sel-sym');
       });
     });
-    // Meds
+    // Meds + medsQty 복원
+    Object.keys(_logMedQty).forEach(k=>delete _logMedQty[k]);
+    if(entry.medsQty) Object.entries(entry.medsQty).forEach(([m,q])=>{_logMedQty[m]={qty:q.qty,unit:q.unit||'T'};});
     (entry.meds||[]).forEach(s=>{
       document.querySelectorAll('.log-chip[data-group="med"]').forEach(c=>{
         if(c.dataset.val===s) c.classList.add('sel','sel-med');
       });
     });
+    _renderLogMedQtyUI();_updateLogMedWarnings();
     // Treatments — chip 매칭 + 나머지는 free-text에 합침
     const txFreeTexts=[];
     (entry.treatments||[]).forEach(s=>{
@@ -1770,7 +1905,9 @@ function selectMood(el, level) {
 // ── Custom chips (meds & symptoms) ──
 // ── 기본 칩 숨김 관리 ──
 function getHiddenChips() {
-  return getCustomItems(S.currentDomain,'hidden')||{};
+  const v=getCustomItems(S.currentDomain,'hidden');
+  // 'hidden'은 객체 {group:[items]} 구조. 빈 배열([])로 저장되었던 레거시/첫 사용 케이스 방어.
+  return (v && typeof v==='object' && !Array.isArray(v)) ? v : {};
 }
 function _hideDefaultChip(group, val) {
   const h=getHiddenChips();
@@ -1806,6 +1943,8 @@ function _saveLogFormState() {
   document.querySelectorAll('.log-chip.sel').forEach(c=>{
     state.chips.push({side:c.dataset.side||'',group:c.dataset.group||'',val:c.dataset.val||'',cls:[...c.classList]});
   });
+  // MedsQty
+  state.medsQty=JSON.parse(JSON.stringify(_logMedQty));
   // Mood
   const moodSel=document.querySelector('#mood-chips .log-chip.sel');
   state.mood=moodSel?{val:moodSel.dataset.val,level:moodSel.dataset.level}:null;
@@ -1855,6 +1994,12 @@ function _restoreLogFormState(state) {
         const chip=document.querySelector(`#dc-${item} .log-chip[data-val="${val}"]`);
         if(chip){chip.classList.add('sel','sel-sym');}
       });
+    }
+    // Restore medsQty
+    if(state.medsQty){
+      Object.keys(_logMedQty).forEach(k=>delete _logMedQty[k]);
+      Object.entries(state.medsQty).forEach(([m,q])=>{_logMedQty[m]={qty:q.qty,unit:q.unit||'T'};});
+      _renderLogMedQtyUI();_updateLogMedWarnings();
     }
     // Restore medCheck
     if(state.medCheck){
@@ -1930,12 +2075,21 @@ function openChipManager(type) {
     );
     return;
   }
-  const customList=getCustomItems(S.currentDomain,type==='meds'?'meds':type==='tx'?'tx':'syms');
+  // type→customGroup, hiddenGroup, defaults, label 매핑
+  const _cmMap={
+    meds:{cg:'meds',hg:'med',def:(lc.meds||[]).filter(m=>m!=='기타'),label:'투약'},
+    syms:{cg:'syms',hg:'sym',def:lc.symptoms||[],label:'증상'},
+    tx:{cg:'tx',hg:'tx',def:lc.treatments||[],label:'치료/시술'},
+    pain:{cg:'pain',hg:'pain',def:lc.painTypes||[],label:'통증 종류'},
+    triggers:{cg:'triggers',hg:'trigger',def:lc.triggers||[],label:'추정 트리거'},
+  };
+  const cm=_cmMap[type]||_cmMap.syms;
+  const customList=getCustomItems(S.currentDomain,cm.cg);
   const hidden=getHiddenChips();
-  const group=type==='meds'?'med':type==='tx'?'tx':'sym';
+  const group=cm.hg;
   const hiddenList=hidden[group]||[];
-  const defaultList=type==='meds'?(lc.meds||[]).filter(m=>m!=='기타'):type==='tx'?(lc.treatments||[]):(lc.symptoms||[]);
-  const label=type==='meds'?'투약':type==='tx'?'치료/시술':'증상';
+  const defaultList=cm.def;
+  const label=cm.label;
   const defaultRows=defaultList.map(item=>{
     const isHidden=hiddenList.includes(item);
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">

@@ -214,7 +214,7 @@ function setCustomItems(domainId, group, items) {
 
 function addCustomItem(domainId, group, item) {
   const items = getCustomItems(domainId, group);
-  if (!items.includes(item)) {
+  if (Array.isArray(items) && !items.includes(item)) {
     items.push(item);
     setCustomItems(domainId, group, items);
   }
