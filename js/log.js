@@ -824,7 +824,7 @@ function renderLog() {
   const allTx = [...(lc.treatments||[]).filter(t=>!_hiddenTx.includes(t)), ...customTx];
 
   const treatmentHtml = lc.treatments === null
-    ? `<div class="log-section-title">치료/시술</div>
+    ? `<div class="log-section-title">치료/시술${customTx.length?' <button onclick="openChipManager(\'tx\')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button>':''}</div>
        <input class="dx-form-input" id="log-treatment" placeholder="예: 상담, CBT, 명상 등 자유 입력">
        <div style="display:flex;gap:4px;align-items:center;margin-top:4px">
          <button onclick="addCustomChip('tx')" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
