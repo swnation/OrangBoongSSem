@@ -720,7 +720,7 @@ var BRK_SUPPL_BUNG = ['arginine','coq10','silymarin','multivitamin'];
 
 // 약물명→영양제 키 매핑 (quick/메인앱 약물 기록 → 붕룩이 영양제 자동 체크)
 var _MED_TO_SUPPL_MAP = {
-  'magnesium':'magnesium','마그네슘':'magnesium','마그네숨':'magnesium','magnesium 350mg':'magnesium',
+  'magnesium':'magnesium','마그네슘':'magnesium','마그네숨':'magnesium','magnesium 350mg':'magnesium','마그네슘 350mg':'magnesium',
   'folic acid':'folicAcid','엽산':'folicAcid',
   '철분':'iron','iron':'iron',
   'vitamin d':'vitaminD','비타민d':'vitaminD','비타민D':'vitaminD',
@@ -742,9 +742,15 @@ function syncMedsToBrkSuppl(meds, date, who) {
   var changed=false;
   meds.forEach(function(med){
     var medLower=med.toLowerCase().trim();
-    // 1) 기본 매핑 테이블
+    // 1) 기본 매핑 테이블 (정확 일치)
     var supplKey=_MED_TO_SUPPL_MAP[medLower]||_MED_TO_SUPPL_MAP[med];
-    // 2) 커스텀 영양제 이름 매칭 (부분 일치)
+    // 2) 기본 영양제 라벨 부분 일치 (마그네슘 350mg → 마그네슘)
+    if(!supplKey && typeof BRK_SUPPL_LABELS==='object'){
+      Object.entries(BRK_SUPPL_LABELS).forEach(function(e){
+        if(!supplKey && (medLower.includes(e[1].label.toLowerCase()) || e[1].label.toLowerCase().includes(medLower))) supplKey=e[0];
+      });
+    }
+    // 3) 커스텀 영양제 이름 매칭 (부분 일치)
     if(!supplKey){
       var found=customs.find(function(c){ return medLower.includes(c.key)||medLower.includes(c.label.toLowerCase())||c.label.toLowerCase().includes(medLower); });
       if(found) supplKey=found.key;
