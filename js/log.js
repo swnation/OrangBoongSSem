@@ -1943,9 +1943,10 @@ function _isChipPinned(group, val) {
 function _applyChipOrder(group, items) {
   const order=getChipOrder()[group]||[];
   if(!order.length) return items;
-  const set=new Set(items);
-  const ordered=order.filter(n=>set.has(n));
-  const rest=items.filter(n=>!order.includes(n));
+  const itemSet=new Set(items);
+  const orderSet=new Set(order);
+  const ordered=order.filter(n=>itemSet.has(n));
+  const rest=items.filter(n=>!orderSet.has(n));
   return [...ordered, ...rest];
 }
 function _moveChipOrder(group, val, delta) {
