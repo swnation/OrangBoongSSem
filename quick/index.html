@@ -917,10 +917,16 @@ function addSiteChip(inputId, containerId, side) {
   if (!customs.includes(val)) { customs.push(val); saveCustom('site-' + side, customs); }
 }
 
-// ── 칩 숨기기/관리 (메인앱과 동일 키 공유) ──
+// ── 칩 관리 (메인앱과 동일 키 공유: 숨김/고정/순서) ──
 const _Q_HIDDEN_KEY = 'om_hidden_chips_orangi-migraine';
+const _Q_PINNED_KEY = 'om_pinned_chips_orangi-migraine';
+const _Q_ORDER_KEY  = 'om_chip_order_orangi-migraine';
 function _qGetHidden(){ return _storageGetJSON(_Q_HIDDEN_KEY,{}); }
 function _qSaveHidden(h){ _storageSetJSON(_Q_HIDDEN_KEY,h); }
+function _qGetPinned(){ return _storageGetJSON(_Q_PINNED_KEY,{}); }
+function _qSavePinned(p){ _storageSetJSON(_Q_PINNED_KEY,p); }
+function _qGetOrder(){ return _storageGetJSON(_Q_ORDER_KEY,{}); }
+function _qSaveOrder(o){ _storageSetJSON(_Q_ORDER_KEY,o); }
 
 // 기본 칩 이름→그룹 매핑 (default arrays)
 const _Q_DEFAULT_MAP = {
@@ -928,44 +934,49 @@ const _Q_DEFAULT_MAP = {
 };
 const _Q_GROUP_LABEL = {sym:'증상',pain:'통증 종류',med:'약물',tx:'시술',trigger:'트리거'};
 
+// 순서 적용 헬퍼
+function _qApplyOrder(group, items){
+  const order=(_qGetOrder()[group])||[];
+  if(!order.length) return items;
+  const itemSet=new Set(items);
+  const orderSet=new Set(order);
+  const ordered=order.filter(n=>itemSet.has(n));
+  const rest=items.filter(n=>!orderSet.has(n));
+  return [...ordered, ...rest];
+}
+function _qIsPinned(group,val){
+  const p=_qGetPinned()[group]||[];
+  return p.includes(val);
+}
+
 function _qOpenChipManager(group){
   const defaults=_Q_DEFAULT_MAP[group]||[];
   const customs=getCustom(group);
-  const hidden=_qGetHidden();
-  const hiddenList=hidden[group]||[];
+  const hiddenList=_qGetHidden()[group]||[];
+  const pinnedList=_qGetPinned()[group]||[];
+  const defsVis=defaults.filter(x=>!hiddenList.includes(x));
+  const items=_qApplyOrder(group, [...defsVis, ...customs]);
 
-  // 전역 참조 (Rule #7 — onclick에 텍스트 직접 삽입 방지)
-  window._qcmDefaults=defaults;
-  window._qcmCustoms=customs;
-  window._qcmGroup=group;
+  // 전역 참조
+  window._qcmItems=items; window._qcmGroup=group;
 
-  let html=`<div style="font-weight:700;font-size:.9rem;margin-bottom:10px">${_Q_GROUP_LABEL[group]||group} 관리</div>`;
+  let html=`<div style="font-weight:700;font-size:.9rem;margin-bottom:6px">${_Q_GROUP_LABEL[group]||group} 관리</div>
+  <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px;line-height:1.5">📌 고정: 실수 삭제 방지 · ↑↓ 순서 변경 · ✕ 삭제</div>`;
 
-  // 기본 항목
-  if(defaults.length){
-    html+=`<div style="font-size:.72rem;color:var(--mu);font-weight:600;margin-bottom:4px">기본 항목</div>`;
-    html+=defaults.map((v,i)=>{
-      const isHidden=hiddenList.includes(v);
-      return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bd)">
-        <span style="flex:1;font-size:.78rem;color:${isHidden?'var(--mu2)':'var(--ink)'};${isHidden?'text-decoration:line-through':''};">${esc(v)}</span>
-        ${isHidden
-          ?`<button onclick="_qRestoreChip(window._qcmGroup,window._qcmDefaults[${i}])" style="font-size:.65rem;padding:3px 8px;border:1px solid var(--gr);border-radius:5px;background:none;color:var(--gr);cursor:pointer">복원</button>`
-          :`<button onclick="_qHideChip(window._qcmGroup,window._qcmDefaults[${i}])" style="font-size:.65rem;padding:3px 8px;border:1px solid var(--mu2);border-radius:5px;background:none;color:var(--mu2);cursor:pointer">숨기기</button>`
-        }
+  if(items.length){
+    html+=items.map((v,i)=>{
+      const isPinned=pinnedList.includes(v);
+      const canUp=i>0, canDown=i<items.length-1;
+      return `<div style="display:flex;align-items:center;gap:4px;padding:5px 0;border-bottom:1px solid var(--bd)">
+        <button onclick="_qTogglePin(${i})" title="${isPinned?'고정 해제':'고정'}" style="background:${isPinned?'#fef3c7':'none'};border:1px solid ${isPinned?'#fbbf24':'var(--bd)'};border-radius:4px;padding:2px 5px;font-size:.72rem;cursor:pointer;min-width:26px">${isPinned?'📌':'📍'}</button>
+        <span style="flex:1;font-size:.76rem;color:var(--ink);${isPinned?'font-weight:600':''}">${esc(v)}</span>
+        <button onclick="_qMove(${i},-1)" ${canUp?'':'disabled'} style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 5px;font-size:.68rem;cursor:${canUp?'pointer':'not-allowed'};opacity:${canUp?1:.3};min-width:22px">↑</button>
+        <button onclick="_qMove(${i},1)" ${canDown?'':'disabled'} style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 5px;font-size:.68rem;cursor:${canDown?'pointer':'not-allowed'};opacity:${canDown?1:.3};min-width:22px">↓</button>
+        <button onclick="_qDelete(${i})" ${isPinned?'disabled':''} title="${isPinned?'고정 해제 후 삭제':'삭제'}" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;font-size:.68rem;cursor:${isPinned?'not-allowed':'pointer'};color:${isPinned?'var(--mu2)':'var(--re)'};opacity:${isPinned?.4:1}">✕</button>
       </div>`;
     }).join('');
-  }
-
-  // 커스텀 항목
-  if(customs.length){
-    html+=`<div style="font-size:.72rem;color:var(--mu);font-weight:600;margin:10px 0 4px">추가 항목</div>`;
-    window._qcmCustoms=[...customs];
-    html+=customs.map((v,i)=>
-      `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bd)">
-        <span style="flex:1;font-size:.78rem;color:var(--ink)">${esc(v)}</span>
-        <button onclick="_qRemoveCustom(window._qcmGroup,${i})" style="font-size:.65rem;padding:3px 8px;border:1px solid var(--re);border-radius:5px;background:none;color:var(--re);cursor:pointer">삭제</button>
-      </div>`
-    ).join('');
+  } else {
+    html+=`<div style="color:var(--mu);font-size:.78rem;padding:8px 0">항목이 없습니다.</div>`;
   }
 
   html+=`<button onclick="document.getElementById('q-modal-overlay').style.display='none'" style="margin-top:12px;width:100%;padding:8px;border:1.5px solid var(--bd);border-radius:8px;background:var(--sf2);font-size:.78rem;cursor:pointer;color:var(--ink)">닫기</button>`;
@@ -974,30 +985,45 @@ function _qOpenChipManager(group){
   document.getElementById('q-modal-overlay').style.display='flex';
 }
 
-function _qHideChip(group,val){
-  const h=_qGetHidden();
-  if(!h[group])h[group]=[];
-  if(!h[group].includes(val))h[group].push(val);
-  _qSaveHidden(h);
-  showToast(`"${val}" 숨김`);
-  _qOpenChipManager(group); // 모달 갱신
-  _qRerender();
-}
-function _qRestoreChip(group,val){
-  const h=_qGetHidden();
-  if(h[group])h[group]=h[group].filter(v=>v!==val);
-  _qSaveHidden(h);
-  showToast(`"${val}" 복원됨`);
+function _qTogglePin(idx){
+  const group=window._qcmGroup; const name=window._qcmItems?.[idx];
+  if(!name||!group) return;
+  const p=_qGetPinned(); if(!p[group]) p[group]=[];
+  const i=p[group].indexOf(name);
+  if(i>=0) p[group].splice(i,1); else p[group].push(name);
+  _qSavePinned(p);
   _qOpenChipManager(group);
-  _qRerender();
 }
-function _qRemoveCustom(group,idx){
+function _qMove(idx, delta){
+  const group=window._qcmGroup; const name=window._qcmItems?.[idx];
+  if(!name||!group) return;
+  const items=[...window._qcmItems];
+  const newIdx=idx+delta;
+  if(newIdx<0||newIdx>=items.length) return;
+  [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+  const o=_qGetOrder(); o[group]=items; _qSaveOrder(o);
+  _qRerender();
+  _qOpenChipManager(group);
+}
+function _qDelete(idx){
+  const group=window._qcmGroup; const name=window._qcmItems?.[idx];
+  if(!name||!group) return;
+  if(_qIsPinned(group,name)) { showToast('📌 고정된 항목은 삭제할 수 없어요'); return; }
   const customs=getCustom(group);
-  const removed=customs.splice(idx,1)[0];
-  saveCustom(group,customs);
-  showToast(`"${removed}" 삭제됨`);
-  _qOpenChipManager(group);
+  if(customs.includes(name)) {
+    saveCustom(group, customs.filter(v=>v!==name));
+  } else {
+    // 기본 → hidden
+    const h=_qGetHidden(); if(!h[group]) h[group]=[];
+    if(!h[group].includes(name)) h[group].push(name);
+    _qSaveHidden(h);
+  }
+  // order에서도 제거
+  const o=_qGetOrder();
+  if(o[group]) { o[group]=o[group].filter(v=>v!==name); _qSaveOrder(o); }
+  showToast(`🗑 "${name}" 삭제됨`);
   _qRerender();
+  _qOpenChipManager(group);
 }
 function _qRerender(){
   // 현재 폼 데이터 수집 후 리렌더
@@ -1046,41 +1072,46 @@ function renderForm(entry) {
     }).join('');
   };
 
-  // 기본(숨김 제외) + 커스텀(영구 저장) + 편집 시 항목 복원
+  // 기본(숨김 제외) + 커스텀 + 편집 시 extra 복원 → 순서 적용
   const _qh=_qGetHidden();
   const _hSym=_qh.sym||[]; const _hPain=_qh.pain||[]; const _hMed=_qh.med||[]; const _hTx=_qh.tx||[]; const _hTrig=_qh.trigger||[];
 
   const customSyms = getCustom('sym');
   const extraSyms = (e.symptoms||[]).filter(s => !SYMPTOMS.includes(s) && !customSyms.includes(s));
-  const symChips = [...SYMPTOMS.filter(s=>!_hSym.includes(s)), ...customSyms, ...extraSyms].map(s => {
+  const symAll = _qApplyOrder('sym', [...SYMPTOMS.filter(s=>!_hSym.includes(s)), ...customSyms, ...extraSyms]);
+  const symChips = symAll.map(s => {
     const sel = e.symptoms?.includes(s);
     return `<span class="chip ${sel?'sel sel-sym':''}" data-val="${esc(s)}" data-group="sym" onclick="toggleChip(this,'sel-sym')">${esc(s)}</span>`;
   }).join('');
 
   const customPain = getCustom('pain');
   const extraPain = (e.painType||[]).filter(p => !PAIN_TYPES.includes(p) && !customPain.includes(p));
-  const painTypeChips = [...PAIN_TYPES.filter(p=>!_hPain.includes(p)), ...customPain, ...extraPain].map(p => {
+  const painAll = _qApplyOrder('pain', [...PAIN_TYPES.filter(p=>!_hPain.includes(p)), ...customPain, ...extraPain]);
+  const painTypeChips = painAll.map(p => {
     const sel = e.painType?.includes(p);
     return `<span class="chip ${sel?'sel sel-pain':''}" data-val="${esc(p)}" data-group="pain" onclick="toggleChip(this,'sel-pain')">${esc(p)}</span>`;
   }).join('');
 
   const customMeds = getCustom('med');
   const extraMeds = (e.meds||[]).filter(m => !MEDS.includes(m) && !customMeds.includes(m));
-  const medChips = [...MEDS.filter(m=>!_hMed.includes(m)), ...customMeds, ...extraMeds].map(m => {
+  const medAll = _qApplyOrder('med', [...MEDS.filter(m=>!_hMed.includes(m)), ...customMeds, ...extraMeds]);
+  const medChips = medAll.map(m => {
     const sel = e.meds?.includes(m);
     return `<span class="chip ${sel?'sel sel-med':''}" data-val="${esc(m)}" data-group="med" onclick="toggleChip(this,'sel-med')">${esc(m)}</span>`;
   }).join('');
 
   const customTx = getCustom('tx');
   const extraTx = (e.treatments||[]).filter(t => !TREATMENTS.includes(t) && !customTx.includes(t));
-  const txChips = [...TREATMENTS.filter(t=>!_hTx.includes(t)), ...customTx, ...extraTx].map(t => {
+  const txAll = _qApplyOrder('tx', [...TREATMENTS.filter(t=>!_hTx.includes(t)), ...customTx, ...extraTx]);
+  const txChips = txAll.map(t => {
     const sel = e.treatments?.includes(t);
     return `<span class="chip ${sel?'sel sel-tx':''}" data-val="${esc(t)}" data-group="tx" onclick="toggleChip(this,'sel-tx')">${esc(t)}</span>`;
   }).join('');
 
   const customTriggers = getCustom('trigger');
   const extraTriggers = (e.triggers||[]).filter(t => !TRIGGERS.includes(t) && !customTriggers.includes(t));
-  const triggerChips = [...TRIGGERS.filter(t=>!_hTrig.includes(t)), ...customTriggers, ...extraTriggers].map(t => {
+  const trigAll = _qApplyOrder('trigger', [...TRIGGERS.filter(t=>!_hTrig.includes(t)), ...customTriggers, ...extraTriggers]);
+  const triggerChips = trigAll.map(t => {
     const sel = e.triggers?.includes(t);
     return `<span class="chip ${sel?'sel sel-trigger':''}" data-val="${esc(t)}" data-group="trigger" onclick="toggleChip(this,'sel-trigger')">${esc(t)}</span>`;
   }).join('');

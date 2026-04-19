@@ -192,10 +192,12 @@ function getAllAppSettings() {
 // CUSTOM ITEMS (도메인별)
 // Firestore 경로: users/{uid}/domains/{domainId}/customItems/{group}
 // ═══════════════════════════════════════════════════════════════
-const _CUSTOM_GROUPS = ['meds', 'syms', 'tx', 'pain', 'triggers', 'sites_left', 'sites_right', 'hidden'];
+const _CUSTOM_GROUPS = ['meds', 'syms', 'tx', 'pain', 'triggers', 'sites_left', 'sites_right', 'hidden', 'pinned', 'order'];
 
 function _customKey(domainId, group) {
   if (group === 'hidden') return 'om_hidden_chips_' + domainId;
+  if (group === 'pinned') return 'om_pinned_chips_' + domainId;
+  if (group === 'order')  return 'om_chip_order_' + domainId;
   return 'om_custom_' + group + '_' + domainId;
 }
 
