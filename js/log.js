@@ -744,7 +744,8 @@ function renderLog() {
 
   // ── 마음관리 모드 (moodMode) ──
   const allMoodOpts=['😞 우울','😶 무감정','😐 보통','🙂 양호','😊 좋음'];
-  const visMoodOpts=allMoodOpts.map((s,i)=>({s,i})).filter(({s})=>!_hiddenMood.includes(s));
+  const visMoodSorted=_applyChipOrder('mood', allMoodOpts.filter(s=>!_hiddenMood.includes(s)));
+  const visMoodOpts=visMoodSorted.map(s=>({s, i:allMoodOpts.indexOf(s)}));
   const skipNrsHtml = `<label style="display:flex;align-items:center;gap:5px;margin-top:6px;cursor:pointer;font-size:.73rem;color:var(--mu)">
     <input type="checkbox" id="log-skip-nrs" onchange="toggleNrsSkip(this.checked)"> 기록 안함
   </label>`;
@@ -780,9 +781,10 @@ function renderLog() {
   const customSitesR = getCustomItems(S.currentDomain,'sites_right');
 
   const customPainTypes = getCustomItems(S.currentDomain,'pain');
+  const allPainTypes = _applyChipOrder('pain', [...(lc.painTypes||[]).filter(p=>!_hiddenPain.includes(p)), ...customPainTypes]);
   const painTypesHtml = lc.painTypes ? `
     <div class="log-section-title">통증 종류 <button onclick="openChipManager('pain')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
-    <div class="log-chips">${[...lc.painTypes.filter(p=>!_hiddenPain.includes(p)),...customPainTypes].map(p=>`<div class="log-chip" data-group="pain" data-val="${p}" onclick="toggleChip(this,'sel-pain')">${p}</div>`).join('')}
+    <div class="log-chips">${allPainTypes.map(p=>`<div class="log-chip" data-group="pain" data-val="${p}" onclick="toggleChip(this,'sel-pain')">${p}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="pain-other" placeholder="직접 입력" style="width:80px">
         <button onclick="addCustomPainType()" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
@@ -811,17 +813,17 @@ function renderLog() {
       </div>
     </div>` : '';
 
-  // 투약: 기본(숨김 제외) + 커스텀
+  // 투약: 기본(숨김 제외) + 커스텀 → 순서 적용
   const customMeds = getCustomItems(S.currentDomain,'meds');
-  const allMeds = [...(lc.meds||[]).filter(m=>m!=='기타'&&!_hiddenMed.includes(m)), ...customMeds];
+  const allMeds = _applyChipOrder('med', [...(lc.meds||[]).filter(m=>m!=='기타'&&!_hiddenMed.includes(m)), ...customMeds]);
 
-  // 증상: 기본(숨김 제외) + 커스텀
+  // 증상: 기본(숨김 제외) + 커스텀 → 순서 적용
   const customSyms = getCustomItems(S.currentDomain,'syms');
-  const allSyms = [...(lc.symptoms||[]).filter(s=>!_hiddenSym.includes(s)), ...customSyms];
+  const allSyms = _applyChipOrder('sym', [...(lc.symptoms||[]).filter(s=>!_hiddenSym.includes(s)), ...customSyms]);
 
-  // 치료: 기본(숨김 제외) + 커스텀
+  // 치료: 기본(숨김 제외) + 커스텀 → 순서 적용
   const customTx = getCustomItems(S.currentDomain,'tx');
-  const allTx = [...(lc.treatments||[]).filter(t=>!_hiddenTx.includes(t)), ...customTx];
+  const allTx = _applyChipOrder('tx', [...(lc.treatments||[]).filter(t=>!_hiddenTx.includes(t)), ...customTx]);
 
   const treatmentHtml = lc.treatments === null
     ? `<div class="log-section-title">치료/시술${customTx.length?' <button onclick="openChipManager(\'tx\')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button>':''}</div>
@@ -841,9 +843,10 @@ function renderLog() {
 
   // 트리거 칩 (triggers가 있는 도메인만)
   let customTriggers=getCustomItems(S.currentDomain,'triggers');
+  const allTriggers=_applyChipOrder('trigger', [...(lc.triggers||[]).filter(t=>!_hiddenTrigger.includes(t)), ...customTriggers]);
   const triggersHtml=lc.triggers?`
     <div class="log-section-title">추정 트리거 <button onclick="openChipManager('triggers')" style="background:none;border:none;cursor:pointer;font-size:.62rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
-    <div class="log-chips">${[...lc.triggers.filter(t=>!_hiddenTrigger.includes(t)),...customTriggers].map(t=>`<div class="log-chip" data-group="trigger" data-val="${t}" onclick="toggleChip(this,'sel-trigger')">${t}</div>`).join('')}
+    <div class="log-chips">${allTriggers.map(t=>`<div class="log-chip" data-group="trigger" data-val="${t}" onclick="toggleChip(this,'sel-trigger')">${t}</div>`).join('')}
       <div style="display:flex;gap:4px;align-items:center">
         <input class="log-other-input" id="trigger-other" placeholder="직접 입력" style="width:80px">
         <button onclick="addCustomTrigger()" style="background:var(--ac);color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:.7rem;cursor:pointer">+고정</button>
@@ -1903,28 +1906,86 @@ function selectMood(el, level) {
 }
 
 // ── Custom chips (meds & symptoms) ──
-// ── 기본 칩 숨김 관리 ──
-function getHiddenChips() {
-  const v=getCustomItems(S.currentDomain,'hidden');
-  // 'hidden'은 객체 {group:[items]} 구조. 빈 배열([])로 저장되었던 레거시/첫 사용 케이스 방어.
+// ── 기본 칩 숨김/고정/순서 관리 ──
+// 모든 객체형 저장소(hidden/pinned/order)는 {group:[items]} 구조.
+// getCustomItems의 기본값 []와 충돌 방지를 위해 self-healing 가드 필수.
+function _getObjectCustom(group) {
+  const v=getCustomItems(S.currentDomain,group);
   return (v && typeof v==='object' && !Array.isArray(v)) ? v : {};
 }
+function getHiddenChips() { return _getObjectCustom('hidden'); }
+function getPinnedChips() { return _getObjectCustom('pinned'); }
+function getChipOrder()   { return _getObjectCustom('order'); }
+
 function _hideDefaultChip(group, val) {
   const h=getHiddenChips();
   if(!h[group]) h[group]=[];
   if(!h[group].includes(val)) h[group].push(val);
   setCustomItems(S.currentDomain,'hidden',h);
-  showToast(`"${val}" 숨김 처리됨`);
-  closeConfirmModal();
-  renderView('log');
 }
 function _restoreDefaultChip(group, val) {
   const h=getHiddenChips();
   if(h[group]) h[group]=h[group].filter(v=>v!==val);
   setCustomItems(S.currentDomain,'hidden',h);
-  showToast(`"${val}" 복원됨`);
-  closeConfirmModal();
-  renderView('log');
+}
+function _togglePinChip(group, val) {
+  const p=getPinnedChips();
+  if(!p[group]) p[group]=[];
+  const idx=p[group].indexOf(val);
+  if(idx>=0) p[group].splice(idx,1); else p[group].push(val);
+  setCustomItems(S.currentDomain,'pinned',p);
+}
+function _isChipPinned(group, val) {
+  const p=getPinnedChips();
+  return !!(p[group]&&p[group].includes(val));
+}
+// 칩 정렬: order에 있는 것 먼저, 없는 것은 기본 순서 유지
+function _applyChipOrder(group, items) {
+  const order=getChipOrder()[group]||[];
+  if(!order.length) return items;
+  const set=new Set(items);
+  const ordered=order.filter(n=>set.has(n));
+  const rest=items.filter(n=>!order.includes(n));
+  return [...ordered, ...rest];
+}
+function _moveChipOrder(group, val, delta) {
+  // 현재 표시되는 전체 리스트(기본+커스텀, 숨김 제외)를 재구성
+  const cm=_cmMap(_cmGroupToType(group));
+  if(!cm) return;
+  const hidden=getHiddenChips()[group]||[];
+  const defs=cm.def.filter(x=>!hidden.includes(x));
+  const customs=cm.cg?getCustomItems(S.currentDomain,cm.cg):[];
+  const full=_applyChipOrder(group, [...defs,...customs]);
+  const idx=full.indexOf(val);
+  if(idx<0) return;
+  const newIdx=idx+delta;
+  if(newIdx<0||newIdx>=full.length) return;
+  [full[idx], full[newIdx]] = [full[newIdx], full[idx]];
+  const ord=getChipOrder();
+  ord[group]=full;
+  setCustomItems(S.currentDomain,'order',ord);
+}
+// 통합 삭제: 기본 → hidden에 추가 / 커스텀 → customs에서 제거
+function _deleteAnyChip(type, val) {
+  const cm=_cmMap(type); if(!cm) return;
+  if(_isChipPinned(cm.hg, val)) { showToast('📌 고정된 항목은 삭제할 수 없어요'); return; }
+  const customs=cm.cg?getCustomItems(S.currentDomain,cm.cg):[];
+  if(cm.cg && customs.includes(val)) {
+    // 커스텀 항목 제거
+    setCustomItems(S.currentDomain,cm.cg, customs.filter(v=>v!==val));
+  } else {
+    // 기본 항목 → hidden 처리
+    _hideDefaultChip(cm.hg, val);
+  }
+  // order에서도 제거
+  const ord=getChipOrder();
+  if(ord[cm.hg]) { ord[cm.hg]=ord[cm.hg].filter(v=>v!==val); setCustomItems(S.currentDomain,'order',ord); }
+  showToast(`🗑 "${val}" 삭제됨`);
+}
+function _cmGroupToType(hg) {
+  // hidden group name(hg: 'med','sym','tx','pain','trigger','mood') → type key for _cmMap
+  const m={med:'meds',sym:'syms',tx:'tx',pain:'pain',trigger:'triggers',mood:'mood'};
+  return m[hg]||hg;
 }
 
 function _saveLogFormState() {
@@ -2053,71 +2114,87 @@ function addCustomPainType() {
   showToast(`✅ "${val}" 고정됨`);
 }
 
-function openChipManager(type) {
+// type→customGroup, hiddenGroup, defaults, label 매핑 (도메인별 logConfig 기반)
+const _cmMap_static={ // def 외 항목은 변경 없음
+  meds:{cg:'meds',hg:'med',label:'투약'},
+  syms:{cg:'syms',hg:'sym',label:'증상'},
+  tx:{cg:'tx',hg:'tx',label:'치료/시술'},
+  pain:{cg:'pain',hg:'pain',label:'통증 종류'},
+  triggers:{cg:'triggers',hg:'trigger',label:'추정 트리거'},
+  mood:{cg:null,hg:'mood',label:'기분'},
+};
+function _cmMap(type) {
   const lc=DC().logConfig;
-  // 기분 모드 처리
-  if(type==='mood') {
-    const allMoodOpts=['😞 우울','😶 무감정','😐 보통','🙂 양호','😊 좋음'];
-    const hidden=getHiddenChips(); const hiddenMood=hidden.mood||[];
-    const rows=allMoodOpts.map(item=>{
-      const isHidden=hiddenMood.includes(item);
-      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
-        <span style="flex:1;font-size:.85rem;${isHidden?'color:var(--mu2);text-decoration:line-through':''}">${esc(item)}</span>
-        <span style="font-size:.65rem;color:var(--mu2);margin-right:2px">${isHidden?'숨김':'기본'}</span>
-        ${isHidden
-          ?`<button onclick="_restoreDefaultChip('mood','${item.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--gr)">↺ 복원</button>`
-          :`<button onclick="_hideDefaultChip('mood','${item.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--re)">✕ 숨김</button>`}
-      </div>`;
-    }).join('');
-    showConfirmModal('✏️ 기분 항목 관리',
-      `<div style="font-size:.78rem;color:var(--mu);margin-bottom:8px">항목을 숨기거나 복원할 수 있어요.</div>`+rows,
-      [{label:'닫기',action:closeConfirmModal,primary:true}]
-    );
-    return;
-  }
-  // type→customGroup, hiddenGroup, defaults, label 매핑
-  const _cmMap={
-    meds:{cg:'meds',hg:'med',def:(lc.meds||[]).filter(m=>m!=='기타'),label:'투약'},
-    syms:{cg:'syms',hg:'sym',def:lc.symptoms||[],label:'증상'},
-    tx:{cg:'tx',hg:'tx',def:lc.treatments||[],label:'치료/시술'},
-    pain:{cg:'pain',hg:'pain',def:lc.painTypes||[],label:'통증 종류'},
-    triggers:{cg:'triggers',hg:'trigger',def:lc.triggers||[],label:'추정 트리거'},
-  };
-  const cm=_cmMap[type]||_cmMap.syms;
-  const customList=getCustomItems(S.currentDomain,cm.cg);
-  const hidden=getHiddenChips();
-  const group=cm.hg;
-  const hiddenList=hidden[group]||[];
-  const defaultList=cm.def;
-  const label=cm.label;
-  const defaultRows=defaultList.map(item=>{
-    const isHidden=hiddenList.includes(item);
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
-      <span style="flex:1;font-size:.85rem;${isHidden?'color:var(--mu2);text-decoration:line-through':''}">${esc(item)}</span>
-      <span style="font-size:.65rem;color:var(--mu2);margin-right:2px">${isHidden?'숨김':'기본'}</span>
-      ${isHidden
-        ?`<button onclick="_restoreDefaultChip('${group}','${item.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--gr)">↺ 복원</button>`
-        :`<button onclick="_hideDefaultChip('${group}','${item.replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--re)">✕ 숨김</button>`}
+  const m=_cmMap_static[type]; if(!m) return null;
+  let def=[];
+  if(type==='meds') def=(lc.meds||[]).filter(m=>m!=='기타');
+  else if(type==='syms') def=lc.symptoms||[];
+  else if(type==='tx') def=lc.treatments||[];
+  else if(type==='pain') def=lc.painTypes||[];
+  else if(type==='triggers') def=lc.triggers||[];
+  else if(type==='mood') def=['😞 우울','😶 무감정','😐 보통','🙂 양호','😊 좋음'];
+  return {...m, def};
+}
+
+function openChipManager(type) {
+  const cm=_cmMap(type); if(!cm) return;
+  const customs=cm.cg?getCustomItems(S.currentDomain,cm.cg):[];
+  const hiddenList=getHiddenChips()[cm.hg]||[];
+  // 기본(숨김 제외) + 커스텀 → 순서 적용
+  const defs=cm.def.filter(x=>!hiddenList.includes(x));
+  const items=_applyChipOrder(cm.hg, [...defs, ...customs]);
+  const pinned=getPinnedChips()[cm.hg]||[];
+
+  // 전역 참조 (onclick에 사용자 텍스트 직접 삽입 방지 — Rule #7)
+  window._cmList=items; window._cmType=type;
+
+  const rows=items.map((item,i)=>{
+    const isPinned=pinned.includes(item);
+    const canUp=i>0, canDown=i<items.length-1;
+    return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bd)">
+      <button onclick="_cmTogglePin(${i})" title="${isPinned?'고정 해제':'고정'}" style="background:${isPinned?'var(--warn-bg,#fef3c7)':'none'};border:1px solid ${isPinned?'var(--warn,#fbbf24)':'var(--bd)'};border-radius:4px;padding:2px 6px;font-size:.78rem;cursor:pointer;min-width:28px">${isPinned?'📌':'📍'}</button>
+      <span style="flex:1;font-size:.85rem;${isPinned?'font-weight:600':''}">${esc(item)}</span>
+      <button onclick="_cmMove(${i},-1)" ${canUp?'':'disabled'} style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;font-size:.72rem;cursor:${canUp?'pointer':'not-allowed'};opacity:${canUp?1:.3};min-width:24px">↑</button>
+      <button onclick="_cmMove(${i},1)" ${canDown?'':'disabled'} style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;font-size:.72rem;cursor:${canDown?'pointer':'not-allowed'};opacity:${canDown?1:.3};min-width:24px">↓</button>
+      <button onclick="_cmDelete(${i})" ${isPinned?'disabled':''} title="${isPinned?'고정을 먼저 해제하세요':'삭제'}" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:${isPinned?'not-allowed':'pointer'};color:${isPinned?'var(--mu2)':'var(--re)'};opacity:${isPinned?.4:1}">✕</button>
     </div>`;
   }).join('');
-  const customRows=customList.map((item,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">
-    <span style="flex:1;font-size:.85rem">${esc(item)}</span>
-    <span style="font-size:.65rem;color:var(--mu2);margin-right:2px">추가</span>
-    <button onclick="_removeCustomChip('${type}',${i})" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--re)">✕ 삭제</button>
-  </div>`).join('');
-  showConfirmModal(`✏️ ${label} 항목 관리`,
-    `<div style="font-size:.78rem;color:var(--mu);margin-bottom:8px">기본 항목은 숨기거나 복원할 수 있고, 추가 항목은 삭제할 수 있어요.</div>`
-    + (defaultRows||'') + (customRows||'')
-    + (!defaultList.length&&!customList.length?'<div style="color:var(--mu);font-size:.82rem;padding:8px 0">항목이 없습니다.</div>':''),
+  showConfirmModal(`✏️ ${cm.label} 항목 관리`,
+    `<div style="font-size:.72rem;color:var(--mu);margin-bottom:8px;line-height:1.5">📌 고정: 실수 삭제 방지 · ↑↓ 순서 변경 · ✕ 삭제</div>`
+    + (rows||'<div style="color:var(--mu);font-size:.82rem;padding:8px 0">항목이 없습니다.</div>'),
     [{label:'닫기',action:closeConfirmModal,primary:true}]
   );
 }
 
+// chipManager 내부 콜백 (전역 참조 방식)
+function _cmTogglePin(idx) {
+  const name=window._cmList?.[idx]; const type=window._cmType;
+  if(!name||!type) return;
+  const cm=_cmMap(type); if(!cm) return;
+  _togglePinChip(cm.hg, name);
+  openChipManager(type); // 재렌더
+}
+function _cmMove(idx, delta) {
+  const name=window._cmList?.[idx]; const type=window._cmType;
+  if(!name||!type) return;
+  const cm=_cmMap(type); if(!cm) return;
+  _moveChipOrder(cm.hg, name, delta);
+  openChipManager(type);
+  renderView('log'); setTimeout(()=>openChipManager(type), 0); // 폼 업데이트 후 모달 복원
+}
+function _cmDelete(idx) {
+  const name=window._cmList?.[idx]; const type=window._cmType;
+  if(!name||!type) return;
+  _deleteAnyChip(type, name);
+  openChipManager(type);
+  renderView('log'); setTimeout(()=>openChipManager(type), 0);
+}
+
+// 레거시 호환 (외부에서 부를 수 있음)
 function _removeCustomChip(type,idx) {
-  const group=type;
-  const list=getCustomItems(S.currentDomain,group);
+  const list=getCustomItems(S.currentDomain,type);
   const removed=list.splice(idx,1)[0];
-  setCustomItems(S.currentDomain,group,list);
+  setCustomItems(S.currentDomain,type,list);
   showToast(`🗑 "${removed}" 삭제됨`);
   closeConfirmModal();
   renderView('log');
