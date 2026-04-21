@@ -178,7 +178,14 @@ saveMaster = async function() { await _origSaveMasterFn(); cacheToLocal(...); };
 
 ## 백업 브랜치
 **규칙: 최근 5개 버전은 항상 백업 브랜치를 유지한다. 새 버전 백업 시 가장 오래된 것을 삭제.**
-현재 원격에 백업 브랜치 없음 — 다음 버전업 시 생성 필요.
+현재 원격 백업 브랜치 (최신→오래된 순):
+- `backup/v9.8` (2026-04-21)
+- `backup/v9.7`
+- `backup/v9.6`
+- `backup/v9.5`
+- `backup/v9.4`
+- `backup/v9.3` ⚠️ **삭제 필요** (자동 삭제 실패 — 다음 세션에서 수동 정리)
+- `backup/pre-modular` (마일스톤 — 유지)
 
 ### 버전업 시 백업 자동화 절차 (필수)
 **Claude는 버전업 커밋을 main에 머지할 때 아래 절차를 반드시 자동 수행한다:**

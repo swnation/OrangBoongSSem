@@ -1,11 +1,47 @@
-# HANDOFF — v9.7+ 세션 인수인계 가이드
+# HANDOFF — v9.8 세션 인수인계 가이드
 
-## 현재 상태: v9.7+ (main)
+## 현재 상태: v9.8 (main)
 - 브랜치: main
-- SW CACHE_NAME: v99m (메인), v21 (quick)
-- APP_VERSION: v9.7
-- backup/v9.7 브랜치 유지
-- PR #166~#195 머지 완료 (이번 세션 PR 31건)
+- SW CACHE_NAME: v99q (메인), v21 (quick)
+- APP_VERSION: v9.8
+- backup/v9.8 브랜치 생성 완료
+- ⚠️ backup/v9.3 자동 삭제 실패(403) — 다음 세션에서 정리 필요
+
+## 세션 D 완료 (2026-04-21) — 붕쌤 마음↔건강 메모 분리
+
+### PR #202 (squash 머지 완료)
+
+#### 문제
+붕쌤 건강관리 목록에 마음관리 메모가 교차 표시되어 불편. `bung/` 앱이 같은 메모를 두 도메인에 중복 저장하던 문제.
+
+#### 해결
+1. **메인앱 교차 표시 필터** (`js/log.js`)
+   - `_CROSS_MEMO_EXCLUDE` 상수: `{bung-health↔bung-mental}` 짝 정의
+   - 홈(`renderRecentLogs`) / 저널(`renderJournalLogs`) 교차 표시에서 짝 제외
+2. **데일리체크 도메인별 메모 분리** (`bung/index.html`)
+   - 단일 `daily-memo` → `daily-memo-bung-mental` / `daily-memo-bung-health` 두 개로 분리
+   - `saveAll`에서 도메인별 메모 각각 저장 (중복 저장 중단)
+   - 엔트리 프리뷰/캘린더 상세에서도 도메인별로 구분 표시
+3. **📤 짝 도메인 이동 버튼**
+   - 메인앱 기록 목록: `_sendMemoToSibling(realIdx)` — 확인 후 메모 이동
+     · 같은 `datetime` 기존 엔트리 있으면 메모 append, 없으면 새 엔트리 생성
+     · 원본이 메모 외 내용 없으면 삭제, 있으면 메모만 비움
+     · `_pushUndo`로 되돌리기 가능
+   - bung/ 앱: `_sendMemoBetween(from, to)` — textarea 내용 이동 (저장 필요)
+
+#### 데이터 처리 방침
+- 기존 `bung-health` 엔트리에 남아 있는 중복 메모는 **자동 정리 안 함** (사용자 판단 "지금까지 자료는 마음관리에 두면 될 것 같아" 반영)
+- 필요 시 📤 버튼으로 개별 이동, 또는 대량 정리 기능을 향후 추가
+- 오랑이 도메인(`orangi-health`↔`orangi-mental`)은 제외 — 명시 요청 없었음. 필요 시 `_CROSS_MEMO_EXCLUDE`에 두 줄 추가로 확장 가능
+
+### 주의사항
+- `_sendMemoToSibling`은 짝 도메인의 `logMonth`가 다르면 Drive에서 해당 월을 새로 로드함. 대상 도메인이 아예 로드되지 않은 상태(`!folderId`)면 토스트 후 중단
+- bung/ 앱의 📤 버튼은 textarea끼리 이동만 하고 저장은 하지 않음 — 유저가 💾 저장 버튼 눌러야 Drive 반영
+
+---
+
+### 이전 컨텍스트 (v9.7까지)
+- PR #166~#195 머지 완료 (이전 세션들 PR 31건)
 - **Firebase 마이그레이션 완료**:
   - localStorage 직접 호출 0건 (storage.js adapter 경유)
   - Firebase 프로젝트: `fam-med-service` (Firestore + Auth)
