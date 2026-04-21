@@ -407,7 +407,12 @@ function renderCheckTab(){
   const _memoDoms=['bung-mental','bung-health'];
   _memoDoms.forEach(mid=>{
     const d=BUNG_DOMAINS[mid];if(!d)return;
-    html+='<div style="margin-bottom:8px"><div style="font-size:.72rem;font-weight:600;color:'+d.color+';margin-bottom:4px">'+d.icon+' '+d.label+' 메모</div>';
+    const other=_memoDoms.find(x=>x!==mid);
+    const od=BUNG_DOMAINS[other];
+    html+='<div style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">';
+    html+='<span style="font-size:.72rem;font-weight:600;color:'+d.color+'">'+d.icon+' '+d.label+' 메모</span>';
+    if(od)html+='<button type="button" onclick="_sendMemoBetween(\''+mid+'\',\''+other+'\')" title="현재 내용을 '+esc(od.label)+' 메모로 보냄" style="margin-left:auto;font-size:.6rem;padding:2px 8px;border:1px solid '+od.color+';border-radius:4px;background:'+od.color+'10;color:'+od.color+';cursor:pointer;font-family:var(--font)">📤 '+od.icon+' '+od.label+'로 보내기</button>';
+    html+='</div>';
     html+='<textarea class="memo" id="daily-memo-'+mid+'" placeholder="'+esc(d.label)+' 기록..."></textarea></div>';
   });
   html+='<button class="btn-save" id="btn-save" onclick="saveAll()">💾 '+(editingEntryId?'수정 저장':'새 기록 저장')+'</button><div class="save-status" id="save-status"></div>';
@@ -423,6 +428,19 @@ function renderCheckTab(){
 }
 function selectDC(btn){const label=btn.dataset.dc;btn.parentElement.querySelectorAll('.dc-btn').forEach(b=>b.classList.toggle('sel',b===btn&&!btn.classList.contains('sel')));}
 function toggleAll(domId,checked){document.querySelectorAll('.med-row input[data-domain="'+domId+'"]').forEach(cb=>cb.checked=checked);}
+// 메모 도메인 간 이동: from 텍스트박스 내용을 to로 이어붙이고 from은 비움
+function _sendMemoBetween(fromId,toId){
+  const from=document.getElementById('daily-memo-'+fromId);
+  const to=document.getElementById('daily-memo-'+toId);
+  if(!from||!to)return;
+  const txt=(from.value||'').trim();
+  if(!txt){showToast('보낼 메모가 없습니다');return;}
+  const toDom=BUNG_DOMAINS[toId];
+  to.value=(to.value?to.value+'\n':'')+txt;
+  from.value='';
+  to.focus();
+  showToast('📤 '+toDom.icon+' '+toDom.label+' 메모로 이동 (저장 필요)');
+}
 async function deleteEntry(datetime){
   if(!confirm('이 기록을 삭제하시겠습니까?'))return;
   for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
