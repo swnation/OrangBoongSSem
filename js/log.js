@@ -1,5 +1,12 @@
 // js/log.js — 증상 기록 시스템 (Phase 4 모듈화)
 
+// 같은 유저의 도메인 중 교차 표시에서 제외할 짝 (메모 맥락이 달라 분리 필요)
+// 붕쌤: 마음관리 ↔ 건강관리는 서로의 로그 목록에 표시하지 않음
+const _CROSS_MEMO_EXCLUDE = {
+  'bung-health': 'bung-mental',
+  'bung-mental': 'bung-health',
+};
+
 // 도메인별 점수 짧은 라벨 (NRS/기분/컨디션)
 function _scoreLabel() {
   const nrsLabel = DC()?.logConfig?.nrsLabel || DC()?.nrsLabel;
@@ -922,6 +929,7 @@ function renderRecentLogs() {
   const crossDomainLogs=[];
   Object.entries(S.domainState).forEach(([domId,dds])=>{
     if(domId===S.currentDomain) return;
+    if(_CROSS_MEMO_EXCLUDE[S.currentDomain]===domId) return;
     const dd=DOMAINS[domId];
     if(!dd||dd.user!==currentUser||!dds.logData) return;
     const dLogs=dds.logData.filter(l=>l.datetime?.slice(0,10)===today);
@@ -956,6 +964,7 @@ function renderRecentLogs() {
   const recentCrossLogs=[];
   Object.entries(S.domainState).forEach(([domId,dds])=>{
     if(domId===S.currentDomain) return;
+    if(_CROSS_MEMO_EXCLUDE[S.currentDomain]===domId) return;
     const dd=DOMAINS[domId];
     if(!dd||dd.user!==currentUser||!dds.logData) return;
     const cutoff=kstDaysAgo(recentCrossDays);
@@ -999,6 +1008,75 @@ function renderRecentLogs() {
   }
 
   return `<div class="card"><div class="card-title">오늘 (${todayLogs.length}건${crossDomainLogs.length?' + 다른 도메인 '+crossDomainLogs.length+'건':''})</div>${currentHtml}${crossHtml}</div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 📤 메모를 짝 도메인으로 이동 (bung-health ↔ bung-mental)
+// ═══════════════════════════════════════════════════════════════
+async function _sendMemoToSibling(realIdx) {
+  const currentDom = S.currentDomain;
+  const targetDom = _CROSS_MEMO_EXCLUDE[currentDom];
+  if (!targetDom) { showToast('짝 도메인이 없습니다'); return; }
+  const ds = D();
+  const entry = ds.logData?.[realIdx];
+  if (!entry) { showToast('기록을 찾을 수 없습니다'); return; }
+  const memo = (entry.memo || '').trim();
+  if (!memo) { showToast('메모가 비어 있습니다'); return; }
+  const tDom = DOMAINS[targetDom];
+  const preview = memo.length > 80 ? memo.slice(0, 80) + '…' : memo;
+  if (!confirm(`이 메모를 ${tDom.icon} ${tDom.label}로 옮길까요?\n\n"${preview}"\n\n원본에서는 메모만 지워지고 컨디션/증상/투약 등 다른 내용은 유지됩니다. 메모만 있던 기록이었다면 원본은 삭제됩니다.`)) return;
+
+  const targetDs = S.domainState[targetDom];
+  if (!targetDs || !targetDs.folderId) { showToast('대상 도메인이 로드되지 않았습니다'); return; }
+
+  const month = entry.datetime?.slice(0, 7);
+  if (!month) { showToast('날짜 정보가 없습니다'); return; }
+
+  // 대상 도메인의 해당 월 데이터 로드 보장
+  if (targetDs.logMonth !== month || !Array.isArray(targetDs.logData)) {
+    try {
+      const fName = tDom.logPrefix + '_' + month + '.json';
+      const files = await driveSearch(fName, targetDs.folderId);
+      if (files.length > 0) { targetDs.logFileId = files[0].id; const d = await driveRead(targetDs.logFileId); targetDs.logData = Array.isArray(d) ? d : []; }
+      else { targetDs.logData = []; targetDs.logFileId = null; }
+      targetDs.logMonth = month;
+    } catch (e) { showToast('대상 도메인 로드 실패: ' + e.message); return; }
+  }
+
+  _pushUndo('메모 → ' + tDom.label);
+
+  // 같은 datetime의 기존 엔트리가 있으면 메모 이어붙임, 없으면 새로 생성
+  const existing = targetDs.logData.find(l => l.datetime === entry.datetime);
+  if (existing) {
+    existing.memo = (existing.memo ? existing.memo + '\n' : '') + memo;
+  } else {
+    targetDs.logData.push({ id: Date.now(), datetime: entry.datetime, nrs: -1, memo });
+    targetDs.logData.sort((a, b) => (a.datetime || '').localeCompare(b.datetime || ''));
+  }
+
+  // 원본에서 메모 제거
+  entry.memo = '';
+
+  // 원본 엔트리가 메모 외 내용이 없으면 삭제
+  const isEmpty = (entry.nrs == null || entry.nrs < 0)
+    && !(entry.symptoms || []).length && !(entry.meds || []).length
+    && !(entry.treatments || []).length && !(entry.categories || []).length
+    && !(entry.sites || []).length && !(entry.triggers || []).length
+    && !entry.mood && !entry.outcome
+    && !Object.keys(entry.dailyChecks || {}).length
+    && !Object.keys(entry.medCheck || {}).length;
+  if (isEmpty) ds.logData.splice(realIdx, 1);
+
+  try {
+    await saveLogData();
+    const fName = tDom.logPrefix + '_' + month + '.json';
+    if (targetDs.logFileId) await driveUpdate(targetDs.logFileId, targetDs.logData);
+    else targetDs.logFileId = await driveCreate(fName, targetDs.logData, targetDs.folderId);
+    showToast('📤 ' + tDom.label + '으로 이동됨');
+  } catch (e) {
+    showToast('❌ 저장 실패: ' + e.message);
+  }
+  renderView(S.currentView);
 }
 
 let _logFilter={med:'',sym:'',cat:''};
@@ -1124,6 +1202,8 @@ function renderLogListInner() {
     byDate[date].push(l);
   });
   const dayNames=['일','월','화','수','목','금','토'];
+  const siblingDom = _CROSS_MEMO_EXCLUDE[S.currentDomain];
+  const siblingDef = siblingDom ? DOMAINS[siblingDom] : null;
   return Object.entries(byDate).map(([date,logs])=>{
     const dayOfWeek=dayNames[new Date(date+'T12:00').getDay()];
     const dateLabel=date.slice(5)+' ('+dayOfWeek+')';
@@ -1153,6 +1233,7 @@ function renderLogListInner() {
           ${l.timeline?`<div style="font-size:.62rem;margin-top:2px;display:flex;gap:8px;align-items:center"><span style="color:var(--ac);cursor:pointer" onclick="event.stopPropagation();_showTimeline(${realIdx})">📊 timeline ${l.timeline.length}건 보기</span><span style="color:var(--mu);cursor:pointer;border:1px solid var(--bd);padding:1px 6px;border-radius:3px" onclick="event.stopPropagation();unmergeDayEntry(${realIdx})" title="병합 해제하여 개별 기록으로 복원">↩ 병합해제</span></div>`:''}
           ${l.weather?`<div style="font-size:.62rem;color:var(--mu2);margin-top:2px">${l.weather.condition} ${l.weather.temp}° ${l.weather.pressure}hPa</div>`:''}
         </div>
+        ${siblingDef && l.memo ? `<button class="log-del" onclick="_sendMemoToSibling(${realIdx})" title="${esc('메모 → '+siblingDef.label)}" style="color:${siblingDef.color};font-size:.7rem">📤</button>` : ''}
         <button class="log-del" onclick="editLogEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
         <button class="log-del" onclick="deleteLogEntry(${realIdx})">✕</button>
       </div>`;
@@ -2274,6 +2355,7 @@ function renderJournalLogs() {
   const crossLogs=[];
   Object.entries(S.domainState).forEach(([domId,dds])=>{
     if(domId===S.currentDomain||domId==='bungruki') return;
+    if(_CROSS_MEMO_EXCLUDE[S.currentDomain]===domId) return;
     const dd=DOMAINS[domId];
     if(!dd||dd.user!==currentUser||!dds.logData) return;
     dds.logData.filter(l=>l.datetime?.slice(0,10)>=weekAgo).forEach(l=>{
@@ -2311,16 +2393,22 @@ function renderJournalLogs() {
   if(!ds.logData?.length&&!crossLogs.length) return '<div class="hint" style="padding:14px">아직 기록이 없어요</div>';
   if(!ds.logData?.length) return crossHtml;
 
+  const siblingDom = _CROSS_MEMO_EXCLUDE[S.currentDomain];
+  const siblingDef = siblingDom ? DOMAINS[siblingDom] : null;
   return `<div class="card"><div class="card-title">📋 기록 (${ds.logData.length}건)</div>`+
     [...ds.logData].reverse().map((l,ri)=>{
       const realIdx=ds.logData.length-1-ri;
       const who=l.who||'';
+      const sendBtn = (siblingDef && l.memo)
+        ? `<button class="log-del" onclick="_sendMemoToSibling(${realIdx})" title="${esc('메모 → '+siblingDef.label)}" style="color:${siblingDef.color};font-size:.7rem">📤</button>`
+        : '';
       return `<div class="log-item">
         <div class="log-item-time">${l.datetime.slice(5,10)}${who?'<br><span style="color:'+(whoColors[who]||'var(--mu)')+'">'+((whoEmoji[who]||'')+' '+who)+'</span>':''}</div>
         <div class="log-item-body">
           ${(l.categories||[]).map(c=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(c)}</span>`).join('')}
           ${l.memo?`<div style="font-size:.82rem;margin-top:4px;line-height:1.65">${esc(l.memo)}</div>`:''}
         </div>
+        ${sendBtn}
         <button class="log-del" onclick="editJournalEntry(${realIdx})" title="편집" style="color:var(--ac)">✏️</button>
         <button class="log-del" onclick="deleteLogEntry(${realIdx})">✕</button>
       </div>`;

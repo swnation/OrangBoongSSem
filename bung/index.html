@@ -279,12 +279,22 @@ function renderCheckTab(){
       const isEditing=editingEntryId===e.datetime;
       const time=e.datetime?.slice(11,16)||'';
       const mcCount=e.medCheck?Object.values(e.medCheck).filter(v=>v).length+'/'+Object.keys(e.medCheck).length:'';
+      // 도메인별 메모 개별 조회 (메모 분리 이후 e.memo는 한 도메인의 메모일 뿐)
+      const _domMemos={};
+      ['bung-mental','bung-health'].forEach(mid=>{
+        const ml=domainData[mid]?.logs?.[selectedDate.slice(0,7)];
+        const de=ml?.data?.find(l=>l.datetime===e.datetime);
+        if(de?.memo)_domMemos[mid]=de.memo;
+      });
       html+='<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;margin-bottom:3px;background:'+(isEditing?'var(--ac)20':'var(--sf2)')+';border:1px solid '+(isEditing?'var(--ac)':'var(--bd)')+'">';
-      html+='<span style="cursor:pointer;flex:1;display:flex;align-items:center;gap:6px" onclick="editingEntryId=\''+esc(e.datetime)+'\';renderCheckTab()">';
+      html+='<span style="cursor:pointer;flex:1;display:flex;align-items:center;gap:6px;flex-wrap:wrap" onclick="editingEntryId=\''+esc(e.datetime)+'\';renderCheckTab()">';
       html+='<span style="font-size:.72rem;font-family:var(--mono);color:var(--mu)">'+(time||'--:--')+'</span>';
       if(mcCount)html+='<span style="font-size:.68rem;color:var(--mu)">💊'+mcCount+'</span>';
       if(e.nrs>=0)html+='<span style="font-size:.68rem;color:var(--mu)">'+e.nrs+'점</span>';
-      if(e.memo)html+='<span style="font-size:.68rem;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">'+esc(e.memo.slice(0,20))+'</span>';
+      Object.entries(_domMemos).forEach(([mid,mtxt])=>{
+        const d=BUNG_DOMAINS[mid];if(!d)return;
+        html+='<span style="font-size:.64rem;color:'+d.color+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px" title="'+esc(mtxt)+'">'+d.icon+' '+esc(mtxt.slice(0,18))+'</span>';
+      });
       html+='</span>';
       html+='<button class="btn-toggle" style="color:var(--re);border-color:var(--re);font-size:.6rem;padding:2px 6px" onclick="deleteEntry(\''+esc(e.datetime)+'\')">삭제</button>';
       html+='</div>';
@@ -393,15 +403,44 @@ function renderCheckTab(){
     html+='</div></div>';
   }
 
-  // Memo + Save
-  html+='<div style="margin-bottom:8px"><div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">메모</div>';
-  html+='<textarea class="memo" id="daily-memo" placeholder="컨디션, 특이사항..."></textarea></div>';
+  // Memo (도메인별 분리) + Save — 마음관리 / 건강관리 각자 저장
+  const _memoDoms=['bung-mental','bung-health'];
+  _memoDoms.forEach(mid=>{
+    const d=BUNG_DOMAINS[mid];if(!d)return;
+    const other=_memoDoms.find(x=>x!==mid);
+    const od=BUNG_DOMAINS[other];
+    html+='<div style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">';
+    html+='<span style="font-size:.72rem;font-weight:600;color:'+d.color+'">'+d.icon+' '+d.label+' 메모</span>';
+    if(od)html+='<button type="button" onclick="_sendMemoBetween(\''+mid+'\',\''+other+'\')" title="현재 내용을 '+esc(od.label)+' 메모로 보냄" style="margin-left:auto;font-size:.6rem;padding:2px 8px;border:1px solid '+od.color+';border-radius:4px;background:'+od.color+'10;color:'+od.color+';cursor:pointer;font-family:var(--font)">📤 '+od.icon+' '+od.label+'로 보내기</button>';
+    html+='</div>';
+    html+='<textarea class="memo" id="daily-memo-'+mid+'" placeholder="'+esc(d.label)+' 기록..."></textarea></div>';
+  });
   html+='<button class="btn-save" id="btn-save" onclick="saveAll()">💾 '+(editingEntryId?'수정 저장':'새 기록 저장')+'</button><div class="save-status" id="save-status"></div>';
   content.innerHTML=html;
-  if(anyEntry?.memo)document.getElementById('daily-memo').value=anyEntry.memo;
+  // 편집 중: 각 도메인의 기존 메모를 개별 로드 / 새 기록: 비워둠
+  if(editingEntryId){
+    _memoDoms.forEach(mid=>{
+      const ta=document.getElementById('daily-memo-'+mid);if(!ta)return;
+      const editE=domainData[mid]?.logs?.[selectedDate.slice(0,7)]?.data?.find(l=>l.datetime===editingEntryId);
+      ta.value=editE?.memo||'';
+    });
+  }
 }
 function selectDC(btn){const label=btn.dataset.dc;btn.parentElement.querySelectorAll('.dc-btn').forEach(b=>b.classList.toggle('sel',b===btn&&!btn.classList.contains('sel')));}
 function toggleAll(domId,checked){document.querySelectorAll('.med-row input[data-domain="'+domId+'"]').forEach(cb=>cb.checked=checked);}
+// 메모 도메인 간 이동: from 텍스트박스 내용을 to로 이어붙이고 from은 비움
+function _sendMemoBetween(fromId,toId){
+  const from=document.getElementById('daily-memo-'+fromId);
+  const to=document.getElementById('daily-memo-'+toId);
+  if(!from||!to)return;
+  const txt=(from.value||'').trim();
+  if(!txt){showToast('보낼 메모가 없습니다');return;}
+  const toDom=BUNG_DOMAINS[toId];
+  to.value=(to.value?to.value+'\n':'')+txt;
+  from.value='';
+  to.focus();
+  showToast('📤 '+toDom.icon+' '+toDom.label+' 메모로 이동 (저장 필요)');
+}
 async function deleteEntry(datetime){
   if(!confirm('이 기록을 삭제하시겠습니까?'))return;
   for(const [domId,dc] of Object.entries(BUNG_DOMAINS)){
@@ -427,7 +466,11 @@ function changeDate(delta){const d=new Date(selectedDate+'T00:00:00');d.setDate(
 async function saveAll(){
   const btn=document.getElementById('btn-save');const statusEl=document.getElementById('save-status');
   btn.disabled=true;btn.textContent='저장 중...';statusEl.innerHTML='';
-  const memo=(document.getElementById('daily-memo')?.value||'').trim();
+  // 도메인별 분리된 메모 (마음관리 / 건강관리 각자 저장)
+  const _memos={
+    'bung-mental':(document.getElementById('daily-memo-bung-mental')?.value||'').trim(),
+    'bung-health':(document.getElementById('daily-memo-bung-health')?.value||'').trim(),
+  };
   const nrsSkip=document.getElementById('nrs-skip')?.checked;
   const nrs=nrsSkip?-1:parseInt(document.getElementById('nrs-range')?.value||'5');
   const timeSkip=document.getElementById('time-skip')?.checked;
@@ -449,6 +492,8 @@ async function saveAll(){
       const month=selectedDate.slice(0,7);await loadLogMonth(domId,month);
       const ml=ds.logs[month];if(!ml){results.push({domId,status:'skip'});continue;}
       const mc=domChecks[domId]||{};
+      // 도메인별 메모 (bungruki는 분리 메모 없음 → 빈 문자열)
+      const memo=(domId in _memos)?_memos[domId]:'';
 
       // 편집: datetime으로 기존 엔트리 찾기 / 새 기록: 새로 생성
       let entry=editingEntryId?ml.data.find(l=>l.datetime===editingEntryId):null;
@@ -475,6 +520,7 @@ async function saveAll(){
       console.error('Save '+domId+':',e);
       // 오프라인 폴백: localStorage에 임시 저장
       const mc=domChecks[domId]||{};
+      const memo=(domId in _memos)?_memos[domId]:'';
       if(Object.keys(mc).length||nrs>=0||memo){
         const offEntry={id:_sharedId,datetime:selectedDate+'T'+timeVal,nrs,medCheck:Object.keys(mc).length?mc:undefined,symptoms:symptoms.length?symptoms:undefined,dailyChecks:Object.keys(dailyChecks).length?dailyChecks:undefined,memo:memo||''};
         _offlineSave(domId,selectedDate.slice(0,7),offEntry);
@@ -860,7 +906,12 @@ function selectCalDate(date){
   if(ae?.nrs>=0)html+='<div style="font-size:.72rem;color:var(--mu);margin-top:4px">컨디션: '+ae.nrs+'/10</div>';
   if(ae?.dailyChecks){const dc=ae.dailyChecks;html+='<div style="font-size:.72rem;color:var(--mu)">기분: '+Object.entries(dc).map(([k,v])=>k+':'+v).join(' ')+'</div>';}
   if(ae?.symptoms?.length)html+='<div style="font-size:.72rem;color:var(--mu)">증상: '+ae.symptoms.map(esc).join(', ')+'</div>';
-  if(ae?.memo)html+='<div style="font-size:.72rem;color:var(--mu)">메모: '+esc(ae.memo)+'</div>';
+  // 도메인별 메모 개별 출력
+  ['bung-mental','bung-health'].forEach(mid=>{
+    const d=BUNG_DOMAINS[mid];if(!d)return;
+    const de=findEntry(mid,date);
+    if(de?.memo)html+='<div style="font-size:.72rem;color:'+d.color+'">'+d.icon+' '+esc(d.label)+' 메모: '+esc(de.memo)+'</div>';
+  });
   html+='</div>';el.innerHTML=html;
 }
 </script>
