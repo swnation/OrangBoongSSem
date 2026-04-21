@@ -1,5 +1,12 @@
 // js/log.js — 증상 기록 시스템 (Phase 4 모듈화)
 
+// 같은 유저의 도메인 중 교차 표시에서 제외할 짝 (메모 맥락이 달라 분리 필요)
+// 붕쌤: 마음관리 ↔ 건강관리는 서로의 로그 목록에 표시하지 않음
+const _CROSS_MEMO_EXCLUDE = {
+  'bung-health': 'bung-mental',
+  'bung-mental': 'bung-health',
+};
+
 // 도메인별 점수 짧은 라벨 (NRS/기분/컨디션)
 function _scoreLabel() {
   const nrsLabel = DC()?.logConfig?.nrsLabel || DC()?.nrsLabel;
@@ -922,6 +929,7 @@ function renderRecentLogs() {
   const crossDomainLogs=[];
   Object.entries(S.domainState).forEach(([domId,dds])=>{
     if(domId===S.currentDomain) return;
+    if(_CROSS_MEMO_EXCLUDE[S.currentDomain]===domId) return;
     const dd=DOMAINS[domId];
     if(!dd||dd.user!==currentUser||!dds.logData) return;
     const dLogs=dds.logData.filter(l=>l.datetime?.slice(0,10)===today);
@@ -956,6 +964,7 @@ function renderRecentLogs() {
   const recentCrossLogs=[];
   Object.entries(S.domainState).forEach(([domId,dds])=>{
     if(domId===S.currentDomain) return;
+    if(_CROSS_MEMO_EXCLUDE[S.currentDomain]===domId) return;
     const dd=DOMAINS[domId];
     if(!dd||dd.user!==currentUser||!dds.logData) return;
     const cutoff=kstDaysAgo(recentCrossDays);
@@ -2274,6 +2283,7 @@ function renderJournalLogs() {
   const crossLogs=[];
   Object.entries(S.domainState).forEach(([domId,dds])=>{
     if(domId===S.currentDomain||domId==='bungruki') return;
+    if(_CROSS_MEMO_EXCLUDE[S.currentDomain]===domId) return;
     const dd=DOMAINS[domId];
     if(!dd||dd.user!==currentUser||!dds.logData) return;
     dds.logData.filter(l=>l.datetime?.slice(0,10)>=weekAgo).forEach(l=>{
