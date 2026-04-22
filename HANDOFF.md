@@ -1,11 +1,34 @@
-# HANDOFF — v9.8.3 세션 인수인계 가이드
+# HANDOFF — v9.8.5 세션 인수인계 가이드
 
-## 현재 상태: v9.8.3 (main)
+## 현재 상태: v9.8.5 (main)
 - 브랜치: main
-- SW CACHE_NAME: v99t (메인), v21 (quick)
-- APP_VERSION: v9.8.3
-- backup/v9.8.3 브랜치 생성 완료
-- ⚠️ backup/v9.4, backup/v9.5 자동 삭제 실패(403) — 다음 세션에서 수동 정리
+- SW CACHE_NAME: v99v (메인), v21 (quick)
+- APP_VERSION: v9.8.5
+- backup/v9.8.5 브랜치 생성 완료 (v9.8.4 + v9.8.5 통합)
+- backup/v9.4, v9.5는 이전 세션에서 삭제 완료
+- ⚠️ backup/v9.6 자동 삭제 실패(403) — 다음 세션에서 수동 정리 (초과 1건)
+
+## 세션 G 완료 (2026-04-22)
+
+### PR #206 — 후속 3건 (v9.8.4)
+1. `runGrokMultiAgent` 요약 JSON에 `patient_friendly` 필드 추가
+2. `bung/` 데일리체크에 `condition.medSchedule` 인식 — 비일일 약(주/월/N일/custom)은 보라색 `📅 라벨` 배지 + 연한 배경
+3. 🧹 붕쌤 중복 메모 대량 정리 도구 (사이드바 버튼)
+   - Drive 전체 월별 로그 스캔 → mental/health 간 메모 정확 일치 탐지
+   - 미리보기 모달 → 확정 시 영향받은 월 파일만 업데이트, 메모 외 데이터 전부 보존
+
+### PR #207 — AI 보수성 완화 (v9.8.5)
+- `_OPINION_POSTURE` 공통 상수 신설 (`cost.js`)
+- 모든 세션 모드(basic/normal/debate/summary/grok)에 주입
+- **허용**: 근거 기반 강한 의견·감별·잠정 결론·용량·우선순위 (확률 언어 사용)
+- **금지**: "전문의와 상담", "주치의 판단이 우선", "의학적 조언 아님" 보일러플레이트
+- basic mode GPT/Perp 역할에서 "의료적 판단 금지" 제거 → 방향성 권고 유도
+- `final_recommendation` 길이 200→240자 + 도피성 금지
+- `renderSummaryResult` 하단 문구 완화 ("반드시 전문의와 상담" → "임상 판단 보조용")
+
+### 향후 TODO
+- backup/v9.6 수동 삭제 (GitHub UI 또는 권한 환경 CLI)
+- AI 응답이 실제로 덜 보수적이 됐는지 실전 모니터링 (몇 세션 돌려본 후 `_OPINION_POSTURE` 미세 조정)
 
 ## 세션 F 완료 (2026-04-22) — 통합 검증 & 회귀 수정
 
