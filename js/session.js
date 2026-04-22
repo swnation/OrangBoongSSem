@@ -596,21 +596,24 @@ async function runFinalSummary() {
   const finalSp=document.getElementById('final-sp');
   if(finalBtn) finalBtn.disabled=true;
   if(finalSp) finalSp.style.display='block';
-  _showProgress(0, 1, '📝 최종 요약 생성 중... (AI 호출)');
-  // 비스트리밍 호출이라 실시간 진행률이 없어 헤비적 추정: 20초 목표로 주기적으로 퍼센트 증가
-  let _summaryEstPct = 0;
-  const _summaryTick = setInterval(()=>{
-    _summaryEstPct = Math.min(95, _summaryEstPct + 4);
-    _showProgress(_summaryEstPct, 100, '📝 최종 요약 생성 중... 환자 설명용 문장 포함');
-  }, 800);
 
-  const lastRound=S.session.rounds[S.session.rounds.length-1];
-  const lastRoundText=lastRound
-    ? Object.entries(lastRound.answers||{}).map(([id,ans])=>`[${AI_DEFS[id]?.name}]\n${(ans||'').substring(0,800)}`).join('\n\n---\n\n')
-    : '';
+  // 진행률·타이머·프롬프트 구성 모두 try 안에서 → 어떤 단계에서 예외나도 finally가 안전 정리
+  let _summaryTick = null;
+  try {
+    _showProgress(0, 1, '📝 최종 요약 생성 중... (AI 호출)');
+    let _summaryEstPct = 0;
+    _summaryTick = setInterval(()=>{
+      _summaryEstPct = Math.min(95, _summaryEstPct + 4);
+      _showProgress(_summaryEstPct, 100, '📝 최종 요약 생성 중... 환자 설명용 문장 포함');
+    }, 800);
 
-  const dc = DC();
-  const prompt = `${dc.user} ${dc.label} 협진 세션 마무리 요약을 JSON으로만 작성.
+    const lastRound=S.session.rounds[S.session.rounds.length-1];
+    const lastRoundText=lastRound
+      ? Object.entries(lastRound.answers||{}).map(([id,ans])=>`[${AI_DEFS[id]?.name}]\n${(ans||'').substring(0,800)}`).join('\n\n---\n\n')
+      : '';
+
+    const dc = DC();
+    const prompt = `${dc.user} ${dc.label} 협진 세션 마무리 요약을 JSON으로만 작성.
 [대상 환자] ${dc.user} · ${dc.label}
 
 질문: ${S.session.question}
@@ -631,7 +634,6 @@ JSON 형식 (각 문자열은 명시된 길이 이내):
   "patient_friendly": "${dc.user}에게 전달할 설명용 문장. 2~4문장. 전문용어 최소화. '${dc.user}님' 호칭 사용. 이번 세션의 핵심 판단·권고·주의점을 부드럽게 전달."
 }`;
 
-  try {
     const result = await callAI('claude',
       '당신은 협진 세션 요약 전문가. 유효한 JSON만 출력. 다른 텍스트 금지.',
       prompt, 'summary');
