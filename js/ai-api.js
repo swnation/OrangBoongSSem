@@ -32,9 +32,10 @@ function getRoleSystem(aiId) {
 - 데이터↔근거 충돌 시 명시적 언급 ("데이터는 A를 시사하지만, 가이드라인은 B를 권고")
 - 환자 특수성(임신 준비, 만성 질환 등) 반드시 고려
 - 모호함 피하고 구체적 액션으로 마무리
+- 자기 역할·직책 재진술 금지. 환자 설명용 문장은 별도 최종 요약 단계에서만 생성되므로 여기선 금지.
 【형식】
 ## 🏥 최종 판단 & 액션 플랜 (Claude)
-**상황 요약** → **임상 판단** (근거 1~2문장) → **권장 액션** (1순위/2순위/금기) → **모니터링 포인트** → **환자 설명용 문장**`,
+**상황 요약** → **임상 판단** (근거 1~2문장) → **권장 액션** (1순위/2순위/금기) → **모니터링 포인트**`,
     };
     return `${dc.user} ${dc.label} 기본 협진 — ${AI_DEFS[aiId].name}\n${basicRoles[aiId]||basicRoles.claude}`;
   }
@@ -49,12 +50,12 @@ function getRoleSystem(aiId) {
       fact: '정보수집 — 인용 수치/문헌/가이드라인 검증, 출처 명시',
     };
     const role=teams[aiId]||'neutral';
-    return `${dc.user} ${dc.label} 디베이트 — ${AI_DEFS[aiId].name} 역할: ${roleDescs[role]||'분석'}.
-${_CONCISE} 자신의 역할에 충실. 근거 기반. 감정적 주장 금지.`;
+    return `${dc.user} ${dc.label} 디베이트 (대상: ${dc.user}) — ${AI_DEFS[aiId].name} 역할: ${roleDescs[role]||'분석'}.
+${_CONCISE} 근거 기반. 감정적 주장 금지.`;
   }
 
   const role = dc.aiRoles[aiId] || 'AI 분석';
-  return `${dc.user} ${dc.label} 협진 AI — ${AI_DEFS[aiId].name} 역할: ${role}.
+  return `${dc.user} ${dc.label} 협진 AI (대상 환자: ${dc.user}) — ${AI_DEFS[aiId].name} 역할: ${role}.
 ${_CONCISE}`;
 }
 
@@ -251,10 +252,13 @@ function getFullContext(question) {
   // 나이 동적 치환 + 공유 프로필 포함
   let patientCtx=m.patient_context||'';
   patientCtx=_replaceDynamicAge(patientCtx);
-  const sharedProfile=typeof getSharedProfileText==='function'?`\n\n[공유 환자 프로필]\n${getSharedProfileText()}`:'';
+  // 대상 환자 명시 헤더 (Perplexity 등이 대상 혼동하지 않도록)
+  const dc=DC();
+  const targetHeader=`[★ 대상 환자 / Target Patient]\n이번 세션의 대상은 오직 "${dc.user}" 뿐입니다. ${dc.label} 도메인 기준 분석을 작성하세요.\n다른 가족 구성원 정보는 상호작용/영향 참고용이며, 주 분석 대상이 아닙니다.\n`;
+  const sharedProfile=typeof getSharedProfileText==='function'?`\n\n[가족 구성원 참고 (상호작용/영향 맥락 — 주 분석 대상 아님)]\n${getSharedProfileText()}`:'';
   // 최근 검진 결과 요약 자동 포함
   const checkupCtx=typeof _getRecentCheckupContext==='function'?_getRecentCheckupContext():'';
-  const contextSection=`[컨텍스트 / SSOT]\n${patientCtx}${sharedProfile}${condContext}${crossCtx}${fileCtx}${checkupCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`;
+  const contextSection=`${targetHeader}\n[컨텍스트 / SSOT — ${dc.user} ${dc.label}]\n${patientCtx}${sharedProfile}${condContext}${crossCtx}${fileCtx}${checkupCtx}${accumText?'\n\n[누적 지식]\n'+accumText:''}`;
   const logSummary=getRecentLogSummary();
   return contextSection+(logSummary?'\n\n'+logSummary:'');
 }
@@ -277,6 +281,8 @@ function buildUserPrompt(aiId, roundNum) {
   const sess = S.session;
   const contextFull = getFullContext(sess.question);
   const question = sess.question || '(질문 미입력)';
+  const dc = DC();
+  const targetLine = `[대상 환자] ${dc.user} · ${dc.label}`;
 
   if (roundNum === 1) {
     const mode=sess.mode||'normal';
@@ -286,9 +292,9 @@ function buildUserPrompt(aiId, roundNum) {
       const others=Object.entries(AI_DEFS)
         .filter(([id])=>id!==judgeId&&sess.rounds[0].answers[id])
         .map(([id,def])=>`▶ [${def.name} — ${getDebateRole(id,sess.debateReversed)}]\n${sess.rounds[0].answers[id]}`).join('\n\n---\n\n');
-      return `${contextFull}\n\n[오늘 세션 질문]\n${question}\n\n[각 측 주장]\n${others}\n\n위 주장들을 심판으로서 평가하세요. 논거 강도, 근거 타당성, 과단정 여부를 체크하고 잠정 결론을 내려주세요.`;
+      return `${contextFull}\n\n${targetLine}\n\n[오늘 세션 질문]\n${question}\n\n[각 측 주장]\n${others}\n\n위 주장들을 심판으로서 평가하세요. 논거 강도, 근거 타당성, 과단정 여부를 체크하고 잠정 결론을 내려주세요. (대상 환자: ${dc.user})`;
     }
-    return `${contextFull}\n\n[오늘 세션 질문]\n${question}\n\n분석해 주세요. 서론/인사 없이 바로 핵심. 항목당 1문장. 최종 정리는 별도 요약 단계에서 하므로 여기선 분석 데이터만.`;
+    return `${contextFull}\n\n${targetLine}\n\n[오늘 세션 질문]\n${question}\n\n${dc.user} 기준으로 분석해 주세요. 서론·인사·자기 역할 재진술 금지. 바로 핵심. 항목당 1문장. 최종 정리·환자 설명용 문장은 별도 요약 단계에서 하므로 여기선 분석 데이터만.`;
   }
   const prevRound = sess.rounds[roundNum-2];
   const myPrev = prevRound?.answers?.[aiId] || '';
@@ -296,5 +302,5 @@ function buildUserPrompt(aiId, roundNum) {
     .filter(([id])=>id!==aiId && prevRound?.answers?.[id])
     .map(([id,def])=>`▶ [${def.name}]\n${prevRound.answers[id]}`).join('\n\n---\n\n');
 
-  return `${contextFull}\n\n[질문]\n${question}\n\n[내 R${roundNum-1} 답변]\n${myPrev}\n\n[다른 AI R${roundNum-1}]\n${others}\n\n서론 없이 바로 답변:\n1. [흡수] 타 AI의 맞는 점 한줄\n2. [반박] 틀린 점·보완 한줄씩\n3. [수정 분석] 핵심만\n4. [인사이트 한줄]`;
+  return `${contextFull}\n\n${targetLine}\n\n[질문]\n${question}\n\n[내 R${roundNum-1} 답변]\n${myPrev}\n\n[다른 AI R${roundNum-1}]\n${others}\n\n서론·자기소개·환자 설명용 문장 금지. 대상 환자는 ${dc.user}. 바로 답변:\n1. [흡수] 타 AI의 맞는 점 한줄\n2. [반박] 틀린 점·보완 한줄씩\n3. [수정 분석] 핵심만\n4. [인사이트 한줄]`;
 }

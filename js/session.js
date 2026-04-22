@@ -596,21 +596,40 @@ async function runFinalSummary() {
   const finalSp=document.getElementById('final-sp');
   if(finalBtn) finalBtn.disabled=true;
   if(finalSp) finalSp.style.display='block';
+  _showProgress(0, 1, '📝 최종 요약 생성 중... (AI 호출)');
+  // 비스트리밍 호출이라 실시간 진행률이 없어 헤비적 추정: 20초 목표로 주기적으로 퍼센트 증가
+  let _summaryEstPct = 0;
+  const _summaryTick = setInterval(()=>{
+    _summaryEstPct = Math.min(95, _summaryEstPct + 4);
+    _showProgress(_summaryEstPct, 100, '📝 최종 요약 생성 중... 환자 설명용 문장 포함');
+  }, 800);
 
   const lastRound=S.session.rounds[S.session.rounds.length-1];
   const lastRoundText=lastRound
     ? Object.entries(lastRound.answers||{}).map(([id,ans])=>`[${AI_DEFS[id]?.name}]\n${(ans||'').substring(0,800)}`).join('\n\n---\n\n')
     : '';
 
-  const prompt = `${DC().user} ${DC().label} 협진 세션 마무리 요약을 JSON으로만 작성.
+  const dc = DC();
+  const prompt = `${dc.user} ${dc.label} 협진 세션 마무리 요약을 JSON으로만 작성.
+[대상 환자] ${dc.user} · ${dc.label}
 
 질문: ${S.session.question}
 
 최종 라운드 답변:
 ${lastRoundText}
 
-JSON 형식 (각 문자열 100자 이내):
-{"session_summary":"3문장요약","new_consensus":["합의"],"new_discarded":["폐기"],"updated_issues":["쟁점"],"new_protocols":[],"round_evolution":"발전과정","final_recommendation":"최종권고","next_steps":["행동1","행동2"]}`;
+JSON 형식 (각 문자열은 명시된 길이 이내):
+{
+  "session_summary": "3문장 요약 (≤200자)",
+  "new_consensus": ["합의 (각 ≤100자)"],
+  "new_discarded": ["폐기 (각 ≤100자)"],
+  "updated_issues": ["쟁점 (각 ≤100자)"],
+  "new_protocols": [],
+  "round_evolution": "발전과정 (≤150자)",
+  "final_recommendation": "최종 권고 (≤200자)",
+  "next_steps": ["행동1", "행동2"],
+  "patient_friendly": "${dc.user}에게 전달할 설명용 문장. 2~4문장. 전문용어 최소화. '${dc.user}님' 호칭 사용. 이번 세션의 핵심 판단·권고·주의점을 부드럽게 전달."
+}`;
 
   try {
     const result = await callAI('claude',
@@ -653,6 +672,7 @@ JSON 형식 (각 문자열 100자 이내):
 
     const area=document.getElementById('summary-area');
     if(area){area.innerHTML=renderSummaryResult(parsed);area.scrollIntoView({behavior:'smooth'});}
+    _showProgress(100, 100, '✅ 최종 요약 완료');
     showToast('✅ 세션 저장 & Drive 동기화 완료!');
     // Offer context auto-merge
     if(parsed.new_consensus?.length||parsed.updated_issues?.length||parsed.final_recommendation) {
@@ -660,6 +680,9 @@ JSON 형식 (각 문자열 100자 이내):
     }
   } catch(e) {
     showToast('❌ 요약 실패: '+e.message,5000);
+  } finally {
+    clearInterval(_summaryTick);
+    setTimeout(_hideProgress, 1200);
   }
   if(finalBtn) finalBtn.disabled=false;
   if(finalSp) finalSp.style.display='none';
@@ -699,12 +722,14 @@ function renderSummaryResult(r) {
   const todayCost=getSidebarCostToday();
   const costBadge=todayCost>0?`<span style="font-size:.7rem;font-family:var(--mono);color:var(--mu);margin-left:auto">$${todayCost.toFixed(4)}</span>`:'';
 
+  const patientFriendly = r.patient_friendly ? `<div class="final-card" style="border-left:4px solid var(--ac)"><h3>💬 환자 전달용 문장 <span class="badge badge-blue">${esc(DC().user)}에게</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p style="line-height:1.7;white-space:pre-wrap">${esc(r.patient_friendly)}</p></div></div>` : '';
   return `
     <div class="final-card"><h3>📈 라운드 발전 <span class="badge badge-blue">Evolution</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p>${esc(r.round_evolution||'')}</p></div></div>
     <div class="final-card"><h3>✅ 세션 요약 ${costBadge}<button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p>${esc(r.session_summary||'')}</p></div></div>
     ${newCon?`<div class="final-card"><h3>🆕 새 합의 <span class="badge badge-green">누적 저장</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><ul>${newCon}</ul></div></div>`:''}
     ${issues?`<div class="final-card"><h3>🔍 미해결 쟁점 <span class="badge badge-orange">추적 중</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><ul>${issues}</ul></div></div>`:''}
     <div class="final-card"><h3>🎯 최종 권고 <span class="badge badge-purple">Action</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p>${esc(r.final_recommendation||'')}</p><div class="divider"></div><ul>${steps}</ul></div></div>
+    ${patientFriendly}
     <p style="font-size:.7rem;color:var(--mu);text-align:center;padding:6px 0 16px">※ 의료적 결정은 반드시 전문의와 상담하세요.</p>
     <div style="text-align:center;padding-bottom:16px"><button class="btn-share" onclick="shareSession()">🔗 세션 공유</button></div>`;
 }
