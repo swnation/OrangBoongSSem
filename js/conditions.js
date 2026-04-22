@@ -953,30 +953,26 @@ function _toggleDxPrn(idx){
 function _openDxMedSched(idx){
   const med=_dxMedsList[idx];if(!med)return;
   const current=_dxMedSchedMap[med]||{type:med.includes('(PRN)')?'prn':'daily',interval:1,custom:''};
-  window['_msType_dx']=current.type;
+  _msState.dx=current.type;
   showConfirmModal('💊 '+med+' 복용 주기',
     _renderSchedPickerInner('dx', current),
     [{ label:'적용', primary:true, action:()=>{
       const sched=_collectSchedFromForm('dx', current);
-      if(sched.type==='daily' && !med.includes('(PRN)')) delete _dxMedSchedMap[med];
-      else _dxMedSchedMap[med]=sched;
-      // custom 이외의 type은 PRN 접미사와 일관되게
-      if(sched.type==='prn' && !med.includes('(PRN)')){
-        const next=med+' (PRN)';
-        _dxMedsList[idx]=next;
-        _dxMedSchedMap[next]=sched; delete _dxMedSchedMap[med];
-        _dxTrackList.forEach(t=>{if(t.med===med)t.med=next;});
-      } else if(sched.type!=='prn' && med.includes('(PRN)')){
-        const next=med.replace(/\s*\(PRN\)/,'');
-        _dxMedsList[idx]=next;
-        if(sched.type==='daily') delete _dxMedSchedMap[med];
-        else _dxMedSchedMap[next]=sched;
-        if(_dxMedSchedMap[med]) delete _dxMedSchedMap[med];
-        _dxTrackList.forEach(t=>{if(t.med===med)t.med=next;});
+      // 1. sched.type 에 맞춰 (PRN) 접미사 정합화 → 새 이름 결정
+      let nextName = med;
+      if(sched.type==='prn' && !med.includes('(PRN)')) nextName = med + ' (PRN)';
+      else if(sched.type!=='prn' && med.includes('(PRN)')) nextName = med.replace(/\s*\(PRN\)/,'');
+      // 2. 이름 변경 시 _dxMedsList / _dxTrackList 키 이관
+      if(nextName !== med){
+        _dxMedsList[idx] = nextName;
+        _dxTrackList.forEach(t=>{if(t.med===med) t.med=nextName;});
       }
+      // 3. _dxMedSchedMap 정리: 옛 키 제거 + 기본(daily) 외만 새 키로 저장
+      delete _dxMedSchedMap[med];
+      if(sched.type !== 'daily') _dxMedSchedMap[nextName] = sched;
       closeConfirmModal();
       renderDxMedChips();
-      showToast('✅ 주기 설정: '+_fmtMedSched(sched, _dxMedsList[idx]));
+      showToast('✅ 주기 설정: '+_fmtMedSched(sched, nextName));
     }}, { label:'취소', action:closeConfirmModal }]);
 }
 
@@ -2675,8 +2671,11 @@ function _renderSchedPickerInner(prefix, current) {
   </div>`;
 }
 
+// 복용 주기 모달 임시 상태 (window 전역 오염 방지 — prefix별 격리)
+const _msState = {};
+
 function _setMedSchedType(prefix, type) {
-  window['_msType_'+prefix] = type;
+  _msState[prefix] = type;
   const units = { weekly:'회/주', monthly:'회/월', days:'일마다' };
   const row = document.getElementById(prefix+'-interval-row');
   const unitEl = document.getElementById(prefix+'-interval-unit');
@@ -2691,7 +2690,7 @@ function _setMedSchedType(prefix, type) {
 }
 
 function _collectSchedFromForm(prefix, fallback) {
-  const type = window['_msType_'+prefix] || fallback?.type || 'daily';
+  const type = _msState[prefix] || fallback?.type || 'daily';
   const interval = parseInt(document.getElementById(prefix+'-interval')?.value) || 1;
   const custom = (document.getElementById(prefix+'-custom')?.value || '').trim();
   const out = { type };
@@ -2706,7 +2705,7 @@ function openMedSchedule(domainId, condIdx, medName) {
   const c = ds.master.conditions[condIdx];
   if (!c.medSchedule) c.medSchedule = {};
   const current = c.medSchedule[medName] || { type: medName.includes('(PRN)') ? 'prn' : 'daily', interval: 1 };
-  window['_msType_ms'] = current.type;
+  _msState.ms = current.type;
   showConfirmModal('💊 ' + medName + ' 복용 주기',
     _renderSchedPickerInner('ms', current),
     [{ label:'저장', primary:true, action:async()=>{
