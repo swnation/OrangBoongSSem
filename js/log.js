@@ -1079,6 +1079,152 @@ async function _sendMemoToSibling(realIdx) {
   renderView(S.currentView);
 }
 
+// ═══════════════════════════════════════════════════════════════
+// 🧹 bung/ 데일리체크 중복 메모 대량 정리
+// bung/ 이전 버전에서 동일 메모를 bung-mental·bung-health 양쪽에 저장하던 버그의 후처리.
+// 사용자 정책: "지금까지 자료는 마음관리에 두면 될 것 같아" → health 쪽 중복분 제거.
+// ═══════════════════════════════════════════════════════════════
+async function openBungHealthMemoCleanup() {
+  const mentalDs = S.domainState['bung-mental'];
+  const healthDs = S.domainState['bung-health'];
+  if (!mentalDs?.folderId || !healthDs?.folderId) {
+    showToast('❌ 붕쌤 마음관리/건강관리 도메인이 로드되지 않았습니다. 붕쌤으로 로그인 후 도메인 전환 1회 실행하세요.', 5000);
+    return;
+  }
+  showConfirmModal('🧹 중복 메모 스캔 중', '<div style="font-size:.8rem;color:var(--mu);padding:12px 0">Drive에서 bung-mental · bung-health 전체 월별 로그를 비교합니다. 잠시만 기다려 주세요...</div>', [{label:'취소',action:closeConfirmModal}]);
+
+  try {
+    // 1. 양쪽 도메인의 모든 월별 로그 파일을 스캔하여 {month: [entries]} 맵 구성
+    const mentalByMonth = await _loadAllMonthlyLogs(mentalDs, DOMAINS['bung-mental'].logPrefix);
+    const healthByMonth = await _loadAllMonthlyLogs(healthDs, DOMAINS['bung-health'].logPrefix);
+
+    // 2. 건강관리 엔트리 중 메모가 있고, 마음관리에 동일 datetime 또는 동일 id의 엔트리가 있으며 메모가 정확히 일치하는 것들을 찾음
+    const candidates = []; // {month, healthIdx, healthEntry, mentalEntry}
+    Object.entries(healthByMonth).forEach(([month, hList]) => {
+      const mList = mentalByMonth[month] || [];
+      hList.forEach((h, hi) => {
+        const memo = (h.memo || '').trim();
+        if (!memo) return;
+        const match = mList.find(m => (h.id && m.id === h.id) || m.datetime === h.datetime);
+        if (match && (match.memo || '').trim() === memo) {
+          candidates.push({ month, healthIdx: hi, healthEntry: h, mentalEntry: match });
+        }
+      });
+    });
+
+    if (!candidates.length) {
+      closeConfirmModal();
+      showToast('✅ 정리할 중복 메모가 없습니다', 3000);
+      return;
+    }
+
+    // 3. 미리보기 모달
+    const preview = candidates.slice(0, 10).map(c => {
+      const m = (c.healthEntry.memo || '').substring(0, 60).replace(/\n/g, ' ');
+      return `<li style="font-size:.72rem;color:var(--mu);margin-bottom:3px;padding:4px 6px;background:var(--sf2);border-radius:4px">${esc(c.healthEntry.datetime?.slice(0,16) || '')} — "${esc(m)}"${(c.healthEntry.memo||'').length>60?'…':''}</li>`;
+    }).join('');
+    const more = candidates.length > 10 ? `<div style="font-size:.7rem;color:var(--mu2);margin-top:6px">...외 ${candidates.length - 10}건 더</div>` : '';
+    const byMonthCount = {};
+    candidates.forEach(c => { byMonthCount[c.month] = (byMonthCount[c.month]||0) + 1; });
+    const monthSummary = Object.entries(byMonthCount).sort().map(([m,n])=>`${m}: ${n}건`).join(' · ');
+
+    showConfirmModal(`🧹 중복 메모 정리 (${candidates.length}건 발견)`,
+      `<div style="font-size:.8rem;line-height:1.6">
+        <p><strong>${candidates.length}건</strong>의 건강관리 엔트리가 마음관리와 <strong>완전히 동일한 메모</strong>를 갖고 있습니다.</p>
+        <p style="font-size:.72rem;color:var(--mu);margin:6px 0">월별: ${esc(monthSummary)}</p>
+        <p style="font-size:.72rem;color:var(--mu)">✅ 진행 시: 건강관리 쪽 메모만 제거 (마음관리에 원본 유지). 메모 외 다른 데이터(컨디션/투약/증상/dailyChecks/medCheck)는 그대로 보존.</p>
+        <p style="font-size:.7rem;color:var(--re);margin-top:8px">⚠️ 이 작업은 Drive에 영구 반영되며 되돌릴 수 없습니다. 진행 전 📦 데이터 백업을 권장합니다.</p>
+        <details style="margin-top:10px"><summary style="cursor:pointer;font-size:.74rem;color:var(--ac)">미리보기 (최대 10건)</summary>
+          <ul style="list-style:none;padding:0;margin:6px 0">${preview}</ul>${more}
+        </details>
+      </div>`,
+      [
+        {label:`🧹 ${candidates.length}건 정리`, primary:true, action:()=>_applyBungHealthMemoCleanup(candidates, healthByMonth, healthDs)},
+        {label:'취소', action:closeConfirmModal},
+      ]);
+  } catch (e) {
+    closeConfirmModal();
+    showToast('❌ 스캔 실패: ' + e.message, 5000);
+    console.error('Cleanup scan:', e);
+  }
+}
+
+async function _loadAllMonthlyLogs(ds, logPrefix) {
+  // Drive에서 logPrefix_YYYY-MM.json 패턴 파일 전수 조회
+  const result = {}; // {YYYY-MM: {fileId, data[]}}
+  try {
+    // 폴더 내 모든 로그 파일 검색 (driveSearch는 이름 정확일치가 아닌 contains 검색이므로 활용)
+    const q = encodeURIComponent(`'${ds.folderId}' in parents and trashed=false and name contains '${logPrefix}_'`);
+    const r = await fetchWithRetry(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=100`, {
+      headers: {Authorization: 'Bearer ' + (await ensureValidToken())}
+    });
+    if (!r.ok) throw new Error('파일 목록 조회 실패: ' + r.status);
+    const data = await r.json();
+    const files = (data.files || []).filter(f => /_\d{4}-\d{2}\.json$/.test(f.name));
+    for (const f of files) {
+      const month = f.name.match(/_(\d{4}-\d{2})\.json$/)?.[1];
+      if (!month) continue;
+      try {
+        const content = await driveRead(f.id);
+        result[month] = { fileId: f.id, data: Array.isArray(content) ? content : [] };
+      } catch (e) {
+        console.warn('Log month read fail:', f.name, e);
+      }
+    }
+  } catch (e) {
+    throw new Error('월별 로그 스캔 실패: ' + e.message);
+  }
+  // 결과를 {month: entries[]} 형태로 단순화 + _fileMap 별도 저장 (저장 단계에서 사용)
+  const flat = {};
+  const fileMap = {};
+  Object.entries(result).forEach(([m, v]) => { flat[m] = v.data; fileMap[m] = v.fileId; });
+  flat._fileMap = fileMap;
+  return flat;
+}
+
+async function _applyBungHealthMemoCleanup(candidates, healthByMonth, healthDs) {
+  closeConfirmModal();
+  const _fileMap = healthByMonth._fileMap || {};
+  const affectedMonths = new Set();
+
+  // 인메모리 수정: 각 건강관리 엔트리의 memo만 비움
+  candidates.forEach(c => {
+    const monthData = healthByMonth[c.month];
+    if (!monthData) return;
+    // healthIdx가 원본 엔트리 포지션이므로 그대로 참조
+    const target = monthData[c.healthIdx];
+    if (target && (target.memo || '').trim() === (c.healthEntry.memo || '').trim()) {
+      target.memo = '';
+      affectedMonths.add(c.month);
+    }
+  });
+
+  // Drive에 영향받은 월별 파일만 업데이트
+  let saved = 0, failed = 0;
+  for (const month of affectedMonths) {
+    const fileId = _fileMap[month];
+    if (!fileId) { failed++; continue; }
+    try {
+      await driveUpdate(fileId, healthByMonth[month]);
+      saved++;
+      // 현재 로드된 월이면 메모리도 갱신
+      if (healthDs.logMonth === month) {
+        healthDs.logData = healthByMonth[month];
+      }
+    } catch (e) {
+      console.error('Cleanup save fail:', month, e);
+      failed++;
+    }
+  }
+
+  if (failed === 0) {
+    showToast(`✅ 정리 완료: ${candidates.length}건 제거 · ${saved}개 월 저장됨`, 5000);
+  } else {
+    showToast(`⚠️ 정리 부분 성공: ${saved}개 월 성공, ${failed}개 월 실패`, 6000);
+  }
+  renderView(S.currentView);
+}
+
 let _logFilter={med:'',sym:'',cat:''};
 function setLogFilter(type,val){_logFilter[type]=val;renderView('log');}
 function clearLogFilter(){_logFilter={med:'',sym:'',cat:''};renderView('log');}
