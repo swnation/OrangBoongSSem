@@ -1,11 +1,39 @@
-# HANDOFF — v9.8 세션 인수인계 가이드
+# HANDOFF — v9.8.2 세션 인수인계 가이드
 
-## 현재 상태: v9.8 (main)
+## 현재 상태: v9.8.2 (main)
 - 브랜치: main
-- SW CACHE_NAME: v99q (메인), v21 (quick)
-- APP_VERSION: v9.8
-- backup/v9.8 브랜치 생성 완료
-- ⚠️ backup/v9.3 자동 삭제 실패(403) — 다음 세션에서 정리 필요
+- SW CACHE_NAME: v99s (메인), v21 (quick)
+- APP_VERSION: v9.8.2
+- backup/v9.8.2 브랜치 생성 완료 (v9.8.1 + v9.8.2 통합 백업)
+- ⚠️ backup/v9.4 자동 삭제 실패(403) — 다음 세션에서 정리 필요 (v9.3은 이전에 정리됨)
+
+## 세션 E 완료 (2026-04-22)
+
+### PR #203 — 질환 편집 약물 칩에 📅 복용 주기 선택기
+- 칩에 매일/PRN 토글 옆 📅 버튼 신설
+- 모달: 매일 / PRN / 주 N회 / 월 N회 / N일마다 / **직접 입력** (자유 문자열)
+- `_dxMedSchedMap` state로 편집 중 관리, `condition.medSchedule`(기존 스키마)에 저장
+- 헬퍼 공용화: `_fmtMedSched`, `_renderSchedPickerInner`, `_setMedSchedType`, `_collectSchedFromForm`, `_msState` (window 전역 오염 방지)
+- Gemini 리뷰 반영: 키 이관 단일 패스 통합, window→`_msState` 모듈 로컬화
+
+### PR #204 — 협진 세션 프롬프트 위생 + 최종 요약 진행률 + Opus 4.7
+1. **환자 설명용 문장**은 최종 요약 단계에서만 생성 (중간 라운드 금지)
+   - `_CONCISE`에 "자기 역할 재진술/환자 설명용 금지" 추가
+   - basic mode Claude 프롬프트에서 "환자 설명용 문장" 형식 제거
+2. **대상 환자 명시 강화** — Perplexity 등이 헷갈리지 않도록
+   - `getFullContext` 맨 앞 `★ 대상 환자` 헤더 신설
+   - 공유 환자 프로필 → "가족 구성원 참고 (상호작용/영향 맥락)" 라벨 변경
+   - `getRoleSystem`/`buildUserPrompt`에 `[대상 환자] OO·OO` 라인 매번 포함
+3. **runFinalSummary 진행률** UI 추가 (800ms당 +4%, 95% 상한)
+   - 타이머와 progress 초기화 모두 try 블록 내부 (Gemini 리뷰 반영, 누수 방지)
+   - 프롬프트에 `patient_friendly` 필드 추가 → renderSummaryResult에 💬 카드
+4. **Claude Opus 4.7** 추가 (2026-04-16 GA, $5/$25, Sonnet 4.6 일상 추천 유지)
+
+### 다음 세션 TODO
+- backup/v9.4 수동 삭제 (GitHub UI 또는 권한 환경에서 `git push origin --delete backup/v9.4`)
+- 기존 bung-health 엔트리 중복 메모 정리 — 📤 버튼으로 수동 또는 대량 정리 도구 검토
+
+---
 
 ## 세션 D 완료 (2026-04-21) — 붕쌤 마음↔건강 메모 분리
 
