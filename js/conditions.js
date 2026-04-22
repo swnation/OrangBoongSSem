@@ -469,9 +469,9 @@ function renderMedsViewLegacy() {
         ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'■ 현재 투약'}${c.drugChangeDate?` <span style="font-size:.6rem;color:var(--mu2);font-weight:400">(${esc(c.drugChangeDate)}~)</span>`:''}</div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">${c.medsList.map((m,mi)=>{
             const sched = c.medSchedule?.[m];
-            const schedLabel = sched ? (sched.type==='weekly'?'주'+sched.interval+'회':sched.type==='monthly'?'월'+sched.interval+'회':sched.type==='days'?sched.interval+'일마다':sched.type==='prn'?'PRN':'매일') : (m.includes('(PRN)')?'PRN':'매일');
+            const schedLabel = _fmtMedSched(sched, m);
             const schedColor = schedLabel==='매일'?'#c2410c':schedLabel==='PRN'?'#92400e':'#7c3aed';
-            return `<span class="log-tag" onclick="openMedSchedule('${esc(c._domainId)}',${c._idx},'${esc(m).replace(/'/g,"\\'")}')" style="cursor:pointer;background:${m.includes('(PRN)')?'#fef3c7':'#fff7ed'};color:${schedColor};${m.includes('(PRN)')?'border:1px dashed #f59e0b':''}">${esc(m)} <span style="font-size:.5rem;opacity:.7">${schedLabel}</span></span>`;
+            return `<span class="log-tag" onclick="openMedSchedule('${esc(c._domainId)}',${c._idx},'${esc(m).replace(/'/g,"\\'")}')" style="cursor:pointer;background:${m.includes('(PRN)')?'#fef3c7':'#fff7ed'};color:${schedColor};${m.includes('(PRN)')?'border:1px dashed #f59e0b':''}" title="클릭하여 복용 주기 수정">${esc(m)} <span style="font-size:.5rem;opacity:.7">${esc(schedLabel)}</span></span>`;
           }).join('')}</div></div>`:''}
         ${c.medications&&!c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'현재 투약'}</div>${esc(c.medications)}</div>`:''}
         ${(()=>{
@@ -676,6 +676,7 @@ function renderMedsViewLegacy() {
 
 let _dxMedsList=[]; // temp med list for form
 let _dxManualHistory=[]; // temp manual history entries for form
+let _dxMedSchedMap={}; // {medName: {type, interval, custom}} — 저장 전 편집중인 복용 주기
 
 function addManualMedHistory() {
   const date=document.getElementById('dx-mh-date')?.value;
@@ -921,6 +922,8 @@ function applyRxPhoto() {
 }
 
 function removeDxMed(idx) {
+  const m=_dxMedsList[idx];
+  if(m && _dxMedSchedMap[m]) delete _dxMedSchedMap[m];
   _dxMedsList.splice(idx,1);
   renderDxMedChips();
 }
@@ -932,9 +935,49 @@ function _isTracked(med){return !!_getTrackItem(med);}
 
 function _toggleDxPrn(idx){
   const m=_dxMedsList[idx];if(!m)return;
-  if(m.includes('(PRN)')){_dxMedsList[idx]=m.replace(/\s*\(PRN\)/,'');}
-  else{_dxMedsList[idx]=m+' (PRN)';}
+  let next;
+  if(m.includes('(PRN)')) next=m.replace(/\s*\(PRN\)/,'');
+  else next=m+' (PRN)';
+  // medSchedMap, trackList의 키를 새 이름으로 이관
+  if(_dxMedSchedMap[m]){ _dxMedSchedMap[next]=_dxMedSchedMap[m]; delete _dxMedSchedMap[m]; }
+  _dxTrackList.forEach(t=>{ if(t.med===m) t.med=next; });
+  _dxMedsList[idx]=next;
+  // PRN 토글 시 스케줄 type도 일관되게 동기화
+  if(_dxMedSchedMap[next]){
+    if(next.includes('(PRN)')&&_dxMedSchedMap[next].type==='daily') _dxMedSchedMap[next].type='prn';
+    else if(!next.includes('(PRN)')&&_dxMedSchedMap[next].type==='prn') _dxMedSchedMap[next].type='daily';
+  }
   renderDxMedChips();
+}
+
+function _openDxMedSched(idx){
+  const med=_dxMedsList[idx];if(!med)return;
+  const current=_dxMedSchedMap[med]||{type:med.includes('(PRN)')?'prn':'daily',interval:1,custom:''};
+  window['_msType_dx']=current.type;
+  showConfirmModal('💊 '+med+' 복용 주기',
+    _renderSchedPickerInner('dx', current),
+    [{ label:'적용', primary:true, action:()=>{
+      const sched=_collectSchedFromForm('dx', current);
+      if(sched.type==='daily' && !med.includes('(PRN)')) delete _dxMedSchedMap[med];
+      else _dxMedSchedMap[med]=sched;
+      // custom 이외의 type은 PRN 접미사와 일관되게
+      if(sched.type==='prn' && !med.includes('(PRN)')){
+        const next=med+' (PRN)';
+        _dxMedsList[idx]=next;
+        _dxMedSchedMap[next]=sched; delete _dxMedSchedMap[med];
+        _dxTrackList.forEach(t=>{if(t.med===med)t.med=next;});
+      } else if(sched.type!=='prn' && med.includes('(PRN)')){
+        const next=med.replace(/\s*\(PRN\)/,'');
+        _dxMedsList[idx]=next;
+        if(sched.type==='daily') delete _dxMedSchedMap[med];
+        else _dxMedSchedMap[next]=sched;
+        if(_dxMedSchedMap[med]) delete _dxMedSchedMap[med];
+        _dxTrackList.forEach(t=>{if(t.med===med)t.med=next;});
+      }
+      closeConfirmModal();
+      renderDxMedChips();
+      showToast('✅ 주기 설정: '+_fmtMedSched(sched, _dxMedsList[idx]));
+    }}, { label:'취소', action:closeConfirmModal }]);
 }
 
 function renderDxMedChips() {
@@ -945,9 +988,16 @@ function renderDxMedChips() {
     const ti=_getTrackItem(m);
     const tracked=!!ti;
     const untilLabel=ti?(ti.until==='change'?'변경시까지':ti.until):'';
+    const sched=_dxMedSchedMap[m];
+    const schedLabel=_fmtMedSched(sched, m);
+    const schedIsCustom=sched && (sched.type==='weekly'||sched.type==='monthly'||sched.type==='days'||sched.type==='custom');
+    const schedBtnStyle=schedIsCustom
+      ? 'border:1px solid #7c3aed;background:#ede9fe;color:#6d28d9'
+      : (isPrn?'border:1px solid #f59e0b;background:#fef3c7;color:#92400e':'border:1px solid var(--bd);background:none;color:var(--mu)');
     return `<span class="file-chip" style="${isPrn?'border:1.5px dashed #f59e0b;background:#fff7ed':''}">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span>
-      <button onclick="_toggleDxPrn(${i})" style="font-size:.55rem;padding:1px 4px;border:1px solid ${isPrn?'#f59e0b':'var(--bd)'};border-radius:3px;background:${isPrn?'#fef3c7':'none'};color:${isPrn?'#92400e':'var(--mu)'};cursor:pointer;margin-left:2px;font-family:var(--font)" title="PRN 토글">${isPrn?'PRN':'매일'}</button>
-      <button onclick="_toggleTrack(${i})" style="font-size:.55rem;padding:1px 4px;border:1px solid ${tracked?'#10b981':'var(--bd)'};border-radius:3px;background:${tracked?'#f0fdf4':'none'};color:${tracked?'#10b981':'var(--mu)'};cursor:pointer;margin-left:2px;font-family:var(--font)" title="순응도 추적">${tracked?'📊'+untilLabel:'추적'}</button></span>`;
+      <button onclick="_toggleDxPrn(${i})" type="button" style="font-size:.55rem;padding:1px 4px;border:1px solid ${isPrn?'#f59e0b':'var(--bd)'};border-radius:3px;background:${isPrn?'#fef3c7':'none'};color:${isPrn?'#92400e':'var(--mu)'};cursor:pointer;margin-left:2px;font-family:var(--font)" title="PRN 토글">${isPrn?'PRN':'매일'}</button>
+      <button onclick="_openDxMedSched(${i})" type="button" style="font-size:.55rem;padding:1px 5px;border-radius:3px;${schedBtnStyle};cursor:pointer;margin-left:2px;font-family:var(--font)" title="복용 주기 설정 (주/월/N일/직접 입력)">📅 ${esc(schedLabel)}</button>
+      <button onclick="_toggleTrack(${i})" type="button" style="font-size:.55rem;padding:1px 4px;border:1px solid ${tracked?'#10b981':'var(--bd)'};border-radius:3px;background:${tracked?'#f0fdf4':'none'};color:${tracked?'#10b981':'var(--mu)'};cursor:pointer;margin-left:2px;font-family:var(--font)" title="순응도 추적">${tracked?'📊'+untilLabel:'추적'}</button></span>`;
   }).join('');
 }
 
@@ -971,7 +1021,7 @@ function openConditionForm(domainId, idx) {
   document.getElementById('dx-edit-idx').value=idx!==undefined?idx:-1;
   document.getElementById('dx-edit-domain').value=domainId||S.currentDomain;
   if(domainId) document.getElementById('dx-domain').value=domainId;
-  _conditionFiles=[];_dxMedsList=[];_dxManualHistory=[];_dxTrackList=[];
+  _conditionFiles=[];_dxMedsList=[];_dxManualHistory=[];_dxTrackList=[];_dxMedSchedMap={};
   const fileList=document.getElementById('dx-file-list');if(fileList)fileList.innerHTML='';
   if(idx!==undefined && domainId) {
     const ds=S.domainState[domainId];
@@ -987,6 +1037,7 @@ function openConditionForm(domainId, idx) {
     _dxMedsList=c.medsList?[...c.medsList]:(c.medications?c.medications.split(',').map(s=>s.trim()).filter(Boolean):[]);
     // 하위호환: 문자열 배열 → 객체 배열 변환
     _dxTrackList=(c.trackCompliance||[]).map(t=>typeof t==='string'?{med:t,until:'change'}:t);
+    if(c.medSchedule) Object.assign(_dxMedSchedMap, JSON.parse(JSON.stringify(c.medSchedule)));
     renderDxMedChips();
     showDxMedSuggestions(c.name);
   } else {
@@ -1012,6 +1063,13 @@ async function saveCondition() {
   if(!ds?.master) {showToast('해당 도메인 데이터가 로드되지 않았습니다.');return;}
   if(!ds.master.conditions) ds.master.conditions=[];
 
+  // 현재 약물 목록에 있는 스케줄만 필터링 (제거된 약의 잔여 스케줄 정리)
+  const cleanSched={};
+  Object.entries(_dxMedSchedMap).forEach(([k,v])=>{
+    if(_dxMedsList.includes(k) && v && v.type && v.type!=='daily'){
+      cleanSched[k]=v;
+    }
+  });
   const data={
     id:Date.now(), name,
     diseaseType:document.getElementById('dx-type')?.value||'chronic',
@@ -1019,6 +1077,7 @@ async function saveCondition() {
     status:document.getElementById('dx-status').value,
     medsList:[..._dxMedsList],
     trackCompliance:_dxTrackList.length?[..._dxTrackList]:undefined,
+    medSchedule:Object.keys(cleanSched).length?cleanSched:undefined,
     medications:_dxMedsList.join(', '),
     drugChangeDate:document.getElementById('dx-drug-change')?.value||'',
     drugResponse:document.getElementById('dx-response').value.trim(),
@@ -2573,56 +2632,92 @@ function getPregnancyVaccinations(){
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 약물 복용 주기 설정 (매일/PRN/주간/월간/N일마다)
+// 약물 복용 주기 설정 (매일/PRN/주간/월간/N일마다/직접 입력)
 // ═══════════════════════════════════════════════════════════════
+const _MED_SCHED_OPTS = [
+  { type:'daily',   label:'매일' },
+  { type:'prn',     label:'PRN (필요 시)' },
+  { type:'weekly',  label:'주 N회' },
+  { type:'monthly', label:'월 N회' },
+  { type:'days',    label:'N일마다' },
+  { type:'custom',  label:'직접 입력' },
+];
+
+function _fmtMedSched(sched, med) {
+  if (!sched) return (med && med.includes('(PRN)')) ? 'PRN' : '매일';
+  if (sched.type === 'weekly')  return '주'+(sched.interval||1)+'회';
+  if (sched.type === 'monthly') return '월'+(sched.interval||1)+'회';
+  if (sched.type === 'days')    return (sched.interval||1)+'일마다';
+  if (sched.type === 'custom')  return (sched.custom||'').trim() || '직접';
+  if (sched.type === 'prn')     return 'PRN';
+  return '매일';
+}
+
+// 주기 선택 UI HTML 빌더 (모달 / 조건편집 폼 공용)
+function _renderSchedPickerInner(prefix, current) {
+  const optsHtml = _MED_SCHED_OPTS.map(o => {
+    const sel = current.type === o.type;
+    return `<button onclick="_setMedSchedType('${prefix}','${o.type}')" id="${prefix}-btn-${o.type}" type="button" style="flex:1 1 30%;min-width:64px;padding:7px 4px;font-size:.7rem;border:1.5px solid ${sel?'var(--ac)':'var(--bd)'};border-radius:6px;background:${sel?'var(--ac)':'var(--sf2)'};color:${sel?'#fff':'var(--ink)'};cursor:pointer;font-family:var(--font)">${o.label}</button>`;
+  }).join('');
+  const needInterval = ['weekly','monthly','days'].includes(current.type);
+  const needCustom   = current.type === 'custom';
+  const unitText = current.type==='weekly'?'회/주':current.type==='monthly'?'회/월':current.type==='days'?'일마다':'';
+  return `<div style="font-size:.72rem">
+    <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${optsHtml}</div>
+    <div id="${prefix}-interval-row" style="display:${needInterval?'flex':'none'};align-items:center;gap:6px;margin-bottom:6px">
+      <span>간격:</span>
+      <input type="number" id="${prefix}-interval" value="${current.interval||1}" min="1" max="90" style="width:60px;padding:4px;font-size:.75rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:var(--mono)">
+      <span id="${prefix}-interval-unit">${unitText}</span>
+    </div>
+    <div id="${prefix}-custom-row" style="display:${needCustom?'block':'none'};margin-bottom:6px">
+      <input type="text" id="${prefix}-custom" value="${esc(current.custom||'')}" placeholder="예: 매주 월요일 저녁, 격주 금요일, 매달 1일..." style="width:100%;padding:5px 8px;font-size:.72rem;border:1px solid var(--bd);border-radius:4px;font-family:var(--font);background:var(--sf2);color:var(--ink)">
+    </div>
+  </div>`;
+}
+
+function _setMedSchedType(prefix, type) {
+  window['_msType_'+prefix] = type;
+  const units = { weekly:'회/주', monthly:'회/월', days:'일마다' };
+  const row = document.getElementById(prefix+'-interval-row');
+  const unitEl = document.getElementById(prefix+'-interval-unit');
+  const customRow = document.getElementById(prefix+'-custom-row');
+  if (row) row.style.display = ['weekly','monthly','days'].includes(type) ? 'flex' : 'none';
+  if (unitEl) unitEl.textContent = units[type] || '';
+  if (customRow) customRow.style.display = type === 'custom' ? 'block' : 'none';
+  _MED_SCHED_OPTS.forEach(o => {
+    const btn = document.getElementById(prefix+'-btn-'+o.type);
+    if (btn) { const s=o.type===type; btn.style.borderColor=s?'var(--ac)':'var(--bd)'; btn.style.background=s?'var(--ac)':'var(--sf2)'; btn.style.color=s?'#fff':'var(--ink)'; }
+  });
+}
+
+function _collectSchedFromForm(prefix, fallback) {
+  const type = window['_msType_'+prefix] || fallback?.type || 'daily';
+  const interval = parseInt(document.getElementById(prefix+'-interval')?.value) || 1;
+  const custom = (document.getElementById(prefix+'-custom')?.value || '').trim();
+  const out = { type };
+  if (['weekly','monthly','days'].includes(type)) out.interval = interval;
+  if (type === 'custom') out.custom = custom;
+  return out;
+}
+
 function openMedSchedule(domainId, condIdx, medName) {
   const ds = S.domainState[domainId];
   if (!ds?.master?.conditions?.[condIdx]) return;
   const c = ds.master.conditions[condIdx];
   if (!c.medSchedule) c.medSchedule = {};
   const current = c.medSchedule[medName] || { type: medName.includes('(PRN)') ? 'prn' : 'daily', interval: 1 };
-  const opts = [
-    { type:'daily', label:'매일' },
-    { type:'prn', label:'PRN (필요 시)' },
-    { type:'weekly', label:'주 N회' },
-    { type:'monthly', label:'월 N회' },
-    { type:'days', label:'N일마다' },
-  ];
-  const optsHtml = opts.map(o => {
-    const sel = current.type === o.type;
-    return `<button onclick="_setMedSchedType('${o.type}')" id="ms-btn-${o.type}" style="flex:1;padding:8px 4px;font-size:.72rem;border:1.5px solid ${sel?'var(--ac)':'var(--bd)'};border-radius:6px;background:${sel?'var(--ac)':'var(--sf2)'};color:${sel?'#fff':'var(--ink)'};cursor:pointer;font-family:var(--font)">${o.label}</button>`;
-  }).join('');
-  const needInterval = ['weekly','monthly','days'].includes(current.type);
+  window['_msType_ms'] = current.type;
   showConfirmModal('💊 ' + medName + ' 복용 주기',
-    `<div style="font-size:.72rem">
-      <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${optsHtml}</div>
-      <div id="ms-interval-row" style="display:${needInterval?'flex':'none'};align-items:center;gap:6px">
-        <span>간격:</span>
-        <input type="number" id="ms-interval" value="${current.interval||1}" min="1" max="90" style="width:50px;padding:4px;font-size:.75rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:var(--mono)">
-        <span id="ms-interval-unit">${current.type==='weekly'?'회/주':current.type==='monthly'?'회/월':'일마다'}</span>
-      </div>
-    </div>`,
+    _renderSchedPickerInner('ms', current),
     [{ label:'저장', primary:true, action:async()=>{
-      const type = window._msType || current.type;
-      const interval = parseInt(document.getElementById('ms-interval')?.value) || 1;
-      c.medSchedule[medName] = { type, interval };
+      const sched = _collectSchedFromForm('ms', current);
+      // default(매일, interval=1) 이면 기록하지 않고 제거
+      if (sched.type === 'daily') delete c.medSchedule[medName];
+      else c.medSchedule[medName] = sched;
       if (ds.masterFileId) await driveUpdate(ds.masterFileId, ds.master);
       cacheToLocal(domainId);
       closeConfirmModal();
       showToast('✅ 주기 설정됨');
       renderView('meds');
     }}, { label:'취소', action:closeConfirmModal }]);
-  window._msType = current.type;
-}
-function _setMedSchedType(type) {
-  window._msType = type;
-  const units = { weekly:'회/주', monthly:'회/월', days:'일마다' };
-  const row = document.getElementById('ms-interval-row');
-  const unitEl = document.getElementById('ms-interval-unit');
-  if (row) row.style.display = ['weekly','monthly','days'].includes(type) ? 'flex' : 'none';
-  if (unitEl) unitEl.textContent = units[type] || '';
-  ['daily','prn','weekly','monthly','days'].forEach(t => {
-    const btn = document.getElementById('ms-btn-' + t);
-    if (btn) { const s=t===type; btn.style.borderColor=s?'var(--ac)':'var(--bd)'; btn.style.background=s?'var(--ac)':'var(--sf2)'; btn.style.color=s?'#fff':'var(--ink)'; }
-  });
 }
