@@ -1,11 +1,34 @@
-# HANDOFF — v9.8.2 세션 인수인계 가이드
+# HANDOFF — v9.8.3 세션 인수인계 가이드
 
-## 현재 상태: v9.8.2 (main)
+## 현재 상태: v9.8.3 (main)
 - 브랜치: main
-- SW CACHE_NAME: v99s (메인), v21 (quick)
-- APP_VERSION: v9.8.2
-- backup/v9.8.2 브랜치 생성 완료 (v9.8.1 + v9.8.2 통합 백업)
-- ⚠️ backup/v9.4 자동 삭제 실패(403) — 다음 세션에서 정리 필요 (v9.3은 이전에 정리됨)
+- SW CACHE_NAME: v99t (메인), v21 (quick)
+- APP_VERSION: v9.8.3
+- backup/v9.8.3 브랜치 생성 완료
+- ⚠️ backup/v9.4, backup/v9.5 자동 삭제 실패(403) — 다음 세션에서 수동 정리
+
+## 세션 F 완료 (2026-04-22) — 통합 검증 & 회귀 수정
+
+### PR #205 — 기본 모드 Claude 환자 설명용 문장 복원 (회귀 수정)
+PR #204 머지 후 통합 검증 중 회귀 1건 발견:
+- 기본 모드(GPT+Perp→Claude) R2 Claude가 **최종 출력**인데, PR #204에서 모든 라운드 "환자 설명용 문장"을 금지하면서 기본 모드 사용자가 환자 전달용 문장을 못 받게 됨.
+- 기본 모드는 별도 `runFinalSummary` 호출이 없음.
+- 수정: basic mode Claude 프롬프트 형식에 `→ **환자 설명용 문장**` 복원, 헤더에 "기본 모드는 응답이 곧 최종 출력" 명시.
+- normal mode (R1/R2/R3 + runFinalSummary)는 그대로 유지.
+
+### 통합 검증 결과 (CLAUDE.md 규칙 39)
+- ✅ `node --check js/*.js` 전체 통과
+- ✅ 인라인 스크립트(`index.html`, `bung/`, `quick/`) 전부 파싱 OK
+- ✅ 스크립트 로딩 순서 vs 의존성 만족
+- ✅ SW PRECACHE vs index.html script 태그 일치
+- ✅ 신규 심볼(`_CROSS_MEMO_EXCLUDE`, `_msState`, `_summaryTick`, `patient_friendly`) 단일 파일 내 사용 — 외부 의존성 없음
+- ✅ ntfy 호출 패턴 일관 (메인: `At:` 헤더 / quick: `?delay=Xm` 쿼리)
+
+### 후속 검토 필요 (세션 F 범위 외)
+1. `runGrokMultiAgent`(`session.js:537`) 요약 JSON에도 `patient_friendly` 필드 추가 → Grok Multi-Agent 모드 일관성
+2. `bung/`(데일리체크)는 `condition.medSchedule`을 무시하고 매일 모든 약 표시 — 주N회/월N회 약의 표시 개선 (예: 배지, 비일일 약 회색 처리)
+3. backup/v9.4, v9.5 수동 삭제 (GitHub UI 또는 권한 환경 CLI)
+4. 기존 `bung-health` 엔트리 중복 메모 정리 대량 도구 검토
 
 ## 세션 E 완료 (2026-04-22)
 
