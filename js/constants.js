@@ -1,6 +1,7 @@
 // js/constants.js — 상수 정의 (Phase 1 모듈화)
 
 const APP_VERSION = [
+  {v:'v9.8.2', date:'2026-04-22', note:'대상환자명시·환자설명용최종단계만·역할재진술금지·최종요약진행률·Opus4.7추가'},
   {v:'v9.8.1', date:'2026-04-22', note:'질환편집약물칩에복용주기선택(주N회·월N회·N일마다·직접입력)'},
   {v:'v9.8', date:'2026-04-21', note:'붕쌤마음관리·건강관리메모분리 · 데일리체크도메인별메모 · 홈/저널교차표시필터 · 메모짝도메인이동버튼'},
   {v:'v9.7', date:'2026-04-08', note:'데일리체크붕쌤필터 · 경과알림서버스케줄 · 양방향동기화 · medCheck정규화 · 관계기록가임기매칭 · 정액검사비교 · AI일일요약월간인사이트 · OCR재분석 · 오프라인데일리체크 · 홈대시보드커스텀'},
@@ -385,8 +386,9 @@ const MODEL_OPTIONS = {
     {value:'gpt-4.1-mini',label:'GPT-4.1 Mini (구버전)'},
   ],
   claude: [
-    {value:'claude-sonnet-4-6',label:'Sonnet 4.6 (추천)'},
-    {value:'claude-opus-4-6',label:'Opus 4.6 (최고성능)'},
+    {value:'claude-sonnet-4-6',label:'Sonnet 4.6 (추천·일상)'},
+    {value:'claude-opus-4-7',label:'Opus 4.7 (최신·최고성능·2026-04)'},
+    {value:'claude-opus-4-6',label:'Opus 4.6 (구세대 최고성능)'},
     {value:'claude-haiku-4-5-20251001',label:'Haiku 4.5 (빠름·저비용)'},
   ],
   gemini: [
@@ -434,6 +436,7 @@ const DEFAULT_PRICE_TABLE = {
   'o3-mini':{in:1.10,out:4.40},
   'o4-mini':{in:0.55,out:2.20},
   'claude-sonnet-4-6':{in:3.00,out:15.00},
+  'claude-opus-4-7':{in:5.00,out:25.00},
   'claude-opus-4-6':{in:5.00,out:25.00},
   'claude-haiku-4-5-20251001':{in:1.00,out:5.00},
   'gemini-3.1-pro-preview':{in:2.00,out:12.00},
