@@ -224,7 +224,29 @@ function getDomainMeds(id,date){
   const ds=domainData[id];if(!ds?.master?.conditions)return[];
   const d=date||selectedDate;
   return(ds.master.conditions||[]).filter(c=>c.status==='active'||c.status==='remission')
-    .map(c=>({condition:c.name,meds:_medsAtDate(c,d),trackCompliance:c.trackCompliance})).filter(g=>g.meds.length);
+    .map(c=>({condition:c.name,meds:_medsAtDate(c,d),trackCompliance:c.trackCompliance,medSchedule:c.medSchedule||{}})).filter(g=>g.meds.length);
+}
+
+// 복용 주기 라벨 포맷 (메인앱 _fmtMedSched와 동일 스키마)
+function _bungFmtMedSched(sched, med){
+  if(!sched) return (med && med.includes('(PRN)')) ? 'PRN' : '매일';
+  if(sched.type==='weekly')  return '주'+(sched.interval||1)+'회';
+  if(sched.type==='monthly') return '월'+(sched.interval||1)+'회';
+  if(sched.type==='days')    return (sched.interval||1)+'일마다';
+  if(sched.type==='custom')  return (sched.custom||'').trim() || '직접';
+  if(sched.type==='prn')     return 'PRN';
+  return '매일';
+}
+
+// 오늘 이 약을 복용해야 하는지 (주기 기반)
+// - daily/prn/custom: 매일 표시 (사용자 판단)
+// - weekly: 주 N회 — 항상 표시하되 배지로 구분
+// - monthly: 월 N회 — 항상 표시하되 배지로 구분
+// - days (N일마다): 마지막 복용일 기준 계산 — 단순화를 위해 배지만 표시
+// 비일일 약은 배지 + 회색 처리해서 사용자가 인지하도록
+function _isNonDailyMed(sched){
+  if(!sched) return false;
+  return ['weekly','monthly','days','custom'].includes(sched.type);
 }
 
 // 새로고침 — 캐시 무효화 + Drive 재로드
@@ -361,12 +383,17 @@ function renderCheckTab(){
       const procMeds=g.meds.filter(m=>_isProc(m));
       dailyMeds.forEach(m=>{
         const prevTaken=_allDayMc[m]; // 이전 기록에서 이미 복용
+        const sched=g.medSchedule?.[m];
+        const nonDaily=_isNonDailyMed(sched);
         let checked=isNewEntry?(m in existingMc?existingMc[m]:false):(m in existingMc?existingMc[m]:false);
-        const lockStyle=isNewEntry&&prevTaken?'opacity:.5;pointer-events:none':'';
+        const rowStyles=[];
+        if(isNewEntry&&prevTaken) rowStyles.push('opacity:.5','pointer-events:none');
+        if(nonDaily) rowStyles.push('background:var(--sf2)','opacity:.75'); // 비일일 약은 회색 톤
         const lockLabel=isNewEntry&&prevTaken?' <span style="font-size:.5rem;color:#10b981">✓이전 복용</span>':'';
-        html+='<div class="med-row" style="'+lockStyle+'" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
+        const schedBadge=nonDaily?' <span style="font-size:.55rem;padding:1px 5px;border:1px solid #7c3aed;border-radius:3px;background:#ede9fe;color:#6d28d9" title="'+esc(_bungFmtMedSched(sched,m))+'">📅 '+esc(_bungFmtMedSched(sched,m))+'</span>':'';
+        html+='<div class="med-row" style="'+rowStyles.join(';')+'" onclick="this.querySelector(\'input\').checked=!this.querySelector(\'input\').checked">';
         html+='<input type="checkbox" data-domain="'+domId+'" data-med="'+esc(m)+'"'+(checked||prevTaken?' checked':'')+''+(isNewEntry&&prevTaken?' disabled':'')+'>';
-        html+='<label>'+esc(m)+lockLabel+'</label></div>';
+        html+='<label>'+esc(m)+schedBadge+lockLabel+'</label></div>';
       });
       if(prnMeds.length){
         prnMeds.forEach(m=>{

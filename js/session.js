@@ -530,11 +530,22 @@ async function runGrokMultiAgent() {
   },1000);
 
   const contextFull=getFullContext(q);
-
+  const dcG = DC();
   const system=`Grok ${agentLevel} Multi-Agent 모드. 내부 ${agentLevel}명(Captain, Researcher, Logician, Contrarian 등) 토론 후 요약.
-SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요.
-**최종 출력은 반드시 아래 JSON만 출력. 다른 텍스트 절대 금지. 각 문자열 100자 이내.**
-{"session_summary":"3문장요약","new_consensus":["합의"],"new_discarded":["폐기"],"updated_issues":["쟁점"],"new_protocols":[],"round_evolution":"에이전트 토론 발전과정","final_recommendation":"최종권고","next_steps":["행동1","행동2"]}`;
+[대상 환자] ${dcG.user} · ${dcG.label}
+SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요. 자기 역할·에이전트 이름 재진술 금지.
+**최종 출력은 반드시 아래 JSON만 출력. 다른 텍스트 절대 금지.**
+{
+  "session_summary":"3문장 요약 (≤200자)",
+  "new_consensus":["합의 (각 ≤100자)"],
+  "new_discarded":["폐기 (각 ≤100자)"],
+  "updated_issues":["쟁점 (각 ≤100자)"],
+  "new_protocols":[],
+  "round_evolution":"에이전트 토론 발전과정 (≤150자)",
+  "final_recommendation":"최종 권고 (≤200자)",
+  "next_steps":["행동1","행동2"],
+  "patient_friendly":"${dcG.user}에게 전달할 설명용 문장 2~4문장. 전문용어 최소화. '${dcG.user}님' 호칭 사용. 핵심 판단·권고·주의점 부드럽게 전달."
+}`;
 
   const userPrompt=`${contextFull}\n\n[질문]\n${q}`;
 
