@@ -1,12 +1,35 @@
-# HANDOFF — v9.8.5 세션 인수인계 가이드
+# HANDOFF — v9.8.6 세션 인수인계 가이드
 
-## 현재 상태: v9.8.5 (main)
+## 현재 상태: v9.8.6 (main)
 - 브랜치: main
-- SW CACHE_NAME: v99v (메인), v21 (quick)
-- APP_VERSION: v9.8.5
-- backup/v9.8.5 브랜치 생성 완료 (v9.8.4 + v9.8.5 통합)
-- backup/v9.4, v9.5는 이전 세션에서 삭제 완료
-- ⚠️ backup/v9.6 자동 삭제 실패(403) — 다음 세션에서 수동 정리 (초과 1건)
+- SW CACHE_NAME: v99w (메인), v21 (quick)
+- APP_VERSION: v9.8.6
+- backup/v9.8.6 브랜치 생성 완료
+- ⚠️ backup/v9.6, v9.7 자동 삭제 실패(403) — 다음 세션 수동 정리 필요 (초과 2건)
+
+## 세션 H 완료 (2026-04-22) — 시간미상 필터 버그 수정
+
+### PR #208 (v9.8.6)
+**문제**: 오랑이 편두통에서 NRS=0 + 시간미상 + 메모만 있는 "두통 없는 날" 기록이 "최근 기록으로 AI 협진" 시 "최근 7일 기록 없음"으로 판정. 편두통 요약 포맷터에 memo 필드 누락으로 AI가 메모 내용도 못 받음.
+
+**원인**: datetime이 `"YYYY-MM-DDT시간미상"` 문자열이라 `new Date()` → Invalid Date → 주간 필터에서 탈락.
+
+**수정**:
+- `_logTimestamp(l)` 헬퍼 신설 (`js/log.js`) — "시간미상"·invalid datetime을 `T00:00`로 폴백
+- `new Date(l.datetime)` 필터 5곳 교체:
+  - `js/log.js`: `getRecentLogSummary`, 24h 중복 약물 체크, 3일 미평가 스캔
+  - `js/views.js`: 통계 `last30`/`last7` (2곳) — `typeof _logTimestamp==='function'` 방어
+- 편두통 요약 `_fmtEntry`에 `📝 memo (100자)` 추가
+- moodMode 요약에도 memo 추가
+- 시간미상 기록 prefix는 `"MM-DD (시간미상)"`로 표시
+
+### 다음 세션 TODO
+- backup/v9.6, v9.7 수동 삭제 (GitHub UI)
+- AI 응답 실전 모니터링 → `_OPINION_POSTURE` 미세 조정 여부 판단
+
+---
+
+## 세션 G 완료 (2026-04-22) — 이전 기록
 
 ## 세션 G 완료 (2026-04-22)
 
