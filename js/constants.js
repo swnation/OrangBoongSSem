@@ -1,6 +1,7 @@
 // js/constants.js — 상수 정의 (Phase 1 모듈화)
 
 const APP_VERSION = [
+  {v:'v9.8.6', date:'2026-04-22', note:'시간미상기록주간필터포함·편두통메모요약에포함·_logTimestamp헬퍼'},
   {v:'v9.8.5', date:'2026-04-22', note:'AI보수성완화(도피성면책금지·임상의대상·확진외강한의견OK)·_OPINION_POSTURE'},
   {v:'v9.8.4', date:'2026-04-22', note:'Grok멀티에이전트환자설명용·bung비일일약배지·bung중복메모대량정리도구'},
   {v:'v9.8.3', date:'2026-04-22', note:'기본모드환자설명용복원(R2 Claude=최종이라 출력허용)·통합검증'},

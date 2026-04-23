@@ -53,6 +53,20 @@ async function saveLogData() {
   else ds.logFileId=await driveCreate(logFileName(ds.logMonth),ds.logData,ds.folderId);
 }
 
+// 로그 datetime을 타임스탬프로 안전 변환 (시간미상/invalid → 날짜 00:00)
+// 필터 (주간/월간/N일 이내) 계산에 사용 — 시간미상 기록이 누락되지 않도록.
+function _logTimestamp(l) {
+  if (!l?.datetime || typeof l.datetime !== 'string') return NaN;
+  const s = l.datetime.includes('시간미상')
+    ? l.datetime.slice(0, 10) + 'T00:00'
+    : l.datetime;
+  let t = new Date(s).getTime();
+  if (isNaN(t) && typeof l.datetime === 'string' && l.datetime.length >= 10) {
+    t = new Date(l.datetime.slice(0, 10) + 'T00:00').getTime();
+  }
+  return isNaN(t) ? NaN : t;
+}
+
 function nrsColor(n){if(n<=3)return'#2d8a5a';if(n<=6)return'#e67e22';return'#c03030';}
 function toggleChip(el,cls){
   el.classList.toggle('sel');el.classList.toggle(cls,el.classList.contains('sel'));
@@ -137,7 +151,8 @@ function _updateLogMedWarnings(){
   const editId=editIdx>=0?ds.logData[editIdx]?.id:null;
   const recent24=(ds.logData||[]).filter(l=>{
     if(!l.datetime||!l.meds?.length) return false;
-    const dt=new Date(l.datetime);
+    const dt=_logTimestamp(l);
+    if(isNaN(dt)) return false;
     const diff=Math.abs(selDt-dt);
     return diff<24*3600000 && l.id!==editId;
   });
@@ -1751,7 +1766,8 @@ function getUnratedLogs() {
   return ds.logData.filter(l=>{
     const hasTreatment=(l.meds?.length>0)||(l.treatments?.length>0);
     const noOutcome=!l.outcome||!l.outcome.rating;
-    const withinDays=(now-new Date(l.datetime))<=3*86400000;
+    const ts=_logTimestamp(l);
+    const withinDays=!isNaN(ts)&&(now-ts)<=3*86400000;
     return hasTreatment&&noOutcome&&withinDays;
   });
 }
@@ -2602,8 +2618,12 @@ function getCrossDomainContext() {
 
 function getRecentLogSummary() {
   const ds=D();if(!ds.logData?.length) return '';
-  const now=new Date();
-  const week=ds.logData.filter(l=>(now-new Date(l.datetime))<=7*86400000);
+  const nowTs=Date.now();
+  // 시간미상 기록도 포함 (날짜 기준으로 판정)
+  const week=ds.logData.filter(l=>{
+    const ts=_logTimestamp(l);
+    return !isNaN(ts) && (nowTs-ts)<=7*86400000;
+  });
   if(!week.length) return '';
   const lc=DC().logConfig;
 
@@ -2626,7 +2646,8 @@ function getRecentLogSummary() {
       const tx=(l.treatments||[]).length?'🩺'+(l.treatments||[]).join('+'):'';
       const dc=l.dailyChecks?Object.entries(l.dailyChecks).map(([k,v])=>k+':'+v).join(','):'';
       const mc=l.medCheck?Object.entries(l.medCheck).map(([k,v])=>(v?'✓':'✗')+k).join(','):'';
-      return `${l.datetime.slice(5,16)} ${mood} ${syms} ${meds} ${tx}${dc?' [컨디션:'+dc+']':''}${mc?' [복용:'+mc+']':''}`.trim();
+      const memo=(l.memo||'').trim();
+      return `${l.datetime.slice(5,16)} ${mood} ${syms} ${meds} ${tx}${dc?' [컨디션:'+dc+']':''}${mc?' [복용:'+mc+']':''}${memo?' 📝'+memo.slice(0,80):''}`.trim();
     }).join('\n');
     return `[최근 7일 기분/증상 기록]\n${lines}`;
   }
@@ -2634,7 +2655,9 @@ function getRecentLogSummary() {
   // Standard mode (편두통)
   const outcomeLabel={better:'→호전',same:'→비슷',worse:'→악화',good:'→호전',partial:'→비슷',none:'→악화'};
   const _sl=_scoreLabel();
-  const _fmtEntry=(l,prefix)=>`${prefix} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' '+_sl+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')+(l.treatments?.length?' 🩺'+l.treatments.join('+'):'')+(l.outcome?.rating?' '+outcomeLabel[l.outcome.rating]:'');
+  // 시간 표시: 'T시간미상' → '(시간미상)'로 치환
+  const _fmtPrefix=(l,p)=>l.datetime.includes('시간미상')?l.datetime.slice(5,10)+' (시간미상)':p;
+  const _fmtEntry=(l,prefix)=>`${prefix} ${(l.sites||[]).join('+')||'-'}${l.nrs>=0?' '+_sl+l.nrs:''}${l.triggers?.length?' ⚡'+l.triggers.join('+'):''}`+(l.meds?.length?' 💊'+l.meds.join('+'):'')+(l.treatments?.length?' 🩺'+l.treatments.join('+'):'')+(l.outcome?.rating?' '+outcomeLabel[l.outcome.rating]:'')+(l.memo?.trim()?' 📝'+l.memo.trim().slice(0,100):'');
   const lines=week.map(l=>{
     // 병합 기록: timeline 시간별 변화를 펼쳐서 AI에게 전달
     if(l.timeline?.length) {
@@ -2642,7 +2665,7 @@ function getRecentLogSummary() {
       const tLines=l.timeline.map(t=>_fmtEntry(t, '  '+date+' '+(t.time||'??:??')));
       return `${date} [시간별 ${l.timeline.length}건]\n${tLines.join('\n')}`;
     }
-    return _fmtEntry(l, l.datetime.slice(5,16));
+    return _fmtEntry(l, _fmtPrefix(l, l.datetime.slice(5,16)));
   }).join('\n');
   const nrsVals=week.map(l=>l.nrs).filter(n=>n>=0);
   const avg=nrsVals.length?(nrsVals.reduce((a,b)=>a+b,0)/nrsVals.length).toFixed(1):'-';
