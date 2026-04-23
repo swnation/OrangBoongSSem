@@ -1090,9 +1090,9 @@ function renderStatsView() {
 
   if(!logs.length) return `<div class="hint">📈 통계를 보려면 먼저 기록을 쌓아주세요.<br><button class="btn-cancel" onclick="switchView('log')" style="margin-top:10px">📊 기록하러 가기</button></div>`;
 
-  const now=new Date();
-  const last30=logs.filter(l=>(now-new Date(l.datetime))<=30*86400000);
-  const last7=logs.filter(l=>(now-new Date(l.datetime))<=7*86400000);
+  const nowTs=Date.now();
+  const last30=logs.filter(l=>{const t=typeof _logTimestamp==='function'?_logTimestamp(l):new Date(l.datetime).getTime();return !isNaN(t)&&(nowTs-t)<=30*86400000;});
+  const last7=logs.filter(l=>{const t=typeof _logTimestamp==='function'?_logTimestamp(l):new Date(l.datetime).getTime();return !isNaN(t)&&(nowTs-t)<=7*86400000;});
 
   // NRS/Mood trend (last 30 days)
   const byDate={};
@@ -1712,7 +1712,8 @@ function exportPDF() {
   }
 
   // Log summary
-  const last30=logs.filter(l=>(Date.now()-new Date(l.datetime))<=30*86400000);
+  const _nowTs=Date.now();
+  const last30=logs.filter(l=>{const t=typeof _logTimestamp==='function'?_logTimestamp(l):new Date(l.datetime).getTime();return !isNaN(t)&&(_nowTs-t)<=30*86400000;});
   if(last30.length) {
     html+=`<h2>증상 기록 (${last30.length}건)</h2><table><tr><th>날짜</th><th>시간</th>`;
     html+=lc.moodMode?'<th>기분</th>':'<th>${_scoreLabel()}</th>';
