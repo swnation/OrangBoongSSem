@@ -682,7 +682,7 @@ function _renderBrkDailySection(date){
   const quickBtns=recentEx.slice(0,6).map(name=>{
     if(exercises.some(e=>e.name===name))return '';
     const db=allExDb[name];
-    return `<button onclick="_addBrkEx('${esc(name)}')" style="padding:3px 8px;font-size:.62rem;border:1px solid var(--bd);border-radius:12px;background:var(--sf);cursor:pointer;color:var(--ink);font-family:var(--font)">${db?.icon||'🏃'} ${esc(name)}</button>`;
+    return `<button onclick="_addBrkEx('${esc(name.replace(/'/g, "\\'"))}')" style="padding:3px 8px;font-size:.62rem;border:1px solid var(--bd);border-radius:12px;background:var(--sf);cursor:pointer;color:var(--ink);font-family:var(--font)">${db?.icon||'🏃'} ${esc(name)}</button>`;
   }).filter(Boolean).join('');
 
   const exHtml=`${exListHtml}<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">${quickBtns}<button onclick="_openBrkExPicker()" style="padding:3px 8px;font-size:.62rem;border:1px solid var(--ac);border-radius:12px;background:var(--ac)15;color:var(--ac);cursor:pointer;font-family:var(--font)" title="카테고리별 운동 더 보기">📚 더 보기</button><button onclick="_addBrkExCustom()" style="padding:3px 8px;font-size:.62rem;border:1px dashed var(--ac);border-radius:12px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 직접 입력</button></div>`;
@@ -782,7 +782,7 @@ function _openBrkExPicker(){
   overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
   const sections=Object.entries(byCat).filter(([,arr])=>arr.length).map(([cat,arr])=>{
     const meta=_BRK_EX_CAT_LABELS[cat]||{label:'기타',color:'var(--mu)'};
-    const btns=arr.map(ex=>'<button onclick="_pickBrkEx(\''+esc(ex.name).replace(/'/g,'\\\'')+'\')" style="padding:6px 10px;font-size:.72rem;border:1px solid var(--bd);border-radius:8px;background:var(--sf);color:var(--ink);cursor:pointer;font-family:var(--font);text-align:left">'+(ex.icon||'🏃')+' '+esc(ex.name)+'</button>').join('');
+    const btns=arr.map(ex=>'<button onclick="_pickBrkEx(\''+esc(ex.name.replace(/'/g,"\\'"))+'\')" style="padding:6px 10px;font-size:.72rem;border:1px solid var(--bd);border-radius:8px;background:var(--sf);color:var(--ink);cursor:pointer;font-family:var(--font);text-align:left">'+(ex.icon||'🏃')+' '+esc(ex.name)+'</button>').join('');
     return '<div style="margin-bottom:10px"><div style="font-size:.72rem;font-weight:600;color:'+meta.color+';margin-bottom:4px">'+meta.label+'</div><div style="display:flex;flex-wrap:wrap;gap:4px">'+btns+'</div></div>';
   }).join('');
   overlay.innerHTML='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:12px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto;padding:16px;color:var(--ink)"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:.9rem;font-weight:600">📚 운동 더 보기</span><button onclick="document.getElementById(\'brk-ex-picker\').remove()" style="margin-left:auto;background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--mu)">✕</button></div>'+sections+'</div>';
