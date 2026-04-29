@@ -1,11 +1,42 @@
-# HANDOFF — v9.8.6 세션 인수인계 가이드
+# HANDOFF — v9.8.7 세션 인수인계 가이드
 
-## 현재 상태: v9.8.6 (main)
+## 현재 상태: v9.8.7 (main)
 - 브랜치: main
-- SW CACHE_NAME: v99w (메인), v21 (quick)
-- APP_VERSION: v9.8.6
-- backup/v9.8.6 브랜치 생성 완료
-- ⚠️ backup/v9.6, v9.7 자동 삭제 실패(403) — 다음 세션 수동 정리 필요 (초과 2건)
+- SW CACHE_NAME: v99x (메인), v21 (quick)
+- APP_VERSION: v9.8.7
+- backup/v9.8.7 브랜치 생성 완료
+- backup/v9.6, v9.7 이전 세션에서 정리 완료 확인
+- ⚠️ backup/v9.8 자동 삭제 실패(403) — 다음 세션 수동 정리 (초과 1건)
+
+## 세션 I 완료 (2026-04-29) — bung 데일리체크 운동 UX 개선
+
+### PR #209 (v9.8.7)
+**문제 4건**
+1. 다크모드에서 운동 영역 글씨 검은색 고정 → 안 보임
+2. 운동 +추가/삭제할 때마다 약 체크/NRS/시간/메모/증상 모두 초기화
+3. 운동 종류 부족 (17종) + 웨이트 서브카테고리 없음
+4. 운동량 칸 placeholder가 단위 변경해도 '분' 고정
+
+**수정**
+- 모든 폼 요소에 `color:var(--ink)` + 입력은 `background:var(--sf2)`
+- `_BRK_EX_DB_FULL` 모듈 전역 상수로 분리 (50+ 종목)
+  · cardio 13 / strength 22 (웨이트 서브카테고리: 벤치프레스·데드리프트·스쿼트·숄더프레스·바벨로우·풀업·딥스·바이셉컬·트라이셉·런지·케틀벨 등) / stretch 5 / sports 14
+- 📚 더 보기 버튼 신설 — 카테고리별 그룹 picker 모달
+- `_rerenderBrkDailySection` 헬퍼 — 운동 영역만 in-place 교체. 재렌더 전 `_saveBrkFormToData`로 brk 섹션 폼 값 보존, 다른 섹션(약물·NRS·시간·메모·증상) 폼 값은 건드리지 않음
+- `_updateExUnitPlaceholder` — 단위 select onchange 시 input.placeholder 즉시 동기화
+- 운동 amount/unit/weight 입력 변경 시 `_saveBrkFormToData` 자동 호출
+
+**Gemini 리뷰 반영**
+- `_addBrkEx`/`_pickBrkEx` onclick에서 `esc(name)`이 `'`를 `&#39;`로 변환해도 브라우저 속성 디코딩 시 다시 `'`로 복원 → JS 파싱 오류
+- 수정: `esc()` 호출 전에 `name.replace(/'/g, "\\'")` JS 이스케이프 우선 처리 (685, 785 두 곳)
+
+### 다음 세션 TODO
+- backup/v9.8 수동 삭제 (GitHub UI)
+- AI 응답 실전 모니터링 → `_OPINION_POSTURE` 미세 조정 여부 판단
+
+---
+
+## 세션 H 완료 (2026-04-22)
 
 ## 세션 H 완료 (2026-04-22) — 시간미상 필터 버그 수정
 
