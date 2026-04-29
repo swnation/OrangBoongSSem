@@ -583,7 +583,44 @@ const _BRK_EXERCISE_OPTS=[
   {v:'cardio',l:'유산소',c:'🏃'},
   {v:'strength',l:'근력',c:'🏋️'},
   {v:'stretch',l:'스트레칭',c:'🧘'},
+  {v:'sports',l:'스포츠',c:'⚽'},
 ];
+
+// 운동 DB (모듈 전역 — picker 모달이 참조)
+const _BRK_EX_DB_FULL={
+  // 유산소
+  '걷기':{cat:'cardio',icon:'🚶',defaultInt:'light',unit:'min'},'산책':{cat:'cardio',icon:'🚶',defaultInt:'light',unit:'min'},
+  '조깅':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'min'},'달리기':{cat:'cardio',icon:'🏃',defaultInt:'intense',unit:'km'},
+  '러닝':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'km'},'러닝머신':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'min'},
+  '자전거':{cat:'cardio',icon:'🚴',defaultInt:'moderate',unit:'km'},'사이클':{cat:'cardio',icon:'🚴',defaultInt:'moderate',unit:'min'},
+  '수영':{cat:'cardio',icon:'🏊',defaultInt:'moderate',unit:'min'},'줄넘기':{cat:'cardio',icon:'⏫',defaultInt:'intense',unit:'reps'},
+  '등산':{cat:'cardio',icon:'⛰️',defaultInt:'intense',unit:'min'},'일립티컬':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'min'},
+  '로잉머신':{cat:'cardio',icon:'🚣',defaultInt:'moderate',unit:'min'},'스피닝':{cat:'cardio',icon:'🚴',defaultInt:'intense',unit:'min'},
+  // 근력 (웨이트 서브카테고리)
+  '웨이트':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'min'},'헬스':{cat:'strength',icon:'🏋️',defaultInt:'moderate',unit:'min'},
+  '벤치프레스':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'sets'},'데드리프트':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'sets'},
+  '스쿼트':{cat:'strength',icon:'🦵',defaultInt:'intense',unit:'sets'},'숄더프레스':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'sets'},
+  '바벨로우':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'sets'},'레그프레스':{cat:'strength',icon:'🦵',defaultInt:'moderate',unit:'sets'},
+  '레그익스텐션':{cat:'strength',icon:'🦵',defaultInt:'moderate',unit:'sets'},'레그컬':{cat:'strength',icon:'🦵',defaultInt:'moderate',unit:'sets'},
+  '카프레이즈':{cat:'strength',icon:'🦵',defaultInt:'light',unit:'reps'},'바이셉컬':{cat:'strength',icon:'💪',defaultInt:'moderate',unit:'sets'},
+  '트라이셉':{cat:'strength',icon:'💪',defaultInt:'moderate',unit:'sets'},'딥스':{cat:'strength',icon:'💪',defaultInt:'intense',unit:'reps'},
+  '풀업':{cat:'strength',icon:'💪',defaultInt:'intense',unit:'reps'},'친업':{cat:'strength',icon:'💪',defaultInt:'intense',unit:'reps'},
+  '푸시업':{cat:'strength',icon:'💪',defaultInt:'moderate',unit:'reps'},'플랭크':{cat:'strength',icon:'🧘',defaultInt:'moderate',unit:'sec'},
+  '크런치':{cat:'strength',icon:'💪',defaultInt:'moderate',unit:'reps'},'런지':{cat:'strength',icon:'🦵',defaultInt:'moderate',unit:'reps'},
+  '케틀벨':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'sets'},'케이블운동':{cat:'strength',icon:'🏋️',defaultInt:'moderate',unit:'sets'},
+  // 스트레칭/유연성
+  '스트레칭':{cat:'stretch',icon:'🧘',defaultInt:'light',unit:'min'},'요가':{cat:'stretch',icon:'🧘',defaultInt:'moderate',unit:'min'},
+  '필라테스':{cat:'stretch',icon:'🧘',defaultInt:'moderate',unit:'min'},'폼롤러':{cat:'stretch',icon:'🔄',defaultInt:'light',unit:'min'},
+  '마사지건':{cat:'stretch',icon:'🔧',defaultInt:'light',unit:'min'},
+  // 구기/스포츠
+  '배드민턴':{cat:'sports',icon:'🏸',defaultInt:'moderate',unit:'min'},'테니스':{cat:'sports',icon:'🎾',defaultInt:'moderate',unit:'min'},
+  '탁구':{cat:'sports',icon:'🏓',defaultInt:'moderate',unit:'min'},'골프':{cat:'sports',icon:'⛳',defaultInt:'light',unit:'min'},
+  '농구':{cat:'sports',icon:'🏀',defaultInt:'intense',unit:'min'},'축구':{cat:'sports',icon:'⚽',defaultInt:'intense',unit:'min'},
+  '야구':{cat:'sports',icon:'⚾',defaultInt:'moderate',unit:'min'},'볼링':{cat:'sports',icon:'🎳',defaultInt:'light',unit:'min'},
+  '클라이밍':{cat:'sports',icon:'🧗',defaultInt:'intense',unit:'min'},'복싱':{cat:'sports',icon:'🥊',defaultInt:'intense',unit:'min'},
+  '격투기':{cat:'sports',icon:'🥋',defaultInt:'intense',unit:'min'},'서핑':{cat:'sports',icon:'🏄',defaultInt:'intense',unit:'min'},
+  '스키':{cat:'sports',icon:'⛷️',defaultInt:'intense',unit:'min'},'스노보드':{cat:'sports',icon:'🏂',defaultInt:'intense',unit:'min'},
+};
 
 function _getBrkSupplItems(){
   const items=[..._BRK_SUPPL_BUNG];
@@ -611,20 +648,8 @@ function _renderBrkDailySection(date){
     </div>`;
   }).join('');
 
-  // 운동 DB (메인앱과 동일)
-  const _EX_DB_B={
-    '걷기':{cat:'cardio',icon:'🚶',defaultInt:'light',unit:'min'},'산책':{cat:'cardio',icon:'🚶',defaultInt:'light',unit:'min'},
-    '조깅':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'min'},'달리기':{cat:'cardio',icon:'🏃',defaultInt:'intense',unit:'km'},
-    '러닝':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'km'},'자전거':{cat:'cardio',icon:'🚴',defaultInt:'moderate',unit:'km'},
-    '수영':{cat:'cardio',icon:'🏊',defaultInt:'moderate',unit:'min'},'줄넘기':{cat:'cardio',icon:'⏫',defaultInt:'intense',unit:'reps'},
-    '등산':{cat:'cardio',icon:'⛰️',defaultInt:'intense',unit:'min'},'웨이트':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'min'},
-    '헬스':{cat:'strength',icon:'🏋️',defaultInt:'moderate',unit:'min'},'스쿼트':{cat:'strength',icon:'🦵',defaultInt:'moderate',unit:'reps'},
-    '푸시업':{cat:'strength',icon:'💪',defaultInt:'moderate',unit:'reps'},'풀업':{cat:'strength',icon:'💪',defaultInt:'intense',unit:'reps'},
-    '플랭크':{cat:'strength',icon:'🧘',defaultInt:'moderate',unit:'sec'},'필라테스':{cat:'strength',icon:'🧘',defaultInt:'moderate',unit:'min'},
-    '스트레칭':{cat:'stretch',icon:'🧘',defaultInt:'light',unit:'min'},'요가':{cat:'stretch',icon:'🧘',defaultInt:'moderate',unit:'min'},
-  };
   const customEx=m.settings?.customExercises||{};
-  const allExDb={..._EX_DB_B,...customEx};
+  const allExDb={..._BRK_EX_DB_FULL,...customEx};
   const _UNITS={min:'분',sec:'초',reps:'회',sets:'세트',km:'km',m:'m'};
   const _UNIT_LIST=['min','sec','reps','sets','km','m'];
   const intLabels={light:'약',moderate:'중',intense:'강'};
@@ -640,15 +665,15 @@ function _renderBrkDailySection(date){
     const curUnit=e.unit||db?.unit||'min';
     const amt=e.amount??e.duration??'';
     const unitOpts=_UNIT_LIST.map(u=>`<option value="${u}"${curUnit===u?' selected':''}>${_UNITS[u]}</option>`).join('');
-    return `<div style="display:flex;align-items:center;gap:3px;padding:4px 6px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:3px;flex-wrap:wrap">
+    return `<div style="display:flex;align-items:center;gap:3px;padding:4px 6px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:3px;flex-wrap:wrap;color:var(--ink)">
       <span>${icon}</span>
-      <span style="font-size:.72rem;font-weight:500">${esc(e.name)}</span>
+      <span style="font-size:.72rem;font-weight:500;color:var(--ink)">${esc(e.name)}</span>
       <div style="display:flex;gap:2px;margin-left:auto">${['light','moderate','intense'].map(int=>{
         const sel=e.intensity===int;
-        return `<button onclick="_setBrkExInt(${i},'${int}')" style="padding:1px 5px;font-size:.52rem;border:1px solid ${sel?intColors[int]:'var(--bd)'};border-radius:3px;background:${sel?intColors[int]+'20':'transparent'};color:${sel?intColors[int]:'var(--mu)'};cursor:pointer">${intLabels[int]}</button>`;
+        return `<button onclick="_setBrkExInt(${i},'${int}')" style="padding:1px 5px;font-size:.52rem;border:1px solid ${sel?intColors[int]:'var(--bd)'};border-radius:3px;background:${sel?intColors[int]+'20':'transparent'};color:${sel?intColors[int]:'var(--mu)'};cursor:pointer;font-family:var(--font)">${intLabels[int]}</button>`;
       }).join('')}</div>
-      <input type="number" data-brk-ex-amt="${i}" placeholder="${_UNITS[curUnit]}" value="${amt}" style="width:35px;padding:2px;font-size:.6rem;border:1px solid var(--bd);border-radius:3px;text-align:center;font-family:monospace">
-      <select data-brk-ex-unit="${i}" style="padding:1px;font-size:.55rem;border:1px solid var(--bd);border-radius:3px;background:var(--sf)">${unitOpts}</select>
+      <input type="number" data-brk-ex-amt="${i}" placeholder="${_UNITS[curUnit]}" value="${amt}" oninput="_saveBrkFormToData()" style="width:42px;padding:2px;font-size:.6rem;border:1px solid var(--bd);border-radius:3px;text-align:center;font-family:monospace;background:var(--sf2);color:var(--ink)">
+      <select data-brk-ex-unit="${i}" onchange="_updateExUnitPlaceholder(${i},this);_saveBrkFormToData()" style="padding:1px;font-size:.55rem;border:1px solid var(--bd);border-radius:3px;background:var(--sf);color:var(--ink);font-family:var(--font)">${unitOpts}</select>
       <button onclick="_removeBrkEx(${i})" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.6rem">✕</button>
     </div>`;
   }).join('');
@@ -657,15 +682,15 @@ function _renderBrkDailySection(date){
   const quickBtns=recentEx.slice(0,6).map(name=>{
     if(exercises.some(e=>e.name===name))return '';
     const db=allExDb[name];
-    return `<button onclick="_addBrkEx('${esc(name)}')" style="padding:3px 8px;font-size:.62rem;border:1px solid var(--bd);border-radius:12px;background:var(--sf);cursor:pointer">${db?.icon||'🏃'} ${esc(name)}</button>`;
+    return `<button onclick="_addBrkEx('${esc(name.replace(/'/g, "\\'"))}')" style="padding:3px 8px;font-size:.62rem;border:1px solid var(--bd);border-radius:12px;background:var(--sf);cursor:pointer;color:var(--ink);font-family:var(--font)">${db?.icon||'🏃'} ${esc(name)}</button>`;
   }).filter(Boolean).join('');
 
-  const exHtml=`${exListHtml}<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">${quickBtns}<button onclick="_addBrkExCustom()" style="padding:3px 8px;font-size:.62rem;border:1px dashed var(--ac);border-radius:12px;background:none;color:var(--ac);cursor:pointer">+ 직접 입력</button></div>`;
+  const exHtml=`${exListHtml}<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">${quickBtns}<button onclick="_openBrkExPicker()" style="padding:3px 8px;font-size:.62rem;border:1px solid var(--ac);border-radius:12px;background:var(--ac)15;color:var(--ac);cursor:pointer;font-family:var(--font)" title="카테고리별 운동 더 보기">📚 더 보기</button><button onclick="_addBrkExCustom()" style="padding:3px 8px;font-size:.62rem;border:1px dashed var(--ac);border-radius:12px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 직접 입력</button></div>`;
 
   // 체중
   const weightHtml=`<div style="margin-top:6px;display:flex;align-items:center;gap:6px">
     <span style="font-size:.68rem;font-weight:600;color:var(--mu)">⚖️ 체중</span>
-    <input type="number" step="0.1" id="brk-weight" value="${dayData.weight||''}" placeholder="kg" style="width:55px;padding:2px 4px;font-size:.68rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:monospace">
+    <input type="number" step="0.1" id="brk-weight" value="${dayData.weight||''}" placeholder="kg" oninput="_saveBrkFormToData()" style="width:55px;padding:2px 4px;font-size:.68rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:monospace;background:var(--sf2);color:var(--ink)">
     <span style="font-size:.55rem;color:var(--mu)">kg</span>
   </div>`;
 
@@ -674,7 +699,7 @@ function _renderBrkDailySection(date){
     <label>🍺 오늘 음주함</label>
   </div>`;
 
-  return `<div class="card">
+  return `<div class="card" id="brk-daily-section">
     <div class="domain-header" style="background:#ec489915;border:1px solid #ec489930">
       <span style="color:#ec4899">🍼 임신준비</span>
       <span style="margin-left:auto;display:flex;gap:4px">
@@ -682,14 +707,90 @@ function _renderBrkDailySection(date){
         <button class="btn-toggle" onclick="_toggleAllBrkSuppl(false)">전체 ✗</button>
       </span>
     </div>
-    <div class="condition-name">영양제</div>
+    <div class="condition-name" style="color:var(--mu)">영양제</div>
     ${supplHtml}
-    <div class="condition-name">운동</div>
+    <div class="condition-name" style="color:var(--mu)">운동</div>
     ${exHtml}
     ${weightHtml}
-    <div class="condition-name">음주 여부</div>
+    <div class="condition-name" style="color:var(--mu)">음주 여부</div>
     ${alcHtml}
   </div>`;
+}
+
+// 운동 입력 플레이스홀더 동기화 (단위 변경 시)
+function _updateExUnitPlaceholder(idx, sel){
+  const inp = document.querySelector('[data-brk-ex-amt="'+idx+'"]');
+  if(inp) inp.placeholder = sel.options[sel.selectedIndex]?.text || '';
+}
+
+// 현재 폼 값을 dayData에 저장 (재렌더 전에 보존)
+function _saveBrkFormToData(){
+  const m=domainData['bungruki']?.master;
+  if(!m?.dailyChecks?.[selectedDate]?.bung) return;
+  const d=m.dailyChecks[selectedDate].bung;
+  document.querySelectorAll('[data-brk-suppl]').forEach(cb=>{ d[cb.dataset.brkSuppl]=cb.checked; });
+  if(Array.isArray(d.exercises)){
+    d.exercises.forEach((e,i)=>{
+      const a=document.querySelector('[data-brk-ex-amt="'+i+'"]');
+      const u=document.querySelector('[data-brk-ex-unit="'+i+'"]');
+      if(a) e.amount = a.value!==''?parseFloat(a.value):null;
+      if(u) e.unit = u.value;
+    });
+  }
+  const w=document.getElementById('brk-weight');
+  if(w) d.weight = w.value!==''?parseFloat(w.value):null;
+  const al=document.getElementById('brk-alcohol');
+  if(al) d.alcohol = al.checked;
+}
+
+// 운동 영역만 재렌더 (전체 renderCheckTab 호출 시 다른 폼 값 초기화 방지)
+function _rerenderBrkDailySection(){
+  _saveBrkFormToData();
+  const wrap=document.getElementById('brk-daily-section');
+  if(!wrap){ renderCheckTab(); return; }
+  const html=_renderBrkDailySection(selectedDate);
+  const tmp=document.createElement('div');
+  tmp.innerHTML=html.trim();
+  const fresh=tmp.firstElementChild;
+  if(fresh) wrap.replaceWith(fresh);
+}
+
+// 운동 카테고리별 picker 모달
+const _BRK_EX_CAT_LABELS = {
+  cardio:{label:'🏃 유산소', color:'#10b981'},
+  strength:{label:'🏋️ 근력', color:'#f59e0b'},
+  stretch:{label:'🧘 스트레칭/유연성', color:'#8b5cf6'},
+  sports:{label:'⚽ 스포츠/구기', color:'#06b6d4'},
+};
+function _openBrkExPicker(){
+  // _EX_DB_B와 동일한 DB를 picker용으로 별도 빌드 (외부 노출용)
+  const m=domainData['bungruki']?.master;
+  const customEx=m?.settings?.customExercises||{};
+  const all={};
+  // _renderBrkDailySection 내부 _EX_DB_B를 외부에서 접근할 수 없어 _BRK_EX_DB_FULL을 별도 정의
+  Object.assign(all, _BRK_EX_DB_FULL, customEx);
+  const byCat={cardio:[],strength:[],stretch:[],sports:[],other:[]};
+  Object.entries(all).forEach(([name,info])=>{
+    const cat=info.cat||'other';
+    (byCat[cat]||byCat.other).push({name,...info});
+  });
+  // 모달 컨테이너 (이미 있으면 제거 후 재생성)
+  document.getElementById('brk-ex-picker')?.remove();
+  const overlay=document.createElement('div');
+  overlay.id='brk-ex-picker';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.onclick=function(e){ if(e.target===overlay) overlay.remove(); };
+  const sections=Object.entries(byCat).filter(([,arr])=>arr.length).map(([cat,arr])=>{
+    const meta=_BRK_EX_CAT_LABELS[cat]||{label:'기타',color:'var(--mu)'};
+    const btns=arr.map(ex=>'<button onclick="_pickBrkEx(\''+esc(ex.name.replace(/'/g,"\\'"))+'\')" style="padding:6px 10px;font-size:.72rem;border:1px solid var(--bd);border-radius:8px;background:var(--sf);color:var(--ink);cursor:pointer;font-family:var(--font);text-align:left">'+(ex.icon||'🏃')+' '+esc(ex.name)+'</button>').join('');
+    return '<div style="margin-bottom:10px"><div style="font-size:.72rem;font-weight:600;color:'+meta.color+';margin-bottom:4px">'+meta.label+'</div><div style="display:flex;flex-wrap:wrap;gap:4px">'+btns+'</div></div>';
+  }).join('');
+  overlay.innerHTML='<div style="background:var(--bg);border:1px solid var(--bd);border-radius:12px;max-width:480px;width:100%;max-height:80vh;overflow-y:auto;padding:16px;color:var(--ink)"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:.9rem;font-weight:600">📚 운동 더 보기</span><button onclick="document.getElementById(\'brk-ex-picker\').remove()" style="margin-left:auto;background:none;border:none;font-size:1.1rem;cursor:pointer;color:var(--mu)">✕</button></div>'+sections+'</div>';
+  document.body.appendChild(overlay);
+}
+function _pickBrkEx(name){
+  document.getElementById('brk-ex-picker')?.remove();
+  _addBrkEx(name);
 }
 
 function _addBrkEx(name){
@@ -699,13 +800,7 @@ function _addBrkEx(name){
   const d=m.dailyChecks[selectedDate].bung;
   if(!d.exercises)d.exercises=[];
   if(d.exercises.some(e=>e.name===name))return;
-  const db={..._BRK_SUPPL_BUNG,...(m.settings?.customExercises||{})};
-  const exDb={
-    '걷기':{cat:'cardio',defaultInt:'light',unit:'min'},'조깅':{cat:'cardio',defaultInt:'moderate',unit:'min'},
-    '웨이트':{cat:'strength',defaultInt:'intense',unit:'min'},'스쿼트':{cat:'strength',defaultInt:'moderate',unit:'reps'},
-    '푸시업':{cat:'strength',defaultInt:'moderate',unit:'reps'},'스트레칭':{cat:'stretch',defaultInt:'light',unit:'min'},
-    '요가':{cat:'stretch',defaultInt:'moderate',unit:'min'},...(m.settings?.customExercises||{}),
-  };
+  const exDb={..._BRK_EX_DB_FULL,...(m.settings?.customExercises||{})};
   const info=exDb[name]||{};
   d.exercises.push({name,cat:info.cat||'cardio',intensity:info.defaultInt||'moderate',unit:info.unit||'min',amount:null});
   // 최근 운동 업데이트
@@ -713,7 +808,7 @@ function _addBrkEx(name){
   const recent=m.settings.recentExercises||['걷기','조깅','웨이트','스트레칭','요가'];
   if(!recent.includes(name)){recent.unshift(name);if(recent.length>10)recent.pop();}
   m.settings.recentExercises=recent;
-  renderCheckTab();
+  _rerenderBrkDailySection();
 }
 function _addBrkExCustom(){
   const name=prompt('운동 이름 입력 (예: 배드민턴, 테니스)');
@@ -725,11 +820,11 @@ function _addBrkExCustom(){
 }
 function _removeBrkEx(idx){
   const d=domainData['bungruki']?.master?.dailyChecks?.[selectedDate]?.bung;
-  if(!d?.exercises)return;d.exercises.splice(idx,1);renderCheckTab();
+  if(!d?.exercises)return;d.exercises.splice(idx,1);_rerenderBrkDailySection();
 }
 function _setBrkExInt(idx,intensity){
   const d=domainData['bungruki']?.master?.dailyChecks?.[selectedDate]?.bung;
-  if(!d?.exercises?.[idx])return;d.exercises[idx].intensity=intensity;renderCheckTab();
+  if(!d?.exercises?.[idx])return;d.exercises[idx].intensity=intensity;_rerenderBrkDailySection();
 }
 function _toggleAllBrkSuppl(checked){
   document.querySelectorAll('[data-brk-suppl]').forEach(cb=>cb.checked=checked);
