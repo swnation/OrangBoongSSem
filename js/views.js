@@ -4,7 +4,7 @@
 // THEME
 // ═══════════════════════════════════════════════════════════════
 function initTheme() {
-  const t = localStorage.getItem('om_theme') || 'light';
+  const t = getAppSetting('theme') || 'light';
   if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
   updateThemeBtn();
 }
@@ -12,7 +12,7 @@ function toggleTheme() {
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   if (isDark) document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme','dark');
-  localStorage.setItem('om_theme', isDark ? 'light' : 'dark');
+  setAppSetting('theme', isDark ? 'light' : 'dark');
   updateThemeBtn();
 }
 function updateThemeBtn() {
@@ -81,7 +81,7 @@ async function switchDomain(domainId) {
   S._dirty = false;
   S.viewingHistIdx = null;
   S.logView = 'form';
-  localStorage.setItem('om_domain', domainId);
+  setAppSetting('lastDomain', domainId);
   document.getElementById('domain-dropdown').classList.remove('show');
   updateDomainUI();
   renderDomainDropdown();
@@ -123,10 +123,10 @@ function renderView(view) {
   const area=document.getElementById('content');
   if(view==='home') area.innerHTML=renderHome();
   else if(view==='session') area.innerHTML=renderSession();
-  else if(view==='log') { try{area.innerHTML=renderLog();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 로그 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;} }
+  else if(view==='log') { try{area.innerHTML=renderLog();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 로그 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;} if(typeof _updateUndoUI==='function')_updateUndoUI(); if(typeof _prefillDailyChecksFromExisting==='function'){const di=document.getElementById('log-date');if(di)_prefillDailyChecksFromExisting(di.value);} }
   else if(view==='history') area.innerHTML=renderHistory();
   else if(view==='templates') area.innerHTML=renderTemplates();
-  else if(view==='meds') { area.innerHTML=renderMedsView(); loadAllUserDomains().then(()=>{if(S.currentView==='meds')area.innerHTML=renderMedsView();}); }
+  else if(view==='meds') { const _renderMedsSafe=()=>{try{area.innerHTML=renderMedsView();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 투약 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;}}; _renderMedsSafe(); loadAllUserDomains().then(()=>{if(S.currentView==='meds')_renderMedsSafe();}); }
   else if(view==='stats') area.innerHTML=renderStatsView();
   else if(view==='timeline') { try{area.innerHTML=renderTimelineView();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 타임라인 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;} loadAllUserDomains().then(()=>{if(S.currentView==='timeline'){try{area.innerHTML=renderTimelineView();}catch(e){area.innerHTML=`<div style="color:red;padding:20px">❌ 타임라인 오류: ${e.message}<br><pre style="font-size:.7rem;overflow:auto">${e.stack}</pre></div>`;}};}); }
   else if(view==='crosslog') { area.innerHTML=renderCrossLogView(); loadAllUserDomains().then(()=>{if(S.currentView==='crosslog')area.innerHTML=renderCrossLogView();}); }
@@ -155,15 +155,18 @@ function renderMigraineForecast() {
   const today=kstToday();
   const dow=kstNow().getUTCDay(); // 요일 (0=일)
   const factors=[];
+  const details=[]; // 상세 근거
   let riskScore=0; // 0~100
+  const allAvg=nrsLogs.reduce((s,l)=>s+l.nrs,0)/nrsLogs.length;
 
   // 1) 요일 패턴 — 같은 요일의 평균 NRS
+  const dowName=['일','월','화','수','목','금','토'][dow];
   const sameDow=nrsLogs.filter(l=>{const d=new Date(l.datetime.slice(0,10)+'T00:00:00Z');return d.getUTCDay()===dow;});
   if(sameDow.length>=3) {
     const avg=sameDow.reduce((s,l)=>s+l.nrs,0)/sameDow.length;
-    const allAvg=nrsLogs.reduce((s,l)=>s+l.nrs,0)/nrsLogs.length;
-    if(avg>allAvg+1) { riskScore+=20; factors.push(`📅 ${['일','월','화','수','목','금','토'][dow]}요일 평균 NRS ${avg.toFixed(1)} (전체 ${allAvg.toFixed(1)})`); }
-    else if(avg>allAvg) { riskScore+=8; }
+    if(avg>allAvg+1) { riskScore+=20; factors.push(`📅 ${dowName}요일 평균 ${_scoreLabel()} ${avg.toFixed(1)} (전체 ${allAvg.toFixed(1)})`);
+      details.push({title:'📅 요일 패턴',score:20,desc:`${dowName}요일 ${sameDow.length}건의 평균 NRS ${avg.toFixed(1)}로, 전체 평균 ${allAvg.toFixed(1)}보다 ${(avg-allAvg).toFixed(1)} 높습니다. 과거 데이터상 이 요일에 편두통이 더 자주/강하게 발생하는 패턴입니다.`}); }
+    else if(avg>allAvg) { riskScore+=8; details.push({title:'📅 요일 패턴',score:8,desc:`${dowName}요일 평균 NRS ${avg.toFixed(1)}로 전체 평균(${allAvg.toFixed(1)})보다 약간 높으나 유의미한 차이는 아닙니다.`}); }
   }
 
   // 2) 최근 3일 패턴 — 연속 고통 후 반동 또는 지속
@@ -173,8 +176,11 @@ function renderMigraineForecast() {
   });
   if(recent3.length) {
     const avg3=recent3.reduce((s,l)=>s+l.nrs,0)/recent3.length;
-    if(avg3>=6) { riskScore+=25; factors.push(`🔥 최근 3일 평균 NRS ${avg3.toFixed(1)} — 고통 지속 중`); }
-    else if(avg3>=4) { riskScore+=12; factors.push(`⚠️ 최근 3일 평균 NRS ${avg3.toFixed(1)}`); }
+    const r3Dates=recent3.map(l=>l.datetime.slice(5,10)+':NRS'+l.nrs).join(', ');
+    if(avg3>=6) { riskScore+=25; factors.push(`🔥 최근 3일 평균 ${_scoreLabel()} ${avg3.toFixed(1)} — 고통 지속 중`);
+      details.push({title:'🔥 최근 3일 추세',score:25,desc:`최근 3일간 ${recent3.length}건의 평균 NRS가 ${avg3.toFixed(1)}로 높은 수준입니다. 연속적인 고통은 다음날에도 이어질 가능성이 높습니다.\n기록: ${r3Dates}`}); }
+    else if(avg3>=4) { riskScore+=12; factors.push(`⚠️ 최근 3일 평균 ${_scoreLabel()} ${avg3.toFixed(1)}`);
+      details.push({title:'⚠️ 최근 3일 추세',score:12,desc:`최근 3일간 평균 NRS ${avg3.toFixed(1)}로 중간 수준의 통증이 지속 중입니다.\n기록: ${r3Dates}`}); }
   }
 
   // 3) 최근 기록의 트리거 활성 여부
@@ -185,17 +191,21 @@ function renderMigraineForecast() {
   const activeTriggers=new Set(recent7.flatMap(l=>l.triggers||[]));
   const highRiskTriggers=['수면부족','수면분절','스트레스','생리전후','피로'];
   const activeHigh=highRiskTriggers.filter(t=>activeTriggers.has(t));
-  if(activeHigh.length>=2) { riskScore+=20; factors.push(`⚡ 고위험 트리거 활성: ${activeHigh.join(', ')}`); }
-  else if(activeHigh.length===1) { riskScore+=10; factors.push(`⚡ 트리거 활성: ${activeHigh[0]}`); }
+  if(activeHigh.length>=2) { riskScore+=20; factors.push(`⚡ 고위험 트리거 활성: ${activeHigh.join(', ')}`);
+    details.push({title:'⚡ 고위험 트리거',score:20,desc:`최근 7일 기록에서 고위험 트리거 ${activeHigh.length}개가 활성 상태입니다: ${activeHigh.join(', ')}. 이 트리거들은 편두통 발작과 강한 상관관계가 있습니다.`}); }
+  else if(activeHigh.length===1) { riskScore+=10; factors.push(`⚡ 트리거 활성: ${activeHigh[0]}`);
+    details.push({title:'⚡ 트리거 활성',score:10,desc:`최근 7일 기록에서 '${activeHigh[0]}' 트리거가 활성 상태입니다.`}); }
 
   // 4) 날씨 (저기압) — 캐시 + 실시간 비동기 업데이트
   const withWeather=[...nrsLogs].reverse().find(l=>l.weather?.pressure);
   const cachedP=withWeather?.weather?.pressure;
   if(cachedP) {
-    if(cachedP<1005) { riskScore+=20; factors.push(`🌧 저기압 ${cachedP}hPa (기압 민감)`); }
-    else if(cachedP<1010) { riskScore+=10; factors.push(`☁️ 기압 ${cachedP}hPa (약간 낮음)`); }
+    if(cachedP<1005) { riskScore+=20; factors.push(`🌧 저기압 ${cachedP}hPa (기압 민감)`);
+      details.push({title:'🌧 저기압',score:20,desc:`최근 기록 시점의 기압이 ${cachedP}hPa로 매우 낮습니다 (기준: 1013hPa). 저기압은 혈관 확장을 유발하여 편두통을 악화시킬 수 있습니다.`}); }
+    else if(cachedP<1010) { riskScore+=10; factors.push(`☁️ 기압 ${cachedP}hPa (약간 낮음)`);
+      details.push({title:'☁️ 기압',score:10,desc:`기압이 ${cachedP}hPa로 평균보다 약간 낮습니다. 기압 변화에 민감한 경우 편두통 위험이 소폭 상승합니다.`}); }
   }
-  // 실시간 날씨 비동기 업데이트 (forecast 카드 렌더 후 갱신)
+  // 실시간 날씨 비동기 업데이트
   if(typeof fetchWeather==='function') {
     if(window._forecastWeatherTimer) clearTimeout(window._forecastWeatherTimer);
     window._forecastWeatherTimer=setTimeout(async()=>{
@@ -213,11 +223,16 @@ function renderMigraineForecast() {
     const tag=getMenstrualTag(today);
     if(tag&&(tag.includes('생리')||tag.includes('D-'))) {
       riskScore+=15; factors.push(`🩸 ${tag} — 호르몬 변동기`);
+      details.push({title:'🩸 생리주기',score:15,desc:`현재 '${tag}' 시기입니다. 에스트로겐 급감기에는 세로토닌 감소와 혈관 변동이 일어나 편두통 위험이 높아집니다.`});
     }
   }
 
   // 점수 정규화 (0~100)
   riskScore=Math.min(100,riskScore);
+
+  // 상세 근거 데이터를 전역에 저장 (클릭 시 모달용)
+  window._forecastDetails={riskScore,factors,details,nrsCount:nrsLogs.length,allAvg,today,
+    noFactors:!details.length?'분석된 ${nrsLogs.length}건 데이터에서 특별한 위험 요인이 감지되지 않았습니다. 평소와 비슷한 컨디션입니다.':null};
 
   // 위험도 레벨
   let level,emoji,color,bg;
@@ -232,18 +247,48 @@ function renderMigraineForecast() {
     <div style="width:${riskScore}%;height:100%;background:${color};border-radius:4px;transition:width .5s"></div>
   </div>`;
 
-  return `<div class="card" style="background:${bg};border:1.5px solid ${color}30">
+  return `<div class="card" style="background:${bg};border:1.5px solid ${color}30;cursor:pointer" onclick="showForecastDetails()">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
       <span style="font-size:1.8rem">${emoji}</span>
       <div>
         <div style="font-size:.82rem;font-weight:700;color:${color}">오늘의 편두통 일기예보</div>
         <div style="font-size:.68rem;color:var(--mu)">위험도 <b>${riskScore}점</b> · ${level}</div>
       </div>
+      <span style="margin-left:auto;font-size:.6rem;color:var(--mu2)">탭하여 근거 보기</span>
     </div>
     ${gauge}
     ${factorHtml}
     <div id="forecast-weather" style="font-size:.65rem;color:var(--mu2);margin-top:6px"></div>
   </div>`;
+}
+
+function showForecastDetails(){
+  const fd=window._forecastDetails;if(!fd)return;
+  let html=`<div style="font-size:.72rem;color:var(--mu);margin-bottom:10px">분석 데이터: <b>${fd.nrsCount}건</b> · 전체 평균 NRS: <b>${fd.allAvg.toFixed(1)}</b> · 기준일: ${fd.today}</div>`;
+  if(fd.details.length){
+    html+=fd.details.map(d=>
+      `<div style="padding:8px;margin-bottom:6px;background:var(--sf);border-radius:8px;border-left:3px solid ${d.score>=20?'#ef4444':d.score>=10?'#f59e0b':'#10b981'}">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:.78rem;font-weight:600">${d.title}</span>
+          <span style="font-size:.68rem;font-weight:700;color:${d.score>=20?'#ef4444':d.score>=10?'#f59e0b':'#10b981'}">+${d.score}점</span>
+        </div>
+        <div style="font-size:.7rem;color:var(--mu);line-height:1.6;white-space:pre-line">${d.desc}</div>
+      </div>`
+    ).join('');
+  } else {
+    html+=`<div style="padding:12px;background:var(--sf);border-radius:8px;font-size:.75rem;color:var(--mu);text-align:center">
+      분석된 ${fd.nrsCount}건 데이터에서 특별한 위험 요인이 감지되지 않았습니다.<br>평소와 비슷한 컨디션입니다.</div>`;
+  }
+  html+=`<div style="margin-top:10px;padding:8px;background:var(--sf2);border-radius:6px;font-size:.62rem;color:var(--mu2);line-height:1.6">
+    <b>예보 산출 기준</b><br>
+    1. 요일 패턴: 같은 요일 과거 기록 대비 NRS 평균 비교 (최대 +20)<br>
+    2. 최근 3일 추세: 연속 고통 지속 여부 (최대 +25)<br>
+    3. 고위험 트리거: 수면부족·스트레스·생리전후 등 활성 여부 (최대 +20)<br>
+    4. 기압: 저기압(1010hPa 이하) 시 혈관 확장 위험 (최대 +20)<br>
+    5. 생리주기: 호르몬 급감기 감지 (최대 +15)
+  </div>`;
+  showConfirmModal(`🔮 편두통 예보 상세 근거 — ${fd.riskScore}점`,html,
+    [{label:'닫기',action:closeConfirmModal,primary:true}]);
 }
 
 // 홈 대시보드 카드 커스텀
@@ -255,6 +300,7 @@ const _HOME_CARDS=[
   {id:'aiSuggestions',label:'🤖 AI 질문 추천',default:true},
   {id:'insight',label:'💡 인사이트',default:true},
   {id:'weeklySummary',label:'📊 주간 요약',default:true},
+  {id:'brkDailySync',label:'🍼 임신준비 데일리체크',default:true},
   {id:'brkTimeline',label:'🍼 붕룩이 타임라인',default:true},
   {id:'knowledge',label:'🧠 누적 협진 지식',default:true},
   {id:'recentSessions',label:'📅 최근 세션',default:true},
@@ -264,7 +310,7 @@ function _getHomeCards(){
   const master=DM();
   const cloud=master?.settings?.homeCards;
   if(cloud)return cloud;
-  return JSON.parse(localStorage.getItem('om_home_cards')||'{}');
+  return getAppSettingJSON('homeCards', {});
 }
 function _homeCardVisible(id){
   const saved=_getHomeCards();
@@ -275,18 +321,46 @@ function _toggleHomeCard(id){
   const saved=_getHomeCards();
   saved[id]=!_homeCardVisible(id);
   // 클라우드 + localStorage 양쪽 저장
-  localStorage.setItem('om_home_cards',JSON.stringify(saved));
+  setAppSetting('homeCards', saved);
   const master=DM();
   if(master){if(!master.settings)master.settings={};master.settings.homeCards=saved;saveMaster();}
   renderView('home');
 }
 function _renderHomeSettings(){
+  const order = _getHomeCardOrder();
+  const sorted = order.map(id => _HOME_CARDS.find(c => c.id === id)).filter(Boolean);
+  // 새로 추가된 카드는 뒤에
+  _HOME_CARDS.forEach(c => { if (!order.includes(c.id)) sorted.push(c); });
   return `<div style="margin-bottom:10px;padding:10px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px">
-    <div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">📌 대시보드 카드 설정</div>
-    ${_HOME_CARDS.map(c=>`<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:.72rem;cursor:pointer">
-      <input type="checkbox" ${_homeCardVisible(c.id)?'checked':''} onchange="_toggleHomeCard('${c.id}')" style="accent-color:var(--ac)"> ${c.label}
-    </label>`).join('')}
+    <div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">📌 대시보드 카드 설정 (순서 변경 가능)</div>
+    ${sorted.map((c, i) => `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;font-size:.72rem">
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <button onclick="_moveHomeCard('${c.id}',-1)" style="background:none;border:none;font-size:.5rem;cursor:pointer;color:var(--mu);padding:0;line-height:1" ${i===0?'disabled':''}>▲</button>
+        <button onclick="_moveHomeCard('${c.id}',1)" style="background:none;border:none;font-size:.5rem;cursor:pointer;color:var(--mu);padding:0;line-height:1" ${i===sorted.length-1?'disabled':''}>▼</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;flex:1;cursor:pointer">
+        <input type="checkbox" ${_homeCardVisible(c.id)?'checked':''} onchange="_toggleHomeCard('${c.id}')" style="accent-color:var(--ac)"> ${c.label}
+      </label>
+    </div>`).join('')}
   </div>`;
+}
+function _getHomeCardOrder() {
+  const m = DM();
+  return m?.settings?.homeCardOrder || getAppSettingJSON('homeCardOrder', []);
+}
+function _moveHomeCard(id, dir) {
+  const order = _getHomeCardOrder();
+  // 현재 순서가 없으면 기본 순서로 초기화
+  if (!order.length) _HOME_CARDS.forEach(c => order.push(c.id));
+  const idx = order.indexOf(id);
+  if (idx < 0) return;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= order.length) return;
+  [order[idx], order[newIdx]] = [order[newIdx], order[idx]];
+  setAppSetting('homeCardOrder', order);
+  const m = DM();
+  if (m) { if (!m.settings) m.settings = {}; m.settings.homeCardOrder = order; saveMaster(); }
+  renderView('home');
 }
 var _homeSettingsOpen=false;
 
@@ -304,25 +378,23 @@ function renderHome() {
     </div>`).join('');
 
   const _v=id=>_homeCardVisible(id);
-  return `
-    <div style="display:flex;align-items:center;margin-bottom:8px">
-      <button onclick="_homeSettingsOpen=!_homeSettingsOpen;renderView('home')" style="margin-left:auto;font-size:.65rem;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">⚙️ 카드 설정</button>
-    </div>
-    ${_homeSettingsOpen?_renderHomeSettings():''}
-    ${_v('sessions')?`<button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
-    <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
-    <button onclick="startLightMode()" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,#f0fdf4,#eff6ff);border:1.5px solid var(--bd);border-radius:12px;cursor:pointer;font-size:.88rem;width:100%;margin-bottom:12px;margin-top:-8px">
-      <span style="font-size:1.2rem">⚡</span>
-      <div style="text-align:left"><div style="font-weight:600;color:var(--ink)">빠른 체크</div><div style="font-size:.68rem;color:var(--mu)">AI 1개 · 최근 기록 기반 빠른 요약</div></div>
-    </button>`:''}
-    ${_v('forecast')?renderMigraineForecast():''}
-    ${_v('warnings')?renderPatternWarnings():''}
-    ${_v('drugWarn')?renderDrugInteractionWarning():''}
-    ${_v('aiSuggestions')?(()=>{_aiSuggestions=generateAIQuestionSuggestions();return renderAIQuestionSuggestions();})():''}
-    ${_v('insight')?renderInsightCard():''}
-    ${_v('weeklySummary')?renderWeeklySummaryCard():''}
-    ${_v('brkTimeline')?renderBungrukiTimeline():''}
-    ${_v('knowledge')?`<div class="card">
+  // 카드 렌더러 맵 (순서 제어 가능)
+  const _cardRenderers = {
+    sessions: () => `<button class="btn-new-session" onclick="startNewSession()">💬 새 세션 시작</button>
+      <button class="btn-new-session" onclick="startSessionFromLogs()" style="background:var(--ac);margin-top:-8px">📊 최근 증상 기록으로 세션 시작</button>
+      <button onclick="startLightMode()" style="display:flex;align-items:center;gap:8px;padding:12px 20px;background:linear-gradient(135deg,var(--ok-bg),var(--info-bg));border:1.5px solid var(--bd);border-radius:12px;cursor:pointer;font-size:.88rem;width:100%;margin-bottom:12px;margin-top:-8px">
+        <span style="font-size:1.2rem">⚡</span>
+        <div style="text-align:left"><div style="font-weight:600;color:var(--ink)">빠른 체크</div><div style="font-size:.68rem;color:var(--mu)">AI 1개 · 최근 기록 기반 빠른 요약</div></div>
+      </button>`,
+    forecast: renderMigraineForecast,
+    warnings: renderPatternWarnings,
+    drugWarn: renderDrugInteractionWarning,
+    aiSuggestions: () => { _aiSuggestions=generateAIQuestionSuggestions(); return renderAIQuestionSuggestions(); },
+    insight: renderInsightCard,
+    weeklySummary: renderWeeklySummaryCard,
+    brkDailySync: typeof renderBrkDailySyncCard==='function' ? renderBrkDailySyncCard : ()=>'',
+    brkTimeline: typeof renderBungrukiTimeline==='function' ? renderBungrukiTimeline : ()=>'',
+    knowledge: () => `<div class="card">
       <div class="card-title">🧠 누적 협진 지식 <span class="badge badge-green">Drive 동기화</span>
         <button onclick="cleanupAccumulated()" style="margin-left:auto;font-size:.65rem;padding:3px 10px;border:1.5px solid var(--ac);border-radius:5px;background:none;color:var(--ac);cursor:pointer;font-weight:600">🤖 AI 정리</button>
       </div>
@@ -344,9 +416,23 @@ function renderHome() {
         <div class="accum-add-row"><input class="accum-add-input" id="add-discarded" placeholder="새 폐기 가설 추가...">
           <button class="btn-accum-add" onclick="addAccum('discarded_hypotheses','add-discarded')">+ 추가</button></div>
       </div>
-    </div>`:''}
-    ${_v('recentSessions')&&sessions.length?`<div class="card"><div class="card-title">📅 최근 세션</div>${recentSessions}
-      ${sessions.length>3?`<div style="text-align:center;margin-top:8px"><button class="btn-cancel" onclick="switchView('history')" style="font-size:.78rem">전체 ${sessions.length}개 보기</button></div>`:''}</div>`:''}`;
+    </div>`,
+    recentSessions: () => sessions.length ? `<div class="card"><div class="card-title">📅 최근 세션</div>${recentSessions}
+      ${sessions.length>3?`<div style="text-align:center;margin-top:8px"><button class="btn-cancel" onclick="switchView('history')" style="font-size:.78rem">전체 ${sessions.length}개 보기</button></div>`:''}</div>` : '',
+  };
+  // 카드 순서 적용
+  const order = _getHomeCardOrder();
+  const orderedIds = order.length ? order : _HOME_CARDS.map(c => c.id);
+  // 새로 추가된 카드도 포함
+  _HOME_CARDS.forEach(c => { if (!orderedIds.includes(c.id)) orderedIds.push(c.id); });
+  const cardsHtml = orderedIds.map(id => _v(id) && _cardRenderers[id] ? _cardRenderers[id]() : '').join('');
+
+  return `
+    <div style="display:flex;align-items:center;margin-bottom:8px">
+      <button onclick="_homeSettingsOpen=!_homeSettingsOpen;renderView('home')" style="margin-left:auto;font-size:.65rem;padding:3px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">⚙️ 카드 설정</button>
+    </div>
+    ${_homeSettingsOpen?_renderHomeSettings():''}
+    ${cardsHtml}`;
 }
 
 // SESSION VIEW
@@ -795,7 +881,7 @@ async function cleanupAccumulated() {
 반드시 JSON만 출력:
 {"consensus":["합의 항목"],"discarded":["폐기 항목"],"issues":["쟁점 항목"],"protocols":["프로토콜 항목"]}`;
       const user=`[${cat.label}] ${items.length}건:\n${items.map((x,j)=>(j+1)+'. '+x).join('\n')}`;
-      const raw=await callAIStream(aiId,system,user,()=>{},ac.signal);
+      const raw=await callAIStream(aiId,system,user,()=>{},ac.signal,'forecast');
       let clean=raw.replace(/```json|```/g,'').trim();
       const jsonMatch=clean.match(/\{[\s\S]*\}/);
       if(jsonMatch) clean=jsonMatch[0];
@@ -963,7 +1049,7 @@ function renderTriggerNrsChart(logs) {
       <div style="flex:1;height:18px;background:var(--bd);border-radius:4px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${color};border-radius:4px"></div></div>
       <span style="min-width:50px;font-size:.68rem;color:var(--mu)">${r.avg.toFixed(1)} (${r.count}회)</span></div>`;
   }).join('');
-  return `<div class="card"><div class="card-title">⚡ 트리거별 평균 NRS</div>${bars}<div style="font-size:.62rem;color:var(--mu2);text-align:center;margin-top:6px">최소 2회 이상 기록된 트리거만 표시.</div></div>`;
+  return `<div class="card"><div class="card-title">⚡ 트리거별 평균 ${_scoreLabel()}</div>${bars}<div style="font-size:.62rem;color:var(--mu2);text-align:center;margin-top:6px">최소 2회 이상 기록된 트리거만 표시.</div></div>`;
 }
 
 // ── 통계 차트: 기압-NRS 산점도 ──
@@ -979,12 +1065,12 @@ function renderPressureChart(logs) {
     const color=l.nrs>=7?'#ef4444':l.nrs>=4?'#f59e0b':'#10b981';
     return `<circle cx="${x}" cy="${y}" r="4" fill="${color}" opacity=".7"/>`;
   }).join('');
-  return `<div class="card"><div class="card-title">🌡️ 기압 vs NRS 상관</div>
+  return `<div class="card"><div class="card-title">🌡️ 기압 vs ${_scoreLabel()} 상관</div>
     <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:400px;display:block;margin:0 auto">
       <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="var(--bd)" stroke-width="1"/>
       <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}" stroke="var(--bd)" stroke-width="1"/>
       <text x="${W/2}" y="${H-5}" text-anchor="middle" font-size="10" fill="var(--mu)">기압 (hPa)</text>
-      <text x="12" y="${H/2}" text-anchor="middle" font-size="10" fill="var(--mu)" transform="rotate(-90,12,${H/2})">NRS</text>
+      <text x="12" y="${H/2}" text-anchor="middle" font-size="10" fill="var(--mu)" transform="rotate(-90,12,${H/2})">${_scoreLabel()}</text>
       <text x="${pad}" y="${H-pad+14}" text-anchor="middle" font-size="9" fill="var(--mu2)">${pMin}</text>
       <text x="${W-pad}" y="${H-pad+14}" text-anchor="middle" font-size="9" fill="var(--mu2)">${pMax}</text>
       ${dots}
@@ -1004,9 +1090,9 @@ function renderStatsView() {
 
   if(!logs.length) return `<div class="hint">📈 통계를 보려면 먼저 기록을 쌓아주세요.<br><button class="btn-cancel" onclick="switchView('log')" style="margin-top:10px">📊 기록하러 가기</button></div>`;
 
-  const now=new Date();
-  const last30=logs.filter(l=>(now-new Date(l.datetime))<=30*86400000);
-  const last7=logs.filter(l=>(now-new Date(l.datetime))<=7*86400000);
+  const nowTs=Date.now();
+  const last30=logs.filter(l=>{const t=typeof _logTimestamp==='function'?_logTimestamp(l):new Date(l.datetime).getTime();return !isNaN(t)&&(nowTs-t)<=30*86400000;});
+  const last7=logs.filter(l=>{const t=typeof _logTimestamp==='function'?_logTimestamp(l):new Date(l.datetime).getTime();return !isNaN(t)&&(nowTs-t)<=7*86400000;});
 
   // NRS/Mood trend (last 30 days)
   const byDate={};
@@ -1032,7 +1118,7 @@ function renderStatsView() {
     const dayName=['일','월','화','수','목','금','토'][new Date(d+'T12:00').getDay()];
     const color=avgNrs>0?nrsColor(avgNrs):'var(--bd)';
     const label=d.slice(8);
-    return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0" title="${d}: ${avgNrs>0?'NRS '+avgNrs.toFixed(1):'기록없음'}${data?.count?' ('+data.count+'건)':''}">
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;min-width:0" title="${d}: ${avgNrs>0?_scoreLabel()+' '+avgNrs.toFixed(1):'기록없음'}${data?.count?' ('+data.count+'건)':''}">
       <div style="font-size:.5rem;color:var(--mu2)">${avgNrs>0?avgNrs.toFixed(1):''}</div>
       <div style="width:100%;max-width:14px;height:${h}px;background:${color};border-radius:2px"></div>
       <div style="font-size:.5rem;color:${isToday?'var(--ac)':'var(--mu2)'};font-weight:${isToday?'700':'400'}">${label}</div>
@@ -1087,14 +1173,16 @@ function renderStatsView() {
     </div>
   </div>
   <div class="card">
-    <div class="card-title">${lc.moodMode?'기분':'NRS'} 추세 (30일)</div>
+    <div class="card-title">${lc.moodMode?'기분':_scoreLabel()} 추세 (30일)</div>
     <div style="display:flex;align-items:flex-end;gap:1px;padding:8px 0">${barHtml}</div>
   </div>
   ${topSyms.length?`<div class="card"><div class="card-title">증상 빈도 (30일)</div>${symHtml}</div>`:''}
   ${topMeds.length?`<div class="card"><div class="card-title">투약 빈도 (30일)</div>${medHtml}</div>`:''}
   ${lc.moodMode?renderMedComplianceStats(last30)+renderDailyCheckTrend(last30,lc):renderCalendarHeatmap(logs,lc)}
   ${renderMedComplianceCalendar(logs)}
+  ${_renderHealthDashboardStats(logs,last30,dc,lc)}
   ${renderTrendChart(logs, 90)}
+  ${_renderCrossDomainCorrelation()}
   ${renderCorrelationAnalysis(logs)}
   ${renderMedEffectAnalysis(logs)}
   ${renderMedSummaryReport(logs)}
@@ -1220,11 +1308,11 @@ function renderCrossLogView() {
     const groupHtml=Object.values(domainGroups).map(g=>{
       const items=g.items.map(l=>{
         const tags=[
-          l.mood?`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(l.mood)}</span>`:'',
-          l.nrs>=0?`<span class="log-tag" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">NRS${l.nrs}</span>`:'',
-          ...l.symptoms.map(s=>`<span class="log-tag" style="background:#faf5ff;color:#7c3aed">${esc(s)}</span>`),
-          ...l.meds.map(m=>`<span class="log-tag" style="background:#fff7ed;color:#c2410c">${esc(m)}</span>`),
-          ...l.categories.map(c=>`<span class="log-tag" style="background:#eff6ff;color:#1d4ed8">${esc(c)}</span>`),
+          l.mood?`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(l.mood)}</span>`:'',
+          l.nrs>=0?`<span class="log-tag" style="background:${nrsColor(l.nrs)}20;color:${nrsColor(l.nrs)}">${_scoreLabel()}${l.nrs}</span>`:'',
+          ...l.symptoms.map(s=>`<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">${esc(s)}</span>`),
+          ...l.meds.map(m=>`<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med)">${esc(m)}</span>`),
+          ...l.categories.map(c=>`<span class="log-tag" style="background:var(--tag-site-bg);color:var(--tag-site)">${esc(c)}</span>`),
         ].filter(Boolean).join('');
         return `<div style="display:flex;align-items:flex-start;gap:6px;padding:2px 0">
           ${l.time&&l.time!=='00:00'?`<span style="font-size:.65rem;font-family:var(--mono);color:var(--mu2);min-width:36px">${l.time}</span>`:''}
@@ -1251,7 +1339,7 @@ function renderCrossLogView() {
     <div class="card-title">🔗 ${currentUser} — 교차 도메인 타임라인</div>
     <p style="font-size:.78rem;color:var(--mu);margin-bottom:6px">
       여러 도메인의 기록을 날짜별로 합쳐서 보여줍니다.<br>
-      예: 편두통 NRS가 높았던 날 수면/기분/식사가 어땠는지 한눈에 비교할 수 있습니다.
+      예: 편두통 통증이 높았던 날 수면/기분/식사가 어땠는지 한눈에 비교할 수 있습니다.
     </p>
     <p style="font-size:.72rem;color:var(--mu2);margin-bottom:10px">
       ${domains.map(id=>`<span style="color:${DOMAINS[id].color};font-weight:600">${DOMAINS[id].icon} ${DOMAINS[id].label}</span>`).join(' · ')}
@@ -1312,7 +1400,7 @@ function renderUsageView() {
   Object.entries(DOMAINS).forEach(([domainId,dd])=>{
     if(processedDomains.has(domainId)) return;
     try {
-      const cached=localStorage.getItem('om_usage_'+domainId);
+      const cached=_storageGet('om_usage_'+domainId);
       if(!cached) return;
       const usageData=JSON.parse(cached);
       let dToday=0, dMonth=0, dAll=0;
@@ -1435,7 +1523,7 @@ function renderUsageView() {
 
   // 가격 업데이트 알림
   const priceAlerts=DM()?._priceAlerts||[];
-  const alertHtml=priceAlerts.length?`<div class="card" style="background:linear-gradient(135deg,#eff6ff,#f0fdf4);border:1.5px solid #3b82f630">
+  const alertHtml=priceAlerts.length?`<div class="card" style="background:linear-gradient(135deg,var(--info-bg),var(--ok-bg));border:1.5px solid var(--ac)">
     <div style="font-size:.78rem;font-weight:600;margin-bottom:6px">📢 가격/모델 업데이트</div>
     ${priceAlerts.map(a=>`<div style="font-size:.72rem;color:var(--mu);padding:2px 0">• ${a}</div>`).join('')}
     <div style="font-size:.6rem;color:var(--mu2);margin-top:4px">마지막 확인: ${DM()?.price_updated?.slice(0,10)||'—'}</div>
@@ -1480,11 +1568,111 @@ function renderUsageView() {
     ${domainRows}
   </div>`:''}
 
+    <div class="card">
+      <div class="card-title">🤖 AI별 이번 달 (전체 통합)</div>
+      ${aiRows||'<div class="hint" style="padding:8px">이번 달 사용 내역 없음</div>'}
+      </div>
+
+  ${_renderUsageCallsBreakdown(monthStr)}`;
+}
+// 모델별/기능별 호출 상세 breakdown
+function _renderUsageCallsBreakdown(monthStr) {
+  const allCalls=[];
+  Object.entries(S.domainState).forEach(([domId,ds])=>{
+    if(!ds.master?.usage_data) return;
+    Object.entries(ds.master.usage_data).forEach(([date,aiMap])=>{
+      if(!date.startsWith(monthStr)) return;
+      Object.entries(aiMap).forEach(([aiId,data])=>{
+        (data.calls||[]).forEach(c=>allCalls.push({date,aiId,...c}));
+      });
+    });
+  });
+  Object.keys(DOMAINS).forEach(domId=>{
+    if(S.domainState[domId]?.master?.usage_data) return;
+    try{
+      const cached=_storageGet('om_usage_'+domId);
+      if(!cached) return;
+      const ud=JSON.parse(cached);
+      Object.entries(ud).forEach(([date,aiMap])=>{
+        if(!date.startsWith(monthStr)) return;
+        Object.entries(aiMap).forEach(([aiId,data])=>{
+          (data.calls||[]).forEach(c=>allCalls.push({date,aiId,...c}));
+        });
+      });
+    }catch(e){}
+  });
+  if(!allCalls.length) return '';
+  const sourceLabels={'session-r1':'🔄 세션 R1','session-r2':'🔄 세션 R2','session-r3':'🔄 세션 R3',
+    'summary':'📝 요약','photo-ocr':'📷 사진 OCR','drug-photo':'💊 약물 사진','lab-normalize':'🧪 검사 표준화',
+    'drug-safety':'🛡️ 약물 안전','drug-search':'🔍 약물 검색','drug-normalize':'💊 약물 정규화',
+    'checkup-interpret':'💡 검진 해석','checkup-merge':'🔗 중복 병합','drug-alert':'⚠️ 약물 경고',
+    'insight':'💡 인사이트','daily-insight':'📊 일간 인사이트','monthly-insight':'📅 월간 인사이트','forecast':'🌤 예보'};
+  const bySource={};
+  allCalls.forEach(c=>{
+    const src=c.source||'기타';
+    if(!bySource[src]) bySource[src]={cost:0,count:0,inT:0,outT:0,models:{}};
+    bySource[src].cost+=c.cost||0; bySource[src].count++; bySource[src].inT+=(c.in||0); bySource[src].outT+=(c.out||0);
+    const m=c.model||'unknown';
+    if(!bySource[src].models[m]) bySource[src].models[m]={cost:0,count:0};
+    bySource[src].models[m].cost+=c.cost||0; bySource[src].models[m].count++;
+  });
+  const sourceRows=Object.entries(bySource).sort((a,b)=>b[1].cost-a[1].cost).map(([src,d])=>{
+    const label=sourceLabels[src]||src;
+    const modelDetail=Object.entries(d.models).map(([m,md])=>
+      `<span style="font-size:.58rem;padding:1px 5px;border-radius:3px;background:var(--sf);color:var(--mu)">${m.replace(/^[a-z]+-/,'')} x${md.count} $${md.cost.toFixed(4)}</span>`
+    ).join(' ');
+    return `<div style="padding:5px 0;border-bottom:1px solid var(--bd)">
+      <div style="display:flex;align-items:center;gap:6px;font-size:.78rem">
+        <span style="flex:2">${label}</span>
+        <span style="font-size:.68rem;color:var(--mu);font-family:var(--mono)">${d.count}회</span>
+        <span style="font-size:.65rem;color:var(--mu);font-family:var(--mono)">${Math.round(d.inT/1000)}K/${Math.round(d.outT/1000)}K</span>
+        <span style="font-family:var(--mono);font-weight:600;min-width:60px;text-align:right">$${d.cost.toFixed(4)}</span>
+      </div>
+      <div style="margin-top:2px;display:flex;gap:3px;flex-wrap:wrap">${modelDetail}</div>
+    </div>`;
+  }).join('');
+  const byModel={};
+  allCalls.forEach(c=>{
+    const m=c.model||'unknown';
+    if(!byModel[m]) byModel[m]={cost:0,count:0,inT:0,outT:0,aiId:c.aiId};
+    byModel[m].cost+=c.cost||0; byModel[m].count++; byModel[m].inT+=(c.in||0); byModel[m].outT+=(c.out||0);
+  });
+  const modelRows=Object.entries(byModel).sort((a,b)=>b[1].cost-a[1].cost).map(([m,d])=>{
+    const def=AI_DEFS[d.aiId];
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--bd);font-size:.75rem">
+      <div style="width:6px;height:6px;border-radius:50%;background:${def?.color||'#888'}"></div>
+      <span style="flex:2;font-size:.72rem">${m}</span>
+      <span style="font-size:.65rem;color:var(--mu);font-family:var(--mono)">${d.count}회 · ${Math.round(d.inT/1000)}K in / ${Math.round(d.outT/1000)}K out</span>
+      <span style="font-family:var(--mono);font-weight:600;min-width:60px;text-align:right">$${d.cost.toFixed(4)}</span>
+    </div>`;
+  }).join('');
+  const recentCalls=[...allCalls].sort((a,b)=>(b.date+' '+(b.time||'')).localeCompare(a.date+' '+(a.time||''))).slice(0,20);
+  const recentRows=recentCalls.map(c=>{
+    const def=AI_DEFS[c.aiId];
+    const srcLabel=sourceLabels[c.source||'']||c.source||'';
+    return `<div style="display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid var(--sf);font-size:.68rem">
+      <span style="font-family:var(--mono);color:var(--mu2);min-width:82px">${c.date.slice(5)} ${c.time||''}</span>
+      <div style="width:5px;height:5px;border-radius:50%;background:${def?.color||'#888'}"></div>
+      <span style="min-width:50px;color:var(--mu);font-size:.62rem">${(c.model||'').replace(/^[a-z]+-/,'')}</span>
+      <span style="font-size:.6rem;color:var(--ac)">${srcLabel}</span>
+      <span style="font-family:var(--mono);color:var(--mu);margin-left:auto;font-size:.62rem">${Math.round((c.in||0)/1000)}K/${Math.round((c.out||0)/1000)}K</span>
+      <span style="font-family:var(--mono);font-weight:600;min-width:50px;text-align:right">$${(c.cost||0).toFixed(4)}</span>
+    </div>`;
+  }).join('');
+  return `<div class="card">
+    <div class="card-title">📋 기능별 비용 (이번 달)</div>
+    ${sourceRows}
+  </div>
   <div class="card">
-    <div class="card-title">🤖 AI별 이번 달 (전체 통합)</div>
-    ${aiRows||'<div class="hint" style="padding:8px">이번 달 사용 내역 없음</div>'}
+    <div class="card-title">🏷 모델별 비용 (이번 달)</div>
+    ${modelRows}
+  </div>
+  <div class="card">
+    <div class="card-title">🕐 최근 호출 로그</div>
+    ${recentRows||'<div class="hint" style="padding:8px">호출 기록 없음</div>'}
   </div>`;
 }
+
 
 
 
@@ -1524,10 +1712,11 @@ function exportPDF() {
   }
 
   // Log summary
-  const last30=logs.filter(l=>(Date.now()-new Date(l.datetime))<=30*86400000);
+  const _nowTs=Date.now();
+  const last30=logs.filter(l=>{const t=typeof _logTimestamp==='function'?_logTimestamp(l):new Date(l.datetime).getTime();return !isNaN(t)&&(_nowTs-t)<=30*86400000;});
   if(last30.length) {
     html+=`<h2>증상 기록 (${last30.length}건)</h2><table><tr><th>날짜</th><th>시간</th>`;
-    html+=lc.moodMode?'<th>기분</th>':'<th>NRS</th>';
+    html+=lc.moodMode?'<th>기분</th>':'<th>${_scoreLabel()}</th>';
     html+=`<th>증상</th><th>투약</th><th>메모</th></tr>`;
     last30.forEach(l=>{
       html+=`<tr><td>${l.datetime.slice(0,10)}</td><td>${l.datetime.slice(11,16)}</td>`;
@@ -1565,35 +1754,97 @@ function renderCalendarHeatmap(logs,lc) {
   const byDate={};
   logs.forEach(l=>{
     const d=l.datetime.slice(0,10);
-    if(!byDate[d]) byDate[d]={nrs:[],count:0};
+    if(!byDate[d]) byDate[d]={nrs:[],count:0,logs:[]};
     byDate[d].count++;
+    byDate[d].logs.push(l);
     if(l.nrs>=0) byDate[d].nrs.push(l.nrs);
   });
+  window._calHeatData=byDate;
 
-  // Last 90 days
+  // Last 90 days — grid layout (7 cols = week)
   const cells=[];
   for(let i=89;i>=0;i--){
     const d=kstDaysAgo(i);
     const data=byDate[d];
+    const isToday=d===kstToday();
+    const dayNum=new Date(d+'T12:00').getDate();
     let color='var(--bd)';let title=d+': 기록없음';
     if(data?.nrs?.length) {
       const avg=data.nrs.reduce((a,b)=>a+b,0)/data.nrs.length;
       color=avg<=2?'#2d8a5a':avg<=4?'#4ade80':avg<=6?'#fbbf24':avg<=8?'#f97316':'#ef4444';
-      title=`${d}: NRS ${avg.toFixed(1)} (${data.count}건)`;
+      title=d+': '+_scoreLabel()+' '+avg.toFixed(1)+' ('+data.count+'건)';
     } else if(data?.count) {
-      color='#93c5fd'; title=`${d}: ${data.count}건 (NRS 미기록)`;
+      color='#93c5fd'; title=d+': '+data.count+'건 ('+_scoreLabel()+' 미기록)';
     }
-    cells.push(`<div style="width:10px;height:10px;border-radius:2px;background:${color}" title="${title}"></div>`);
+    cells.push('<div onclick="_showCalDetail(\''+d+'\')" style="width:12px;height:12px;border-radius:2px;background:'+color+';cursor:pointer'+(isToday?';outline:1.5px solid var(--ac)':'')+'" title="'+title+'"></div>');
   }
 
-  return `<div class="card">
-    <div class="card-title">📅 90일 캘린더 히트맵</div>
-    <div style="display:flex;flex-wrap:wrap;gap:2px;padding:4px">${cells.join('')}</div>
-    <div style="display:flex;gap:8px;justify-content:center;margin-top:6px;font-size:.6rem;color:var(--mu)">
-      <span>⬜ 없음</span><span style="color:#2d8a5a">🟩 0-2</span><span style="color:#4ade80">🟢 3-4</span>
-      <span style="color:#fbbf24">🟡 5-6</span><span style="color:#f97316">🟠 7-8</span><span style="color:#ef4444">🔴 9-10</span>
-    </div>
-  </div>`;
+  return '<div class="card">'
+    +'<div class="card-title">📅 90일 캘린더 히트맵 <span style="font-size:.6rem;color:var(--mu2);font-weight:400">클릭하여 상세 보기</span></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:2px;padding:4px">'+cells.join('')+'</div>'
+    +'<div style="display:flex;gap:8px;justify-content:center;margin-top:6px;font-size:.6rem;color:var(--mu)">'
+    +'<span>⬜ 없음</span><span style="color:#2d8a5a">🟩 0-2</span><span style="color:#4ade80">🟢 3-4</span>'
+    +'<span style="color:#fbbf24">🟡 5-6</span><span style="color:#f97316">🟠 7-8</span><span style="color:#ef4444">🔴 9-10</span>'
+    +'</div>'
+    +'<div id="cal-heat-detail"></div>'
+    +'</div>';
+}
+
+function _showCalDetail(date) {
+  var el=document.getElementById('cal-heat-detail'); if(!el) return;
+  var data=window._calHeatData?.[date];
+  if(!data||!data.logs.length) { el.innerHTML='<div style="padding:8px;font-size:.72rem;color:var(--mu);border-top:1px solid var(--bd);margin-top:8px">'+date+' — 기록 없음</div>'; return; }
+  var dayNames=['일','월','화','수','목','금','토'];
+  var dayOfWeek=dayNames[new Date(date+'T12:00').getDay()];
+  var nrsVals=data.nrs;
+  var avg=nrsVals.length?(nrsVals.reduce(function(a,b){return a+b;},0)/nrsVals.length).toFixed(1):'-';
+  var nc=avg==='-'?'var(--mu)':avg>=7?'#ef4444':avg>=4?'#f59e0b':'#10b981';
+
+  // Daily check from bungruki
+  var brkDs=S.domainState['bungruki'];
+  var dcHtml='';
+  if(brkDs?.master?.dailyChecks?.[date]){
+    var who=DC()?.user==='붕쌤'?'bung':'orangi';
+    var wd=brkDs.master.dailyChecks[date][who];
+    if(wd){
+      var items=[];
+      if(wd.weight) items.push('⚖️ '+wd.weight+'kg');
+      if(wd.exercises?.length) items.push('🏃 '+wd.exercises.map(function(e){return e.name;}).join(', '));
+      if(wd.alcohol) items.push('🍺 음주');
+      var supplLabels=Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(function(e){return[e[0],e[1].label]}));
+      var oKeys=typeof BRK_SUPPL_ORANGI!=='undefined'?BRK_SUPPL_ORANGI:[];
+      var bKeys=typeof BRK_SUPPL_BUNG!=='undefined'?BRK_SUPPL_BUNG:[];
+      var sk=who==='orangi'?oKeys:bKeys;
+      var taken=sk.filter(function(k){return wd[k];}).map(function(k){return supplLabels[k]||k;});
+      if(taken.length) items.push('💊 '+taken.join(', '));
+      if(items.length) dcHtml='<div style="font-size:.65rem;color:var(--ac);margin-top:4px">'+items.join(' · ')+'</div>';
+    }
+  }
+
+  var logsHtml=data.logs.map(function(l){
+    var time=l.datetime.slice(11,16);
+    var tags=[];
+    if(l.mood) tags.push('<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym)">'+esc(l.mood)+'</span>');
+    if(l.nrs>=0) tags.push('<span class="log-tag" style="background:'+nrsColor(l.nrs)+'20;color:'+nrsColor(l.nrs)+'">'+_scoreLabel()+' '+l.nrs+'</span>');
+    (l.symptoms||[]).forEach(function(s){tags.push('<span class="log-tag" style="background:var(--tag-sym-bg);color:var(--tag-sym);font-size:.58rem">'+esc(s)+'</span>');});
+    (l.meds||[]).forEach(function(m){tags.push('<span class="log-tag" style="background:var(--tag-med-bg);color:var(--tag-med);font-size:.58rem">'+esc(m)+'</span>');});
+    (l.treatments||[]).forEach(function(t){tags.push('<span class="log-tag" style="background:var(--tag-tx-bg);color:var(--tag-tx);font-size:.58rem">'+esc(t)+'</span>');});
+    if(l.medCheck){Object.entries(l.medCheck).forEach(function(mc){tags.push('<span class="log-tag" style="background:'+(mc[1]?'#f0fdf4':'#fef2f2')+';color:'+(mc[1]?'#15803d':'#dc2626')+';font-size:.55rem">'+(mc[1]?'✓':'✗')+' '+esc(mc[0])+'</span>');});}
+    return '<div style="display:flex;gap:6px;padding:4px 0;border-bottom:1px dotted var(--bd)">'
+      +'<span style="font-size:.65rem;font-family:var(--mono);color:var(--mu);min-width:36px">'+(time!=='00:00'?time:'')+'</span>'
+      +'<div style="flex:1;display:flex;flex-wrap:wrap;gap:2px;align-items:center">'+tags.join('')+'</div>'
+      +(l.memo?'<span style="font-size:.6rem;color:var(--mu);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.memo)+'</span>':'')
+      +'</div>';
+  }).join('');
+
+  el.innerHTML='<div style="border-top:1.5px solid var(--bd);margin-top:10px;padding-top:10px">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+    +'<span style="font-size:.82rem;font-weight:700">'+date+' ('+dayOfWeek+')</span>'
+    +'<span style="font-size:.72rem;color:'+nc+';font-weight:600">평균 '+avg+'</span>'
+    +'<span style="font-size:.62rem;color:var(--mu)">'+data.count+'건</span>'
+    +'<button onclick="document.getElementById(\'cal-heat-detail\').innerHTML=\'\'" style="margin-left:auto;font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf2);color:var(--mu);cursor:pointer">✕ 닫기</button>'
+    +'</div>'
+    +dcHtml+logsHtml+'</div>';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1678,27 +1929,166 @@ function renderMedComplianceCalendar(logs) {
 function _showMcDetail(date){
   const el=document.getElementById('mc-cal-detail');if(!el)return;
   const data=window._mcCalData?.[date];
-  let html=`<div style="border-top:1px solid var(--bd);margin-top:8px;padding-top:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-    <span style="font-size:.78rem;font-weight:600">${date}</span>`;
-  if(data?.hasRecord){
-    const rate=data.total>0?Math.round(data.taken/data.total*100):0;
-    html+=`<span style="font-size:.68rem;font-weight:600;color:${rate>=90?'#10b981':rate>=50?'#f59e0b':'#ef4444'}">${rate}%</span>`;
-  }else{html+=`<span style="font-size:.68rem;color:var(--mu2)">기록 없음</span>`;}
-  html+=`</div>`;
-  if(data?.meds&&Object.keys(data.meds).length){
-    html+=Object.entries(data.meds).map(([m,t])=>`<div style="font-size:.72rem;padding:1px 0 1px 8px">${t?'✅':'❌'} ${esc(m)}</div>`).join('');
-  }
-  if(data?.entries?.length){
-    data.entries.forEach(e=>{
-      const parts=[];
-      if(e.nrs>=0)parts.push('컨디션:'+e.nrs);
-      if(e.mood)parts.push(e.mood);
-      if(e.symptoms?.length)parts.push('증상:'+e.symptoms.join(','));
-      if(e.memo)parts.push(esc(e.memo.slice(0,40)));
-      if(parts.length)html+=`<div style="font-size:.65rem;color:var(--mu);padding:2px 0 2px 8px;border-top:1px dotted var(--bd);margin-top:3px">${e.datetime?.slice(11,16)||''} ${parts.join(' · ')}</div>`;
+  const ds=D(); const logData=ds.logData||[];
+  const dayLogs=logData.filter(l=>l.datetime?.slice(0,10)===date);
+  const entry=dayLogs[0];
+
+  // 약물 체크 (bung/ 데일리체크와 동일)
+  const condMeds=typeof getConditionMeds==='function'?getConditionMeds(date):[];
+  const existMc=entry?.medCheck||{};
+  const _isProcFn=typeof _isProcedure==='function'?_isProcedure:(m=>false);
+
+  let medsHtml='';
+  condMeds.forEach(g=>{
+    const daily=g.meds.filter(m=>!m.includes('(PRN)')&&!_isProcFn(m));
+    const prn=g.meds.filter(m=>m.includes('(PRN)')&&!_isProcFn(m));
+    if(!daily.length&&!prn.length)return;
+    medsHtml+=`<div style="font-size:.62rem;font-weight:600;color:var(--mu);margin-top:4px">${esc(g.condition||'')}</div>`;
+    daily.forEach(m=>{
+      const checked=existMc[m]||false;
+      medsHtml+=`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer" onclick="this.querySelector('input').checked=!this.querySelector('input').checked">
+        <input type="checkbox" data-mc-med="${esc(m)}" ${checked?'checked':''} style="accent-color:var(--ac)">
+        <span style="font-size:.72rem">${esc(m)}</span>
+      </div>`;
     });
+    prn.forEach(m=>{
+      const checked=existMc[m]||false;
+      medsHtml+=`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer" onclick="this.querySelector('input').checked=!this.querySelector('input').checked">
+        <input type="checkbox" data-mc-med="${esc(m)}" ${checked?'checked':''} style="accent-color:#f59e0b">
+        <span style="font-size:.72rem">${esc(m)}</span><span style="font-size:.55rem;color:#f59e0b;padding:1px 4px;border:1px dashed #f59e0b;border-radius:3px">PRN</span>
+      </div>`;
+    });
+  });
+
+  // 증상 (도메인 설정에서 가져오기)
+  const dc=DC();
+  const domSymptoms=dc?.logConfig?.symptoms||[];
+  const existSyms=entry?.symptoms||[];
+  const symsHtml=domSymptoms.length?`<div style="margin-top:6px"><div style="font-size:.62rem;font-weight:600;color:var(--mu);margin-bottom:3px">증상</div>
+    <div style="display:flex;flex-wrap:wrap;gap:3px">${domSymptoms.map(s=>{
+      const sel=existSyms.includes(s);
+      return `<span data-mc-sym="${esc(s)}" onclick="this.classList.toggle('sel')" class="log-tag${sel?' sel':''}" style="cursor:pointer;font-size:.62rem;${sel?'background:#fee2e2;color:#dc2626':'background:var(--sf);color:var(--mu)'}">${esc(s)}</span>`;
+    }).join('')}</div></div>`:'';
+
+  // NRS
+  const nrs=entry?.nrs??-1;
+  const nrsLabel=typeof _scoreLabel==='function'?_scoreLabel():'컨디션';
+
+  // 메모
+  const memo=entry?.memo||'';
+
+  let html=`<div style="border-top:1px solid var(--bd);margin-top:8px;padding-top:8px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:.78rem;font-weight:600">${date}</span>
+      ${data?.hasRecord?`<span style="font-size:.68rem;font-weight:600;color:${(data.total>0?Math.round(data.taken/data.total*100):0)>=90?'#10b981':'#f59e0b'}">${data.total>0?Math.round(data.taken/data.total*100):0}%</span>`:'<span style="font-size:.68rem;color:var(--mu2)">기록 없음</span>'}
+      <button onclick="_saveMcDetail('${date}')" style="margin-left:auto;font-size:.65rem;padding:3px 10px;border:1.5px solid var(--ac);border-radius:6px;background:var(--ac);color:#fff;cursor:pointer;font-family:var(--font);font-weight:600">💾 저장</button>
+    </div>
+    ${medsHtml}
+    ${symsHtml}
+    ${_renderMcSupplExercise(date)}
+    <div style="margin-top:6px"><div style="font-size:.62rem;font-weight:600;color:var(--mu);margin-bottom:2px">${nrsLabel} (0-10)</div>
+      <input type="range" id="mc-nrs" min="0" max="10" value="${nrs>=0?nrs:5}" style="width:100%">
+      <div style="display:flex;justify-content:space-between;font-size:.55rem;color:var(--mu)"><span>0</span><span id="mc-nrs-val">${nrs>=0?nrs:'-'}</span><span>10</span></div>
+    </div>
+    <div style="margin-top:4px"><textarea id="mc-memo" placeholder="메모..." style="width:100%;height:40px;border:1px solid var(--bd);border-radius:6px;padding:6px;font-size:.68rem;font-family:var(--font);resize:vertical;color:var(--ink);background:var(--sf2)">${esc(memo)}</textarea></div>
+  </div>`;
+  el.innerHTML=html;
+  const slider=document.getElementById('mc-nrs');
+  if(slider)slider.oninput=function(){document.getElementById('mc-nrs-val').textContent=this.value;};
+}
+
+function _renderMcSupplExercise(date) {
+  const brkDs = S.domainState['bungruki'];
+  if (!brkDs?.master) return '';
+  const m = brkDs.master;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  if (!m.dailyChecks) m.dailyChecks = {};
+  if (!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if (!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
+  const dayData = m.dailyChecks[date][who];
+
+  // 영양제
+  const oKeys = typeof BRK_SUPPL_ORANGI !== 'undefined' ? BRK_SUPPL_ORANGI : [];
+  const bKeys = typeof BRK_SUPPL_BUNG !== 'undefined' ? BRK_SUPPL_BUNG : [];
+  const supplLabels = Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(function(e){return[e[0],e[1].label]}));
+  let supplKeys = who === 'orangi' ? oKeys : bKeys;
+  // 커스텀 영양제 추가
+  if (m.customSuppl?.[who]) m.customSuppl[who].forEach(c => { if (!supplKeys.includes(c.key)) { supplKeys = [...supplKeys, c.key]; supplLabels[c.key] = c.label; } });
+  const hidden = m.hiddenSuppl?.[who] || [];
+  supplKeys = supplKeys.filter(k => !hidden.includes(k));
+
+  const supplHtml = supplKeys.map(k => {
+    const checked = dayData[k] || false;
+    return `<span data-mc-suppl="${k}" onclick="this.classList.toggle('sel')" class="${checked?'sel':''}" style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border:1px solid ${checked?'#86efac':'var(--bd)'};border-radius:6px;background:${checked?'#f0fdf4':'var(--sf2)'};cursor:pointer;font-size:.65rem;color:${checked?'#16a34a':'var(--ink)'}">${checked?'✅':'⬜'} ${esc(supplLabels[k]||k)}</span>`;
+  }).join('');
+
+  // 운동
+  const exercises = dayData.exercises || [];
+  const exSummary = exercises.length ? exercises.map(e => esc(e.name) + '(' + (e.intensity === 'light' ? '약' : e.intensity === 'intense' ? '강' : '중') + (e.duration ? ' ' + e.duration + '분' : '') + ')').join(', ') : '없음';
+
+  // 체중 + 음주
+  const weight = dayData.weight || '';
+  const alcohol = dayData.alcohol || false;
+
+  return `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd)">
+    <div style="font-size:.62rem;font-weight:600;color:var(--mu);margin-bottom:3px">💊 영양제</div>
+    <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">${supplHtml}</div>
+    <div style="font-size:.62rem;font-weight:600;color:var(--mu);margin-bottom:2px">🏃 운동: <span style="font-weight:400">${exSummary}</span></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+      <span style="font-size:.62rem;font-weight:600;color:var(--mu)">⚖️</span>
+      <input type="number" step="0.1" id="mc-weight" value="${weight}" placeholder="kg" style="width:55px;padding:2px 4px;font-size:.65rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:var(--mono);color:var(--ink);background:var(--sf2)">
+      <span style="font-size:.55rem;color:var(--mu2)">kg</span>
+      ${who === 'bung' ? `<span data-mc-alcohol onclick="this.classList.toggle('sel')" class="${alcohol?'sel':''}" style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border:1px solid ${alcohol?'#fca5a5':'var(--bd)'};border-radius:6px;background:${alcohol?'#fef2f2':'var(--sf2)'};cursor:pointer;font-size:.62rem;color:${alcohol?'#dc2626':'var(--ink)'};margin-left:auto">${alcohol?'🍺':'⬜'} 음주</span>` : ''}
+    </div>
+  </div>`;
+}
+
+async function _saveMcDetail(date){
+  const ds=D();if(!ds.logData)return;
+  let entry=ds.logData.find(l=>l.datetime?.slice(0,10)===date);
+  if(!entry){
+    entry={datetime:date+'T'+kstTimeStr(),nrs:-1,meds:[],symptoms:[],medCheck:{},memo:''};
+    ds.logData.push(entry);
   }
-  html+=`</div>`;el.innerHTML=html;
+  // medCheck
+  const mc={};
+  document.querySelectorAll('[data-mc-med]').forEach(cb=>{mc[cb.dataset.mcMed]=cb.checked;});
+  entry.medCheck=mc;
+  // 증상
+  const syms=[];
+  document.querySelectorAll('[data-mc-sym].sel').forEach(el=>{syms.push(el.dataset.mcSym);});
+  entry.symptoms=syms;
+  // NRS
+  const nrs=parseInt(document.getElementById('mc-nrs')?.value);
+  entry.nrs=isNaN(nrs)?-1:nrs;
+  // 메모
+  entry.memo=document.getElementById('mc-memo')?.value||'';
+  // meds 동기화
+  entry.meds=Object.entries(mc).filter(([,v])=>v).map(([k])=>k);
+
+  // 영양제/체중/음주 → 붕룩이 dailyChecks에 저장
+  const brkDs=S.domainState['bungruki'];
+  if(brkDs?.master){
+    const who=DC()?.user==='붕쌤'?'bung':'orangi';
+    const m=brkDs.master;
+    if(!m.dailyChecks[date])m.dailyChecks[date]={};
+    if(!m.dailyChecks[date][who])m.dailyChecks[date][who]={};
+    const dd=m.dailyChecks[date][who];
+    // 영양제
+    document.querySelectorAll('[data-mc-suppl]').forEach(el=>{
+      dd[el.dataset.mcSuppl]=el.classList.contains('sel');
+    });
+    // 체중
+    const w=document.getElementById('mc-weight')?.value;
+    dd.weight=w?parseFloat(w):null;
+    // 음주
+    const alcEl=document.querySelector('[data-mc-alcohol]');
+    if(alcEl)dd.alcohol=alcEl.classList.contains('sel');
+    try{await saveBrkMaster();}catch(e){}
+  }
+
+  try{await saveLogData();showToast('✅ '+date+' 저장됨');renderView('stats');}
+  catch(e){showToast('❌ 저장 실패');}
 }
 
 async function _syncMedsToMedCheck(){
@@ -1766,7 +2156,7 @@ async function _aiDailySummary(){
   const dc=DC();
   const data=todayLogs.map(l=>{
     const parts=[l.datetime?.slice(11,16)];
-    if(l.nrs>=0)parts.push('NRS:'+l.nrs);
+    if(l.nrs>=0)parts.push(_scoreLabel()+':'+l.nrs);
     if(l.mood)parts.push('기분:'+l.mood);
     if(l.symptoms?.length)parts.push('증상:'+l.symptoms.join(','));
     if(l.meds?.length)parts.push('약물:'+l.meds.join(','));
@@ -1780,7 +2170,7 @@ async function _aiDailySummary(){
   try{
     const aiId=S.keys.claude?'claude':S.keys.gpt?'gpt':S.keys.gemini?'gemini':null;
     if(!aiId){el.innerHTML='<div style="color:var(--re)">AI API 키를 설정하세요.</div>';return;}
-    const result=await callAI(aiId,system,'오늘('+today+') 기록:\n'+data);
+    const result=await callAI(aiId,system,'오늘('+today+') 기록:\n'+data,'daily-insight');
     el.innerHTML='<div style="font-size:.75rem;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd);line-height:1.5">'+renderMD(result)+'</div>';
   }catch(e){el.innerHTML='<div style="color:var(--re);font-size:.72rem">AI 오류: '+esc(e.message)+'</div>';}
 }
@@ -1801,7 +2191,7 @@ async function _aiMonthlyInsight(){
   });
   const summary=Object.entries(byDate).sort(([a],[b])=>a.localeCompare(b)).map(([d,v])=>{
     const parts=[d];
-    if(v.nrs.length)parts.push('NRS:'+Math.round(v.nrs.reduce((a,b)=>a+b,0)/v.nrs.length*10)/10);
+    if(v.nrs.length)parts.push(_scoreLabel()+':'+Math.round(v.nrs.reduce((a,b)=>a+b,0)/v.nrs.length*10)/10);
     if(v.symptoms.length)parts.push('증상:'+[...new Set(v.symptoms)].join(','));
     if(v.meds.length)parts.push('약물:'+[...new Set(v.meds)].join(','));
     if(v.outcomes.length)parts.push('경과:'+v.outcomes.join(','));
@@ -1817,7 +2207,7 @@ async function _aiMonthlyInsight(){
   try{
     const aiId=S.keys.claude?'claude':S.keys.gpt?'gpt':S.keys.gemini?'gemini':null;
     if(!aiId){el.innerHTML='<div style="color:var(--re)">AI API 키를 설정하세요.</div>';return;}
-    const result=await callAI(aiId,system,ds.logMonth+' 월간 기록 ('+logs.length+'건):\n'+summary);
+    const result=await callAI(aiId,system,ds.logMonth+' 월간 기록 ('+logs.length+'건):\n'+summary,'monthly-insight');
     el.innerHTML='<div style="font-size:.75rem;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd);line-height:1.5">'+renderMD(result)+'</div>';
   }catch(e){el.innerHTML='<div style="color:var(--re);font-size:.72rem">AI 오류: '+esc(e.message)+'</div>';}
 }
@@ -1910,7 +2300,9 @@ async function checkWeeklyInsight() {
   try {
     const result=await callAI('claude',
       '당신은 의료 데이터 패턴 분석 전문가입니다. 3줄 이내로 핵심만.',
-      `최근 14일 기록:\n${logSummary}\n\n특이 패턴, 추세 변화, 주의 사항이 있으면 3줄 이내로 알려주세요. 없으면 "특이사항 없음"만.`
+     `최근 14일 기록:\n${logSummary}\n\n특이 패턴, 추세 변화, 주의 사항이 있으면 3줄 이내로 알려주세요. 없으면 "특이사항 없음"만.`,
+                      'insight'
+
     );
     m.lastInsight=result;
     m.lastInsightDate=kstToday();
@@ -2006,7 +2398,7 @@ function getRating(aiId) {
 function toggleAIEnabled(aiId, checked) {
   if(!S.aiEnabled) S.aiEnabled={gpt:true,claude:true,gemini:true,grok:true,perp:true};
   S.aiEnabled[aiId]=checked;
-  try { localStorage.setItem('aiEnabled',JSON.stringify(S.aiEnabled)); } catch(e){}
+  setAppSetting('aiEnabled', S.aiEnabled);
   renderSidebarAIs();
 }
 
@@ -2018,65 +2410,162 @@ function getEnabledAIs() {
 // ═══════════════════════════════════════════════════════════════
 // #10 환자 타임라인 뷰
 // ═══════════════════════════════════════════════════════════════
+let _tlFilter = 'all';
+let _tlLimit = 50;
+function setTlFilter(f) { _tlFilter = f; _tlLimit = 50; renderView('timeline'); }
+function loadMoreTl() { _tlLimit += 50; renderView('timeline'); }
+
 function renderTimelineView() {
   const currentUser=DC().user;
   const events=[];
+  const typeIcons={log:'📊',session:'💬',medChange:'💊',checkup:'🏥',condition:'📋',exercise:'🏃',milestone:'🎯'};
 
-  // Collect logs and sessions from all loaded domains
   Object.entries(S.domainState).forEach(([domainId,ds])=>{
     const dd=DOMAINS[domainId];
     if(!dd||dd.user!==currentUser||!ds.master) return;
-    const icon=dd.icon;const label=dd.label;const color=dd.color;
-    const lc=dd.logConfig;
+    const icon=dd.icon,label=dd.label,color=dd.color,lc=dd.logConfig;
 
     // Log entries
     (ds.logData||[]).forEach(log=>{
-      const date=log.datetime?.slice(0,10)||'';
-      if(!date) return;
+      const date=log.datetime?.slice(0,10)||''; if(!date) return;
       let text='';
-      if(lc.moodMode) {
-        text=log.mood||'기분 기록';
-        if(log.symptoms?.length) text+=' — '+log.symptoms.join(', ');
-      } else if(lc.customFields) {
-        text=(log.categories||[]).join(', ')||'기록';
-        if(log.memo) text+=' — '+log.memo.substring(0,40);
-      } else if(log.nrs>=0) {
-        text=`NRS ${log.nrs} — ${(log.symptoms||[]).join(', ')||'기록'}`;
-      } else { return; }
+      if(lc.moodMode) { text=log.mood||'기분 기록'; if(log.symptoms?.length) text+=' — '+log.symptoms.join(', '); }
+      else if(lc.customFields) { text=(log.categories||[]).join(', ')||'기록'; if(log.memo) text+=' — '+log.memo.substring(0,50); }
+      else if(log.nrs>=0) { text=_scoreLabel()+' '+log.nrs+' — '+((log.symptoms||[]).join(', ')||'기록'); }
+      else return;
       events.push({date,type:'log',domain:label,icon,color,text,
-        detail:(log.meds||[]).join(', ')});
+        detail:(log.meds||[]).join(', '),
+        nrs:log.nrs,medCheck:log.medCheck,dailyChecks:log.dailyChecks});
     });
+
     // Sessions
     (ds.master?.sessions||[]).forEach(sess=>{
       events.push({date:sess.date,type:'session',domain:label,icon,color,
         text:sess.question?(sess.question.substring(0,60)+'...'):'세션',
-        detail:`R${sess.rounds?.length||0} · ${Object.keys(sess.rounds?.[0]?.answers||{}).length}개 AI`});
+        detail:'R'+(sess.rounds?.length||0)+' · '+Object.keys(sess.rounds?.[0]?.answers||{}).length+'개 AI'});
     });
+
+    // Med changes (from condition history)
+    (ds.master?.conditions||[]).forEach(c=>{
+      if(!c.medHistory?.length) return;
+      c.medHistory.forEach((h,i)=>{
+        if(i===0) return;
+        const prev=c.medHistory[i-1];
+        const added=(h.meds||[]).filter(m=>(prev.meds||[]).indexOf(m)<0);
+        const removed=(prev.meds||[]).filter(m=>(h.meds||[]).indexOf(m)<0);
+        if(!added.length&&!removed.length) return;
+        let text=c.name+': ';
+        if(added.length) text+='추가 '+added.join(', ');
+        if(added.length&&removed.length) text+=' / ';
+        if(removed.length) text+='중단 '+removed.join(', ');
+        events.push({date:h.date,type:'medChange',domain:label,icon,color,text,detail:''});
+      });
+    });
+
+    // Condition status changes
+    (ds.master?.conditions||[]).forEach(c=>{
+      if(c.diagnosisDate) {
+        events.push({date:c.diagnosisDate,type:'condition',domain:label,icon,color,
+          text:c.name+' — 진단',detail:'상태: '+(c.status||'active')});
+      }
+    });
+
+    // Checkup results
+    if(ds.master?.checkupArchive?.length) {
+      ds.master.checkupArchive.forEach(ch=>{
+        const count=ch.results?.length||0;
+        events.push({date:ch.date,type:'checkup',domain:label,icon,color,
+          text:'건강검진 ('+(ch.institution||'기관미상')+')',
+          detail:count+'항목'+(ch.aiInterpretation?' · AI해석':'')});
+      });
+    }
   });
+
+  // Exercise milestones from bungruki
+  const brkDs=S.domainState['bungruki'];
+  if(brkDs?.master?.dailyChecks) {
+    const dc=brkDs.master.dailyChecks;
+    const who=DC().user==='붕쌤'?'bung':'orangi';
+    Object.entries(dc).forEach(([date,dayData])=>{
+      const wd=dayData[who];
+      if(wd?.exercises?.length) {
+        const exStr=wd.exercises.map(e=>e.name+'('+({light:'약',moderate:'중',intense:'강'}[e.intensity]||'중')+')').join(', ');
+        events.push({date,type:'exercise',domain:'데일리',icon:'🏃',color:'#10b981',text:exStr,detail:''});
+      }
+    });
+    // Milestones
+    (brkDs.master.milestones||[]).forEach(ms=>{
+      events.push({date:ms.date,type:'milestone',domain:'임신준비',icon:'🎯',color:'#ec4899',text:ms.title||ms.text||'마일스톤',detail:ms.note||''});
+    });
+  }
 
   if(!events.length) return '<div class="hint">데이터를 로딩 중입니다... 잠시만 기다려 주세요.</div>';
 
   events.sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
-  const items=events.slice(0,50).map(e=>{
-    const typeIcon=e.type==='log'?'📊':'💬';
-    return `<div class="timeline-card">
-      <div class="timeline-event" style="border-left:3px solid ${e.color}">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span style="font-size:.68rem;color:var(--mu);font-family:var(--mono)">${e.date}</span>
-          <span style="font-size:.72rem">${typeIcon} ${e.icon} ${esc(e.domain)}</span>
-        </div>
-        <div style="font-size:.82rem;font-weight:500;color:var(--ink)">${esc(e.text)}</div>
-        ${e.detail?`<div style="font-size:.7rem;color:var(--mu);margin-top:2px">${esc(e.detail)}</div>`:''}
-      </div>
-    </div>`;
+  // Type counts for filter buttons
+  const typeCounts={};
+  events.forEach(e=>{ typeCounts[e.type]=(typeCounts[e.type]||0)+1; });
+
+  const filtered=_tlFilter==='all'?events:events.filter(e=>e.type===_tlFilter);
+  const shown=filtered.slice(0,_tlLimit);
+
+  // Group by date
+  const byDate={};
+  shown.forEach(e=>{
+    if(!byDate[e.date]) byDate[e.date]=[];
+    byDate[e.date].push(e);
+  });
+
+  const dayNames=['일','월','화','수','목','금','토'];
+  const groupsHtml=Object.entries(byDate).map(([date,evts])=>{
+    const dayOfWeek=dayNames[new Date(date+'T12:00').getDay()];
+    const evtsHtml=evts.map(e=>{
+      const ti=typeIcons[e.type]||'📋';
+      return '<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)">'
+        +'<div style="width:3px;border-radius:2px;background:'+e.color+';flex-shrink:0"></div>'
+        +'<div style="flex:1">'
+        +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">'
+        +'<span style="font-size:.72rem">'+ti+' '+e.icon+'</span>'
+        +'<span style="font-size:.68rem;font-weight:600;color:'+e.color+'">'+esc(e.domain)+'</span>'
+        +'<span style="font-size:.55rem;padding:1px 5px;border-radius:3px;background:var(--sf2);color:var(--mu)">'+esc(e.type)+'</span>'
+        +'</div>'
+        +'<div style="font-size:.78rem;color:var(--ink)">'+esc(e.text)+'</div>'
+        +(e.detail?'<div style="font-size:.65rem;color:var(--mu);margin-top:1px">'+esc(e.detail)+'</div>':'')
+        +'</div></div>';
+    }).join('');
+
+    return '<div class="card" style="padding:10px 14px;margin-bottom:6px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+      +'<span style="font-size:.78rem;font-weight:700;font-family:var(--mono)">'+date+'</span>'
+      +'<span style="font-size:.62rem;color:var(--mu)">'+dayOfWeek+'요일</span>'
+      +'<span style="font-size:.6rem;color:var(--mu);margin-left:auto">'+evts.length+'건</span>'
+      +'</div>'+evtsHtml+'</div>';
   }).join('');
 
-  return `<div class="card">
-    <div class="card-title">📅 전체 타임라인 <span class="badge badge-blue">${events.length}건</span></div>
-    ${items}
-    ${events.length>50?`<div style="text-align:center;padding:8px;font-size:.72rem;color:var(--mu)">최근 50건만 표시됩니다.</div>`:''}
-  </div>`;
+  // Filter bar
+  const filterTypes=[
+    {key:'all',label:'전체',count:events.length},
+    {key:'log',label:'📊 기록',count:typeCounts.log||0},
+    {key:'session',label:'💬 세션',count:typeCounts.session||0},
+    {key:'medChange',label:'💊 약물변경',count:typeCounts.medChange||0},
+    {key:'checkup',label:'🏥 검진',count:typeCounts.checkup||0},
+    {key:'exercise',label:'🏃 운동',count:typeCounts.exercise||0},
+    {key:'condition',label:'📋 질환',count:typeCounts.condition||0},
+    {key:'milestone',label:'🎯 마일스톤',count:typeCounts.milestone||0},
+  ].filter(f=>f.count>0||f.key==='all');
+
+  const filterBar='<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">'
+    +filterTypes.map(f=>{
+      const active=_tlFilter===f.key;
+      return '<button onclick="setTlFilter(\''+f.key+'\')" style="font-size:.62rem;padding:3px 8px;border:1px solid '+(active?'var(--ac)':'var(--bd)')+';border-radius:12px;background:'+(active?'var(--ac)':'var(--sf)')+';color:'+(active?'#fff':'var(--ink)')+';cursor:pointer;font-family:var(--font)">'+f.label+' <span style="font-size:.55rem;opacity:.7">'+f.count+'</span></button>';
+    }).join('')+'</div>';
+
+  return '<div class="card"><div class="card-title">📅 통합 타임라인 <span class="badge badge-blue">'+filtered.length+'건</span></div>'
+    +'<div style="font-size:.72rem;color:var(--mu);margin-bottom:8px">모든 도메인의 기록 · 세션 · 약물변경 · 검진 · 운동을 시간순으로 통합합니다.</div>'
+    +filterBar+'</div>'
+    +groupsHtml
+    +(filtered.length>_tlLimit?'<div style="text-align:center;padding:10px"><button onclick="loadMoreTl()" style="font-size:.72rem;padding:6px 20px;border:1.5px solid var(--ac);border-radius:8px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">더 보기 ('+(_tlLimit)+'/'+filtered.length+')</button></div>':'');
 }
 
 
@@ -2162,7 +2651,7 @@ function _renderWeeklyNrsChart(logs, dates) {
     var r=hasTx?4:2.5;
     var stroke=hasTx?'stroke="#1e40af" stroke-width="2"':'stroke="var(--sf)" stroke-width="1"';
     return '<circle cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="'+r+'" fill="'+c+'" '+stroke+'>'
-      +'<title>'+p.time+' NRS '+p.nrs+(p.meds.length?' | '+p.meds.join(', '):'')+(p.tx&&p.tx.length?' | '+p.tx.join(', '):'')+'</title></circle>';
+      +'<title>'+p.time+' '+_scoreLabel()+' '+p.nrs+(p.meds.length?' | '+p.meds.join(', '):'')+(p.tx&&p.tx.length?' | '+p.tx.join(', '):'')+'</title></circle>';
   }).join('');
   // Med/tx markers
   var markers=pts.map(function(p){
@@ -2216,9 +2705,9 @@ function renderWeeklySummaryCard() {
     // 요약 한줄 (접힌 상태)
     const firstLog=dd.logs.sort((a,b)=>(a.datetime||'').localeCompare(b.datetime||''))[0];
     const nrsVals=dd.logs.filter(l=>l.nrs>=0).map(l=>l.nrs);
-    const nrsRange=nrsVals.length?'NRS '+(nrsVals.length>1?Math.min(...nrsVals)+'~'+Math.max(...nrsVals):nrsVals[0]):'';
+    const nrsRange=nrsVals.length?_scoreLabel()+' '+(nrsVals.length>1?Math.min(...nrsVals)+'~'+Math.max(...nrsVals):nrsVals[0]):'';
     const allMeds=[...new Set(dd.logs.flatMap(l=>l.meds||[]))];
-    const previewMeds=allMeds.slice(0,2).map(m=>'<span style="font-size:.58rem;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#92400e">'+esc(m)+'</span>').join(' ');
+    const previewMeds=allMeds.slice(0,2).map(m=>'<span style="font-size:.58rem;padding:1px 4px;border-radius:3px;background:var(--tag-trigger-bg);color:var(--tag-trigger)">'+esc(m)+'</span>').join(' ');
     const allSites=[...new Set(dd.logs.flatMap(l=>l.sites||[]))];
     const previewSites=allSites.length?'<span style="font-size:.58rem;color:var(--mu)">'+allSites.slice(0,3).map(s=>esc(s)).join(', ')+'</span>':'';
 
@@ -2228,7 +2717,7 @@ function renderWeeklySummaryCard() {
       const nrs=l.nrs>=0?l.nrs:null;
       const nc=nrs===null?'var(--mu)':nrs>=7?'#ef4444':nrs>=4?'#f59e0b':'#10b981';
       const barW=nrs!==null?Math.max(5,nrs*10):0;
-      const meds=(l.meds||[]).map(m=>'<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:#fef3c7;color:#92400e">'+esc(m)+'</span>').join(' ');
+      const meds=(l.meds||[]).map(m=>'<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:var(--tag-trigger-bg);color:var(--tag-trigger)">'+esc(m)+'</span>').join(' ');
       const tx=(l.treatments||[]).map(t=>{
         if(isBlock(t)) return '<span style="font-size:.6rem;padding:1px 6px;border-radius:4px;background:#dbeafe;color:#1e40af;font-weight:700;border:1.5px solid #93c5fd">💉 '+esc(t)+'</span>';
         return '<span style="font-size:.6rem;padding:1px 5px;border-radius:3px;background:#d1fae5;color:#065f46">'+esc(t)+'</span>';
@@ -2269,7 +2758,7 @@ function renderWeeklySummaryCard() {
     +'<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0">'
     +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--ac)">'+summary.logCount+'</div><div style="font-size:.65rem;color:var(--mu)">기록</div></div>'
     +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:var(--r3)">'+summary.sessionCount+'</div><div style="font-size:.65rem;color:var(--mu)">세션</div></div>'
-    +(summary.avgNrs!==null?'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:'+avgColor+'">'+summary.avgNrs+'</div><div style="font-size:.65rem;color:var(--mu)">평균 NRS</div></div>':'')
+    +(summary.avgNrs!==null?'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:'+avgColor+'">'+summary.avgNrs+'</div><div style="font-size:.65rem;color:var(--mu)">평균 '+_scoreLabel()+'</div></div>':'')
     +'</div>'
     +svgChart
     +daysHtml
@@ -2401,7 +2890,7 @@ async function decryptData(encrypted, password) {
 }
 
 function isEncryptionEnabled() {
-  return localStorage.getItem('om_encrypt_enabled')==='true';
+  return getAppSetting('encryptEnabled')==='true';
 }
 
 function getEncryptionPassword() {
@@ -2415,11 +2904,11 @@ function toggleEncryption(enabled) {
     const confirm=prompt('비밀번호를 다시 입력하세요:');
     if(pass!==confirm) { showToast('비밀번호가 일치하지 않습니다.'); return; }
     S._encryptPass=pass;
-    localStorage.setItem('om_encrypt_enabled','true');
+    setAppSetting('encryptEnabled','true');
     showToast('🔐 데이터 암호화가 활성화되었습니다');
   } else {
     S._encryptPass=null;
-    localStorage.removeItem('om_encrypt_enabled');
+    setAppSetting('encryptEnabled',null);
     showToast('🔓 데이터 암호화가 비활성화되었습니다');
   }
 }
@@ -2445,8 +2934,8 @@ function stampVersion(master) {
 }
 
 function getDeviceId() {
-  let id=localStorage.getItem('om_device_id');
-  if(!id) { id='dev_'+Math.random().toString(36).slice(2,10); localStorage.setItem('om_device_id',id); }
+  let id=getAppSetting('deviceId');
+  if(!id) { id='dev_'+Math.random().toString(36).slice(2,10); setAppSetting('deviceId',id); }
   return id;
 }
 
@@ -2611,11 +3100,11 @@ function renderTrendChart(logs, days) {
   const dots=points.map(p=>{
     const color=nrsColor(p.avg);
     return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="2.5" fill="${color}" stroke="var(--sf)" stroke-width="1">
-      <title>${p.date}: NRS ${p.avg.toFixed(1)}</title></circle>`;
+      <title>${p.date}: ${_scoreLabel()} ${p.avg.toFixed(1)}</title></circle>`;
   }).join('');
 
   return `<div class="card">
-    <div class="card-title">📈 NRS ${days}일 추세</div>
+    <div class="card-title">📈 ${_scoreLabel()} ${days}일 추세</div>
     <svg viewBox="0 0 ${width} ${height}" style="width:100%;height:auto;max-height:150px">
       ${gridLines}
       <path d="${areaD}" fill="var(--ac)" opacity="0.08"/>
@@ -2674,8 +3163,8 @@ function renderCorrelationAnalysis(logs) {
   }).join('');
 
   return `<div class="card">
-    <div class="card-title">🔬 약물-NRS 상관분석 <span class="badge badge-blue">vs 전체 평균 ${globalAvg.toFixed(1)}</span></div>
-    <div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">투약 시 NRS가 전체 평균 대비 어떻게 변했는지 보여줍니다.</div>
+    <div class="card-title">🔬 약물-${_scoreLabel()} 상관분석 <span class="badge badge-blue">vs 전체 평균 ${globalAvg.toFixed(1)}</span></div>
+    <div style="font-size:.68rem;color:var(--mu);margin-bottom:6px">투약 시 ${_scoreLabel()}가 전체 평균 대비 어떻게 변했는지 보여줍니다.</div>
     ${rows}
     <div style="font-size:.6rem;color:var(--mu);margin-top:8px">※ 상관관계는 인과관계를 의미하지 않습니다. 최소 3회 이상 투약 데이터 기준.</div>
   </div>`;
@@ -2751,8 +3240,8 @@ function renderMedEffectAnalysis(logs) {
   }).join('');
 
   return `<div class="card">
-    <div class="card-title">💊 약물 효과 추적 <span class="badge badge-green">복용→다음날 NRS 변화</span></div>
-    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">약물 복용일과 다음날의 평균 NRS 변화를 비교합니다.</div>
+    <div class="card-title">💊 약물 효과 추적 <span class="badge badge-green">복용→다음날 ${_scoreLabel()} 변화</span></div>
+    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">약물 복용일과 다음날의 평균 ${_scoreLabel()} 변화를 비교합니다.</div>
     ${rows}
     <div style="font-size:.6rem;color:var(--mu);margin-top:8px">※ 최소 3회 이상 복용 데이터 기준. 다른 요인이 영향을 줄 수 있습니다.</div>
   </div>`;
@@ -2834,17 +3323,17 @@ function renderMedSummaryReport(logs) {
     return `<div style="display:flex;align-items:center;gap:6px;padding:6px 0;${i<ranked.length-1?'border-bottom:1px solid var(--bd)':''}">
       <span style="font-size:.85rem;width:22px;text-align:center">${medal[i]||''}</span>
       <span style="font-size:.8rem;font-weight:600;min-width:80px;flex:1">${esc(r.item)}</span>
-      <div style="text-align:center;min-width:55px"><div style="font-size:.72rem">${nrsStr}</div><div style="font-size:.55rem;color:var(--mu2)">NRS변화</div></div>
+      <div style="text-align:center;min-width:55px"><div style="font-size:.72rem">${nrsStr}</div><div style="font-size:.55rem;color:var(--mu2)">${_scoreLabel()}변화</div></div>
       <div style="text-align:center;min-width:45px"><div style="font-size:.72rem">${outcomeStr}</div><div style="font-size:.55rem;color:var(--mu2)">호전율</div></div>
       <div style="text-align:center;min-width:35px"><div style="font-size:.72rem;font-family:var(--mono)">${r.days}</div><div style="font-size:.55rem;color:var(--mu2)">일</div></div>
     </div>`;
   }).join('');
 
-  const baseline=noMedAvg!==null?`<div style="font-size:.68rem;color:var(--mu);margin-top:8px;padding:6px 8px;background:var(--sf2);border-radius:6px">📊 비교 기준: 약/시술 없는 날 평균 NRS <b>${noMedAvg.toFixed(1)}</b> | 전체 평균 <b>${allNrsAvg.toFixed(1)}</b></div>`:'';
+  const baseline=noMedAvg!==null?`<div style="font-size:.68rem;color:var(--mu);margin-top:8px;padding:6px 8px;background:var(--sf2);border-radius:6px">📊 비교 기준: 약/시술 없는 날 평균 ${_scoreLabel()} <b>${noMedAvg.toFixed(1)}</b> | 전체 평균 <b>${allNrsAvg.toFixed(1)}</b></div>`:'';
 
   return `<div class="card">
-    <div class="card-title">📋 약물 종합 효과 리포트 <span class="badge badge-green">NRS + 경과 통합</span></div>
-    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">NRS 변화와 경과 평가를 종합하여 효과 순으로 정렬합니다.</div>
+    <div class="card-title">📋 약물 종합 효과 리포트 <span class="badge badge-green">${_scoreLabel()} + 경과 통합</span></div>
+    <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">${_scoreLabel()} 변화와 경과 평가를 종합하여 효과 순으로 정렬합니다.</div>
     ${rows}${baseline}
     <div style="font-size:.58rem;color:var(--mu2);margin-top:6px">※ 최소 3일 이상 사용 기준. 다른 요인(날씨·수면·트리거)이 영향을 줄 수 있습니다.</div>
   </div>`;
@@ -2884,7 +3373,7 @@ function detectDangerousPatterns() {
     else { consecHigh=0; }
   });
   if(maxConsec>=3) {
-    warnings.push({level:'high',icon:'🔴',text:`${maxConsec}일 연속 NRS 7 이상 — 전문의 상담을 권장합니다`});
+    warnings.push({level:'high',icon:'🔴',text:`${maxConsec}일 연속 ${_scoreLabel()} 7 이상 — 전문의 상담을 권장합니다`});
   }
 
   // 2. 투약 빈도 과다: 7일 중 5일 이상 진통제 사용
@@ -2897,7 +3386,7 @@ function detectDangerousPatterns() {
     warnings.push({level:'moderate',icon:'🟡',text:`최근 7일 중 ${medDays.size}일 투약 — 약물 과용 두통(MOH) 주의`});
   }
 
-  // 3. NRS 악화 추세: 최근 7일 평균 > 이전 7일 평균
+  // 3. ${_scoreLabel()} 악화 추세: 최근 7일 평균 > 이전 7일 평균
   const prev7=logs.filter(l=>{
     const diff=Math.round((new Date(today+'T00:00:00')-new Date(l.datetime.slice(0,10)+'T00:00:00'))/86400000);
     return diff>7&&diff<=14;
@@ -2908,7 +3397,7 @@ function detectDangerousPatterns() {
     const curAvg=cur7Nrs.reduce((a,b)=>a+b,0)/cur7Nrs.length;
     const prevAvg=prev7Nrs.reduce((a,b)=>a+b,0)/prev7Nrs.length;
     if(curAvg-prevAvg>=2) {
-      warnings.push({level:'moderate',icon:'📈',text:`NRS 악화 추세: 이전 주 평균 ${prevAvg.toFixed(1)} → 이번 주 ${curAvg.toFixed(1)} (+${(curAvg-prevAvg).toFixed(1)})`});
+      warnings.push({level:'moderate',icon:'📈',text:`${_scoreLabel()} 악화 추세: 이전 주 평균 ${prevAvg.toFixed(1)} → 이번 주 ${curAvg.toFixed(1)} (+${(curAvg-prevAvg).toFixed(1)})`});
     }
   }
 
@@ -2991,7 +3480,7 @@ function exportMonthlyPDF() {
     table{width:100%;border-collapse:collapse;margin:8px 0;font-size:10px}
     th{background:#e8f0fe;padding:5px 8px;text-align:left;font-weight:600;border:1px solid #ddd}
     td{border:1px solid #ddd;padding:4px 8px}
-    .nrs-high{background:#fee2e2;color:#991b1b}.nrs-med{background:#fef3c7;color:#92400e}.nrs-low{background:#d1fae5;color:#065f46}
+    .nrs-high{background:#fee2e2;color:#991b1b}.nrs-med{background:var(--tag-trigger-bg);color:var(--tag-trigger)}.nrs-low{background:#d1fae5;color:#065f46}
     .freq-bar{display:inline-block;height:8px;border-radius:4px;margin-right:6px;vertical-align:middle}
     .section{margin-bottom:16px;page-break-inside:avoid}
     .footer{margin-top:24px;padding-top:12px;border-top:1px solid #ddd;font-size:9px;color:#999;text-align:center}
@@ -3005,9 +3494,9 @@ function exportMonthlyPDF() {
   // Summary stats
   html+=`<div class="stat-grid">
     <div class="stat-box"><div class="stat-val">${last30.length}</div><div class="stat-label">총 기록 수</div></div>
-    <div class="stat-box"><div class="stat-val">${avgNrs}</div><div class="stat-label">평균 NRS</div></div>
-    <div class="stat-box"><div class="stat-val">${maxNrs}</div><div class="stat-label">최대 NRS</div></div>
-    <div class="stat-box"><div class="stat-val">${attackDays}일</div><div class="stat-label">발작일(NRS4+)</div></div>
+    <div class="stat-box"><div class="stat-val">${avgNrs}</div><div class="stat-label">평균 ${_scoreLabel()}</div></div>
+    <div class="stat-box"><div class="stat-val">${maxNrs}</div><div class="stat-label">최대 ${_scoreLabel()}</div></div>
+    <div class="stat-box"><div class="stat-val">${attackDays}일</div><div class="stat-label">${DC()?.logConfig?.moodMode?'저조일':_scoreLabel()+'4+'}</div></div>
     <div class="stat-box"><div class="stat-val">${medDays}일</div><div class="stat-label">투약일</div></div>
   </div>`;
 
@@ -3044,7 +3533,7 @@ function exportMonthlyPDF() {
     html+=`<div class="week-row">
       <strong style="min-width:50px">${weekLabels[wi]}</strong>
       <span>기록 ${w.length}건</span>
-      <span>평균 NRS: ${wAvg}</span>
+      <span>평균 ${_scoreLabel()}: ${wAvg}</span>
       <span>최대: ${wMax}</span>
       <span>투약: ${wMeds}일</span>
     </div>`;
@@ -3053,7 +3542,7 @@ function exportMonthlyPDF() {
 
   // Detailed log table
   if(last30.length) {
-    html+=`<div class="section"><h2>상세 기록</h2><table><tr><th>날짜</th><th>시간</th><th>NRS</th><th>증상</th><th>투약</th><th>메모</th></tr>`;
+    html+=`<div class="section"><h2>상세 기록</h2><table><tr><th>날짜</th><th>시간</th><th>${_scoreLabel()}</th><th>증상</th><th>투약</th><th>메모</th></tr>`;
     last30.forEach(l=>{
       const nrsCls=l.nrs>=7?'nrs-high':l.nrs>=4?'nrs-med':'nrs-low';
       html+=`<tr><td>${l.datetime.slice(0,10)}</td><td>${l.datetime.slice(11,16)}</td>
@@ -3104,7 +3593,7 @@ function generateAIQuestionSuggestions() {
   // Pattern 1: High NRS frequency
   const highNrs=recent.filter(l=>l.nrs>=7);
   if(highNrs.length>=3) {
-    suggestions.push(`최근 2주간 NRS 7 이상이 ${highNrs.length}회 발생했습니다. 예방약 조정이 필요한지 검토해 주세요.`);
+    suggestions.push(`최근 2주간 ${_scoreLabel()} 7 이상이 ${highNrs.length}회 발생했습니다. 예방약 조정이 필요한지 검토해 주세요.`);
   }
 
   // Pattern 2: Same symptom recurring
@@ -3134,7 +3623,7 @@ function generateAIQuestionSuggestions() {
     const prev=first7.reduce((a,l)=>a+l.nrs,0)/first7.length;
     const cur=last7.reduce((a,l)=>a+l.nrs,0)/last7.length;
     if(cur-prev>=1.5) {
-      suggestions.push(`NRS가 악화 추세입니다 (${prev.toFixed(1)}→${cur.toFixed(1)}). 악화 원인과 치료 전략 변경을 논의해 주세요.`);
+      suggestions.push(`${_scoreLabel()}가 악화 추세입니다 (${prev.toFixed(1)}→${cur.toFixed(1)}). 악화 원인과 치료 전략 변경을 논의해 주세요.`);
     }
   }
 
@@ -3249,5 +3738,392 @@ function _renderBungrukiStats(){
       ${semen.length?`<div style="font-size:.65rem;color:var(--mu)">검사일: ${semen[0].date}</div>`:''}
       ${hormone.length?`<div style="font-size:.78rem;margin-top:6px">호르몬: ${Object.entries(hormone[0].values).map(([k,v])=>k+':'+v).join(' · ')}</div>`:''}
       <button onclick="switchView('meds')" style="margin-top:8px;font-size:.72rem;padding:5px 14px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">📋 검사 결과 관리 →</button>
+    </div>
+    ${_renderIntimacyStats(m)}`;
+}
+
+// ── 관계 빈도 통계 + 가임기 적중률 ──
+function _renderIntimacyStats(m) {
+  const dc = m.dailyChecks || {};
+  const cycles = (m.menstrualCycles || []).sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const avgLen = typeof getAvgCycleLength === 'function' ? getAvgCycleLength(cycles) : 28;
+
+  // 관계 기록 수집 (최근 180일)
+  const today = kstToday();
+  const records = [];
+  for (let i = 0; i < 180; i++) {
+    const d = kstDaysAgo(i);
+    if (dc[d]?.intimacy) records.push({ date: d, ...dc[d].intimacy });
+  }
+  if (!records.length) return '';
+  records.reverse(); // 오래된 순
+
+  // 월별 빈도
+  const byMonth = {};
+  records.forEach(r => { const m2 = r.date.slice(0, 7); byMonth[m2] = (byMonth[m2] || 0) + 1; });
+  const monthKeys = Object.keys(byMonth).sort();
+  const avgPerMonth = records.length && monthKeys.length ? Math.round(records.length / monthKeys.length * 10) / 10 : 0;
+
+  // 주별 빈도 (최근 12주)
+  const weekCounts = [];
+  for (let w = 0; w < 12; w++) {
+    let cnt = 0;
+    for (let d = 0; d < 7; d++) {
+      const dt = kstDaysAgo(w * 7 + d);
+      if (dc[dt]?.intimacy) cnt++;
+    }
+    weekCounts.push(cnt);
+  }
+  weekCounts.reverse();
+  const maxWeek = Math.max(...weekCounts, 1);
+
+  // 주별 바 차트
+  const weekBars = weekCounts.map((c, i) => {
+    const h = Math.round(c / maxWeek * 40);
+    const label = i === weekCounts.length - 1 ? '이번주' : (weekCounts.length - 1 - i) + '주전';
+    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0">
+      <div style="font-size:.5rem;color:var(--mu);margin-bottom:2px">${c}</div>
+      <div style="width:100%;max-width:18px;height:${h}px;background:${c ? '#ec4899' : 'var(--bd)'};border-radius:3px 3px 0 0"></div>
+      <div style="font-size:.42rem;color:var(--mu2);margin-top:2px">${i % 2 === 0 ? label : ''}</div>
     </div>`;
+  }).join('');
+
+  // 가임기 적중률 계산
+  let fertileCount = 0, ovDayCount = 0, nonFertileCount = 0;
+  const ovDayDiffs = []; // 배란일 기준 차이 수집 (히스토그램용)
+  records.forEach(r => {
+    if (typeof _getFertileStatus !== 'function') return;
+    const fs = _getFertileStatus(m, r.date);
+    if (fs.status === 'ovulation') { ovDayCount++; fertileCount++; }
+    else if (fs.status === 'fertile') fertileCount++;
+    else nonFertileCount++;
+    if (fs.daysToOv !== null && Math.abs(fs.daysToOv) <= 7) ovDayDiffs.push(fs.daysToOv);
+  });
+  const totalWithStatus = fertileCount + nonFertileCount;
+  const fertileRate = totalWithStatus ? Math.round(fertileCount / totalWithStatus * 100) : 0;
+
+  // 배란일 기준 타이밍 히스토그램 (-7 ~ +7)
+  const histogram = {};
+  for (let d = -7; d <= 7; d++) histogram[d] = 0;
+  ovDayDiffs.forEach(d => { if (histogram[d] !== undefined) histogram[d]++; });
+  const maxHist = Math.max(...Object.values(histogram), 1);
+  const histBars = [];
+  for (let d = -7; d <= 7; d++) {
+    const c = histogram[d];
+    const h = Math.round(c / maxHist * 50);
+    const isFertile = d >= -3 && d <= 3;
+    const isOv = d === 0;
+    const color = isOv ? '#8b5cf6' : isFertile ? '#ec4899' : 'var(--bd2)';
+    const bg = c ? color : 'var(--bd)';
+    histBars.push(`<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0">
+      <div style="font-size:.48rem;color:${c ? color : 'var(--mu2)'};margin-bottom:1px">${c || ''}</div>
+      <div style="width:100%;max-width:14px;height:${h || 2}px;background:${bg};border-radius:2px 2px 0 0"></div>
+      <div style="font-size:.45rem;color:${isOv ? '#8b5cf6' : 'var(--mu2)'};margin-top:1px;font-weight:${isOv ? '700' : '400'}">${d > 0 ? '+' + d : d}</div>
+    </div>`);
+  }
+
+  return `<div class="card">
+    <div class="card-title">❤️ 관계 빈도 통계</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+      <div style="text-align:center;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+        <div style="font-size:.68rem;color:var(--mu)">총 기록</div>
+        <div style="font-size:1.2rem;font-weight:700;color:#ec4899">${records.length}회</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+        <div style="font-size:.68rem;color:var(--mu)">월 평균</div>
+        <div style="font-size:1.2rem;font-weight:700;color:var(--ink)">${avgPerMonth}회</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">
+        <div style="font-size:.68rem;color:var(--mu)">가임기 비율</div>
+        <div style="font-size:1.2rem;font-weight:700;color:${fertileRate >= 50 ? '#10b981' : fertileRate >= 30 ? '#f59e0b' : '#ef4444'}">${fertileRate}%</div>
+      </div>
+    </div>
+    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">📊 주간 빈도 (12주)</div>
+    <div style="display:flex;gap:2px;align-items:flex-end;height:60px;padding:0 4px;margin-bottom:12px">${weekBars}</div>
+    ${monthKeys.length ? `<div style="font-size:.62rem;color:var(--mu);margin-bottom:8px">월별: ${monthKeys.slice(-4).map(k => k.slice(5) + '월 ' + byMonth[k] + '회').join(' · ')}</div>` : ''}
+  </div>
+  ${ovDayDiffs.length ? `<div class="card">
+    <div class="card-title">🎯 가임기 적중률</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="flex:1;text-align:center;padding:8px;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:8px">
+        <div style="font-size:.62rem;color:#be185d">가임기 내</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#ec4899">${fertileCount}회</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:8px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px">
+        <div style="font-size:.62rem;color:#6d28d9">배란 추정일</div>
+        <div style="font-size:1.1rem;font-weight:700;color:#8b5cf6">${ovDayCount}회</div>
+      </div>
+      <div style="flex:1;text-align:center;padding:8px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px">
+        <div style="font-size:.62rem;color:var(--mu)">비가임기</div>
+        <div style="font-size:1.1rem;font-weight:700;color:var(--mu)">${nonFertileCount}회</div>
+      </div>
+    </div>
+    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">📈 배란일 기준 타이밍 (D-7 ~ D+7)</div>
+    <div style="display:flex;gap:1px;align-items:flex-end;height:65px;padding:0 2px;margin-bottom:4px">${histBars.join('')}</div>
+    <div style="display:flex;justify-content:center;gap:12px;font-size:.55rem;color:var(--mu)">
+      <span style="color:#ec4899">● 가임기 (D-3~D+3)</span>
+      <span style="color:#8b5cf6">● 배란 추정일 (D0)</span>
+    </div>
+    <div style="font-size:.62rem;color:var(--mu2);margin-top:6px;text-align:center">
+      💡 D-2~D0 타이밍이 임신 확률 가장 높음 (배란 2일 전~당일)
+    </div>
+  </div>` : ''}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HEALTH DASHBOARD STATS — 건강관리 도메인 전용 통계
+// ═══════════════════════════════════════════════════════════════
+function _renderHealthDashboardStats(logs, last30, dc, lc) {
+  var brkDs = S.domainState['bungruki'];
+  if (!brkDs || !brkDs.master) return '';
+  var m = brkDs.master;
+  var dc2 = m.dailyChecks || {};
+  var who = dc.user === '붕쌤' ? 'bung' : 'orangi';
+
+  // Collect last 30 days of daily check data
+  var days30 = [];
+  for (var i = 29; i >= 0; i--) { days30.push(kstDaysAgo(i)); }
+  var dcData = days30.map(function(d) {
+    var dayD = dc2[d]; if (!dayD) return null;
+    var w = dayD[who]; if (!w) return null;
+    return { date: d, data: w };
+  }).filter(Boolean);
+
+  if (!dcData.length) return '';
+  var html = '';
+
+  // ── 체중 추세 ──
+  var weightData = dcData.filter(function(d) { return d.data.weight; }).map(function(d) { return { date: d.date, val: d.data.weight }; });
+  if (weightData.length >= 2) {
+    var wMin = Math.min.apply(null, weightData.map(function(d) { return d.val; })) - 1;
+    var wMax = Math.max.apply(null, weightData.map(function(d) { return d.val; })) + 1;
+    var wRange = wMax - wMin || 1;
+    var wW = 400, wH = 100, wPad = 35;
+    var wPts = weightData.map(function(d, i) {
+      var x = wPad + (i / (weightData.length - 1 || 1)) * (wW - wPad * 2);
+      var y = 10 + (1 - (d.val - wMin) / wRange) * (wH - 25);
+      return { x: x, y: y, val: d.val, date: d.date };
+    });
+    var wPath = wPts.map(function(p, i) { return (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
+    var wDots = wPts.map(function(p) {
+      return '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="3" fill="var(--ac)" stroke="var(--sf)" stroke-width="1"><title>' + p.date + ': ' + p.val + 'kg</title></circle>';
+    }).join('');
+    var latest = weightData[weightData.length - 1].val;
+    var first = weightData[0].val;
+    var diff = (latest - first).toFixed(1);
+    var diffColor = diff > 0 ? '#10b981' : diff < 0 ? '#ef4444' : 'var(--mu)';
+    html += '<div class="card"><div class="card-title">⚖️ 체중 추세</div>'
+      + '<div style="display:flex;gap:16px;margin-bottom:8px">'
+      + '<div style="text-align:center"><div style="font-size:1.3rem;font-weight:700">' + latest + '</div><div style="font-size:.6rem;color:var(--mu)">현재 (kg)</div></div>'
+      + '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:600;color:' + diffColor + '">' + (diff > 0 ? '+' : '') + diff + '</div><div style="font-size:.6rem;color:var(--mu)">변화</div></div>'
+      + '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:600">' + weightData.length + '</div><div style="font-size:.6rem;color:var(--mu)">기록일</div></div>'
+      + '</div>'
+      + '<svg viewBox="0 0 ' + wW + ' ' + wH + '" style="width:100%;height:auto;max-height:120px">'
+      + '<text x="' + (wPad - 4) + '" y="15" text-anchor="end" font-size="8" fill="var(--mu)">' + wMax.toFixed(0) + '</text>'
+      + '<text x="' + (wPad - 4) + '" y="' + (wH - 12) + '" text-anchor="end" font-size="8" fill="var(--mu)">' + wMin.toFixed(0) + '</text>'
+      + '<line x1="' + wPad + '" y1="10" x2="' + wPad + '" y2="' + (wH - 15) + '" stroke="var(--bd)" stroke-width="0.5"/>'
+      + '<path d="' + wPath + '" fill="none" stroke="var(--ac)" stroke-width="2" stroke-linecap="round"/>'
+      + wDots + '</svg></div>';
+  }
+
+  // ── 운동 일수/강도 추세 ──
+  var exData = dcData.filter(function(d) { return d.data.exercises && d.data.exercises.length; });
+  if (exData.length) {
+    var totalDays = exData.length;
+    var exTypes = {};
+    var intCount = { light: 0, moderate: 0, intense: 0 };
+    exData.forEach(function(d) {
+      d.data.exercises.forEach(function(e) {
+        exTypes[e.name] = (exTypes[e.name] || 0) + 1;
+        intCount[e.intensity || 'moderate']++;
+      });
+    });
+    var topEx = Object.entries(exTypes).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 5);
+    var maxEx = topEx[0] ? topEx[0][1] : 1;
+    var intTotal = intCount.light + intCount.moderate + intCount.intense || 1;
+    html += '<div class="card"><div class="card-title">🏃 운동 통계 (30일)</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'
+      + '<div style="text-align:center;background:var(--sf2);padding:8px;border-radius:8px;border:1px solid var(--bd)"><div style="font-size:1.2rem;font-weight:700;color:var(--ac)">' + totalDays + '</div><div style="font-size:.6rem;color:var(--mu)">운동일</div></div>'
+      + '<div style="text-align:center;background:var(--sf2);padding:8px;border-radius:8px;border:1px solid var(--bd)"><div style="font-size:1.2rem;font-weight:700;color:#10b981">' + Math.round(totalDays / 30 * 100) + '%</div><div style="font-size:.6rem;color:var(--mu)">실천율</div></div>'
+      + '<div style="text-align:center;background:var(--sf2);padding:8px;border-radius:8px;border:1px solid var(--bd)"><div style="font-size:1.2rem;font-weight:700;color:#f59e0b">' + Object.keys(exTypes).length + '</div><div style="font-size:.6rem;color:var(--mu)">종류</div></div>'
+      + '</div>'
+      + '<div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">강도 분포</div>'
+      + '<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin-bottom:10px">'
+      + (intCount.light ? '<div style="width:' + Math.round(intCount.light / intTotal * 100) + '%;background:#10b981" title="약 ' + intCount.light + '회"></div>' : '')
+      + (intCount.moderate ? '<div style="width:' + Math.round(intCount.moderate / intTotal * 100) + '%;background:#f59e0b" title="중 ' + intCount.moderate + '회"></div>' : '')
+      + (intCount.intense ? '<div style="width:' + Math.round(intCount.intense / intTotal * 100) + '%;background:#ef4444" title="강 ' + intCount.intense + '회"></div>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:12px;font-size:.6rem;color:var(--mu);margin-bottom:8px"><span style="color:#10b981">● 약 ' + intCount.light + '</span><span style="color:#f59e0b">● 중 ' + intCount.moderate + '</span><span style="color:#ef4444">● 강 ' + intCount.intense + '</span></div>'
+      + '<div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">운동 빈도</div>'
+      + topEx.map(function(e) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><span style="font-size:.72rem;min-width:70px;text-align:right">' + esc(e[0]) + '</span>'
+          + '<div style="flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden"><div style="width:' + Math.round(e[1] / maxEx * 100) + '%;height:100%;background:var(--ac);border-radius:4px"></div></div>'
+          + '<span style="font-size:.62rem;color:var(--mu)">' + e[1] + '회</span></div>';
+      }).join('')
+      + '</div>';
+  }
+
+  // ── 영양제 순응도 ──
+  var oKeys = typeof BRK_SUPPL_ORANGI !== 'undefined' ? BRK_SUPPL_ORANGI : [];
+  var bKeys = typeof BRK_SUPPL_BUNG !== 'undefined' ? BRK_SUPPL_BUNG : [];
+  var supplKeys = who === 'orangi' ? [...oKeys] : [...bKeys];
+  var supplLabels = Object.fromEntries(Object.entries(typeof BRK_SUPPL_LABELS!=='undefined'?BRK_SUPPL_LABELS:{}).map(function(e){return[e[0],e[1].label]}));
+  if (m.customSuppl && m.customSuppl[who]) m.customSuppl[who].forEach(function(c) { if (supplKeys.indexOf(c.key) < 0) { supplKeys.push(c.key); supplLabels[c.key] = c.label; } });
+  if (supplKeys.length && dcData.length) {
+    var supplStats = {};
+    supplKeys.forEach(function(k) { supplStats[k] = { taken: 0, total: dcData.length }; });
+    dcData.forEach(function(d) {
+      supplKeys.forEach(function(k) { if (d.data[k]) supplStats[k].taken++; });
+    });
+    var overallSuppl = supplKeys.length ? Math.round(supplKeys.reduce(function(s, k) { return s + (supplStats[k].taken / supplStats[k].total * 100); }, 0) / supplKeys.length) : 0;
+    var supplColor = overallSuppl >= 80 ? '#10b981' : overallSuppl >= 50 ? '#f59e0b' : '#ef4444';
+    html += '<div class="card"><div class="card-title">💊 영양제 순응도 (30일)</div>'
+      + '<div style="text-align:center;margin-bottom:10px"><span style="font-size:1.5rem;font-weight:700;color:' + supplColor + '">' + overallSuppl + '%</span><span style="font-size:.72rem;color:var(--mu)"> 평균 순응도</span></div>'
+      + supplKeys.map(function(k) {
+        var s = supplStats[k];
+        var pct = Math.round(s.taken / s.total * 100);
+        var c = pct >= 80 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><span style="font-size:.72rem;min-width:80px;text-align:right">' + esc(supplLabels[k] || k) + '</span>'
+          + '<div style="flex:1;height:10px;background:var(--bd);border-radius:5px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:' + c + ';border-radius:5px"></div></div>'
+          + '<span style="font-size:.68rem;font-weight:600;color:' + c + ';min-width:36px">' + pct + '%</span>'
+          + '<span style="font-size:.55rem;color:var(--mu)">' + s.taken + '/' + s.total + '</span></div>';
+      }).join('')
+      + '</div>';
+  }
+
+  // ── 음주 패턴 (붕쌤) ──
+  if (who === 'bung') {
+    var alcoholDays = dcData.filter(function(d) { return d.data.alcohol; });
+    if (alcoholDays.length) {
+      html += '<div class="card"><div class="card-title">🍺 음주 기록 (30일)</div>'
+        + '<div style="display:flex;gap:16px;margin-bottom:8px">'
+        + '<div style="text-align:center"><div style="font-size:1.3rem;font-weight:700;color:#dc2626">' + alcoholDays.length + '</div><div style="font-size:.6rem;color:var(--mu)">음주일</div></div>'
+        + '<div style="text-align:center"><div style="font-size:1.1rem;font-weight:600">' + Math.round(alcoholDays.length / dcData.length * 100) + '%</div><div style="font-size:.6rem;color:var(--mu)">빈도</div></div>'
+        + '</div></div>';
+    }
+  }
+
+  return html;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CROSS-DOMAIN CORRELATION — 도메인 간 상관분석
+// ═══════════════════════════════════════════════════════════════
+function _renderCrossDomainCorrelation() {
+  var currentUser = DC().user;
+  var domainPairs = [];
+  var domainLogs = {};
+
+  Object.entries(S.domainState).forEach(function(e) {
+    var domId = e[0], ds = e[1];
+    var dd = DOMAINS[domId];
+    if (!dd || dd.user !== currentUser || !ds.logData || !ds.logData.length) return;
+    domainLogs[domId] = {};
+    ds.logData.forEach(function(l) {
+      var d = l.datetime ? l.datetime.slice(0, 10) : '';
+      if (!d) return;
+      if (!domainLogs[domId][d]) domainLogs[domId][d] = { nrs: [], mood: [], dailyChecks: {} };
+      if (l.nrs >= 0) domainLogs[domId][d].nrs.push(l.nrs);
+      if (l.mood) domainLogs[domId][d].mood.push(l.mood);
+      if (l.dailyChecks) {
+        Object.entries(l.dailyChecks).forEach(function(dc) {
+          domainLogs[domId][d].dailyChecks[dc[0]] = dc[1];
+        });
+      }
+    });
+  });
+
+  var domIds = Object.keys(domainLogs);
+  if (domIds.length < 2) return '';
+
+  // Find correlations between domains
+  var correlations = [];
+  for (var i = 0; i < domIds.length; i++) {
+    for (var j = i + 1; j < domIds.length; j++) {
+      var d1 = domIds[i], d2 = domIds[j];
+      var dd1 = DOMAINS[d1], dd2 = DOMAINS[d2];
+      var commonDates = Object.keys(domainLogs[d1]).filter(function(d) { return domainLogs[d2][d]; });
+      if (commonDates.length < 5) continue;
+
+      // NRS correlation
+      var pairs = commonDates.map(function(d) {
+        var nrs1 = domainLogs[d1][d].nrs.length ? domainLogs[d1][d].nrs.reduce(function(a, b) { return a + b; }, 0) / domainLogs[d1][d].nrs.length : null;
+        var nrs2 = domainLogs[d2][d].nrs.length ? domainLogs[d2][d].nrs.reduce(function(a, b) { return a + b; }, 0) / domainLogs[d2][d].nrs.length : null;
+        return { nrs1: nrs1, nrs2: nrs2 };
+      }).filter(function(p) { return p.nrs1 !== null && p.nrs2 !== null; });
+
+      if (pairs.length >= 5) {
+        var avg1 = pairs.reduce(function(s, p) { return s + p.nrs1; }, 0) / pairs.length;
+        var avg2 = pairs.reduce(function(s, p) { return s + p.nrs2; }, 0) / pairs.length;
+        var cov = pairs.reduce(function(s, p) { return s + (p.nrs1 - avg1) * (p.nrs2 - avg2); }, 0) / pairs.length;
+        var std1 = Math.sqrt(pairs.reduce(function(s, p) { return s + (p.nrs1 - avg1) * (p.nrs1 - avg1); }, 0) / pairs.length);
+        var std2 = Math.sqrt(pairs.reduce(function(s, p) { return s + (p.nrs2 - avg2) * (p.nrs2 - avg2); }, 0) / pairs.length);
+        var r = (std1 && std2) ? (cov / (std1 * std2)) : 0;
+        correlations.push({
+          label: dd1.icon + ' ' + dd1.label + ' ↔ ' + dd2.icon + ' ' + dd2.label,
+          r: r, n: pairs.length, type: 'nrs'
+        });
+      }
+
+      // Daily check vs NRS correlation
+      var dcKeys = {};
+      commonDates.forEach(function(d) {
+        var dc = domainLogs[d1][d].dailyChecks;
+        Object.keys(dc).forEach(function(k) { dcKeys[k] = true; });
+        dc = domainLogs[d2][d].dailyChecks;
+        Object.keys(dc).forEach(function(k) { dcKeys[k] = true; });
+      });
+
+      Object.keys(dcKeys).forEach(function(dcKey) {
+        // Check which domain has this daily check and which has NRS
+        var dcDom = null, nrsDom = null;
+        if (domainLogs[d1][commonDates[0]] && domainLogs[d1][commonDates[0]].dailyChecks[dcKey] !== undefined) dcDom = d1;
+        else if (domainLogs[d2][commonDates[0]] && domainLogs[d2][commonDates[0]].dailyChecks[dcKey] !== undefined) dcDom = d2;
+        nrsDom = dcDom === d1 ? d2 : d1;
+
+        if (!dcDom) return;
+        var dcPairs = commonDates.map(function(d) {
+          var dcVal = domainLogs[dcDom][d].dailyChecks[dcKey];
+          var nrsVal = domainLogs[nrsDom][d].nrs.length ? domainLogs[nrsDom][d].nrs.reduce(function(a, b) { return a + b; }, 0) / domainLogs[nrsDom][d].nrs.length : null;
+          return { dc: dcVal, nrs: nrsVal };
+        }).filter(function(p) { return p.dc !== undefined && p.nrs !== null; });
+
+        if (dcPairs.length >= 5) {
+          var avgDc = dcPairs.reduce(function(s, p) { return s + p.dc; }, 0) / dcPairs.length;
+          var avgNrs = dcPairs.reduce(function(s, p) { return s + p.nrs; }, 0) / dcPairs.length;
+          var covDc = dcPairs.reduce(function(s, p) { return s + (p.dc - avgDc) * (p.nrs - avgNrs); }, 0) / dcPairs.length;
+          var stdDc = Math.sqrt(dcPairs.reduce(function(s, p) { return s + (p.dc - avgDc) * (p.dc - avgDc); }, 0) / dcPairs.length);
+          var stdNrs = Math.sqrt(dcPairs.reduce(function(s, p) { return s + (p.nrs - avgNrs) * (p.nrs - avgNrs); }, 0) / dcPairs.length);
+          var rr = (stdDc && stdNrs) ? (covDc / (stdDc * stdNrs)) : 0;
+          if (Math.abs(rr) >= 0.2) {
+            var nrsDd = DOMAINS[nrsDom];
+            correlations.push({
+              label: dcKey + ' → ' + nrsDd.icon + ' ' + nrsDd.label,
+              r: rr, n: dcPairs.length, type: 'dc'
+            });
+          }
+        }
+      });
+    }
+  }
+
+  if (!correlations.length) return '';
+
+  correlations.sort(function(a, b) { return Math.abs(b.r) - Math.abs(a.r); });
+  var rows = correlations.slice(0, 8).map(function(c) {
+    var absR = Math.abs(c.r);
+    var color = c.r > 0 ? '#ef4444' : '#10b981';
+    var strength = absR >= 0.7 ? '강함' : absR >= 0.4 ? '보통' : '약함';
+    var dir = c.r > 0 ? '양의 상관' : '음의 상관';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bd)">'
+      + '<span style="font-size:.72rem;min-width:140px">' + esc(c.label) + '</span>'
+      + '<div style="flex:1;height:8px;background:var(--bd);border-radius:4px;overflow:hidden"><div style="width:' + Math.round(absR * 100) + '%;height:100%;background:' + color + ';border-radius:4px"></div></div>'
+      + '<span style="font-size:.65rem;font-weight:600;color:' + color + ';min-width:70px">' + dir + '</span>'
+      + '<span style="font-size:.58rem;color:var(--mu)">' + c.r.toFixed(2) + ' (' + strength + ', n=' + c.n + ')</span></div>';
+  }).join('');
+
+  return '<div class="card"><div class="card-title">🔗 도메인 간 상관분석</div>'
+    + '<div style="font-size:.68rem;color:var(--mu);margin-bottom:8px">같은 날 기록된 서로 다른 도메인의 점수/컨디션 간 상관관계입니다.</div>'
+    + rows
+    + '<div style="font-size:.58rem;color:var(--mu2);margin-top:8px">※ 5일 이상 동시 기록 필요. 상관관계 ≠ 인과관계</div></div>';
 }

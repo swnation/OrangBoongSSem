@@ -35,12 +35,12 @@ async function _decryptKeys(encrypted, pin) {
 async function saveKeysEncrypted() {
   if(!S._keyPin||!Object.keys(S.keys).length) return;
   const enc=await _encryptKeys(S.keys,S._keyPin);
-  localStorage.setItem(_KEY_STORAGE,enc);
-  localStorage.removeItem(_KEY_LEGACY); // 평문 제거
+  _storageSet(_KEY_STORAGE,enc);
+  _storageRemove(_KEY_LEGACY); // 평문 제거
 }
 
 async function loadKeysWithPin(pin) {
-  const enc=localStorage.getItem(_KEY_STORAGE);
+  const enc=_storageGet(_KEY_STORAGE);
   if(!enc) return false;
   try {
     S.keys=await _decryptKeys(enc,pin);
@@ -51,7 +51,7 @@ async function loadKeysWithPin(pin) {
 
 function _migrateKeysIfNeeded() {
   // 평문 키가 있으면 메모리에 로드 (PIN 설정 시 암호화 저장됨)
-  const legacy=localStorage.getItem(_KEY_LEGACY);
+  const legacy=_storageGet(_KEY_LEGACY);
   if(legacy) {
     try { S.keys=JSON.parse(legacy); } catch(e) { S.keys={}; }
   }

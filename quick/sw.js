@@ -1,8 +1,9 @@
-const CACHE_NAME = 'orangi-quick-v16';
+const CACHE_NAME = 'orangi-quick-v23';
 const PRECACHE = [
   './',
   './index.html',
   './rate.html',
+  '../js/storage.js',
   '../style.css',
   '../icons/head-front.png',
   '../icons/head-back.png',

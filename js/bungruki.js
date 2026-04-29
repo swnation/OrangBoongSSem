@@ -106,6 +106,35 @@ const _PREGNANCY_SAFETY = {
   'Magnesium': { fda:'A', pllr:'안전, 전자간증 예방/치료', kfda:'안전', note:'편두통 예방에도 사용' },
 };
 
+// 남성 복용 시 임신·정자에 미치는 영향 DB
+const _MALE_FERTILITY_IMPACT = {
+  'Lithium': {impact:'주의',note:'정자 운동성 20-30% 감소 보고. 혈중 농도 0.6-0.8 유지 시 영향 최소화 가능. 임신 시도 3개월 전 감량 검토. 대안: Lamotrigine',ref:'Koren 2020, Ghosh 2014',washout:'중단 후 약 3개월 회복'},
+  'Valproate': {impact:'위험',note:'정자 운동성 25-40% 감소, 형태 이상 증가, DNA 분절 2배. 용량 의존적(>1000mg/일 시 심함). 대안: Lamotrigine, Lithium 저용량',ref:'Engeland 2019, Røste 2003',washout:'중단 후 3-6개월 회복'},
+  'Carbamazepine': {impact:'주의',note:'정자 농도 15-20% 감소, 운동성 저하. Valproate보다 영향 적음. 대안: Lamotrigine',ref:'Isojärvi 2004, Röste 2003',washout:'중단 후 약 3개월 회복'},
+  'Topiramate': {impact:'주의',note:'정자 형태 이상 보고(비정상 형태 증가). 체중 감소로 인한 간접 영향도 가능. 편두통 예방 대안: 마그네슘, 프로프라놀롤',ref:'Hamed 2015',washout:'중단 후 약 3개월'},
+  'Lamotrigine': {impact:'안전',note:'정자 수·운동성·형태에 유의미한 영향 없음. 남성 기분안정제 중 가임력에 가장 안전한 선택',ref:'Rønning 2019',washout:''},
+  'Escitalopram': {impact:'주의',note:'SSRI 계열 — 정자 DNA 분절 30-40% 증가, 운동성 10-15% 감소. 세로토닌이 고환 혈류·정자 성숙에 관여. 임신 시도 3개월 전 감량/전환 검토. 대안: Bupropion',ref:'Tanrikut 2010, Akasheh 2014',washout:'중단 후 2-3개월 회복'},
+  'Sertraline': {impact:'주의',note:'SSRI — 정자 DNA 분절 증가, 정액량 감소 보고. SSRI 중에서는 비교적 영향 적은 편. 장기 복용(>3개월)이 더 영향',ref:'Tanrikut 2010',washout:'중단 후 2-3개월 회복'},
+  'Fluoxetine': {impact:'주의',note:'SSRI — 정자 DNA 분절·운동성 감소. 긴 반감기(4-6일)로 중단 후에도 수주간 영향. 대안: Bupropion',ref:'Safarinejad 2008',washout:'중단 후 3개월 이상 필요'},
+  'Paroxetine': {impact:'주의',note:'SSRI 중 정자 DNA 손상이 가장 많이 보고됨. 중단 시 금단 증상 심해 점진 감량 필수. 대안: Bupropion, Mirtazapine',ref:'Tanrikut 2010',washout:'점진 감량 1개월 + 회복 2-3개월'},
+  'Venlafaxine': {impact:'경미',note:'SNRI — SSRI보다 정자 영향 적음. 노르에피네프린 효과가 정자에 미치는 영향은 미미. 고용량(>150mg)에서 주의',ref:'Koyuncu 2012',washout:'중단 후 약 2개월 회복'},
+  'Bupropion': {impact:'안전',note:'세로토닌 비관여 → 정자에 유의미한 영향 없음. SSRI에서 전환 시 가장 많이 추천되는 대안',ref:'Tanrikut 2010',washout:''},
+  'Quetiapine': {impact:'경미',note:'프로락틴 경미 상승 → 성욕·발기 기능 일부 영향 가능. 정자 직접 영향은 미보고. 비정형 항정신병약 중에서는 양호',ref:'Montejo 2020',washout:''},
+  'Aripiprazole': {impact:'안전',note:'프로락틴 상승 최소(오히려 감소시킬 수 있음) → 성기능·정자 영향 거의 없음. 항정신병약 중 가장 가임력 친화적',ref:'Montejo 2020',washout:''},
+  'Concerta': {impact:'안전',note:'Methylphenidate — 정자 수·운동성·형태에 유의미한 영향 없음. 교감신경 자극이 사정에 영향줄 수 있으나 임상적으로 미미',ref:'Ramasamy 2014',washout:''},
+  'Atomoxetine': {impact:'경미',note:'동물실험에서 고용량 시 정자 생성 감소 보고. 인체에서는 데이터 부족. 임신 시도 시 필요성 재평가 권장',ref:'Eli Lilly PI',washout:'중단 후 약 3개월'},
+  'Metformin': {impact:'안전',note:'정자 질 개선 보고도 있음(항산화 효과). 비만 남성에서 테스토스테론 개선. 가임력에 긍정적',ref:'Morgante 2011',washout:''},
+  'Finasteride': {impact:'위험',note:'5α-환원효소 억제 → DHT 감소 → 정자 농도 평균 34% 감소, 정액량 감소. 1mg(탈모)도 5mg(전립선)과 유사한 영향. 반드시 중단',ref:'Samplaski 2013, Amory 2007',washout:'중단 후 3-6개월 회복'},
+  'Dutasteride': {impact:'위험',note:'Finasteride보다 더 강력(type 1+2 억제). 반감기 매우 김(5주). 정자 농도·정액량 심각 감소',ref:'Amory 2007',washout:'중단 후 6개월 이상 필요'},
+  'Testosterone': {impact:'위험',note:'외부 테스토스테론 → 시상하부 피드백으로 FSH/LH 완전 억제 → 정자 생성 중단(무정자증). 임신 시도 시 절대 금기. 남성 피임 수준의 효과',ref:'ASRM 2020, Patel 2019',washout:'중단 후 3-12개월 회복(개인차 큼)'},
+  'Sulfasalazine': {impact:'위험',note:'정자 농도 60-80% 감소, 운동성 급감, 형태 이상. 엽산 대사 방해 메커니즘. 대안: Mesalazine(5-ASA, 정자 무영향)',ref:'Hoeltzenbein 2014, O\'Morain 1984',washout:'중단 후 2-3개월 회복'},
+  'Colchicine': {impact:'주의',note:'미세소관 억제 → 정자 형성(감수분열) 방해. 장기 저용량은 비교적 안전하나 임신 시도 시 중단 권장',ref:'Merlin 1972, Ben-Chetrit 2003',washout:'중단 후 약 3개월'},
+  'Methotrexate': {impact:'위험',note:'엽산 길항 → 정자 DNA 합성 직접 독성. 기형 유발 가능(동물). 반드시 중단 후 충분한 세척 기간 필요. 중단 중 엽산 5mg/일 보충',ref:'Weber-Schoendorfer 2014',washout:'중단 후 최소 3개월(권장 6개월)'},
+  'Propranolol': {impact:'안전',note:'정자에 유의미한 영향 없음. 편두통 예방 목적 사용 시 가임력 우려 없음',ref:'Burnett 2011',washout:''},
+  'Losartan': {impact:'안전',note:'남성에서는 정자·가임력에 영향 없음. (여성은 2-3분기 금기이나 남성 복용은 무관)',ref:'',washout:''},
+  'Enalapril': {impact:'안전',note:'남성에서는 정자·가임력에 영향 없음. (여성은 2-3분기 금기이나 남성 복용은 무관)',ref:'',washout:''},
+};
+
 const _DEFAULT_MILESTONES = [
   { id: 1, who: '오랑이', label: '산부인과 preconception visit', done: false, doneDate: null },
   { id: 2, who: '오랑이', label: '풍진 항체 확인', done: false, doneDate: null },
@@ -214,10 +243,12 @@ function buildCycleCalendarCells(calMonth, today, periodDays, fertileDays, ovDay
       if (oData.exercise||bData.exercise) ic.push('🏃');
       if (oData.treatment||bData.treatment) ic.push('🏥');
       if (oData.memo||bData.memo) ic.push('📝');
+      // 복용 순응도 체크 여부
+      if (bData.mc && Object.values(bData.mc).some(function(v){return v;})) ic.push('🏥');
       // 누구 기록인지 표시
       var whoMark='';
       var hasO=BRK_SUPPL_ORANGI.some(function(k){return oData[k];})||oData.exercise||oData.treatment||oData.memo;
-      var hasB=BRK_SUPPL_BUNG.some(function(k){return bData[k];})||bData.exercise||bData.treatment||bData.memo;
+      var hasB=BRK_SUPPL_BUNG.some(function(k){return bData[k];})||bData.exercise||bData.treatment||bData.memo||bData.mc;
       if(hasO&&hasB)whoMark='<span style="font-size:.35rem">🧡🩵</span>';
       else if(hasO)whoMark='<span style="font-size:.35rem">🧡</span>';
       else if(hasB)whoMark='<span style="font-size:.35rem">🩵</span>';
@@ -493,7 +524,13 @@ function brkOpenCycleForm() {
 function brkTogglePeriodDay(ds) {
   var el = document.getElementById('brk-cyc-start');
   if (el && document.getElementById('brk-cycle-form').style.display !== 'none') {
+    // 생리 기록 폼이 열려있으면 시작일 설정
     el.value = ds;
+  } else {
+    // 폼이 닫혀있으면 해당 날짜의 데일리체크로 이동
+    _brkCheckDate = ds;
+    _brkDashTab = 'daily';
+    renderView('meds');
   }
 }
 
@@ -555,6 +592,7 @@ async function brkProcessCyclePhoto(input) {
         });
         var data = await resp.json();
         result = data.content?.[0]?.text || '';
+        if(data.usage) recordUsage('claude', S.models?.claude||'claude-sonnet-4-20250514', data.usage.input_tokens||0, data.usage.output_tokens||0, 'photo-ocr');
       } else {
         var resp = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -566,6 +604,7 @@ async function brkProcessCyclePhoto(input) {
         });
         var data = await resp.json();
         result = data.choices?.[0]?.message?.content || '';
+        if(data.usage) recordUsage('gpt', S.models?.gpt||'gpt-4o', data.usage.prompt_tokens||0, data.usage.completion_tokens||0, 'photo-ocr');
       }
       // Parse JSON from response
       var jsonMatch = result.match(/\[[\s\S]*?\]/);
@@ -679,6 +718,51 @@ function renderCrossSyncStatus(date, who) {
 var BRK_SUPPL_ORANGI = ['folicAcid','iron','vitaminD','multivitamin','magnesium'];
 var BRK_SUPPL_BUNG = ['arginine','coq10','silymarin','multivitamin'];
 
+// 약물명→영양제 키 매핑 (quick/메인앱 약물 기록 → 붕룩이 영양제 자동 체크)
+var _MED_TO_SUPPL_MAP = {
+  'magnesium':'magnesium','마그네슘':'magnesium','마그네숨':'magnesium','magnesium 350mg':'magnesium','마그네슘 350mg':'magnesium',
+  'folic acid':'folicAcid','엽산':'folicAcid',
+  '철분':'iron','iron':'iron',
+  'vitamin d':'vitaminD','비타민d':'vitaminD','비타민D':'vitaminD',
+  'multivitamin':'multivitamin','멀티비타민':'multivitamin',
+  'arginine':'arginine','아르기닌':'arginine',
+  'coq10':'coq10','코큐텐':'coq10',
+  'silymarin':'silymarin','실리마린':'silymarin',
+};
+
+// 약물 기록에서 영양제 자동 체크 (도메인/유저 자동 판별)
+function syncMedsToBrkSuppl(meds, date, who) {
+  if(!meds?.length) return;
+  var m=getBrkMaster(); if(!m) return;
+  if(!m.dailyChecks[date]) m.dailyChecks[date]={};
+  var whoKey=who||'orangi';
+  if(!m.dailyChecks[date][whoKey]) m.dailyChecks[date][whoKey]={};
+  var dayData=m.dailyChecks[date][whoKey];
+  var customs=_getBrkCustomSuppl(whoKey);
+  var changed=false;
+  meds.forEach(function(med){
+    var medLower=med.toLowerCase().trim();
+    // 1) 기본 매핑 테이블 (정확 일치)
+    var supplKey=_MED_TO_SUPPL_MAP[medLower]||_MED_TO_SUPPL_MAP[med];
+    // 2) 기본 영양제 라벨 부분 일치 (마그네슘 350mg → 마그네슘)
+    if(!supplKey && typeof BRK_SUPPL_LABELS==='object'){
+      Object.entries(BRK_SUPPL_LABELS).forEach(function(e){
+        if(!supplKey && (medLower.includes(e[1].label.toLowerCase()) || e[1].label.toLowerCase().includes(medLower))) supplKey=e[0];
+      });
+    }
+    // 3) 커스텀 영양제 이름 매칭 (부분 일치)
+    if(!supplKey){
+      var found=customs.find(function(c){ return medLower.includes(c.key)||medLower.includes(c.label.toLowerCase())||c.label.toLowerCase().includes(medLower); });
+      if(found) supplKey=found.key;
+    }
+    if(supplKey&&!dayData[supplKey]){
+      dayData[supplKey]=true;
+      changed=true;
+    }
+  });
+  if(changed) saveBrkMaster().catch(function(e){console.warn('syncMedsToBrkSuppl:',e);});
+}
+
 function _getBrkWhoData(m) {
   if (!m) m = getBrkMaster(); if (!m) return null;
   var selDate = _brkCheckDate || kstToday();
@@ -718,7 +802,13 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
   var customs=_getBrkCustomSuppl(who2);
   if(isOrangi) customs.forEach(function(c){orangiItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
   else customs.forEach(function(c){bungItems.push({key:c.key,label:c.label,icon:'💊',custom:true});});
-  var items = isOrangi ? orangiItems : bungItems;
+  // 숨긴 항목 필터링 (1회 순회 + Set)
+  var hidden=_getBrkHiddenSuppl(who2);
+  var hiddenSet=new Set(hidden);
+  var allItems = isOrangi ? orangiItems : bungItems;
+  var items = [];
+  var hiddenItems = [];
+  allItems.forEach(function(it){ (hiddenSet.has(it.key)?hiddenItems:items).push(it); });
 
   var checkHtml = items.map(function(it) {
     var checked = whoData[it.key] ? true : false;
@@ -727,9 +817,15 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
       + '<span style="font-size:1.2rem">'+(checked?'✅':it.icon)+'</span>'
       + '<span style="font-size:.82rem;font-weight:'+(checked?'600':'400')+';color:'+(checked?'#16a34a':'var(--tx)')+'">'+it.label+'</span>'
       + '</div>'
-      + (it.custom?'<button onclick="_brkRemoveSuppl(\''+esc(it.key)+'\')" style="background:none;border:none;color:var(--re);cursor:pointer;font-size:.8rem;padding:4px 8px" title="삭제">✕</button>':'')
+      + '<button onclick="'+(it.custom?'_brkRemoveSuppl':'_brkHideSuppl')+'(\''+esc(it.key)+'\')" style="background:none;border:none;color:var(--mu2);cursor:pointer;font-size:.7rem;padding:4px 6px" title="'+(it.custom?'삭제':'숨기기')+'">✕</button>'
       + '</div>';
   }).join('');
+  // 숨긴 항목 복원
+  if(hiddenItems.length) {
+    checkHtml += '<div style="margin-top:8px;font-size:.65rem;color:var(--mu)">숨긴 항목: '
+      + hiddenItems.map(function(it){ return '<button onclick="_brkUnhideSuppl(\''+esc(it.key)+'\')" style="background:none;border:1px dashed var(--bd);border-radius:4px;padding:1px 6px;font-size:.62rem;color:var(--mu);cursor:pointer;margin:0 2px" title="다시 표시">'+it.icon+' '+it.label+' ↩</button>'; }).join('')
+      + '</div>';
+  }
   // 추가 버튼
   checkHtml += '<div style="display:flex;gap:6px;margin-top:8px"><input id="brk-suppl-add" class="dx-form-input" placeholder="영양제/약물 이름" style="flex:1;font-size:.78rem;padding:6px 10px"><button onclick="_brkAddSuppl()" style="font-size:.72rem;padding:6px 12px;border:1.5px solid var(--ac);border-radius:6px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font);white-space:nowrap">+ 추가</button></div>';
 
@@ -758,7 +854,201 @@ function _brkRenderSuppl(isOrangi, whoData, m, today) {
     + '<div style="margin-top:14px;padding:10px;background:var(--sf2);border-radius:8px;border:1px solid var(--bd)">'
     + '<div style="font-size:.75rem;font-weight:600;color:var(--mu);margin-bottom:6px">📊 주간 요약 (최근 7일)</div>'
     + '<div style="display:flex;flex-direction:column;gap:4px">'+weekSummary+'</div>'
+    + '</div>'
+    + (isOrangi ? '' : _brkRenderMedCompliance(m, _brkCheckDate || today));
+}
+
+// ── 붕쌤 질환별 복용 순응도 ──
+
+function _getBungConditions() {
+  // 붕쌤의 모든 도메인에서 active 질환 + 약물 수집
+  var result = [];
+  Object.entries(S.domainState).forEach(function(entry) {
+    var domainId = entry[0], ds = entry[1];
+    var dd = DOMAINS[domainId];
+    if (!dd || dd.user !== '붕쌤' || !ds.master?.conditions) return;
+    ds.master.conditions.forEach(function(c) {
+      if (c.status !== 'active' && c.status !== 'remission') return;
+      if (!c.medsList?.length) return;
+      var daily = [], prn = [];
+      c.medsList.forEach(function(m) { (m.includes('(PRN)') ? prn : daily).push(m); });
+      result.push({ id: c.id || c.name, name: c.name, domain: dd.label, icon: dd.icon, daily: daily, prn: prn, domainId: domainId });
+    });
+  });
+  return result;
+}
+
+function _getMedComplianceConfig() {
+  var m = getBrkMaster();
+  return m?.medComplianceConfig || {};
+}
+
+async function _saveMedComplianceConfig(config) {
+  var m = getBrkMaster(); if (!m) return;
+  m.medComplianceConfig = config;
+  await saveBrkMaster();
+}
+
+function _brkToggleMedComplianceCondition(condKey) {
+  var config = _getMedComplianceConfig();
+  if (!config.tracked) config.tracked = {};
+  config.tracked[condKey] = !config.tracked[condKey];
+  _saveMedComplianceConfig(config);
+  renderView('meds');
+}
+
+function _brkToggleMedCheck(medKey) {
+  var r = _getBrkWhoData(); if (!r) return;
+  if (!r.whoData.mc) r.whoData.mc = {};
+  r.whoData.mc[medKey] = !r.whoData.mc[medKey];
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _brkRenderMedCompliance(m, selDate) {
+  var conds = _getBungConditions();
+  if (!conds.length) return '';
+  var config = _getMedComplianceConfig();
+  var tracked = config.tracked || {};
+  var anyTracked = Object.keys(tracked).some(function(k) { return tracked[k]; });
+
+  // 질환 선택 패널
+  var selectorId = 'brk-mc-selector';
+  var selectorHtml = '<div id="'+selectorId+'" style="display:none;margin-bottom:10px;padding:8px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:8px">'
+    + '<div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:6px">순응도 추적할 질환 선택</div>'
+    + conds.map(function(c) {
+      var key = c.domainId + '_' + (c.id || c.name);
+      var on = tracked[key];
+      return '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:.75rem">'
+        + '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="_brkToggleMedComplianceCondition(\'' + esc(key) + '\')" style="width:16px;height:16px;accent-color:var(--ac)">'
+        + '<span>' + c.icon + ' ' + esc(c.name) + '</span>'
+        + '<span style="font-size:.6rem;color:var(--mu2)">' + esc(c.domain) + ' · 매일 ' + c.daily.length + '개' + (c.prn.length ? ' + PRN ' + c.prn.length + '개' : '') + '</span>'
+        + '</label>';
+    }).join('')
     + '</div>';
+
+  // 선택된 질환의 복용 체크
+  var dayData = m.dailyChecks[selDate] || {};
+  var bData = dayData.bung || {};
+  var mc = bData.mc || {};
+
+  var compHtml = '';
+  conds.forEach(function(c) {
+    var key = c.domainId + '_' + (c.id || c.name);
+    if (!tracked[key]) return;
+
+    var medsHtml = c.daily.map(function(med) {
+      var mk = key + '_' + med;
+      var checked = mc[mk];
+      return '<div onclick="_brkToggleMedCheck(\'' + esc(mk) + '\')" style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + (checked ? '#f0fdf4' : 'var(--sf2)') + ';border:1.5px solid ' + (checked ? '#86efac' : 'var(--bd)') + ';border-radius:8px;cursor:pointer;margin-bottom:3px">'
+        + '<span style="font-size:1rem">' + (checked ? '✅' : '💊') + '</span>'
+        + '<span style="font-size:.78rem;font-weight:' + (checked ? '600' : '400') + ';color:' + (checked ? '#16a34a' : 'var(--tx)') + '">' + esc(med.replace(/\s*\(PRN\)/i, '')) + '</span>'
+        + '<span style="font-size:.58rem;color:var(--mu2);margin-left:auto">매일</span>'
+        + '</div>';
+    }).join('');
+
+    medsHtml += c.prn.map(function(med) {
+      var mk = key + '_' + med;
+      var checked = mc[mk];
+      return '<div onclick="_brkToggleMedCheck(\'' + esc(mk) + '\')" style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:' + (checked ? '#fffbeb' : 'var(--sf2)') + ';border:1.5px solid ' + (checked ? '#fde68a' : 'var(--bd)') + ';border-radius:8px;cursor:pointer;margin-bottom:3px;border-style:' + (checked ? 'solid' : 'dashed') + '">'
+        + '<span style="font-size:1rem">' + (checked ? '✅' : '💊') + '</span>'
+        + '<span style="font-size:.78rem;font-weight:' + (checked ? '600' : '400') + ';color:' + (checked ? '#92400e' : 'var(--tx)') + '">' + esc(med.replace(/\s*\(PRN\)/i, '')) + '</span>'
+        + '<span style="font-size:.58rem;color:#f59e0b;margin-left:auto">PRN</span>'
+        + '</div>';
+    }).join('');
+
+    compHtml += '<div style="margin-bottom:8px">'
+      + '<div style="font-size:.72rem;font-weight:600;color:var(--ink);margin-bottom:4px">' + c.icon + ' ' + esc(c.name) + ' <span style="font-size:.58rem;font-weight:400;color:var(--mu2)">' + esc(c.domain) + '</span></div>'
+      + medsHtml
+      + '</div>';
+  });
+
+  if (!anyTracked) {
+    compHtml = '<div style="font-size:.72rem;color:var(--mu2);text-align:center;padding:8px">아래 ⚙️ 버튼으로 추적할 질환을 선택하세요.</div>';
+  }
+
+  // 주간 순응도 (선택된 질환의 daily 약물만)
+  var weekCompHtml = '';
+  if (anyTracked) {
+    var today2 = kstToday();
+    var trackedMeds = [];
+    conds.forEach(function(c) {
+      var ckey = c.domainId + '_' + (c.id || c.name);
+      if (!tracked[ckey]) return;
+      c.daily.forEach(function(med) { trackedMeds.push({ key: ckey + '_' + med, label: med.replace(/\s*\(PRN\)/i, '') }); });
+    });
+    if (trackedMeds.length) {
+      weekCompHtml = '<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px">';
+      trackedMeds.forEach(function(tm) {
+        var count = 0;
+        for (var i = 0; i < 7; i++) {
+          var d = new Date(new Date(today2 + 'T00:00:00').getTime() - i * 86400000);
+          var ds2 = _localDateStr(d);
+          var dd2 = m.dailyChecks[ds2];
+          if (dd2?.bung?.mc?.[tm.key]) count++;
+        }
+        var pct = Math.round(count / 7 * 100);
+        weekCompHtml += '<div style="display:flex;align-items:center;gap:6px;font-size:.72rem">'
+          + '<span style="width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">💊 ' + esc(tm.label) + '</span>'
+          + '<span style="flex:1;height:5px;background:var(--bd);border-radius:3px;overflow:hidden"><span style="display:block;height:100%;width:' + pct + '%;background:' + (pct >= 80 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#ef4444') + ';border-radius:3px"></span></span>'
+          + '<span style="font-weight:600;color:' + (pct >= 80 ? '#16a34a' : pct >= 50 ? '#f59e0b' : '#ef4444') + '">' + count + '/7</span>'
+          + '</div>';
+      });
+      weekCompHtml += '</div>';
+    }
+  }
+
+  return '<div style="margin-top:14px;padding:10px;background:var(--sf2);border-radius:8px;border:1.5px solid var(--bd)">'
+    + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'
+    + '<div style="font-size:.78rem;font-weight:600;color:var(--ink)">🏥 질환별 복용 체크</div>'
+    + '<button onclick="var d=document.getElementById(\'' + selectorId + '\');d.style.display=d.style.display===\'none\'?\'block\':\'none\'" style="margin-left:auto;background:none;border:1px solid var(--bd);border-radius:6px;padding:2px 8px;font-size:.65rem;color:var(--mu);cursor:pointer;font-family:var(--font)">⚙️ 질환 선택</button>'
+    + '</div>'
+    + selectorHtml
+    + compHtml
+    + (weekCompHtml || anyTracked ? '<div style="margin-top:8px;padding:8px;background:var(--sf);border-radius:6px;border:1px solid var(--bd)">'
+      + '<div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:4px">📊 종합 순응도 (7일)</div>'
+      + weekCompHtml
+      + _brkWeekSupplExercise(m)
+      + '</div>' : '')
+    + '</div>';
+}
+
+function _brkWeekSupplExercise(m) {
+  var today2 = kstToday();
+  var html = '';
+  // 붕쌤 영양제 순응도
+  var supplKeys = BRK_SUPPL_BUNG;
+  var customs = _getBrkCustomSuppl('bung');
+  var hidden = _getBrkHiddenSuppl('bung');
+  var hiddenSet = new Set(hidden);
+  var allSuppl = supplKeys.concat(customs.map(function(c){return c.key;})).filter(function(k){return !hiddenSet.has(k);});
+  if (allSuppl.length) {
+    var supplCount = 0;
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(new Date(today2+'T00:00:00').getTime() - i*86400000);
+      var ds = _localDateStr(d);
+      var dd = m.dailyChecks[ds]?.bung || {};
+      if (allSuppl.some(function(k){return dd[k];})) supplCount++;
+    }
+    var supplPct = Math.round(supplCount/7*100);
+    html += '<div style="display:flex;align-items:center;gap:6px;font-size:.72rem">'
+      + '<span style="width:80px">💊 영양제</span>'
+      + '<span style="flex:1;height:5px;background:var(--bd);border-radius:3px;overflow:hidden"><span style="display:block;height:100%;width:'+supplPct+'%;background:'+(supplPct>=80?'#16a34a':supplPct>=50?'#f59e0b':'#ef4444')+';border-radius:3px"></span></span>'
+      + '<span style="font-weight:600;color:'+(supplPct>=80?'#16a34a':supplPct>=50?'#f59e0b':'#ef4444')+'">'+supplCount+'/7</span></div>';
+  }
+  // 운동 순응도
+  var exCount = 0;
+  for (var j = 0; j < 7; j++) {
+    var d2 = new Date(new Date(today2+'T00:00:00').getTime() - j*86400000);
+    var ds2 = _localDateStr(d2);
+    if (m.dailyChecks[ds2]?.bung?.exercise) exCount++;
+  }
+  var exPct = Math.round(exCount/7*100);
+  html += '<div style="display:flex;align-items:center;gap:6px;font-size:.72rem">'
+    + '<span style="width:80px">🏃 운동</span>'
+    + '<span style="flex:1;height:5px;background:var(--bd);border-radius:3px;overflow:hidden"><span style="display:block;height:100%;width:'+exPct+'%;background:'+(exPct>=80?'#16a34a':exPct>=50?'#f59e0b':'#ef4444')+';border-radius:3px"></span></span>'
+    + '<span style="font-weight:600;color:'+(exPct>=80?'#16a34a':exPct>=50?'#f59e0b':'#ef4444')+'">'+exCount+'/7</span></div>';
+  return html;
 }
 
 function _brkRenderExercise(isOrangi, whoData) {
@@ -788,9 +1078,9 @@ function _brkRenderExercise(isOrangi, whoData) {
   } else {
     var alcohol = whoData.alcohol || false;
     html += '<div style="margin-top:10px"><div class="dx-form-label">음주 여부</div>'
-      + '<div onclick="brkToggleAlcohol()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:'+(alcohol?'#fef2f2':'#f0fdf4')+';border:1.5px solid '+(alcohol?'#fca5a5':'#86efac')+';border-radius:8px;cursor:pointer">'
-      + '<span style="font-size:1.2rem">'+(alcohol?'🍺':'🚫')+'</span>'
-      + '<span style="font-size:.82rem;font-weight:600;color:'+(alcohol?'#dc2626':'#16a34a')+'">'+(alcohol?'음주':'금주')+'</span>'
+      + '<div onclick="brkToggleAlcohol()" style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:'+(alcohol?'#fef2f2':'var(--sf2)')+';border:1.5px solid '+(alcohol?'#fca5a5':'var(--bd)')+';border-radius:8px;cursor:pointer">'
+      + '<span style="font-size:1.2rem">'+(alcohol?'🍺':'⬜')+'</span>'
+      + '<span style="font-size:.82rem;font-weight:'+(alcohol?'600':'400')+';color:'+(alcohol?'#dc2626':'var(--tx)')+'">오늘 음주함</span>'
       + '</div></div>';
   }
   return html;
@@ -843,7 +1133,7 @@ function _brkRenderIntimacy(m, selDate) {
   } else {
     html+='<div style="padding:12px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px;margin-bottom:10px">'
       +'<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
-      +'<input type="time" id="brk-int-time" class="dx-form-input" style="width:120px" value="'+kstTimeStr()+'">'
+      +'<input type="time" id="brk-int-time" class="dx-form-input" style="width:120px" value="'+kstTime()+'">'
       +'<button onclick="brkSaveIntimacy()" class="btn-accum-add" style="font-size:.75rem;padding:6px 16px">❤️ 기록</button>'
       +'</div>'
       +'<input type="text" id="brk-int-note" class="dx-form-input" placeholder="메모 (선택)" style="width:100%;font-size:.78rem">'
@@ -926,11 +1216,11 @@ function _getBrkCustomSuppl(who){
   const m=getBrkMaster();
   const cloud=m?.customSuppl?.[who];
   if(cloud?.length) return cloud;
-  return JSON.parse(localStorage.getItem('om_brk_suppl_'+who)||'[]');
+  return _storageGetJSON('om_brk_suppl_'+who,[]);
 }
 async function _saveBrkCustomSuppl(who,customs){
   // localStorage + 클라우드(마스터) 양쪽 저장
-  localStorage.setItem('om_brk_suppl_'+who,JSON.stringify(customs));
+  _storageSetJSON('om_brk_suppl_'+who,customs);
   const m=getBrkMaster();
   if(m){if(!m.customSuppl)m.customSuppl={};m.customSuppl[who]=customs;await saveBrkMaster();}
 }
@@ -947,6 +1237,35 @@ function _brkAddSuppl(){
   renderView('meds');
 }
 
+function _getBrkHiddenSuppl(who){
+  var m=getBrkMaster();
+  return m?.hiddenSuppl?.[who]||[];
+}
+async function _saveBrkHiddenSuppl(who,hidden){
+  var m=getBrkMaster();
+  if(m){
+    if(!m.hiddenSuppl) m.hiddenSuppl={};
+    m.hiddenSuppl[who]=hidden;
+    await saveBrkMaster();
+  }
+}
+function _brkHideSuppl(key){
+  var who=_brkCheckWho==='orangi'?'orangi':'bung';
+  var hidden=_getBrkHiddenSuppl(who);
+  if(hidden.indexOf(key)>=0)return;
+  hidden.push(key);
+  _saveBrkHiddenSuppl(who,hidden);
+  showToast('숨김 처리됨 (아래에서 복원 가능)');
+  renderView('meds');
+}
+function _brkUnhideSuppl(key){
+  var who=_brkCheckWho==='orangi'?'orangi':'bung';
+  var hidden=_getBrkHiddenSuppl(who).filter(function(k){return k!==key;});
+  _saveBrkHiddenSuppl(who,hidden);
+  showToast('다시 표시됨');
+  renderView('meds');
+}
+
 function _brkRemoveSuppl(key){
   const who=_brkCheckWho==='orangi'?'orangi':'bung';
   const customs=_getBrkCustomSuppl(who);
@@ -959,62 +1278,20 @@ function _brkRemoveSuppl(key){
 }
 
 async function brkToggleCheck(key) {
-  var r = _getBrkWhoData(); if (!r) return;
+  var r = _getBrkWhoData(); if (!r) { showToast('⚠️ 데이터를 불러올 수 없습니다'); return; }
   r.whoData[key] = !r.whoData[key];
-  await saveBrkMaster();
-  // 교차 동기화: 건강관리 도메인에 영양제/운동 기록 반영
-  syncBrkToHealth(r.selDate, _brkCheckWho);
+  // 즉시 UI 피드백 후 저장
   renderView('meds');
+  try { await saveBrkMaster(); } catch(e) { console.warn('brkToggleCheck save:', e); showToast('⚠️ 저장 실패 (오프라인?)'); }
+  syncBrkToHealth(r.selDate, _brkCheckWho);
 }
 
 // 붕룩이 체크 → 건강관리 도메인 로그 동기화
 function syncBrkToHealth(date, who) {
-  const healthDomain = who==='orangi' ? 'orangi-health' : 'bung-health';
-  const ds = S.domainState[healthDomain];
-  if(!ds?.master) return; // 건강관리 도메인 미로드 시 스킵
-  const m = getBrkMaster(); if(!m) return;
-  const dayData = m.dailyChecks?.[date]?.[who];
-  if(!dayData) return;
-  // 영양제 목록 수집
-  const supplKeys = who==='orangi' ? BRK_SUPPL_ORANGI : BRK_SUPPL_BUNG;
-  const supplItems = who==='orangi'
-    ? [{key:'folicAcid',label:'엽산'},{key:'iron',label:'철분'},{key:'vitaminD',label:'비타민D'},{key:'multivitamin',label:'멀티비타민'},{key:'magnesium',label:'마그네슘'}]
-    : [{key:'arginine',label:'아르기닌'},{key:'coq10',label:'CoQ10'},{key:'silymarin',label:'실리마린'},{key:'multivitamin',label:'멀티비타민'}];
-  // 사용자 추가 영양제도 동기화에 포함
-  var syncCustomKey='om_brk_suppl_'+who;
-  var syncCustoms=JSON.parse(localStorage.getItem(syncCustomKey)||'[]');
-  syncCustoms.forEach(function(c){supplItems.push({key:c.key,label:c.label});});
-  const takenSuppl = supplItems.filter(it=>dayData[it.key]).map(it=>it.label);
-  const exercise = dayData.exercise || '';
-  const memo = dayData.memo || '';
-  // 건강관리 로그에 동기화 기록 찾기/생성
-  if(!ds.logData) ds.logData=[];
-  const syncId = 'brk-sync-'+date;
-  let existing = ds.logData.find(l=>l._syncId===syncId);
-  const parts = [];
-  if(takenSuppl.length) parts.push('💊 영양제: '+takenSuppl.join(', '));
-  if(exercise) parts.push('🏃 운동: '+exercise);
-  if(memo) parts.push('📝 '+memo);
-  if(!parts.length) {
-    // 모두 해제됨 → 동기화 기록 제거
-    if(existing) { ds.logData=ds.logData.filter(l=>l._syncId!==syncId); }
-    return;
-  }
-  const entry = {
-    _syncId: syncId,
-    datetime: date+'T00:00',
-    categories: takenSuppl.length ? ['투약'] : [],
-    memo: '[🍼 임신준비 연동] '+parts.join(' | '),
-    who: who==='orangi'?'오랑이':'붕쌤',
-  };
-  if(exercise) entry.categories.push('운동');
-  if(existing) {
-    Object.assign(existing, entry);
-  } else {
-    entry.id = Date.now();
-    ds.logData.push(entry);
-    ds.logData.sort((a,b)=>a.datetime.localeCompare(b.datetime));
-  }
+  // 건강관리 캘린더 상세에서 직접 편집 가능하므로
+  // logData에 별도 동기화 엔트리를 더 이상 생성하지 않음.
+  // 영양제/운동/체중 데이터는 붕룩이 dailyChecks에만 저장하고
+  // 건강관리에서 직접 참조 (_renderMcSupplExercise, renderHealthDailyCheck)
 }
 
 async function brkSetMeals(n) {
@@ -1038,6 +1315,7 @@ async function brkSetExercise(val) {
   var r = _getBrkWhoData(); if (!r) return;
   r.whoData.exercise = val;
   await saveBrkMaster();
+  syncBrkToHealth(r.selDate, _brkCheckWho);
   renderView('meds');
 }
 
@@ -1047,6 +1325,7 @@ async function brkToggleAlcohol() {
   if (!r.m.dailyChecks[r.selDate].bung) r.m.dailyChecks[r.selDate].bung = {};
   r.m.dailyChecks[r.selDate].bung.alcohol = !r.m.dailyChecks[r.selDate].bung.alcohol;
   await saveBrkMaster();
+  syncBrkToHealth(r.selDate, 'bung');
   renderView('meds');
 }
 
@@ -1067,6 +1346,7 @@ async function brkSetMemo(val) {
   var r = _getBrkWhoData(); if (!r) return;
   r.whoData.memo = val || null;
   await saveBrkMaster();
+  syncBrkToHealth(r.selDate, _brkCheckWho);
 }
 
 // ── 7-3: 검사 결과 관리 ──
@@ -1564,7 +1844,8 @@ function renderLabResults() {
     + '<div id="brk-lab-form" style="display:none;margin-bottom:12px;padding:12px;background:var(--sf2);border-radius:8px;border:1.5px solid var(--bd)">'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<div><div class="dx-form-label">날짜 *</div><input type="date" id="brk-lab-date" class="dx-form-input" style="width:140px"></div>'
-    + '<div><div class="dx-form-label">누구</div><select id="brk-lab-who" class="dx-form-input" style="width:90px"><option value="붕쌤">붕쌤</option><option value="오랑이">오랑이</option></select></div>'
+    + '<div><div class="dx-form-label">누구</div><select id="brk-lab-who" class="dx-form-input" style="width:90px"><option value="붕쌤">붕쌤</option><option value="오랑이">오랑이</option><option value="붕룩이">🍼 붕룩이</option></select></div>'
+    + '<div><div class="dx-form-label">기관</div><input type="text" id="brk-lab-inst" class="dx-form-input" placeholder="검사 기관명" style="width:130px"></div>'
     + '<div><div class="dx-form-label">검사 종류</div><select id="brk-lab-type" class="dx-form-input" style="width:120px" onchange="brkLabTypeChange()">'
     + '<option value="semen">🔬 정액검사</option><option value="blood">🩸 혈액검사</option><option value="hormone">⚗️ 호르몬</option><option value="ultrasound">📷 초음파</option><option value="other">📋 기타</option>'
     + '</select></div></div>'
@@ -1576,7 +1857,40 @@ function renderLabResults() {
     + '</div></div>'
     + _renderLabsByPerson(labs, typeLabels, typeIcons)
     + trendHtml
+    + _renderHealthCheckupLink()
     + '</div>';
+}
+
+// 붕룩이 검사탭에서 건강관리 도메인 검진 데이터 연계 표시
+function _renderHealthCheckupLink() {
+  if (typeof getAllHealthCheckups !== 'function') return '';
+  const oCheckups = getAllHealthCheckups('오랑이', true, { includePregnancy: true });
+  const bCheckups = getAllHealthCheckups('붕쌤', true, { includePregnancy: true });
+  if (!oCheckups.length && !bCheckups.length) return '';
+
+  const renderGroup = (who, checkups, color) => {
+    if (!checkups.length) return '';
+    const recent = checkups.slice(0, 3);
+    const items = recent.map(c => {
+      const abnormal = (c.results || []).filter(r => r.status === 'high' || r.status === 'low').length;
+      return `<div style="padding:4px 8px;background:var(--sf);border-radius:4px;font-size:.65rem;display:flex;align-items:center;gap:6px">
+        <span style="font-family:var(--mono)">${c.date}</span>
+        <span style="color:var(--mu)">${(c.results||[]).length}항목</span>
+        ${abnormal ? `<span style="color:#dc2626;font-weight:600">⚠${abnormal}</span>` : '<span style="color:#10b981">✓</span>'}
+        ${c._legacyLab ? '<span style="font-size:.5rem;color:#7c3aed">임준</span>' : ''}
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:6px">
+      <div style="font-size:.68rem;font-weight:600;color:${color};margin-bottom:3px">${who} (${checkups.length}건)</div>
+      ${items}
+    </div>`;
+  };
+
+  return `<div style="margin-top:12px;padding:10px;background:var(--sf2);border:1px solid var(--bd);border-radius:8px">
+    <div style="font-size:.72rem;font-weight:600;color:var(--mu);margin-bottom:6px">🔗 건강관리 도메인 검진 연계</div>
+    ${renderGroup('오랑이', oCheckups, '#f97316')}
+    ${renderGroup('붕쌤', bCheckups, '#06b6d4')}
+  </div>`;
 }
 
 var _labBulkMode=false;
@@ -1584,7 +1898,8 @@ var _labBulkSet=new Set();
 function _renderLabsByPerson(labs, typeLabels, typeIcons) {
   const bung=labs.filter(l=>(l.who||'')==='붕쌤');
   const orangi=labs.filter(l=>(l.who||'')==='오랑이');
-  const other=labs.filter(l=>l.who!=='붕쌤'&&l.who!=='오랑이');
+  const bungruki=labs.filter(l=>(l.who||'')==='붕룩이');
+  const other=labs.filter(l=>l.who!=='붕쌤'&&l.who!=='오랑이'&&l.who!=='붕룩이');
   // 관리 도구바
   const toolbar=`<div style="display:flex;gap:6px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
     <button onclick="_labBulkMode=!_labBulkMode;_labBulkSet.clear();renderView('meds')" style="font-size:.65rem;padding:3px 10px;border:1px solid ${_labBulkMode?'#dc2626':'var(--bd)'};border-radius:5px;background:${_labBulkMode?'#fee2e2':'var(--sf)'};color:${_labBulkMode?'#dc2626':'var(--mu)'};cursor:pointer;font-family:var(--font)">${_labBulkMode?'✕ 선택 모드 끄기':'☑️ 선택 삭제'}</button>
@@ -1604,6 +1919,7 @@ function _renderLabsByPerson(labs, typeLabels, typeIcons) {
   };
   return toolbar + renderGroup('붕쌤','🩵','#06b6d4',bung)
     + renderGroup('오랑이','🧡','#f97316',orangi)
+    + renderGroup('붕룩이','🍼','#a855f7',bungruki)
     + (other.length?renderGroup('기타','📋','var(--mu)',other):'');
 }
 async function _brkBulkDeleteLabs(){
@@ -1639,6 +1955,15 @@ async function _brkEditLabType(labId){
       await saveBrkMaster();closeConfirmModal();showToast('✅ 수정됨');renderView('meds');
     },primary:true}]);
 }
+async function _brkEditLabInst(labId) {
+  const m=getBrkMaster();if(!m)return;
+  const l=m.labResults.find(x=>x.id===labId);if(!l)return;
+  const name=prompt('기관명 입력:', l.institution||'');
+  if(name===null) return;
+  l.institution=name.trim()||undefined;
+  await saveBrkMaster();showToast('✅ 기관명 수정됨');renderView('meds');
+}
+
 async function _brkToggleLabLock(labId){
   const m=getBrkMaster();if(!m)return;
   const l=m.labResults.find(x=>x.id===labId);if(!l)return;
@@ -1687,6 +2012,7 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
       <span style="font-size:.72rem">${typeIcons[l.type]||'📋'}</span>
       <span style="font-size:.75rem;font-weight:600">${esc(displayName)}</span>
       ${isLocked?'<span style="font-size:.6rem">🔒</span>':''}
+      ${l.institution?`<span style="font-size:.58rem;color:var(--ac)">${esc(l.institution)}</span>`:''}
       <span style="font-size:.65rem;color:var(--mu);margin-left:auto">${esc(l.date)}</span>
       <span style="font-size:.6rem;color:var(--mu2)">▾</span>
     </div>
@@ -1708,13 +2034,14 @@ function _renderLabCard(l, globalIdx, typeLabels, typeIcons) {
         <button onclick="_brkEditLabValues(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">✏️ 수치 수정</button>
         <button onclick="_brkToggleLabLock(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid ${isLocked?'#15803d':'var(--bd)'};border-radius:4px;background:${isLocked?'#dcfce7':'none'};color:${isLocked?'#15803d':'var(--mu)'};cursor:pointer;font-family:var(--font)">${isLocked?'🔓 잠금 해제':'🔒 잠금'}</button>
         ${!isLocked?`<button onclick="brkDeleteLab(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid #dc2626;border-radius:4px;background:none;color:#dc2626;cursor:pointer;font-family:var(--font)">🗑 삭제</button>`:''}
-        ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>
+        <button onclick="_brkEditLabInst(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid #f59e0b;border-radius:4px;background:none;color:#f59e0b;cursor:pointer;font-family:var(--font)">🏥 기관명</button>
+        ${l.imgSrc?`<button onclick="_brkReanalyzeLab(${labId})" style="font-size:.56rem;padding:2px 6px;border:1px solid #7c3aed;border-radius:4px;background:none;color:#7c3aed;cursor:pointer;font-family:var(--font)">🔄 재분석</button>`:''}
         <select onchange="if(this.value){_brkReanalyzeLab(${labId},this.value);this.value='';}" style="font-size:.56rem;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);font-family:var(--font)">
           <option value="">AI 선택</option>
           ${S.keys?.gemini?'<option value="gemini">Gemini</option>':''}
           ${S.keys?.gpt?'<option value="gpt">GPT</option>':''}
           ${S.keys?.claude?'<option value="claude">Claude</option>':''}
-        </select>`:''}
+        </select>
       </div>
     </div>
   </div>`;
@@ -1785,7 +2112,8 @@ async function brkSaveLab() {
     if (textEl && textEl.value) values.text = textEl.value;
   }
 
-  const labEntry3={ id: Date.now(), date: date, who: who, type: type, values: values, memo: memo };
+  const institution = (document.getElementById('brk-lab-inst')?.value || '').trim();
+  const labEntry3={ id: Date.now(), date: date, who: who, type: type, values: values, memo: memo, institution: institution || undefined };
   m.labResults.push(labEntry3);
   if(typeof _checkAntibodyAndSyncVax==='function')_checkAntibodyAndSyncVax(labEntry3);
   await saveBrkMaster();
@@ -2298,21 +2626,30 @@ async function _analyzeOnePhoto(photo,aiId){
   const tiles=prep.tiles;
   const isTiled=prep.mode==='tiled';
   const tileNote=isTiled?`\n주의: 이 ${tiles.length}개 이미지는 하나의 검사결과지를 ${prep.direction==='vertical'?'상하':'좌우'}로 분할한 것입니다. 모든 이미지의 수치를 합산하여 하나의 JSON으로 응답하세요.`:'';
-  const prompt=`이 이미지는 의료 검사 결과지(혈액검사, 호르몬검사, 정액검사, 초음파 등)입니다.${tileNote}
-다음을 추출하세요:
-1. 검사 종류 (semen/blood/hormone/ultrasound/other)
-2. 검사 날짜 (YYYY-MM-DD)
-3. 검사 대상 (남성이면 "붕쌤", 여성이면 "오랑이")
-4. 모든 수치 결과 — 항목명에 단위를 포함 (예: "TSH(mIU/L)": 3.63). 빠짐없이 전부 추출
-5. 정상 범위 (참고치가 보이면 ref에 기록)
-6. 이상 소견 + 임신 준비 관점 소견
-반드시 JSON으로 응답:
-{"type":"blood","date":"YYYY-MM-DD","who":"오랑이","values":{"WBC(10^3/uL)":6.78,"TSH(mIU/L)":3.63},"ref":{"WBC(10^3/uL)":"4.0-10.0","TSH(mIU/L)":"0.35-5.50"},"abnormal":["이상소견"],"opinion":"소견"}
-중요 규칙:
-1. values 키에 반드시 단위를 괄호로 포함 (예: "TSH(mIU/L)")
-2. ref는 검사지에 인쇄된 참고치(정상범위)를 그대로 기록 — 검사실마다 다를 수 있으므로 검사지의 값을 우선
-3. 검사지에 참고치가 없는 항목은 ref에서 제외 (임의로 넣지 말 것)
-4. abnormal은 참고치 범위를 벗어난 항목만 기록`;
+  const prompt=`이 이미지는 의료 검사 결과지입니다.${tileNote}
+실제 검사된 항목만 추출하여 정규화된 JSON으로 응답하세요.
+
+반드시 아래 JSON 형식:
+{"type":"blood","date":"YYYY-MM-DD","who":"오랑이",
+ "results":[
+  {"code":"WBC","name":"백혈구","value":6.78,"unit":"10^3/μL","refLow":4.0,"refHigh":10.0,"status":"normal","category":"cbc"},
+  {"code":"HBsAb","name":"B형간염표면항체","value":67.69,"unit":"IU/L","refLow":10,"status":"positive","category":"infection"}
+ ],
+ "opinion":"종합 소견"}
+
+규칙:
+1. type: semen/blood/hormone/ultrasound/other
+2. who: 남성="붕쌤", 여성="오랑이", 아기/태아="붕룩이"
+3. results 배열 — 실제 검사된 항목만. 미실시/빈값/텍스트만 있는 항목은 반드시 제외
+4. code: 표준 약어 (WBC, RBC, HGB, AST, ALT, TSH, FSH 등). 모르면 null
+5. value: 반드시 숫자. 정성검사(Positive/Negative)는 value에 숫자 넣고 status로 판정
+   - 항원(HBsAg 등): Negative→0, Positive→1
+   - 항체(HBsAb, HAV IgG, Rubella IgG): 수치 그대로. 높으면 면역 형성
+6. status: "normal"(정상), "high"(높음), "low"(낮음), "positive"(항체 면역 형성)
+7. category: cbc/liver/kidney/thyroid/lipid/glucose/electrolyte/inflammation/reproductive/semen/vitamin/iron/tumor/infection/coagulation/urine/other
+8. refLow/refHigh: 검사지에 인쇄된 참고치만. 없으면 생략
+9. 중복 항목 제거 (같은 검사가 두 번 있으면 하나만)
+10. 혈액형/Rh 등 정성 결과: value에 null, unit에 결과값("A", "Positive" 등) 기재`;
   let result='';
   if(aiId==='gemini'){
     const gemModel=S.models?.gemini||DEFAULT_MODELS.gemini;
@@ -2326,7 +2663,7 @@ async function _analyzeOnePhoto(photo,aiId){
     result=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
     if(!result)throw new Error('Gemini: 빈 응답'+(d.candidates?.[0]?.finishReason?' ('+d.candidates[0].finishReason+')':''));
     // 비용 추적
-    const gu=d.usageMetadata;if(gu)recordUsage('gemini',gemModel,gu.promptTokenCount||0,gu.candidatesTokenCount||0);
+    const gu=d.usageMetadata;if(gu)recordUsage('gemini',gemModel,gu.promptTokenCount||0,gu.candidatesTokenCount||0,'lab-normalize');
   }else if(aiId==='claude'){
     const clModel=S.models?.claude||DEFAULT_MODELS.claude;
     const content=tiles.map(t=>{const b=t.split(',')[1];const mt=t.startsWith('data:image/jpeg')?'image/jpeg':'image/png';return{type:'image',source:{type:'base64',media_type:mt,data:b}};});
@@ -2339,7 +2676,7 @@ async function _analyzeOnePhoto(photo,aiId){
     result=d.content?.[0]?.text||'';
     if(!result)throw new Error('Claude: 빈 응답');
     // 비용 추적
-    if(d.usage)recordUsage('claude',clModel,d.usage.input_tokens||0,d.usage.output_tokens||0);
+    if(d.usage)recordUsage('claude',clModel,d.usage.input_tokens||0,d.usage.output_tokens||0,'lab-normalize');
   }else{
     const gptModel=S.models?.gpt||DEFAULT_MODELS.gpt;
     const content=tiles.map(t=>({type:'image_url',image_url:{url:t,detail:'high'}}));
@@ -2353,11 +2690,27 @@ async function _analyzeOnePhoto(photo,aiId){
     result=d.choices?.[0]?.message?.content||'';
     if(!result)throw new Error('GPT: 빈 응답');
     // 비용 추적
-    if(d.usage)recordUsage('gpt',gptModel,d.usage.prompt_tokens||0,d.usage.completion_tokens||0);
+    if(d.usage)recordUsage('gpt',gptModel,d.usage.prompt_tokens||0,d.usage.completion_tokens||0,'lab-normalize');
   }
   const jsonMatch=result.match(/\{[\s\S]*\}/);
   if(!jsonMatch)throw new Error('인식 실패');
-  return JSON.parse(jsonMatch[0]);
+  const parsed=JSON.parse(jsonMatch[0]);
+  // 새 포맷(results 배열) → 기존 포맷(values/ref)으로도 변환 (하위호환)
+  if(parsed.results&&Array.isArray(parsed.results)&&!parsed.values){
+    parsed._aiNormalized=true; // AI가 직접 정규화한 결과 플래그
+    const values={},ref={};
+    parsed.results.forEach(r=>{
+      if(r.value===null||r.value===undefined)return;
+      const key=r.code||(r.name+(r.unit?'('+r.unit+')':''));
+      values[key]=r.value;
+      if(r.refLow!==undefined||r.refHigh!==undefined){
+        ref[key]=(r.refLow!==undefined?r.refLow:'')+(r.refHigh!==undefined?'-'+r.refHigh:'');
+      }
+    });
+    parsed.values=values;
+    parsed.ref=ref;
+  }
+  return parsed;
 }
 
 async function brkSaveLabFromPhoto() {
@@ -2521,7 +2874,7 @@ function _extractDrugCandidates(rawName) {
   }).filter(Boolean));
   // 성분명에서 "나트륨수화물","나트륨","수화물","염산염" 등 접미사 제거하여 추가
   candidates = candidates.concat(candidates.map(function(c){
-    return c.replace(/(나트륨|수화물|염산염|칼슘|마그네슘|칼륨|염|산$)+/g,'').trim();
+    return c.replace(/(나트륨|수화물|염산염|칼슘|마그네슘|칼륨)+$/,'').trim();
   }).filter(Boolean));
   // 중복 제거
   var seen = {};
@@ -2547,7 +2900,7 @@ function _lookupDrugSafety(name) {
   }
   // 2) localStorage 캐시
   try {
-    var cache = JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
+    var cache = _storageGetJSON('om_preg_drug_db',{});
     for (var j=0; j<candidates.length; j++) {
       if (cache[candidates[j]]) return {...cache[candidates[j]], source:'AI검색'};
       var eng2 = _DRUG_NAMES[candidates[j]];
@@ -2558,11 +2911,185 @@ function _lookupDrugSafety(name) {
 }
 
 function _cacheDrugSafety(name, data) {
+  // 클라우드 우선 저장 (규칙 #22)
   try {
-    var cache=JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
-    cache[name]={...data,searchedAt:new Date().toISOString()};
-    localStorage.setItem('om_preg_drug_db',JSON.stringify(cache));
+    const m = getBrkMaster();
+    if (m) {
+      if (!m.settings) m.settings = {};
+      if (!m.settings.drugSafetyCache) m.settings.drugSafetyCache = {};
+      m.settings.drugSafetyCache[name] = { ...data, searchedAt: new Date().toISOString() };
+      saveBrkMaster(); // 비동기, fire-and-forget
+    }
   } catch(e){}
+  // localStorage 폴백
+  try {
+    var cache=_storageGetJSON('om_preg_drug_db',{});
+    cache[name]={...data,searchedAt:new Date().toISOString()};
+    _storageSetJSON('om_preg_drug_db',cache);
+  } catch(e){}
+}
+
+// ── AI 약품명 정규화: 상품명 → 성분명 매핑 + 동적 사전 확장 (규칙 #37) ──
+var _drugNameDisplayMode = 'brand'; // 'brand' | 'generic'
+function toggleDrugNameMode() {
+  _drugNameDisplayMode = _drugNameDisplayMode === 'brand' ? 'generic' : 'brand';
+  renderView('meds');
+}
+// 동적 약품명 사전: settings.customDrugNames에 클라우드 저장
+function _getCustomDrugNames() {
+  const m = getBrkMaster();
+  return m?.settings?.customDrugNames || {};
+}
+function _saveCustomDrugName(brand, generic) {
+  const m = getBrkMaster(); if (!m) return;
+  if (!m.settings) m.settings = {};
+  if (!m.settings.customDrugNames) m.settings.customDrugNames = {};
+  m.settings.customDrugNames[brand] = generic;
+  // 런타임 _DRUG_NAMES에도 추가
+  _DRUG_NAMES[brand] = generic;
+  saveBrkMaster();
+}
+// 약품명 표시: 모드에 따라 상품명/성분명 전환
+function getDrugDisplayName(rawName) {
+  const candidates = _extractDrugCandidates(rawName);
+  const customMap = _getCustomDrugNames();
+  let brand = rawName, generic = null;
+  // 성분명 찾기
+  for (const c of candidates) {
+    if (_DRUG_NAMES[c]) { generic = _DRUG_NAMES[c]; brand = c; break; }
+    if (customMap[c]) { generic = customMap[c]; brand = c; break; }
+    // 영문명 자체가 입력된 경우
+    if (/^[A-Za-z]/.test(c) && Object.values(_DRUG_NAMES).includes(c)) { generic = c; break; }
+    if (/^[A-Za-z]/.test(c) && Object.values(customMap).includes(c)) { generic = c; break; }
+  }
+  if (!generic) return { display: rawName, brand: rawName, generic: null, matched: false };
+  return {
+    display: _drugNameDisplayMode === 'generic' ? generic : brand,
+    brand, generic, matched: true,
+  };
+}
+// AI 일괄 약품명 매핑 (미매칭 약물만)
+async function aiVerifyDrugNames(drugList) {
+  const unmatched = drugList.filter(d => !getDrugDisplayName(d).matched);
+  if (!unmatched.length) { showToast('모든 약품 매칭 완료'); return; }
+  const aiId = S.keys?.gemini ? 'gemini' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+  if (!aiId) { showToast('⚠️ AI API 키 필요'); return; }
+  showToast('🤖 ' + AI_DEFS[aiId].name + ' 약품명 매핑 중... (' + unmatched.length + '건)', 8000);
+  const prompt = `아래 약품명들의 영문 성분명(generic name)을 매핑하세요.
+상품명이면 성분명을, 성분명이면 그대로, 약물이 아니면 null을 반환.
+
+${unmatched.map((d, i) => `${i}. "${d}"`).join('\n')}
+
+JSON 배열로 응답:
+[{"idx":0,"brand":"타이레놀","generic":"Acetaminophen"},...]
+약물이 아닌 항목: {"idx":0,"brand":"...","generic":null}`;
+  try {
+    const resp = await callAI(aiId, '약학 전문가. JSON만 응답.', prompt, 'drug-safety');
+    const match = resp.match(/\[[\s\S]*\]/);
+    if (!match) { showToast('⚠️ AI 응답 파싱 실패'); return; }
+    const mappings = JSON.parse(match[0]);
+    let added = 0;
+    mappings.forEach(m => {
+      if (m.idx === undefined || m.idx < 0 || m.idx >= unmatched.length) return;
+      if (m.generic && m.generic !== 'null') {
+        _saveCustomDrugName(unmatched[m.idx], m.generic);
+        added++;
+      }
+    });
+    showToast(added ? `🆕 ${added}개 약품 성분명 매핑 추가됨` : '매핑 가능한 항목 없음');
+    if (added) renderView('meds');
+  } catch(e) { showToast('⚠️ AI 약품명 매핑 실패'); console.warn('AI drug name verify failed:', e); }
+}
+
+// ── AI 동적 사전 확장: 임신안전 + 남성가임력 + 질환→약물 (규칙 #37) ──
+// 새 약물의 임신 안전 등급을 AI로 조회 → _PREGNANCY_SAFETY에 동적 추가
+async function aiExpandPregnancySafety(drugName) {
+  const aiId = S.keys?.perp ? 'perp' : (S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : null));
+  if (!aiId) return null;
+  showToast('🔍 ' + esc(drugName) + ' 임신안전 조회 중...', 5000);
+  const prompt = `약물 "${drugName}"의 임신 안전성 정보를 JSON으로 반환.
+{"fda":"FDA등급(A/B/C/D/X/N/A)","pllr":"PLLR 요약 1-2문장","kfda":"한국식약처(안전/2등급/금기/정보없음)","note":"핵심 1문장"}
+불확실하면 필드에 "정보부족". JSON만 출력.`;
+  try {
+    const resp = await callAI(aiId, '약학 전문가. JSON만.', prompt, 'drug-safety');
+    const m = resp.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    // 동적 사전 추가
+    _PREGNANCY_SAFETY[drugName] = parsed;
+    _cacheDrugSafety(drugName, parsed);
+    // 클라우드 저장
+    const master = getBrkMaster();
+    if (master) {
+      if (!master.settings) master.settings = {};
+      if (!master.settings.customPregnancySafety) master.settings.customPregnancySafety = {};
+      master.settings.customPregnancySafety[drugName] = parsed;
+      await saveBrkMaster();
+    }
+    return parsed;
+  } catch(e) { return null; }
+}
+
+// 새 약물의 남성 가임력 영향을 AI로 조회 → _MALE_FERTILITY_IMPACT에 동적 추가
+async function aiExpandMaleFertility(drugName) {
+  const aiId = S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : (S.keys?.gemini ? 'gemini' : null));
+  if (!aiId) return null;
+  showToast('🧬 ' + esc(drugName) + ' 남성가임력 조회 중...', 5000);
+  const prompt = `약물 "${drugName}"의 남성 가임력 영향을 JSON으로 반환.
+{"impact":"위험/주의/경미/안전 중 택1","note":"영향 메커니즘 1-2문장","washout":"중단 후 회복 기간(예: 3개월)","ref":"참고문헌 1개"}
+데이터 없으면 {"impact":"안전","note":"가임력 영향 보고 없음","washout":"","ref":""}. JSON만.`;
+  try {
+    const resp = await callAI(aiId, '남성 생식의학 전문가. JSON만.', prompt, 'drug-safety');
+    const m = resp.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    _MALE_FERTILITY_IMPACT[drugName] = parsed;
+    const master = getBrkMaster();
+    if (master) {
+      if (!master.settings) master.settings = {};
+      if (!master.settings.customMaleFertility) master.settings.customMaleFertility = {};
+      master.settings.customMaleFertility[drugName] = parsed;
+      await saveBrkMaster();
+    }
+    return parsed;
+  } catch(e) { return null; }
+}
+
+// 질환→약물 추천을 AI로 확장
+async function aiExpandDiseaseMeds(diseaseName) {
+  const aiId = S.keys?.claude ? 'claude' : (S.keys?.gpt ? 'gpt' : (S.keys?.gemini ? 'gemini' : null));
+  if (!aiId) return null;
+  showToast('💊 ' + esc(diseaseName) + ' 치료약물 조회 중...', 5000);
+  const prompt = `질환 "${diseaseName}"의 표준 치료약물 목록을 JSON으로 반환.
+{"meds":["Acetaminophen","Ibuprofen"],"note":"1차/2차 선택 간략 설명"}
+일반적인 처방 약물만 포함. 5-10개. 영문 성분명. JSON만.`;
+  try {
+    const resp = await callAI(aiId, '임상약학 전문가. JSON만.', prompt, 'drug-safety');
+    const m = resp.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    if (parsed.meds?.length) {
+      _DISEASE_MEDS[diseaseName] = parsed.meds;
+      const master = getBrkMaster();
+      if (master) {
+        if (!master.settings) master.settings = {};
+        if (!master.settings.customDiseaseMeds) master.settings.customDiseaseMeds = {};
+        master.settings.customDiseaseMeds[diseaseName] = parsed.meds;
+        await saveBrkMaster();
+      }
+    }
+    return parsed;
+  } catch(e) { return null; }
+}
+
+// 앱 시작 시 클라우드 동적 사전 로드
+function _loadCustomDrugDicts() {
+  const m = getBrkMaster(); if (!m?.settings) return;
+  const s = m.settings;
+  if (s.customPregnancySafety) Object.assign(_PREGNANCY_SAFETY, s.customPregnancySafety);
+  if (s.customMaleFertility) Object.assign(_MALE_FERTILITY_IMPACT, s.customMaleFertility);
+  if (s.customDiseaseMeds) Object.assign(_DISEASE_MEDS, s.customDiseaseMeds);
+  if (s.customDrugNames) Object.assign(_DRUG_NAMES, s.customDrugNames);
 }
 
 async function fetchDrugSafetyPerplexity(drugName) {
@@ -2580,7 +3107,7 @@ async function fetchDrugSafetyPerplexity(drugName) {
     if(match){
       const parsed=JSON.parse(match[0]);
       _cacheDrugSafety(drugName,parsed);
-      recordUsage('perp','sonar',d.usage?.prompt_tokens||0,d.usage?.completion_tokens||0);
+      recordUsage('perp','sonar',d.usage?.prompt_tokens||0,d.usage?.completion_tokens||0,'drug-safety');
       return parsed;
     }
   } catch(e){console.error('Drug safety Perplexity error:',e);}
@@ -2612,14 +3139,20 @@ async function refreshDrugSafety(drugName) {
     var eng=_DRUG_NAMES[candidates[i]];
     if(eng){searchName=eng;break;}
   }
-  const result=await fetchDrugSafetyPerplexity(searchName);
-  if(result){
-    // 원본명과 영문명 모두 캐시
-    _cacheDrugSafety(drugName,result);
-    if(searchName!==drugName) _cacheDrugSafety(searchName,result);
+  // 임신안전 + 남성가임력 병렬 조회
+  const [safetyResult, maleResult] = await Promise.all([
+    aiExpandPregnancySafety(searchName),
+    aiExpandMaleFertility(searchName),
+  ]);
+  if(safetyResult){
+    _cacheDrugSafety(drugName,safetyResult);
+    if(searchName!==drugName) _cacheDrugSafety(searchName,safetyResult);
   }
   if(el) el.style.display='none';
-  if(result){showToast('✅ '+drugName+' 안전 정보 갱신');renderView('meds');}
+  const msgs=[];
+  if(safetyResult) msgs.push('임신안전');
+  if(maleResult) msgs.push('가임력');
+  if(msgs.length){showToast('✅ '+drugName+' '+msgs.join('+')+' 정보 갱신');renderView('meds');}
   else showToast('⚠️ 검색 실패');
 }
 
@@ -2692,7 +3225,7 @@ function _isDrugNotTreatment(med) {
   return true;
 }
 
-function _renderDrugCard(name, info) {
+function _renderDrugCard(name, info, isMale) {
   var safety = _lookupDrugSafety(name);
   var fda = safety?.fda || '?';
   var pllr = safety?.pllr || '';
@@ -2700,6 +3233,13 @@ function _renderDrugCard(name, info) {
   var note = safety?.note || '';
   var source = safety?.source || '';
   var fc = _fdaColor(fda), fb = _fdaBg(fda), kc = _kfdaColor(kfda);
+  // 상품명/성분명 표시
+  var dn = getDrugDisplayName(info.originalNames[0]);
+  var nameHtml = '<span style="font-size:.78rem;font-weight:600">' + esc(dn.display.replace(/\s*\(PRN\)/i,' (PRN)').replace(/\s*\(정규\)/i,' (정규)')) + '</span>';
+  if (dn.matched && dn.brand !== dn.generic) {
+    var sub = _drugNameDisplayMode === 'generic' ? dn.brand : dn.generic;
+    nameHtml += ' <span style="font-size:.58rem;color:var(--mu2)">(' + esc(sub) + ')</span>';
+  }
 
   var badges = '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">'
     + '<span style="padding:2px 8px;border-radius:10px;font-size:.68rem;font-weight:700;background:'+fc+'18;color:'+fc+';border:1px solid '+fc+'40">FDA: '+esc(fda)+'</span>'
@@ -2708,11 +3248,50 @@ function _renderDrugCard(name, info) {
     + '</div>';
   var detail = (pllr?'<div style="font-size:.72rem;color:#0369a1;margin-top:4px"><b>PLLR:</b> '+esc(pllr)+'</div>':'')
     + (note?'<div style="font-size:.72rem;color:var(--mu);margin-top:2px">'+esc(note)+'</div>':'');
+
+  // 남성: 가임력 영향을 메인으로
+  var maleHtml = '';
+  if (isMale) {
+    var mi = _MALE_FERTILITY_IMPACT[name];
+    if (mi) {
+      var _mic={'위험':'#dc2626','주의':'#ea580c','경미':'#f59e0b','안전':'#10b981'};
+      var mic = _mic[mi.impact]||'#10b981';
+      maleHtml = '<div style="margin-top:5px;padding:8px 10px;background:'+mic+'08;border:1.5px solid '+mic+'30;border-radius:8px">'
+        + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span style="padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:700;background:'+mic+'18;color:'+mic+';border:1px solid '+mic+'40">🧬 '+mi.impact+'</span>'
+        + (mi.washout?'<span style="font-size:.6rem;color:var(--mu)">⏱ '+esc(mi.washout)+'</span>':'')
+        + '</div>'
+        + '<div style="font-size:.7rem;color:var(--tx);line-height:1.5">'+esc(mi.note)+'</div>'
+        + (mi.ref?'<div style="font-size:.55rem;color:var(--mu2);margin-top:3px">📚 '+esc(mi.ref)+'</div>':'')
+        + '</div>';
+    } else {
+      maleHtml = '<div style="margin-top:5px;padding:6px 8px;background:#f9fafb;border:1px dashed var(--bd);border-radius:6px;font-size:.65rem;color:var(--mu2)">🧬 남성 가임력 영향: 데이터 미확보 — 주치의 상담 권장</div>';
+    }
+  }
+
   var srcLabel = source==='내장DB'?'<span style="font-size:.58rem;color:var(--mu2)">✓ 공식</span>'
     :source==='AI검색'?'<span style="font-size:.58rem;color:#f59e0b">🔍 AI검색</span>'
     :'<span style="font-size:.58rem;color:var(--mu2)">데이터 없음</span>';
   var refreshBtn = !safety?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--ac)" title="Perplexity로 검색">🔍 검색</button>`
     :(source==='AI검색'?`<button onclick="refreshDrugSafety('${esc(name)}')" class="accum-del" style="font-size:.62rem;color:var(--mu)" title="재검색">🔄</button>`:'');
+
+  // 붕쌤(남성): 가임력 메인 + PLLR 표시 + FDA 등급만 접기
+  if (isMale) {
+    var pllrHtml = pllr ? '<div style="margin-top:5px;font-size:.7rem;color:#0369a1;line-height:1.5"><b>PLLR</b> <span style="font-size:.55rem;color:var(--mu2)">(Pregnancy &amp; Lactation Labeling Rule — 임신·수유 약물 표시 기준)</span><br>'+esc(pllr)+'</div>' : '';
+    var foldedFda = '<div style="margin-top:5px"><div style="font-size:.58rem;color:var(--mu2);cursor:pointer" onclick="var d=this.nextElementSibling;d.style.display=d.style.display===\'none\'?\'block\':\'none\'">▸ FDA 등급: '+esc(fda)+' / 식약처: '+esc(kfda)+'</div>'
+      + '<div style="display:none;margin-top:4px">' + badges + (note?'<div style="font-size:.72rem;color:var(--mu);margin-top:2px">'+esc(note)+'</div>':'') + '</div></div>';
+    return '<div style="padding:10px 12px;background:var(--sf2);border:1.5px solid var(--bd);border-radius:8px;margin-bottom:5px">'
+      + '<div style="display:flex;align-items:center;gap:8px">'
+      + '<div style="flex:1">'
+      + '<div>'+nameHtml+'</div>'
+      + (name!==info.originalNames[0]?'<div style="font-size:.6rem;color:var(--ac)">'+esc(name)+'</div>':'')
+      + '<div style="font-size:.62rem;color:var(--mu)">'+info.conditions.join(', ')+'</div>'
+      + '</div>'
+      + srcLabel + refreshBtn
+      + '<span id="ds-loading-'+esc(name)+'" style="display:none;font-size:.6rem;color:var(--ac)">검색중...</span>'
+      + '</div>'
+      + maleHtml + pllrHtml + foldedFda
+      + '</div>';
+  }
 
   return '<div style="padding:10px 12px;background:'+fb+';border:1.5px solid '+fc+'30;border-radius:8px;margin-bottom:5px">'
     + '<div style="display:flex;align-items:center;gap:8px">'
@@ -2758,21 +3337,32 @@ function renderDrugSafety() {
   });
 
   // 유저별 섹션 렌더링
-  function renderUserSection(userName, userIcon, userColor, meds) {
+  function renderUserSection(userName, userIcon, userColor, meds, isMale) {
     var entries = Object.entries(meds);
     if (!entries.length) return '<div style="font-size:.72rem;color:var(--mu2);padding:8px;text-align:center">등록된 약물이 없습니다.</div>';
-    // 위험도 순 정렬: X > D > C > B > A > ?
-    var order = {'X':0,'D':1,'C':2,'B':3,'A':4,'?':5,'N/A':5};
-    entries.sort(function(a,b){
-      var sa = _lookupDrugSafety(a[0]), sb = _lookupDrugSafety(b[0]);
-      var fa = sa?.fda||'?', fb2 = sb?.fda||'?';
-      return (order[fa.charAt(0)]||5) - (order[fb2.charAt(0)]||5);
-    });
-    return entries.map(function(e){ return _renderDrugCard(e[0], e[1]); }).join('');
+    if (isMale) {
+      // 남성: 가임력 영향 순 (위험→주의→경미→안전→미확보)
+      var maleOrder = {'위험':0,'주의':1,'경미':2,'안전':3};
+      entries.sort(function(a,b){
+        var ma = _MALE_FERTILITY_IMPACT[a[0]], mb = _MALE_FERTILITY_IMPACT[b[0]];
+        var ia = ma ? (maleOrder[ma.impact]??4) : 4;
+        var ib = mb ? (maleOrder[mb.impact]??4) : 4;
+        return ia - ib;
+      });
+    } else {
+      // 여성: FDA 위험도 순 X > D > C > B > A > ?
+      var order = {'X':0,'D':1,'C':2,'B':3,'A':4,'?':5,'N/A':5};
+      entries.sort(function(a,b){
+        var sa = _lookupDrugSafety(a[0]), sb = _lookupDrugSafety(b[0]);
+        var fa = sa?.fda||'?', fb2 = sb?.fda||'?';
+        return (order[fa.charAt(0)]||5) - (order[fb2.charAt(0)]||5);
+      });
+    }
+    return entries.map(function(e){ return _renderDrugCard(e[0], e[1], isMale); }).join('');
   }
 
-  var orangiCards = renderUserSection('오랑이','🧡','#f97316',byUser['오랑이']);
-  var bungCards = renderUserSection('붕쌤','🩵','#06b6d4',byUser['붕쌤']);
+  var orangiCards = renderUserSection('오랑이','🧡','#f97316',byUser['오랑이'], false);
+  var bungCards = renderUserSection('붕쌤','🩵','#06b6d4',byUser['붕쌤'], true);
   var totalCount = Object.keys(byUser['오랑이']).length + Object.keys(byUser['붕쌤']).length;
 
   if (!totalCount) {
@@ -2783,14 +3373,24 @@ function renderDrugSafety() {
   // Cache stats
   var cacheStats='';
   try {
-    var cache=JSON.parse(localStorage.getItem('om_preg_drug_db')||'{}');
+    var cache=_storageGetJSON('om_preg_drug_db',{});
     var cacheCount=Object.keys(cache).length;
     var cacheSize=new Blob([JSON.stringify(cache)]).size;
     if(cacheCount) cacheStats='<div style="font-size:.62rem;color:var(--mu2);margin-top:8px;text-align:right">💾 캐시: '+cacheCount+'개 약물 · '+Math.round(cacheSize/1024)+'KB</div>';
   } catch(e){}
 
+  // 상품명/성분명 토글 + AI 매핑 버튼
+  var allDrugs = [].concat(Object.keys(byUser['오랑이']), Object.keys(byUser['붕쌤']));
+  var unmatchedCount = allDrugs.filter(d => !getDrugDisplayName(d).matched).length;
+  var toggleBtn = '<button onclick="toggleDrugNameMode()" style="font-size:.65rem;padding:3px 10px;border:1.5px solid var(--ac);border-radius:6px;background:var(--ac)15;color:var(--ac);cursor:pointer;font-family:var(--font);font-weight:600">'
+    + (_drugNameDisplayMode === 'brand' ? '🏷 성분명으로 보기' : '🏪 상품명으로 보기') + '</button>';
+  var aiBtn = unmatchedCount ? '<button onclick="aiVerifyDrugNames([' + allDrugs.filter(d => !getDrugDisplayName(d).matched).map(d => "'" + esc(d).replace(/'/g,"\\'") + "'").join(',') + '])" style="font-size:.65rem;padding:3px 10px;border:1.5px solid #8b5cf6;border-radius:6px;background:#8b5cf615;color:#8b5cf6;cursor:pointer;font-family:var(--font)">🤖 미매칭 ' + unmatchedCount + '건 AI 매핑</button>' : '';
+
   return '<div>'
-    + '<div style="font-size:.78rem;color:var(--mu);margin-bottom:10px">복용 중인 약물의 임신 안전성을 3개 소스로 교차 비교합니다.</div>'
+    + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
+    + '<span style="font-size:.78rem;color:var(--mu)">약물 임신 안전성 3소스 교차 비교</span>'
+    + toggleBtn + aiBtn
+    + '</div>'
     + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;font-size:.65rem">'
     + [['A','안전','#16a34a'],['B','대체로 안전','#65a30d'],['C','위험-이익','#f59e0b'],['D','위험','#ea580c'],['X','금기','#dc2626']].map(function(g){
       return '<span style="padding:2px 8px;border-radius:10px;background:'+g[2]+'15;color:'+g[2]+';border:1px solid '+g[2]+'30">'+g[0]+': '+g[1]+'</span>';
@@ -2803,7 +3403,7 @@ function renderDrugSafety() {
     + (totalCount ? '<div style="margin-bottom:12px">'
       + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="font-size:.88rem">🧡</span><span style="font-size:.78rem;font-weight:700;color:#f97316">오랑이</span><span style="font-size:.6rem;color:var(--mu)">'+Object.keys(byUser['오랑이']).length+'개</span></div>'
       + orangiCards
-      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;margin-top:14px"><span style="font-size:.88rem">🩵</span><span style="font-size:.78rem;font-weight:700;color:#06b6d4">붕쌤</span><span style="font-size:.6rem;color:var(--mu)">'+Object.keys(byUser['붕쌤']).length+'개</span></div>'
+      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;margin-top:14px"><span style="font-size:.88rem">🩵</span><span style="font-size:.78rem;font-weight:700;color:#06b6d4">붕쌤</span><span style="font-size:.6rem;color:var(--mu)">'+Object.keys(byUser['붕쌤']).length+'개</span><span style="font-size:.55rem;color:#06b6d4;background:#ecfeff;padding:1px 6px;border-radius:8px">🧬 남성 가임력 영향 포함</span></div>'
       + bungCards
       + '</div>' : orangiCards)
     + cacheStats
@@ -2812,12 +3412,163 @@ function renderDrugSafety() {
 
 // ── 7-6: 메인 대시보드 렌더러 ──
 
+// ═══════════════════════════════════════════════════════════════
+// 🍼 출산준비 체크리스트
+// ═══════════════════════════════════════════════════════════════
+const _DEFAULT_BIRTH_PREP = [
+  { cat: '🏥 병원/조리원', items: [
+    { key: 'obgyn', label: '산부인과 선택', desc: '분만 가능 여부, 위치, 비용 비교' },
+    { key: 'postpartum', label: '산후조리원 예약', desc: '시기, 비용, 후기 비교' },
+    { key: 'delivery_plan', label: '분만 계획서 작성', desc: '자연분만/제왕절개 선호, 무통 등' },
+  ]},
+  { cat: '👶 아기 용품', items: [
+    { key: 'stroller', label: '유모차', desc: '디럭스/절충형/휴대용' },
+    { key: 'carseat', label: '카시트', desc: '신생아용 필수 (퇴원 시 필요)' },
+    { key: 'crib', label: '아기 침대/범퍼', desc: '침대 or 바닥 생활' },
+    { key: 'bottle', label: '젖병/소독기', desc: '신생아용 젖병 + 소독기' },
+    { key: 'formula', label: '분유', desc: '모유 수유 계획에 따라 준비' },
+    { key: 'diaper', label: '기저귀/물티슈', desc: '신생아용 1단계' },
+    { key: 'clothes', label: '신생아 의류', desc: '배냇저고리, 속싸개, 외출복' },
+    { key: 'bath', label: '목욕용품', desc: '아기욕조, 체온계, 보습제' },
+  ]},
+  { cat: '🤰 산모 용품', items: [
+    { key: 'maternity_pad', label: '산모패드', desc: '출산 후 필수' },
+    { key: 'nursing_bra', label: '수유브라/수유패드', desc: '' },
+    { key: 'hospital_bag', label: '출산가방', desc: '입원 시 필요한 물품 패킹' },
+    { key: 'belly_band', label: '산후복대', desc: '' },
+    { key: 'breast_pump', label: '유축기', desc: '전동/수동' },
+  ]},
+  { cat: '📋 서류/보험', items: [
+    { key: 'prenatal_ins', label: '태아보험 가입', desc: '임신 22주 전 가입 권장' },
+    { key: 'birth_reg', label: '출생신고 준비', desc: '이름 결정, 주민센터' },
+    { key: 'maternity_leave', label: '출산휴가/육아휴직 신청', desc: '' },
+    { key: 'gov_support', label: '정부 지원금 확인', desc: '첫만남이용권, 영아수당 등' },
+  ]},
+  { cat: '💪 건강 관리', items: [
+    { key: 'folic_acid', label: '엽산/철분 복용', desc: '임신 3개월 전부터' },
+    { key: 'checkup_schedule', label: '산전검사 일정', desc: '기형아검사, 임당검사 등' },
+    { key: 'dental', label: '치과 검진', desc: '임신 전 치료 권장' },
+    { key: 'vaccination', label: '예방접종 확인', desc: '풍진, A형간염, 독감 등' },
+  ]},
+];
+
+function _getBirthPrepData() {
+  var m = getBrkMaster(); if (!m) return null;
+  if (!m.birthPrep) m.birthPrep = { categories: JSON.parse(JSON.stringify(_DEFAULT_BIRTH_PREP)), checked: {}, notes: {} };
+  return m.birthPrep;
+}
+
+function _renderBirthPrepTab() {
+  var bp = _getBirthPrepData();
+  if (!bp) return '<div style="font-size:.72rem;color:var(--mu)">붕룩이 마스터 데이터 없음</div>';
+
+  var totalItems = 0, checkedItems = 0;
+  bp.categories.forEach(function(cat) { cat.items.forEach(function(it) { totalItems++; if (bp.checked[it.key]) checkedItems++; }); });
+  var pct = totalItems ? Math.round(checkedItems / totalItems * 100) : 0;
+  var pctColor = pct >= 80 ? '#10b981' : pct >= 40 ? '#f59e0b' : '#ef4444';
+
+  var html = '<div style="text-align:center;margin-bottom:12px">'
+    + '<div style="font-size:1.8rem;font-weight:700;color:' + pctColor + '">' + pct + '%</div>'
+    + '<div style="font-size:.68rem;color:var(--mu)">' + checkedItems + '/' + totalItems + ' 완료</div>'
+    + '<div style="width:100%;height:8px;background:var(--bd);border-radius:4px;margin-top:6px;overflow:hidden"><div style="width:' + pct + '%;height:100%;background:' + pctColor + ';border-radius:4px;transition:width .3s"></div></div>'
+    + '</div>';
+
+  html += bp.categories.map(function(cat, ci) {
+    var catChecked = cat.items.filter(function(it) { return bp.checked[it.key]; }).length;
+    var catTotal = cat.items.length;
+    var itemsHtml = cat.items.map(function(it) {
+      var checked = bp.checked[it.key] || false;
+      var note = bp.notes[it.key] || '';
+      return '<div style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--sf)">'
+        + '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onchange="_toggleBirthPrep(\'' + it.key + '\',this.checked)" style="margin-top:2px;width:16px;height:16px;accent-color:#ec4899;flex-shrink:0">'
+        + '<div style="flex:1">'
+        + '<div style="font-size:.78rem;font-weight:' + (checked ? '400' : '500') + ';color:' + (checked ? 'var(--mu)' : 'var(--ink)') + ';' + (checked ? 'text-decoration:line-through' : '') + '">' + esc(it.label) + '</div>'
+        + (it.desc ? '<div style="font-size:.6rem;color:var(--mu2)">' + esc(it.desc) + '</div>' : '')
+        + (note ? '<div style="font-size:.6rem;color:var(--ac);margin-top:2px">📝 ' + esc(note) + '</div>' : '')
+        + '</div>'
+        + '<button onclick="_editBirthPrepNote(\'' + it.key + '\')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu);padding:2px" title="메모">📝</button>'
+        + '<button onclick="_removeBirthPrepItem(' + ci + ',\'' + it.key + '\')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:#dc2626;padding:2px" title="삭제">✕</button>'
+        + '</div>';
+    }).join('');
+
+    return '<div style="margin-bottom:8px;border:1px solid var(--bd);border-radius:8px;overflow:hidden">'
+      + '<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;background:var(--sf2);cursor:pointer" onclick="var b=this.nextElementSibling;b.style.display=b.style.display===\'none\'?\'block\':\'none\'">'
+      + '<span style="font-size:.78rem;font-weight:600">' + esc(cat.cat) + '</span>'
+      + '<span style="font-size:.6rem;color:var(--mu);margin-left:auto">' + catChecked + '/' + catTotal + '</span>'
+      + '<div style="width:40px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden"><div style="width:' + (catTotal ? Math.round(catChecked / catTotal * 100) : 0) + '%;height:100%;background:#ec4899;border-radius:2px"></div></div>'
+      + '</div>'
+      + '<div style="padding:4px 10px">' + itemsHtml
+      + '<button onclick="_addBirthPrepItem(' + ci + ')" style="width:100%;margin-top:4px;padding:4px;font-size:.65rem;border:1px dashed var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 항목 추가</button>'
+      + '</div></div>';
+  }).join('');
+
+  html += '<button onclick="_addBirthPrepCategory()" style="width:100%;margin-top:6px;padding:6px;font-size:.68rem;border:1.5px dashed #ec4899;border-radius:6px;background:none;color:#ec4899;cursor:pointer;font-family:var(--font)">+ 카테고리 추가</button>';
+  html += '<button onclick="_resetBirthPrep()" style="display:block;margin:8px auto 0;font-size:.58rem;color:var(--mu2);background:none;border:none;cursor:pointer;font-family:var(--font)">🔄 기본값으로 초기화</button>';
+
+  return html;
+}
+
+function _toggleBirthPrep(key, checked) {
+  var bp = _getBirthPrepData(); if (!bp) return;
+  bp.checked[key] = checked;
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _editBirthPrepNote(key) {
+  var bp = _getBirthPrepData(); if (!bp) return;
+  var note = prompt('메모 입력:', bp.notes[key] || '');
+  if (note === null) return;
+  bp.notes[key] = note.trim();
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _addBirthPrepItem(catIdx) {
+  var bp = _getBirthPrepData(); if (!bp || !bp.categories[catIdx]) return;
+  var label = prompt('항목 이름:');
+  if (!label || !label.trim()) return;
+  var desc = prompt('설명 (선택):') || '';
+  var key = 'custom_' + Date.now();
+  bp.categories[catIdx].items.push({ key: key, label: label.trim(), desc: desc.trim() });
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _removeBirthPrepItem(catIdx, key) {
+  if (!confirm('이 항목을 삭제할까요?')) return;
+  var bp = _getBirthPrepData(); if (!bp || !bp.categories[catIdx]) return;
+  bp.categories[catIdx].items = bp.categories[catIdx].items.filter(function(it) { return it.key !== key; });
+  delete bp.checked[key];
+  delete bp.notes[key];
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _addBirthPrepCategory() {
+  var bp = _getBirthPrepData(); if (!bp) return;
+  var name = prompt('카테고리 이름 (예: 🏠 인테리어):');
+  if (!name || !name.trim()) return;
+  bp.categories.push({ cat: name.trim(), items: [] });
+  saveBrkMaster();
+  renderView('meds');
+}
+
+function _resetBirthPrep() {
+  if (!confirm('출산준비 체크리스트를 기본값으로 초기화할까요? 체크/메모는 유지됩니다.')) return;
+  var bp = _getBirthPrepData(); if (!bp) return;
+  bp.categories = JSON.parse(JSON.stringify(_DEFAULT_BIRTH_PREP));
+  saveBrkMaster();
+  renderView('meds');
+}
+
 function renderBungrukiDashboard() {
   var tabs = [
     {id:'cycle',label:'🩸 생리주기',color:'#dc2626'},
     {id:'daily',label:'✅ 일일체크',color:'#16a34a'},
     {id:'lab',label:'🔬 검사결과',color:'#2563eb'},
     {id:'vaccine',label:'💉 접종',color:'#0891b2'},
+    {id:'birthprep',label:'🍼 출산준비',color:'#ec4899'},
     {id:'milestone',label:'🏁 마일스톤',color:'#7c3aed'},
     {id:'safety',label:'💊 약물안전',color:'#ea580c'},
   ];
@@ -2832,6 +3583,7 @@ function renderBungrukiDashboard() {
   else if (_brkDashTab === 'daily') contentHtml = renderDailyChecks();
   else if (_brkDashTab === 'lab') contentHtml = renderLabResults();
   else if (_brkDashTab === 'vaccine') contentHtml = _renderBrkVaccineTab();
+  else if (_brkDashTab === 'birthprep') contentHtml = _renderBirthPrepTab();
   else if (_brkDashTab === 'milestone') contentHtml = renderMilestones();
   else if (_brkDashTab === 'safety') contentHtml = renderDrugSafety();
 
@@ -2861,6 +3613,380 @@ function getMenstrualTag() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// 건강관리 도메인 홈 카드: 오늘의 임신준비 데일리체크 현황
+// ═══════════════════════════════════════════════════════════════
+function renderBrkDailySyncCard() {
+  // 건강관리 도메인에서만 표시
+  if(!S.currentDomain?.endsWith('-health')) return '';
+  const brkDs=S.domainState['bungruki'];
+  if(!brkDs?.master?.dailyChecks) return '';
+  const who=DC()?.user==='붕쌤'?'bung':'orangi';
+  const today=kstToday();
+  const dayData=brkDs.master.dailyChecks[today]?.[who];
+  if(!dayData) return '';
+
+  const supplItems=who==='orangi'
+    ?[{key:'folicAcid',label:'엽산',icon:'💊'},{key:'iron',label:'철분',icon:'🩸'},{key:'vitaminD',label:'비타민D',icon:'☀️'},{key:'multivitamin',label:'멀티비타민',icon:'💊'},{key:'magnesium',label:'마그네슘',icon:'🧲'}]
+    :[{key:'arginine',label:'아르기닌',icon:'💪'},{key:'coq10',label:'CoQ10',icon:'⚡'},{key:'silymarin',label:'실리마린',icon:'🌿'},{key:'multivitamin',label:'멀티비타민',icon:'💊'}];
+  // 커스텀 영양제
+  if(brkDs.master.customSuppl?.[who]) brkDs.master.customSuppl[who].forEach(c=>supplItems.push({key:c.key,label:c.label,icon:'💊'}));
+  // 숨긴 항목 제외
+  const hidden=brkDs.master.hiddenSuppl?.[who]||[];
+  const visibleItems=supplItems.filter(it=>hidden.indexOf(it.key)<0);
+
+  const supplHtml=visibleItems.map(it=>{
+    const taken=dayData[it.key];
+    return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:12px;font-size:.68rem;background:${taken?'#dcfce7':'#fef2f2'};color:${taken?'#16a34a':'#dc2626'};font-weight:500">${taken?'✅':'⬜'} ${it.label}</span>`;
+  }).join('');
+
+  const exerciseLabel={cardio:'🏃 유산소',strength:'🏋️ 근력',stretch:'🧘 스트레칭'};
+  const exercise=dayData.exercise;
+  const exerciseHtml=exercise
+    ?`<span style="display:inline-flex;padding:2px 8px;border-radius:12px;font-size:.68rem;background:#dcfce7;color:#16a34a;font-weight:500">${exerciseLabel[exercise]||exercise}</span>`
+    :`<span style="display:inline-flex;padding:2px 8px;border-radius:12px;font-size:.68rem;background:#fef2f2;color:#dc2626;font-weight:500">⬜ 운동 안함</span>`;
+
+  let extraHtml='';
+  if(who==='bung'){
+    const alcohol=dayData.alcohol;
+    if(alcohol) extraHtml+=`<span style="display:inline-flex;padding:2px 8px;border-radius:12px;font-size:.68rem;background:#fef2f2;color:#dc2626;font-weight:500">🍺 음주</span>`;
+  }
+
+  const takenCount=visibleItems.filter(it=>dayData[it.key]).length;
+  const totalCount=visibleItems.length;
+  const pct=totalCount?Math.round(takenCount/totalCount*100):0;
+
+  return `<div class="card" style="border-left:3px solid #a855f7">
+    <div class="card-title">🍼 오늘의 임신준비 데일리체크
+      <span style="font-size:.62rem;font-weight:400;color:var(--mu);margin-left:auto">${today}</span>
+    </div>
+    <div style="margin-bottom:8px">
+      <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">💊 영양제 (${takenCount}/${totalCount})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${supplHtml}</div>
+      <div style="margin-top:4px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${pct>=80?'#16a34a':pct>=50?'#f59e0b':'#ef4444'};border-radius:2px"></div></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px">
+      <div style="font-size:.68rem;font-weight:600;color:var(--mu);width:100%;margin-bottom:2px">🏃 운동 / 생활</div>
+      ${exerciseHtml} ${extraHtml}
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 건강관리 도메인 — 영양제/운동 데일리체크 (붕룩이 연동)
+// ═══════════════════════════════════════════════════════════════
+var _healthDailyDate = null; // null=오늘
+
+function renderHealthDailyCheck() {
+  if(!S.currentDomain?.endsWith('-health')) return '';
+  const brkDs = S.domainState['bungruki'];
+  if(!brkDs?.master) return '';
+  const m = brkDs.master;
+  if(!m.dailyChecks) m.dailyChecks = {};
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const today = kstToday();
+  const date = _healthDailyDate || today;
+  if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if(!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
+  const dayData = m.dailyChecks[date][who];
+
+  const supplItems = who === 'orangi'
+    ? [{key:'folicAcid',label:'엽산',icon:'💊'},{key:'iron',label:'철분',icon:'🩸'},{key:'vitaminD',label:'비타민D',icon:'☀️'},{key:'multivitamin',label:'멀티비타민',icon:'💊'},{key:'magnesium',label:'마그네슘',icon:'🧲'}]
+    : [{key:'arginine',label:'아르기닌',icon:'💪'},{key:'coq10',label:'CoQ10',icon:'⚡'},{key:'silymarin',label:'실리마린',icon:'🌿'},{key:'multivitamin',label:'멀티비타민',icon:'💊'}];
+  // 커스텀 영양제 추가
+  if(m.customSuppl?.[who]) m.customSuppl[who].forEach(c => { if(!supplItems.find(x=>x.key===c.key)) supplItems.push({key:c.key,label:c.label,icon:'💊'}); });
+  const hidden = m.hiddenSuppl?.[who] || [];
+  const visibleItems = supplItems.filter(it => hidden.indexOf(it.key) < 0);
+
+  const supplHtml = visibleItems.map(it => {
+    const checked = dayData[it.key] ? true : false;
+    return `<div onclick="_toggleHealthSuppl('${esc(it.key)}')" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:${checked?'#f0fdf4':'var(--sf2)'};border:1.5px solid ${checked?'#86efac':'var(--bd)'};border-radius:8px;cursor:pointer;transition:all .15s">
+      <span style="font-size:1rem">${checked?'✅':it.icon}</span>
+      <span style="font-size:.78rem;font-weight:${checked?'600':'400'};color:${checked?'#16a34a':'var(--tx)'}">${esc(it.label)}</span>
+    </div>`;
+  }).join('');
+
+  // ── 운동 기록 (직접 입력 + DB 자동매칭) ──
+  const _EX_DB = {
+    // 유산소 (기본 단위: 분)
+    '걷기':{cat:'cardio',icon:'🚶',defaultInt:'light',unit:'min'},'산책':{cat:'cardio',icon:'🚶',defaultInt:'light',unit:'min'},
+    '조깅':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'min'},'달리기':{cat:'cardio',icon:'🏃',defaultInt:'intense',unit:'km'},
+    '러닝':{cat:'cardio',icon:'🏃',defaultInt:'moderate',unit:'km'},'자전거':{cat:'cardio',icon:'🚴',defaultInt:'moderate',unit:'km'},
+    '수영':{cat:'cardio',icon:'🏊',defaultInt:'moderate',unit:'min'},'줄넘기':{cat:'cardio',icon:'⏫',defaultInt:'intense',unit:'reps'},
+    '등산':{cat:'cardio',icon:'⛰️',defaultInt:'intense',unit:'min'},'에어로빅':{cat:'cardio',icon:'💃',defaultInt:'moderate',unit:'min'},
+    '댄스':{cat:'cardio',icon:'💃',defaultInt:'moderate',unit:'min'},'계단':{cat:'cardio',icon:'🪜',defaultInt:'moderate',unit:'min'},
+    // 근력 (기본 단위: 횟수 또는 분)
+    '웨이트':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'min'},'헬스':{cat:'strength',icon:'🏋️',defaultInt:'moderate',unit:'min'},
+    '스쿼트':{cat:'strength',icon:'🦵',defaultInt:'moderate',unit:'reps'},'푸시업':{cat:'strength',icon:'💪',defaultInt:'moderate',unit:'reps'},
+    '풀업':{cat:'strength',icon:'💪',defaultInt:'intense',unit:'reps'},'플랭크':{cat:'strength',icon:'🧘',defaultInt:'moderate',unit:'sec'},
+    '덤벨':{cat:'strength',icon:'🏋️',defaultInt:'moderate',unit:'reps'},'바벨':{cat:'strength',icon:'🏋️',defaultInt:'intense',unit:'reps'},
+    '필라테스':{cat:'strength',icon:'🧘',defaultInt:'moderate',unit:'min'},'크로스핏':{cat:'strength',icon:'🔥',defaultInt:'intense',unit:'min'},
+    // 유연성
+    '스트레칭':{cat:'stretch',icon:'🧘',defaultInt:'light',unit:'min'},'요가':{cat:'stretch',icon:'🧘',defaultInt:'moderate',unit:'min'},
+    '폼롤러':{cat:'stretch',icon:'🔄',defaultInt:'light',unit:'min'},'마사지건':{cat:'stretch',icon:'🔧',defaultInt:'light',unit:'min'},
+  };
+  const _EX_UNITS = {min:'분',sec:'초',reps:'회',sets:'세트',km:'km',m:'m'};
+  const _EX_UNIT_LIST = ['min','sec','reps','sets','km','m'];
+  // 커스텀 운동 (클라우드)
+  const customEx = m.settings?.customExercises || {};
+  const allExDb = { ..._EX_DB, ...customEx };
+  const intensityLabels = {light:'약',moderate:'중',intense:'강'};
+  const intensityColors = {light:'#10b981',moderate:'#f59e0b',intense:'#dc2626'};
+  const catLabels = {cardio:'유산소',strength:'근력',stretch:'유연성'};
+
+  // 하위호환
+  let exercises = dayData.exercises || [];
+  if (!exercises.length && dayData.exercise) exercises = [{name:dayData.exercise, cat:'cardio', intensity:'moderate', duration:null}];
+
+  // 기록된 운동 목록
+  const exListHtml = exercises.map((e, i) => {
+    const db = allExDb[e.name];
+    const icon = db?.icon || (e.cat==='cardio'?'🏃':e.cat==='strength'?'🏋️':'🧘');
+    const catLabel = catLabels[e.cat||db?.cat] || '';
+    const curUnit = e.unit || db?.unit || 'min';
+    const amount = e.amount ?? e.duration ?? '';
+    const unitOpts = _EX_UNIT_LIST.map(u =>
+      `<option value="${u}"${curUnit===u?' selected':''}>${_EX_UNITS[u]}</option>`
+    ).join('');
+    return `<div style="display:flex;align-items:center;gap:3px;padding:4px 6px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:3px;flex-wrap:wrap">
+      <span style="font-size:.8rem">${icon}</span>
+      <span style="font-size:.72rem;font-weight:500">${esc(e.name)}</span>
+      <span style="font-size:.5rem;color:var(--mu)">${catLabel}</span>
+      <div style="display:flex;gap:2px;margin-left:auto">${['light','moderate','intense'].map(int => {
+        const sel = e.intensity === int;
+        return `<button onclick="_setExIntensity(${i},'${int}')" style="padding:1px 5px;font-size:.52rem;border:1px solid ${sel?intensityColors[int]:'var(--bd)'};border-radius:3px;background:${sel?intensityColors[int]+'20':'transparent'};color:${sel?intensityColors[int]:'var(--mu)'};cursor:pointer;font-family:var(--font)">${intensityLabels[int]}</button>`;
+      }).join('')}</div>
+      <input type="number" placeholder="${_EX_UNITS[curUnit]}" value="${amount}" onchange="_setExAmount(${i},this.value)"
+        style="width:35px;padding:2px;font-size:.6rem;border:1px solid var(--bd);border-radius:3px;text-align:center;font-family:var(--mono);color:var(--ink);background:var(--sf2)">
+      <select onchange="_setExUnit(${i},this.value)" style="padding:1px 2px;font-size:.55rem;border:1px solid var(--bd);border-radius:3px;background:var(--sf2);color:var(--ink);font-family:var(--font)">${unitOpts}</select>
+      <button onclick="_removeExercise(${i})" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:.6rem;padding:2px">✕</button>
+    </div>`;
+  }).join('');
+
+  // 운동 요약
+  const exSummary = exercises.length
+    ? exercises.map(e => { const db=allExDb[e.name]; const u=_EX_UNITS[e.unit||db?.unit||'min']||'분'; const amt=e.amount??e.duration; return (db?.icon||'🏃')+esc(e.name)+'('+intensityLabels[e.intensity||'moderate']+(amt?' '+amt+u:'')+')'; }).join(' · ')
+    : '안함';
+
+  // 빠른 추가 버튼 (자주 쓰는 운동)
+  const recentEx = m.settings?.recentExercises || ['걷기','조깅','웨이트','스트레칭','요가'];
+  const quickBtns = recentEx.slice(0,6).map(name => {
+    const db = allExDb[name];
+    const already = exercises.some(e => e.name === name);
+    if (already) return '';
+    return `<button onclick="_addExercise('${esc(name)}')" style="padding:3px 8px;font-size:.62rem;border:1px solid var(--bd);border-radius:12px;background:var(--sf2);color:var(--ink);cursor:pointer;font-family:var(--font)">${db?.icon||'🏃'} ${esc(name)}</button>`;
+  }).filter(Boolean).join('');
+
+  const exHtml = `${exListHtml}
+    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:4px">${quickBtns}
+      <button onclick="_addExerciseCustom()" style="padding:3px 8px;font-size:.62rem;border:1px dashed var(--ac);border-radius:12px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+ 직접 입력</button>
+    </div>`;
+
+  // 붕쌤 전용: 음주
+  let alcoholHtml = '';
+  if(who === 'bung') {
+    const alcohol = dayData.alcohol || false;
+    alcoholHtml = `<div style="margin-top:6px"><span style="font-size:.68rem;font-weight:600;color:var(--mu)">🍺 음주 여부</span>
+      <div onclick="_toggleHealthAlcohol()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:${alcohol?'#fef2f2':'var(--sf2)'};border:1.5px solid ${alcohol?'#fca5a5':'var(--bd)'};border-radius:8px;cursor:pointer;margin-left:8px">
+        <span style="font-size:.9rem">${alcohol?'🍺':'⬜'}</span>
+        <span style="font-size:.72rem;font-weight:${alcohol?'600':'400'};color:${alcohol?'#dc2626':'var(--tx)'}">오늘 음주함</span>
+      </div>
+    </div>`;
+  }
+
+  // 주간 순응도
+  const weekDays = [];
+  for(let i = 6; i >= 0; i--) {
+    const d = new Date(new Date(today+'T00:00:00').getTime() - i*86400000);
+    weekDays.push(_localDateStr(d));
+  }
+  const takenCount = visibleItems.filter(it => dayData[it.key]).length;
+  const totalCount = visibleItems.length;
+  const pct = totalCount ? Math.round(takenCount/totalCount*100) : 0;
+
+  // 날짜 네비게이션
+  const isToday = date === today;
+  const prevDateStr = _prevDay(date);
+  const nextDateStr = _nextDay(date);
+  const dateNav = `<div style="display:flex;align-items:center;gap:6px;justify-content:center;margin-bottom:8px">
+    <button onclick="_healthDailyDate='${prevDateStr}';renderView('meds')" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--ink);font-family:var(--font)">◀</button>
+    <span style="font-size:.78rem;font-weight:600">${date}${isToday?' (오늘)':''}</span>
+    <button onclick="_healthDailyDate=${isToday ? 'null' : "'" + nextDateStr + "'"};renderView('meds')" ${isToday?'disabled':''} style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;color:var(--ink);font-family:var(--font)">▶</button>
+    ${!isToday?`<button onclick="_healthDailyDate=null;renderView('meds')" style="background:none;border:1px solid var(--ac);border-radius:4px;padding:2px 8px;font-size:.62rem;cursor:pointer;color:var(--ac);font-family:var(--font)">오늘</button>`:''}
+  </div>`;
+
+  return `<div style="padding:12px;background:var(--sf2);border:1.5px solid #a855f730;border-radius:10px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:1.1rem">🍼</span>
+      <span style="font-size:.88rem;font-weight:700;color:#a855f7">임신준비 데일리체크</span>
+      <span style="font-size:.62rem;color:var(--mu);margin-left:auto">${takenCount}/${totalCount} (${pct}%)</span>
+    </div>
+    ${dateNav}
+    <div style="font-size:.68rem;font-weight:600;color:var(--mu);margin-bottom:4px">💊 영양제
+      <button onclick="_addHealthSuppl()" style="font-size:.6rem;padding:1px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font);margin-left:6px">+ 추가</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px;margin-bottom:8px">${supplHtml}</div>
+    <div style="margin-top:4px;height:4px;background:var(--bd);border-radius:2px;overflow:hidden;margin-bottom:8px"><div style="height:100%;width:${pct}%;background:${pct>=80?'#16a34a':pct>=50?'#f59e0b':'#ef4444'};border-radius:2px"></div></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span style="font-size:.68rem;font-weight:600;color:var(--mu)">🏃 운동</span>
+      <span style="font-size:.58rem;color:var(--ac)">${exSummary}</span>
+    </div>
+    <div style="display:flex;gap:4px;margin-bottom:4px">${exHtml}</div>
+    ${alcoholHtml}
+    <div style="margin-top:6px"><span style="font-size:.68rem;font-weight:600;color:var(--mu)">⚖️ 체중</span>
+      <input type="number" step="0.1" placeholder="kg" value="${dayData.weight||''}" onchange="_setHealthWeight(this.value)"
+        style="width:60px;margin-left:8px;padding:4px 6px;font-size:.72rem;border:1px solid var(--bd);border-radius:6px;text-align:center;font-family:var(--mono);color:var(--ink);background:var(--sf2)">
+      <span style="font-size:.6rem;color:var(--mu2)">kg</span>
+    </div>
+  </div>`;
+}
+
+function _addHealthSuppl() {
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  showConfirmModal('💊 영양제 추가',
+    `<div style="font-size:.72rem">
+      <label>영양제 이름<br><input type="text" id="health-suppl-name" class="dx-form-input" style="width:100%" placeholder="예: 오메가3, 유산균, 비타민C"></label>
+    </div>`,
+    [{
+      label: '추가', primary: true,
+      action: async () => {
+        const name = document.getElementById('health-suppl-name')?.value?.trim();
+        if (!name) { showToast('이름을 입력하세요'); return; }
+        const key = name.replace(/\s+/g, '_').toLowerCase();
+        const brkDs = S.domainState['bungruki'];
+        if (!brkDs?.master) { showToast('⚠️ 붕룩이 데이터 없음'); return; }
+        const m = brkDs.master;
+        if (!m.customSuppl) m.customSuppl = {};
+        if (!m.customSuppl[who]) m.customSuppl[who] = [];
+        if (m.customSuppl[who].find(c => c.key === key)) { showToast('이미 존재하는 항목'); return; }
+        m.customSuppl[who].push({ key, label: name });
+        await saveBrkMaster();
+        closeConfirmModal();
+        showToast('✅ ' + name + ' 추가됨');
+        renderView('meds');
+      }
+    }, { label: '취소', action: closeConfirmModal }]);
+}
+
+function _prevDay(d){const dt=new Date(d+'T00:00:00');dt.setDate(dt.getDate()-1);return _localDateStr(dt);}
+function _nextDay(d){const dt=new Date(d+'T00:00:00');dt.setDate(dt.getDate()+1);return _localDateStr(dt);}
+
+async function _toggleHealthSuppl(key) {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const date = _healthDailyDate || kstToday();
+  const m = brkDs.master;
+  if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if(!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
+  m.dailyChecks[date][who][key] = !m.dailyChecks[date][who][key];
+  await saveBrkMaster();
+  syncBrkToHealth(date, who);
+  renderView('meds');
+}
+
+// 운동 DB
+const _EXERCISE_DB = {
+  '걷기':{cat:'cardio',icon:'🚶',defaultInt:'light'},'산책':{cat:'cardio',icon:'🚶',defaultInt:'light'},
+  '조깅':{cat:'cardio',icon:'🏃',defaultInt:'moderate'},'달리기':{cat:'cardio',icon:'🏃',defaultInt:'intense'},
+  '러닝':{cat:'cardio',icon:'🏃',defaultInt:'moderate'},'자전거':{cat:'cardio',icon:'🚴',defaultInt:'moderate'},
+  '수영':{cat:'cardio',icon:'🏊',defaultInt:'moderate'},'줄넘기':{cat:'cardio',icon:'⏫',defaultInt:'intense'},
+  '등산':{cat:'cardio',icon:'⛰️',defaultInt:'intense'},'에어로빅':{cat:'cardio',icon:'💃',defaultInt:'moderate'},
+  '댄스':{cat:'cardio',icon:'💃',defaultInt:'moderate'},'계단':{cat:'cardio',icon:'🪜',defaultInt:'moderate'},
+  '웨이트':{cat:'strength',icon:'🏋️',defaultInt:'intense'},'헬스':{cat:'strength',icon:'🏋️',defaultInt:'moderate'},
+  '스쿼트':{cat:'strength',icon:'🦵',defaultInt:'moderate'},'푸시업':{cat:'strength',icon:'💪',defaultInt:'moderate'},
+  '풀업':{cat:'strength',icon:'💪',defaultInt:'intense'},'플랭크':{cat:'strength',icon:'🧘',defaultInt:'moderate'},
+  '덤벨':{cat:'strength',icon:'🏋️',defaultInt:'moderate'},'바벨':{cat:'strength',icon:'🏋️',defaultInt:'intense'},
+  '필라테스':{cat:'strength',icon:'🧘',defaultInt:'moderate'},'크로스핏':{cat:'strength',icon:'🔥',defaultInt:'intense'},
+  '스트레칭':{cat:'stretch',icon:'🧘',defaultInt:'light'},'요가':{cat:'stretch',icon:'🧘',defaultInt:'moderate'},
+  '폼롤러':{cat:'stretch',icon:'🔄',defaultInt:'light'},'마사지건':{cat:'stretch',icon:'🔧',defaultInt:'light'},
+};
+
+function _getExDayData() {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return null;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const date = _healthDailyDate || kstToday();
+  const m = brkDs.master;
+  if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if(!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
+  const d = m.dailyChecks[date][who];
+  if (!d.exercises) d.exercises = [];
+  return d;
+}
+async function _addExercise(name) {
+  const d = _getExDayData(); if(!d) return;
+  if (d.exercises.some(e => e.name === name)) return;
+  const db = _EXERCISE_DB[name] || getBrkMaster()?.settings?.customExercises?.[name];
+  d.exercises.push({ name, cat: db?.cat||'cardio', intensity: db?.defaultInt||'moderate', unit: db?.unit||'min', amount: null, duration: null });
+  // 최근 운동 목록 업데이트
+  const m = getBrkMaster();
+  if (m) {
+    if (!m.settings) m.settings = {};
+    const recent = m.settings.recentExercises || ['걷기','조깅','웨이트','스트레칭','요가'];
+    if (!recent.includes(name)) { recent.unshift(name); if (recent.length > 10) recent.pop(); }
+    m.settings.recentExercises = recent;
+  }
+  await saveBrkMaster(); renderView('meds');
+}
+function _addExerciseCustom() {
+  const name = prompt('운동 이름을 입력하세요 (예: 배드민턴, 테니스, 복싱)');
+  if (!name?.trim()) return;
+  const trimmed = name.trim();
+  // 커스텀 운동 DB에 추가
+  const m = getBrkMaster();
+  if (m) {
+    if (!m.settings) m.settings = {};
+    if (!m.settings.customExercises) m.settings.customExercises = {};
+    if (!m.settings.customExercises[trimmed]) {
+      m.settings.customExercises[trimmed] = { cat:'cardio', icon:'🏃', defaultInt:'moderate' };
+    }
+  }
+  _addExercise(trimmed);
+}
+async function _removeExercise(idx) {
+  const d = _getExDayData(); if(!d) return;
+  d.exercises.splice(idx, 1);
+  await saveBrkMaster(); renderView('meds');
+}
+async function _setExIntensity(idx, intensity) {
+  const d = _getExDayData(); if(!d || !d.exercises[idx]) return;
+  d.exercises[idx].intensity = intensity;
+  await saveBrkMaster(); renderView('meds');
+}
+async function _setExAmount(idx, val) {
+  const d = _getExDayData(); if(!d || !d.exercises[idx]) return;
+  d.exercises[idx].amount = val ? parseFloat(val) : null;
+  d.exercises[idx].duration = d.exercises[idx].amount; // 하위호환
+  await saveBrkMaster();
+}
+async function _setExUnit(idx, unit) {
+  const d = _getExDayData(); if(!d || !d.exercises[idx]) return;
+  d.exercises[idx].unit = unit;
+  await saveBrkMaster(); renderView('meds');
+}
+
+async function _setHealthWeight(val) {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
+  const who = DC()?.user === '붕쌤' ? 'bung' : 'orangi';
+  const date = _healthDailyDate || kstToday();
+  const m = brkDs.master;
+  if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if(!m.dailyChecks[date][who]) m.dailyChecks[date][who] = {};
+  m.dailyChecks[date][who].weight = val ? parseFloat(val) : null;
+  await saveBrkMaster();
+}
+async function _toggleHealthAlcohol() {
+  const brkDs = S.domainState['bungruki']; if(!brkDs?.master) return;
+  const who = 'bung';
+  const date = _healthDailyDate || kstToday();
+  const m = brkDs.master;
+  if(!m.dailyChecks[date]) m.dailyChecks[date] = {};
+  if(!m.dailyChecks[date].bung) m.dailyChecks[date].bung = {};
+  m.dailyChecks[date].bung.alcohol = !m.dailyChecks[date].bung.alcohol;
+  await saveBrkMaster();
+  syncBrkToHealth(date, who);
+  renderView('meds');
+}
+
 // BUNGRUKI TIMELINE (임신 준비 타임라인)
 // ═══════════════════════════════════════════════════════════════
 function renderBungrukiTimeline() {
@@ -2883,7 +4009,7 @@ function renderBungrukiTimeline() {
         <div style="font-size:.68rem;font-family:var(--mono);color:var(--mu)">${l.datetime.slice(0,10)}</div>
         <div style="font-size:.62rem;color:${color};font-weight:600">${who}</div>
         ${cats?`<div style="font-size:.65rem;color:var(--ac);margin-top:2px">${esc(cats)}</div>`:''}
-        <div style="font-size:.78rem;margin-top:3px;line-height:1.5">${esc((l.memo||'').substring(0,100))}</div>
+        ${l.memo?`<div style="font-size:.78rem;margin-top:3px;line-height:1.5">${esc(l.memo.substring(0,100))}</div>`:''}
       </div>
       <div style="width:12px;display:flex;flex-direction:column;align-items:center;flex-shrink:0">
         <div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid var(--sf)"></div>

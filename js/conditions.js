@@ -7,6 +7,13 @@
 // {id, name, diagnosisDate, status:'active'|'remission'|'resolved'|'self-stopped',
 //  medications:'텍스트', drugResponse:'텍스트', course:'텍스트', notes:'텍스트'}
 
+// 시술 판별: 약물이 아닌 시술/치료 항목 (데일리 체크에서 제외, 시행 시에만 기록)
+const _PROCEDURE_KEYWORDS = ['block','신경자극술','VNS','ONS','SPG','물리치료','산소요법','CBT','시술','수술','주사'];
+function _isProcedure(medName) {
+  const lower = medName.toLowerCase();
+  return _PROCEDURE_KEYWORDS.some(kw => lower.includes(kw.toLowerCase()));
+}
+
 function renderConditionMedSelector(date) {
   const condMeds=getConditionMeds(date);
   if(!condMeds.length) return '';
@@ -22,31 +29,307 @@ function renderConditionMedSelector(date) {
     </div>`;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// MEDICATION DETAIL — 약물별 주기/횟수/시간/처방 관리
+// ═══════════════════════════════════════════════════════════════
+
+const _CYCLE_OPTIONS = [
+  {value:'daily',label:'매일'},
+  {value:'weekly',label:'주 N회'},
+  {value:'monthly',label:'월 N회'},
+  {value:'prn',label:'필요 시 (PRN)'},
+];
+const _TIMING_OPTIONS = ['아침','점심','저녁','취침전'];
+const _WEEKDAY_LABELS = ['일','월','화','수','목','금','토'];
+
+function _getMedDetail(condition, medName) {
+  if(!condition.medsDetail) condition.medsDetail={};
+  return condition.medsDetail[medName] || {cycle:'daily',timesPerDay:1,timing:[],dose:'',rxDays:0,rxStartDate:'',weekDays:[],monthDay:0};
+}
+
+function _getTimesMax(detail) {
+  if(detail.cycle==='prn') return 99;
+  return detail.timesPerDay || 1;
+}
+
+// 오늘 이 약을 복용해야 하는 날인지 판단
+function _isMedDueToday(detail, dateStr) {
+  if(!detail.cycle || detail.cycle==='daily' || detail.cycle==='prn') return true;
+  if(detail.cycle==='weekly') {
+    const dow=new Date(dateStr+'T12:00').getDay(); // 0=일~6=토
+    return (detail.weekDays||[]).includes(dow);
+  }
+  if(detail.cycle==='monthly') {
+    const dom=new Date(dateStr+'T12:00').getDate();
+    return dom===(detail.monthDay||1);
+  }
+  return true;
+}
+
+// 당일 해당 약물 복용 횟수 계산
+function _getTodayDoseCount(date, medName) {
+  const ds=D();
+  let count=0;
+  (ds.logData||[]).filter(l=>l.datetime?.slice(0,10)===date).forEach(l=>{
+    if(l.medCheck?.[medName]) count++;
+  });
+  return count;
+}
+
+// 처방 소진일 계산
+function _getRxEndDate(detail) {
+  if(!detail.rxStartDate||!detail.rxDays) return null;
+  const start=new Date(detail.rxStartDate+'T00:00:00');
+  start.setDate(start.getDate()+detail.rxDays);
+  return start.toISOString().slice(0,10);
+}
+
+// 약물 상세 설정 모달
+function openMedDetailSettings(conditionId, medName) {
+  const allConds=getAllUserConditions();
+  const cond=allConds.find(c=>c.id===conditionId);
+  if(!cond) return;
+  const ds=S.domainState[cond._domainId];
+  const origCond=ds?.master?.conditions?.find(c=>c.id===conditionId);
+  if(!origCond) return;
+  if(!origCond.medsDetail) origCond.medsDetail={};
+  const d=origCond.medsDetail[medName]||{cycle:'daily',timesPerDay:1,timing:[],dose:'',rxDays:0,rxStartDate:'',weekDays:[],monthDay:0};
+
+  const cycleOpts=_CYCLE_OPTIONS.map(o=>`<option value="${o.value}"${d.cycle===o.value?' selected':''}>${o.label}</option>`).join('');
+  const timingChips=_TIMING_OPTIONS.map(t=>`<div class="log-chip${(d.timing||[]).includes(t)?' sel sel-sym':''}" data-group="md-timing" data-val="${t}" onclick="toggleChip(this,'sel-sym')" style="font-size:.65rem;padding:3px 8px">${t}</div>`).join('');
+  const weekChips=_WEEKDAY_LABELS.map((l,i)=>`<div class="log-chip${(d.weekDays||[]).includes(i)?' sel sel-sym':''}" data-group="md-weekday" data-val="${i}" onclick="toggleChip(this,'sel-sym')" style="font-size:.65rem;padding:3px 8px;min-width:28px;text-align:center">${l}</div>`).join('');
+  const rxEnd=_getRxEndDate(d);
+
+  showConfirmModal('💊 '+esc(medName)+' — 복용 설정',
+    `<div style="font-size:.72rem;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px">
+        <div><div class="dx-form-label">복용 주기</div><select id="md-cycle" class="dx-form-input" style="width:120px" onchange="_mdCycleChange()">${cycleOpts}</select></div>
+        <div id="md-times-wrap"><div class="dx-form-label">하루 횟수</div><select id="md-times" class="dx-form-input" style="width:80px">
+          ${[1,2,3,4].map(n=>`<option value="${n}"${(d.timesPerDay||1)===n?' selected':''}>${n}회</option>`).join('')}
+        </select></div>
+      </div>
+      <div><div class="dx-form-label">복용 시간대</div><div class="log-chips" style="gap:3px">${timingChips}</div></div>
+      <div id="md-weekdays-wrap" style="display:${d.cycle==='weekly'?'block':'none'}"><div class="dx-form-label">요일 선택</div><div class="log-chips" style="gap:3px">${weekChips}</div></div>
+      <div id="md-monthday-wrap" style="display:${d.cycle==='monthly'?'block':'none'}"><div class="dx-form-label">매월</div><input type="number" id="md-monthday" class="dx-form-input" min="1" max="31" value="${d.monthDay||1}" style="width:60px"><span style="font-size:.68rem;color:var(--mu)">일</span></div>
+      <div><div class="dx-form-label">용량</div><input id="md-dose" class="dx-form-input" value="${esc(d.dose||'')}" placeholder="예: 50mg" style="width:180px"></div>
+      <div style="display:flex;gap:8px">
+        <div><div class="dx-form-label">처방일수</div><input type="number" id="md-rx-days" class="dx-form-input" value="${d.rxDays||''}" placeholder="일" style="width:80px"></div>
+        <div><div class="dx-form-label">처방 시작일</div><input type="date" id="md-rx-start" class="dx-form-input" value="${d.rxStartDate||''}" style="width:140px"></div>
+      </div>
+      ${rxEnd?`<div style="font-size:.65rem;color:var(--ac)">💊 소진 예정: ${rxEnd}</div>`:''}
+    </div>`,
+    [{label:'💾 저장',primary:true,action:async()=>{
+      const timing=[];document.querySelectorAll('[data-group="md-timing"].sel').forEach(el=>timing.push(el.dataset.val));
+      const weekDays=[];document.querySelectorAll('[data-group="md-weekday"].sel').forEach(el=>weekDays.push(parseInt(el.dataset.val)));
+      origCond.medsDetail[medName]={
+        cycle:document.getElementById('md-cycle')?.value||'daily',
+        timesPerDay:parseInt(document.getElementById('md-times')?.value)||1,
+        timing:timing,
+        dose:(document.getElementById('md-dose')?.value||'').trim(),
+        rxDays:parseInt(document.getElementById('md-rx-days')?.value)||0,
+        rxStartDate:document.getElementById('md-rx-start')?.value||'',
+        weekDays:weekDays,
+        monthDay:parseInt(document.getElementById('md-monthday')?.value)||1,
+      };
+      await saveMaster();closeConfirmModal();showToast('✅ 복용 설정 저장');renderView(S.currentView);
+    }},{label:'취소',action:closeConfirmModal}]);
+}
+
+function _mdCycleChange() {
+  const cycle=document.getElementById('md-cycle')?.value;
+  const timesWrap=document.getElementById('md-times-wrap');
+  const weekWrap=document.getElementById('md-weekdays-wrap');
+  const monthWrap=document.getElementById('md-monthday-wrap');
+  if(timesWrap) timesWrap.style.display=(cycle==='prn')?'none':'block';
+  if(weekWrap) weekWrap.style.display=(cycle==='weekly')?'block':'none';
+  if(monthWrap) monthWrap.style.display=(cycle==='monthly')?'block':'none';
+}
+
+// PRN/추가복용 이유 프리셋
+const _DEFAULT_MED_REASONS=['두통 악화','불안/공황','불면','통증','구역','기타'];
+
+function _getMedReasonPresets() {
+  const dm=DM();
+  return dm?.settings?.medReasonPresets || _DEFAULT_MED_REASONS;
+}
+
+function _promptMedReason(medName, callback) {
+  const presets=_getMedReasonPresets();
+  const presetsHtml=presets.map(r=>`<button onclick="document.getElementById('med-reason-input').value='${esc(r)}'" style="font-size:.62rem;padding:2px 8px;border:1px solid var(--bd);border-radius:12px;background:var(--sf2);color:var(--ink);cursor:pointer;font-family:var(--font)">${esc(r)}</button>`).join('');
+
+  showConfirmModal('💊 '+esc(medName)+' 복용 이유',
+    `<div style="font-size:.72rem">
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">${presetsHtml}</div>
+      <input id="med-reason-input" class="dx-form-input" placeholder="복용 이유 입력..." style="width:100%">
+      <div style="margin-top:6px;display:flex;gap:4px;align-items:center">
+        <input type="text" id="med-reason-new-preset" placeholder="새 프리셋" style="flex:1;font-size:.65rem;padding:3px 6px;border:1px solid var(--bd);border-radius:4px;font-family:var(--font);color:var(--ink);background:var(--sf2)">
+        <button onclick="_addMedReasonPreset()" style="font-size:.6rem;padding:2px 8px;border:1px solid var(--ac);border-radius:4px;background:none;color:var(--ac);cursor:pointer;font-family:var(--font)">+고정</button>
+      </div>
+    </div>`,
+    [{label:'✅ 확인',primary:true,action:()=>{
+      const reason=(document.getElementById('med-reason-input')?.value||'').trim();
+      closeConfirmModal();
+      callback(reason);
+    }},{label:'취소',action:()=>{closeConfirmModal();callback(null);}}]);
+}
+
+async function _addMedReasonPreset() {
+  const input=document.getElementById('med-reason-new-preset');
+  const val=(input?.value||'').trim();
+  if(!val) return;
+  const dm=DM();if(!dm) return;
+  if(!dm.settings) dm.settings={};
+  if(!dm.settings.medReasonPresets) dm.settings.medReasonPresets=[..._DEFAULT_MED_REASONS];
+  if(!dm.settings.medReasonPresets.includes(val)) {
+    dm.settings.medReasonPresets.push(val);
+    await saveMaster();
+    showToast('✅ 프리셋 추가: '+val);
+  }
+  if(input) input.value='';
+}
+
 function renderDailyMedCheck(date) {
   const condMeds=getConditionMeds(date);
   if(!condMeds.length) return '';
-  return `<div class="log-section-title">💊 오늘 복용 체크</div>
+  // 당일 기존 기록에서 이미 복용 체크된 약물 수집 + 횟수
+  const _dayMcCount={};
+  const _dayMcReasons={};
+  const ds=D();
+  (ds.logData||[]).filter(l=>l.datetime?.slice(0,10)===date&&l.medCheck).forEach(l=>{
+    Object.entries(l.medCheck).forEach(([k,v])=>{
+      if(v) _dayMcCount[k]=(_dayMcCount[k]||0)+1;
+    });
+    if(l.medCheckDetail){
+      Object.entries(l.medCheckDetail).forEach(([k,d])=>{
+        if(d.reason) _dayMcReasons[k]=d.reason;
+      });
+    }
+  });
+
+  // 약물별 medsDetail 조회
+  const allConds=getAllUserConditions();
+  const _getDetail=(medName)=>{
+    for(const c of allConds){
+      if(c._domainId!==S.currentDomain) continue;
+      if(c.medsDetail?.[medName]) return {detail:c.medsDetail[medName],condId:c.id};
+    }
+    return {detail:{cycle:'daily',timesPerDay:1},condId:null};
+  };
+
+  return `<div class="log-section-title">💊 오늘 복용 체크
+    <span style="margin-left:auto;display:flex;gap:4px">
+      <button onclick="document.querySelectorAll('.med-check-cb:not(:disabled)').forEach(c=>c.checked=true)" style="font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">전체 ✓</button>
+      <button onclick="document.querySelectorAll('.med-check-cb:not(:disabled)').forEach(c=>c.checked=false)" style="font-size:.6rem;padding:2px 8px;border:1px solid var(--bd);border-radius:4px;background:var(--sf);color:var(--mu);cursor:pointer;font-family:var(--font)">전체 ✗</button>
+    </span>
+  </div>
     <div style="margin-bottom:8px">
     ${condMeds.map(cm=>{
-      const daily=cm.meds.filter(m=>!m.includes('(PRN)'));
-      const prn=cm.meds.filter(m=>m.includes('(PRN)'));
+      const procedures=cm.meds.filter(m=>_isProcedure(m));
+      const nonProc=cm.meds.filter(m=>!_isProcedure(m));
+      if(!nonProc.length&&!procedures.length) return '';
+
+      const medRows=nonProc.map(m=>{
+        const isPRN=m.includes('(PRN)');
+        const {detail,condId}=_getDetail(m);
+        const cycle=isPRN?'prn':(detail.cycle||'daily');
+        const maxDose=cycle==='prn'?99:(detail.timesPerDay||1);
+        const takenCount=_dayMcCount[m]||0;
+
+        // 오늘 복용일이 아닌 약물은 축소 표시
+        if(cycle!=='prn' && !_isMedDueToday(detail, date)){
+          const cycleText=cycle==='weekly'?'주 '+(detail.weekDays||[]).map(d=>_WEEKDAY_LABELS[d]).join('·'):cycle==='monthly'?'매월 '+(detail.monthDay||1)+'일':'';
+          return `<div style="display:flex;align-items:center;gap:6px;padding:2px 0;opacity:.4;font-size:.68rem">
+            <span style="color:var(--mu)">⏭</span>
+            <span style="color:var(--mu)">${esc(m)}</span>
+            <span style="font-size:.5rem;color:var(--mu2)">${cycleText} — 오늘 비해당</span>
+          </div>`;
+        }
+
+        const isComplete=cycle!=='prn' && takenCount>=maxDose;
+        const timingText=(detail.timing||[]).length?detail.timing.join('·'):'';
+        const doseText=detail.dose?' '+detail.dose:'';
+        const cycleLabel=cycle==='daily'?(maxDose===1?'QD':maxDose===2?'BID':maxDose===3?'TID':'QID'):cycle==='weekly'?'주'+(detail.weekDays||[]).length+'회':cycle==='monthly'?'월1회':'PRN';
+
+        // 처방 소진 경고
+        let rxWarn='';
+        if(detail.rxStartDate&&detail.rxDays){
+          const endDate=_getRxEndDate(detail);
+          if(endDate){
+            const daysLeft=Math.ceil((new Date(endDate+'T00:00')-new Date(date+'T00:00'))/86400000);
+            if(daysLeft<=3&&daysLeft>=0) rxWarn=`<span style="font-size:.5rem;color:var(--err);font-weight:600">⚠️ ${daysLeft}일 후 소진</span>`;
+            else if(daysLeft<0) rxWarn=`<span style="font-size:.5rem;color:var(--err);font-weight:600">❌ 소진됨</span>`;
+          }
+        }
+
+        if(cycle==='prn'){
+          return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+            <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" data-freq="PRN" onchange="if(this.checked)_onPrnCheck(this,'${esc(m).replace(/'/g,"\\'")}')" style="width:16px;height:16px;accent-color:#f59e0b">
+            <span style="font-size:.78rem;color:var(--ink)">${esc(m)}<span style="font-size:.58rem;color:var(--mu)">${esc(doseText)}</span></span>
+            <span style="font-size:.55rem;padding:1px 4px;border-radius:3px;border:1px solid #f59e0b;color:#f59e0b">PRN</span>
+            ${takenCount?'<span style="font-size:.5rem;color:var(--mu)">오늘 '+takenCount+'회</span>':''}
+            ${rxWarn}
+          </label>
+          <input type="hidden" class="med-reason" data-med="${esc(m)}" value="">`;
+        }
+
+        if(isComplete){
+          return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer;opacity:.5">
+            <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" checked disabled style="width:16px;height:16px;accent-color:var(--ac)">
+            <span style="font-size:.78rem;color:var(--ink)">${esc(m)}<span style="font-size:.58rem;color:var(--mu)">${esc(doseText)}</span></span>
+            <span style="font-size:.5rem;color:var(--ok)">✓${takenCount}/${maxDose} 완료${timingText?' ('+timingText+')':''}</span>
+            ${rxWarn}
+            <button onclick="event.preventDefault();_onExtraDoseCheck('${esc(m).replace(/'/g,"\\'")}',${maxDose})" style="font-size:.48rem;padding:1px 5px;border:1px dashed var(--mu2);border-radius:3px;background:none;color:var(--mu);cursor:pointer;font-family:var(--font)">+추가</button>
+          </label>`;
+        }
+
+        return `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+          <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" style="width:16px;height:16px;accent-color:var(--ac)">
+          <span style="font-size:.78rem;color:var(--ink)">${esc(m)}<span style="font-size:.58rem;color:var(--mu)">${esc(doseText)}</span></span>
+          <span style="font-size:.55rem;color:var(--mu2)">${cycleLabel}${timingText?' '+timingText:''}</span>
+          ${maxDose>1?'<span style="font-size:.5rem;color:var(--mu)">('+takenCount+'/'+maxDose+')</span>':''}
+          ${rxWarn}
+          ${condId?`<button onclick="event.preventDefault();openMedDetailSettings(${condId},'${esc(m).replace(/'/g,"\\'")}')" style="font-size:.45rem;padding:1px 4px;border:1px solid var(--bd);border-radius:3px;background:none;color:var(--mu2);cursor:pointer;font-family:var(--font)">⚙️</button>`:''}
+        </label>`;
+      }).join('');
+
       return `<div style="margin-bottom:6px;border:1px solid var(--bd);border-radius:8px;padding:8px 10px;background:var(--sf)">
         <div style="font-size:.72rem;font-weight:600;color:var(--ink);margin-bottom:6px">${cm.icon} ${esc(cm.condition)}</div>
-        ${daily.map(m=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
-          <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" checked style="width:16px;height:16px;accent-color:var(--ac)">
-          <span style="font-size:.78rem;color:var(--ink)">${esc(m)}</span>
-          <span style="font-size:.6rem;color:var(--mu2)">매일</span>
-        </label>`).join('')}
-        ${prn.length?`<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd)">
-          ${prn.map(m=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
-            <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" style="width:16px;height:16px;accent-color:#f59e0b">
-            <span style="font-size:.78rem;color:var(--ink)">${esc(m)}</span>
-            <span style="font-size:.6rem;color:#f59e0b">PRN</span>
+        ${medRows}
+        ${procedures.length?`<div style="margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd)">
+          <div style="font-size:.6rem;color:#1e40af;font-weight:600;margin-bottom:2px">💉 시술 (시행 시에만 기록)</div>
+          ${procedures.map(m=>`<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer">
+            <input type="checkbox" class="med-check-cb" data-med="${esc(m)}" style="width:16px;height:16px;accent-color:#3b82f6">
+            <span style="font-size:.78rem;color:#1e40af">${esc(m)}</span>
+            <span style="font-size:.6rem;color:#3b82f6">시술</span>
           </label>`).join('')}
         </div>`:''}
       </div>`;
     }).join('')}
     </div>`;
+}
+
+function _onPrnCheck(cb, medName) {
+  if(!cb.checked) return;
+  _promptMedReason(medName, function(reason) {
+    if(reason===null) { cb.checked=false; return; }
+    const hidden=cb.closest('label')?.nextElementSibling;
+    if(hidden&&hidden.classList.contains('med-reason')) hidden.value=reason||'';
+  });
+}
+
+function _onExtraDoseCheck(medName, maxDose) {
+  _promptMedReason(medName+' (추가 복용)', function(reason) {
+    if(reason===null) return;
+    const cbs=document.querySelectorAll('.med-check-cb[data-med="'+medName+'"]');
+    cbs.forEach(cb=>{ cb.disabled=false; cb.checked=true; cb.closest('label').style.opacity='1'; });
+    let hidden=document.querySelector('.med-reason[data-med="'+medName+'"]');
+    if(!hidden){
+      hidden=document.createElement('input');hidden.type='hidden';hidden.className='med-reason';hidden.dataset.med=medName;
+      cbs[0]?.closest('label')?.after(hidden);
+    }
+    if(hidden) hidden.value='추가복용: '+(reason||'');
+    showToast('💊 '+medName+' 추가 복용 기록');
+  });
 }
 
 function getConditions() { return DM()?.conditions || []; }
@@ -99,6 +382,8 @@ async function loadAllUserDomains() {
     } catch(e) { console.warn('Domain load failed:', domainId, e.message); }
   }
   _loadingAllDomains=false;
+  // 동적 약물 사전 로드 (클라우드 → 런타임)
+  if (typeof _loadCustomDrugDicts === 'function') _loadCustomDrugDicts();
 }
 
 // Get meds from all user conditions (for log form)
@@ -139,7 +424,12 @@ function renderMedsView() {
   if (S.currentDomain==='bungruki') {
     return renderBungrukiDashboard() + renderMedsViewLegacy();
   }
-  return renderVaccinationSection() + renderMedsViewLegacy();
+  // 건강관리 도메인: 검사 아카이브 + 데일리체크 + 예방접종 + 질환 관리
+  const checkupHtml = (typeof renderCheckupArchive === 'function' && S.currentDomain.endsWith('-health'))
+    ? renderCheckupArchive() : '';
+  const dailyHtml = (typeof renderHealthDailyCheck === 'function' && S.currentDomain.endsWith('-health'))
+    ? renderHealthDailyCheck() : '';
+  return checkupHtml + dailyHtml + renderVaccinationSection() + renderMedsViewLegacy();
 }
 
 function renderMedsViewLegacy() {
@@ -177,7 +467,12 @@ function renderMedsViewLegacy() {
       <div class="dx-body">
         ${c.diagnosisDate?`<strong>${isBungruki?'시작':'진단'}:</strong> ${esc(c.diagnosisDate)}<br>`:''}
         ${c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'■ 현재 투약'}${c.drugChangeDate?` <span style="font-size:.6rem;color:var(--mu2);font-weight:400">(${esc(c.drugChangeDate)}~)</span>`:''}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">${c.medsList.map(m=>`<span class="log-tag" style="background:${m.includes('(PRN)')?'#fef3c7':'#fff7ed'};color:${m.includes('(PRN)')?'#92400e':'#c2410c'};${m.includes('(PRN)')?'border:1px dashed #f59e0b':''}">${esc(m)}</span>`).join('')}</div></div>`:''}
+          <div style="display:flex;flex-wrap:wrap;gap:4px">${c.medsList.map((m,mi)=>{
+            const sched = c.medSchedule?.[m];
+            const schedLabel = _fmtMedSched(sched, m);
+            const schedColor = schedLabel==='매일'?'#c2410c':schedLabel==='PRN'?'#92400e':'#7c3aed';
+            return `<span class="log-tag" onclick="openMedSchedule('${esc(c._domainId)}',${c._idx},'${esc(m).replace(/'/g,"\\'")}')" style="cursor:pointer;background:${m.includes('(PRN)')?'#fef3c7':'#fff7ed'};color:${schedColor};${m.includes('(PRN)')?'border:1px dashed #f59e0b':''}" title="클릭하여 복용 주기 수정">${esc(m)} <span style="font-size:.5rem;opacity:.7">${esc(schedLabel)}</span></span>`;
+          }).join('')}</div></div>`:''}
         ${c.medications&&!c.medsList?.length?`<div class="dx-section"><div class="dx-section-title">${isBungruki?'복용/보충제':'현재 투약'}</div>${esc(c.medications)}</div>`:''}
         ${(()=>{
           if(!c.medHistory?.length) return '';
@@ -381,6 +676,7 @@ function renderMedsViewLegacy() {
 
 let _dxMedsList=[]; // temp med list for form
 let _dxManualHistory=[]; // temp manual history entries for form
+let _dxMedSchedMap={}; // {medName: {type, interval, custom}} — 저장 전 편집중인 복용 주기
 
 function addManualMedHistory() {
   const date=document.getElementById('dx-mh-date')?.value;
@@ -492,16 +788,19 @@ async function aiSearchMeds() {
   if(result){result.style.display='block';result.innerHTML='<span style="color:var(--ac)">검색 중...</span>';}
   try {
     const answer=await callAI('perp',
-      '한국 의료 기준으로 답변. 약품명은 성분명(영문)으로.',
-      `"${name}" 질환의 현재 표준 치료약물 목록을 간결하게 나열해줘. 1차/2차/3차 치료로 분류. 최신 가이드라인 기준.`
+      '한국 의료 기준으로 답변. 약품명은 반드시 영문 성분명(generic name)만 사용. 시술/치료법은 별도 구분. 출처 표기.',
+      `"${name}" 질환의 현재 한국 표준 치료약물을 나열해줘.\n\n형식:\n## 약물 치료\n### 1차 치료\n- 성분명 (용량, 빈도)\n### 2차 치료\n- ...\n\n## 비약물 치료/시술\n- ...\n\n최신 한국 가이드라인 기준. 각 약물은 영문 성분명(generic name)만 사용.`,
+      'drug-search'
     );
     if(result){
       result.innerHTML=DOMPurify.sanitize(marked.parse(answer||'결과 없음'));
-      // 약물명 추출하여 클릭 가능 칩으로 변환
-      const medNames=answer.match(/[A-Z][a-z]+(?:\/[A-Z][a-z]+)*/g);
+      // 약물명 추출: 영문 성분명 (대문자 시작, 소문자/하이픈 포함, 4자 이상)
+      const medNames=(answer||'').match(/\b[A-Z][a-z]{2,}(?:[-\/][A-Za-z]+)*(?:\s[A-Z][a-z]+)?\b/g);
       if(medNames?.length){
-        const unique=[...new Set(medNames)].filter(m=>m.length>3).slice(0,15);
-        result.innerHTML+=`<div style="margin-top:6px;border-top:1px solid var(--bd);padding-top:6px"><div style="font-size:.6rem;color:var(--mu);margin-bottom:4px">클릭하여 추가:</div><div style="display:flex;flex-wrap:wrap;gap:3px">${unique.map(m=>`<span class="log-chip" style="padding:2px 8px;font-size:.72rem;cursor:pointer" onclick="addDxMedFromSuggest('${esc(m)}')">${esc(m)}</span>`).join('')}</div></div>`;
+        // 일반 영어 단어 제외
+        const stopWords=new Set(['The','This','That','These','Those','With','From','Into','About','After','Before','During','Between','Through','However','Although','Because','Therefore','Also','Very','Most','Some','Other','Each','Every','Such','Both','Either','Neither','While','Since','Until','Unless','Where','When','Which','What','Korean','Korea','Guidelines','Treatment','Therapy','Line','First','Second','Third','Step','Oral','Intranasal','Daily','Chronic','Acute','Mild','Moderate','Severe','Standard','Recommended','Alternative','Combination','Monotherapy','Maintenance','Initial','Response','Refractory','Persistent','Intermittent','Available']);
+        const unique=[...new Set(medNames)].filter(m=>m.length>3&&!stopWords.has(m)).slice(0,20);
+        if(unique.length) result.innerHTML+=`<div style="margin-top:6px;border-top:1px solid var(--bd);padding-top:6px"><div style="font-size:.6rem;color:var(--mu);margin-bottom:4px">클릭하여 추가:</div><div style="display:flex;flex-wrap:wrap;gap:3px">${unique.map(m=>`<span class="log-chip" style="padding:2px 8px;font-size:.72rem;cursor:pointer" onclick="addDxMedFromSuggest('${esc(m)}')">${esc(m)}</span>`).join('')}</div></div>`;
       }
     }
   } catch(e) {
@@ -561,6 +860,7 @@ async function processRxPhoto(input) {
         });
         const data=await resp.json();
         result=data.content?.[0]?.text||'';
+        if(data.usage) recordUsage('claude',S.models?.claude||DEFAULT_MODELS.claude,data.usage.input_tokens||0,data.usage.output_tokens||0,'drug-photo');
       } else {
         const resp=await fetchWithRetry('https://api.openai.com/v1/chat/completions',{
           method:'POST',
@@ -572,6 +872,7 @@ async function processRxPhoto(input) {
         });
         const data=await resp.json();
         result=data.choices?.[0]?.message?.content||'';
+        if(data.usage) recordUsage('gpt',S.models?.gpt||DEFAULT_MODELS.gpt,data.usage.prompt_tokens||0,data.usage.completion_tokens||0,'drug-photo');
       }
       // Parse
       const jsonMatch=result.match(/\[[\s\S]*?\]/);
@@ -621,6 +922,8 @@ function applyRxPhoto() {
 }
 
 function removeDxMed(idx) {
+  const m=_dxMedsList[idx];
+  if(m && _dxMedSchedMap[m]) delete _dxMedSchedMap[m];
   _dxMedsList.splice(idx,1);
   renderDxMedChips();
 }
@@ -630,6 +933,49 @@ let _dxTrackList=[]; // [{med, until}] — until: 'change'|'YYYY-MM-DD'
 function _getTrackItem(med){return _dxTrackList.find(t=>t.med===med);}
 function _isTracked(med){return !!_getTrackItem(med);}
 
+function _toggleDxPrn(idx){
+  const m=_dxMedsList[idx];if(!m)return;
+  let next;
+  if(m.includes('(PRN)')) next=m.replace(/\s*\(PRN\)/,'');
+  else next=m+' (PRN)';
+  // medSchedMap, trackList의 키를 새 이름으로 이관
+  if(_dxMedSchedMap[m]){ _dxMedSchedMap[next]=_dxMedSchedMap[m]; delete _dxMedSchedMap[m]; }
+  _dxTrackList.forEach(t=>{ if(t.med===m) t.med=next; });
+  _dxMedsList[idx]=next;
+  // PRN 토글 시 스케줄 type도 일관되게 동기화
+  if(_dxMedSchedMap[next]){
+    if(next.includes('(PRN)')&&_dxMedSchedMap[next].type==='daily') _dxMedSchedMap[next].type='prn';
+    else if(!next.includes('(PRN)')&&_dxMedSchedMap[next].type==='prn') _dxMedSchedMap[next].type='daily';
+  }
+  renderDxMedChips();
+}
+
+function _openDxMedSched(idx){
+  const med=_dxMedsList[idx];if(!med)return;
+  const current=_dxMedSchedMap[med]||{type:med.includes('(PRN)')?'prn':'daily',interval:1,custom:''};
+  _msState.dx=current.type;
+  showConfirmModal('💊 '+med+' 복용 주기',
+    _renderSchedPickerInner('dx', current),
+    [{ label:'적용', primary:true, action:()=>{
+      const sched=_collectSchedFromForm('dx', current);
+      // 1. sched.type 에 맞춰 (PRN) 접미사 정합화 → 새 이름 결정
+      let nextName = med;
+      if(sched.type==='prn' && !med.includes('(PRN)')) nextName = med + ' (PRN)';
+      else if(sched.type!=='prn' && med.includes('(PRN)')) nextName = med.replace(/\s*\(PRN\)/,'');
+      // 2. 이름 변경 시 _dxMedsList / _dxTrackList 키 이관
+      if(nextName !== med){
+        _dxMedsList[idx] = nextName;
+        _dxTrackList.forEach(t=>{if(t.med===med) t.med=nextName;});
+      }
+      // 3. _dxMedSchedMap 정리: 옛 키 제거 + 기본(daily) 외만 새 키로 저장
+      delete _dxMedSchedMap[med];
+      if(sched.type !== 'daily') _dxMedSchedMap[nextName] = sched;
+      closeConfirmModal();
+      renderDxMedChips();
+      showToast('✅ 주기 설정: '+_fmtMedSched(sched, nextName));
+    }}, { label:'취소', action:closeConfirmModal }]);
+}
+
 function renderDxMedChips() {
   const el=document.getElementById('dx-med-chips');
   if(!el) return;
@@ -638,8 +984,16 @@ function renderDxMedChips() {
     const ti=_getTrackItem(m);
     const tracked=!!ti;
     const untilLabel=ti?(ti.until==='change'?'변경시까지':ti.until):'';
+    const sched=_dxMedSchedMap[m];
+    const schedLabel=_fmtMedSched(sched, m);
+    const schedIsCustom=sched && (sched.type==='weekly'||sched.type==='monthly'||sched.type==='days'||sched.type==='custom');
+    const schedBtnStyle=schedIsCustom
+      ? 'border:1px solid #7c3aed;background:#ede9fe;color:#6d28d9'
+      : (isPrn?'border:1px solid #f59e0b;background:#fef3c7;color:#92400e':'border:1px solid var(--bd);background:none;color:var(--mu)');
     return `<span class="file-chip" style="${isPrn?'border:1.5px dashed #f59e0b;background:#fff7ed':''}">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span>
-      <button onclick="_toggleTrack(${i})" style="font-size:.55rem;padding:1px 4px;border:1px solid ${tracked?'#10b981':'var(--bd)'};border-radius:3px;background:${tracked?'#f0fdf4':'none'};color:${tracked?'#10b981':'var(--mu)'};cursor:pointer;margin-left:4px;font-family:var(--font)" title="순응도 추적">${tracked?'📊'+untilLabel:'추적'}</button></span>`;
+      <button onclick="_toggleDxPrn(${i})" type="button" style="font-size:.55rem;padding:1px 4px;border:1px solid ${isPrn?'#f59e0b':'var(--bd)'};border-radius:3px;background:${isPrn?'#fef3c7':'none'};color:${isPrn?'#92400e':'var(--mu)'};cursor:pointer;margin-left:2px;font-family:var(--font)" title="PRN 토글">${isPrn?'PRN':'매일'}</button>
+      <button onclick="_openDxMedSched(${i})" type="button" style="font-size:.55rem;padding:1px 5px;border-radius:3px;${schedBtnStyle};cursor:pointer;margin-left:2px;font-family:var(--font)" title="복용 주기 설정 (주/월/N일/직접 입력)">📅 ${esc(schedLabel)}</button>
+      <button onclick="_toggleTrack(${i})" type="button" style="font-size:.55rem;padding:1px 4px;border:1px solid ${tracked?'#10b981':'var(--bd)'};border-radius:3px;background:${tracked?'#f0fdf4':'none'};color:${tracked?'#10b981':'var(--mu)'};cursor:pointer;margin-left:2px;font-family:var(--font)" title="순응도 추적">${tracked?'📊'+untilLabel:'추적'}</button></span>`;
   }).join('');
 }
 
@@ -663,7 +1017,7 @@ function openConditionForm(domainId, idx) {
   document.getElementById('dx-edit-idx').value=idx!==undefined?idx:-1;
   document.getElementById('dx-edit-domain').value=domainId||S.currentDomain;
   if(domainId) document.getElementById('dx-domain').value=domainId;
-  _conditionFiles=[];_dxMedsList=[];_dxManualHistory=[];_dxTrackList=[];
+  _conditionFiles=[];_dxMedsList=[];_dxManualHistory=[];_dxTrackList=[];_dxMedSchedMap={};
   const fileList=document.getElementById('dx-file-list');if(fileList)fileList.innerHTML='';
   if(idx!==undefined && domainId) {
     const ds=S.domainState[domainId];
@@ -679,6 +1033,7 @@ function openConditionForm(domainId, idx) {
     _dxMedsList=c.medsList?[...c.medsList]:(c.medications?c.medications.split(',').map(s=>s.trim()).filter(Boolean):[]);
     // 하위호환: 문자열 배열 → 객체 배열 변환
     _dxTrackList=(c.trackCompliance||[]).map(t=>typeof t==='string'?{med:t,until:'change'}:t);
+    if(c.medSchedule) Object.assign(_dxMedSchedMap, JSON.parse(JSON.stringify(c.medSchedule)));
     renderDxMedChips();
     showDxMedSuggestions(c.name);
   } else {
@@ -704,6 +1059,13 @@ async function saveCondition() {
   if(!ds?.master) {showToast('해당 도메인 데이터가 로드되지 않았습니다.');return;}
   if(!ds.master.conditions) ds.master.conditions=[];
 
+  // 현재 약물 목록에 있는 스케줄만 필터링 (제거된 약의 잔여 스케줄 정리)
+  const cleanSched={};
+  Object.entries(_dxMedSchedMap).forEach(([k,v])=>{
+    if(_dxMedsList.includes(k) && v && v.type && v.type!=='daily'){
+      cleanSched[k]=v;
+    }
+  });
   const data={
     id:Date.now(), name,
     diseaseType:document.getElementById('dx-type')?.value||'chronic',
@@ -711,6 +1073,7 @@ async function saveCondition() {
     status:document.getElementById('dx-status').value,
     medsList:[..._dxMedsList],
     trackCompliance:_dxTrackList.length?[..._dxTrackList]:undefined,
+    medSchedule:Object.keys(cleanSched).length?cleanSched:undefined,
     medications:_dxMedsList.join(', '),
     drugChangeDate:document.getElementById('dx-drug-change')?.value||'',
     drugResponse:document.getElementById('dx-response').value.trim(),
@@ -1152,10 +1515,10 @@ const _DRUG_NAMES = {
   '파록세틴':'Paroxetine','팍실':'Paroxetine',
   '플루복사민':'Fluvoxamine','듀미록스':'Fluvoxamine',
   '시탈로프람':'Citalopram','시프라밀':'Citalopram',
-  '벤라팍신':'Venlafaxine','이팩사':'Venlafaxine',
-  '데스벤라팍신':'Desvenlafaxine','프리스틱':'Desvenlafaxine',
+  '벤라팍신':'Venlafaxine','이팩사':'Venlafaxine','Venlafaxine XR':'Venlafaxine','벤라팍신XR':'Venlafaxine',
+  '데스벤라팍신':'Desvenlafaxine','프리스틱':'Desvenlafaxine','Desvenlafaxine ER':'Desvenlafaxine',
   '둘록세틴':'Duloxetine','심발타':'Duloxetine',
-  '부프로피온':'Bupropion','웰부트린':'Bupropion',
+  '부프로피온':'Bupropion','웰부트린':'Bupropion','Bupropion XL':'Bupropion','Bupropion XR':'Bupropion','Bupropion SR':'Bupropion',
   '미르타자핀':'Mirtazapine','레메론':'Mirtazapine',
   '트라조돈':'Trazodone','트라조릴':'Trazodone',
   '보르티옥세틴':'Vortioxetine','브린텔릭스':'Vortioxetine',
@@ -1373,17 +1736,17 @@ const _DISEASE_MEDS = {
   '긴장형두통':['AAP 500mg','Ibuprofen','Naproxen','Amitriptyline','물리치료','스트레스 관리'],
   '군발두통':['산소요법(O2 15L)','Sumatriptan SC','Verapamil','Galcanezumab','Lithium','Prednisone 단기'],
   // ── 정신과 ──
-  '주요우울장애':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine XR','Duloxetine','Bupropion XL','Mirtazapine','Desvenlafaxine','Vortioxetine','Aripiprazole 보조','CBT'],
-  'MDD':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine XR','Duloxetine','Bupropion XL','Mirtazapine','Desvenlafaxine','Vortioxetine','Aripiprazole 보조','CBT'],
-  '우울장애':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine XR','Duloxetine','Bupropion XL','Mirtazapine','CBT'],
+  '주요우울장애':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine','Duloxetine','Bupropion','Mirtazapine','Desvenlafaxine','Vortioxetine','Aripiprazole 보조','CBT'],
+  'MDD':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine','Duloxetine','Bupropion','Mirtazapine','Desvenlafaxine','Vortioxetine','Aripiprazole 보조','CBT'],
+  '우울장애':['Escitalopram','Sertraline','Fluoxetine','Venlafaxine','Duloxetine','Bupropion','Mirtazapine','CBT'],
   '기분부전장애':['Sertraline','Escitalopram','Duloxetine','Bupropion','CBT'],
-  '범불안장애':['Escitalopram','Sertraline','Venlafaxine XR','Duloxetine','Buspirone','Pregabalin','Hydroxyzine','CBT'],
-  'GAD':['Escitalopram','Sertraline','Venlafaxine XR','Duloxetine','Buspirone','Pregabalin','CBT'],
+  '범불안장애':['Escitalopram','Sertraline','Venlafaxine','Duloxetine','Buspirone','Pregabalin','Hydroxyzine','CBT'],
+  'GAD':['Escitalopram','Sertraline','Venlafaxine','Duloxetine','Buspirone','Pregabalin','CBT'],
   '강박장애':['Fluoxetine 고용량','Sertraline','Escitalopram','Fluvoxamine','Clomipramine','ERP치료'],
   'OCD':['Fluoxetine 고용량','Sertraline','Escitalopram','Fluvoxamine','Clomipramine','ERP치료'],
-  '공황장애':['Escitalopram','Sertraline','Venlafaxine XR','Paroxetine','Clonazepam 단기','CBT'],
-  '사회불안장애':['Escitalopram','Sertraline','Venlafaxine XR','Paroxetine','Pregabalin','CBT'],
-  'PTSD':['Sertraline','Paroxetine','Venlafaxine XR','Prazosin(악몽)','CPT','EMDR'],
+  '공황장애':['Escitalopram','Sertraline','Venlafaxine','Paroxetine','Clonazepam 단기','CBT'],
+  '사회불안장애':['Escitalopram','Sertraline','Venlafaxine','Paroxetine','Pregabalin','CBT'],
+  'PTSD':['Sertraline','Paroxetine','Venlafaxine','Prazosin(악몽)','CPT','EMDR'],
   'ADHD':['Methylphenidate','Concerta','Atomoxetine','Bupropion','Lisdexamfetamine','Clonidine'],
   '양극성장애':['Lithium','Valproate','Lamotrigine','Quetiapine','Aripiprazole','Olanzapine','Carbamazepine'],
   '불면증':['Zolpidem','Trazodone','Melatonin','Lemborexant','Suvorexant','CBT-I','수면위생'],
@@ -1815,18 +2178,57 @@ const _DRUG_INTERACTIONS = [
 ];
 
 function _normalizeDrugName(name) {
-  // Convert Korean drug name to English using _DRUG_NAMES mapping
+  // 3단계 파이프라인 (Rule #37): ①사전 매칭 → ②규칙 기반 → ③AI 검증(비동기 별도)
   const upper=(name||'').trim();
   if(!upper) return '';
-  // Check exact match in _DRUG_NAMES
+  // ① 사전 빠른 매칭
   if(_DRUG_NAMES[upper]) return _DRUG_NAMES[upper];
-  // Check case-insensitive English
+  // ② 규칙 기반: 대소문자 무시 + 제형/용량 접미사 제거
   const lower=upper.toLowerCase();
   for(const [ko,en] of Object.entries(_DRUG_NAMES)) {
     if(ko.toLowerCase()===lower||en.toLowerCase()===lower) return en;
   }
-  // Return original (capitalized) for English names
+  // 제형/용량 접미사 제거 후 재시도 (XR, XL, SR, ER, 숫자mg 등)
+  const stripped=upper.replace(/\s*(XR|XL|SR|ER|IR|CR|LA|qAM|qPM|qHS)\s*$/i,'').replace(/\s*\d+(\.\d+)?\s*(mg|mcg|μg|g|ml|mL)\s*$/i,'').trim();
+  if(stripped!==upper){
+    if(_DRUG_NAMES[stripped]) return _DRUG_NAMES[stripped];
+    const sl=stripped.toLowerCase();
+    for(const [ko,en] of Object.entries(_DRUG_NAMES)) {
+      if(ko.toLowerCase()===sl||en.toLowerCase()===sl) return en;
+    }
+  }
+  // 동적 사전 캐시 확인 (AI가 이전에 매핑한 항목)
+  const dm=typeof DM==='function'?DM():null;
+  const dynMap=dm?.settings?.customDrugMappings||{};
+  if(dynMap[lower]) return dynMap[lower];
+  // 매칭 실패: 원본 반환 (AI 비동기 검증은 별도 호출)
   return upper.charAt(0).toUpperCase()+upper.slice(1).toLowerCase();
+}
+
+// AI 약물명 검증 (비동기) — 미매칭 약물에 대해 호출
+async function aiVerifyDrugName(drugName) {
+  const aiId=S.keys?.gemini?'gemini':(S.keys?.claude?'claude':(S.keys?.gpt?'gpt':null));
+  if(!aiId) return null;
+  const prompt='약물명 "'+drugName+'"의 국제 일반명(INN/generic name)을 영문으로 알려주세요. JSON: {"generic":"영문일반명","korean":"한글명"} JSON만.';
+  try{
+    const resp=await callAI(aiId,'약물명 정규화 전문가. JSON만.',prompt,'drug-normalize');
+    const m=resp.match(/\{[\s\S]*?\}/);
+    if(!m) return null;
+    const result=JSON.parse(m[0]);
+    if(result.generic){
+      // 동적 사전 확장: 클라우드에 저장
+      const dm=DM();
+      if(dm){
+        if(!dm.settings) dm.settings={};
+        if(!dm.settings.customDrugMappings) dm.settings.customDrugMappings={};
+        dm.settings.customDrugMappings[drugName.toLowerCase()]=result.generic;
+        if(result.korean) dm.settings.customDrugMappings[result.korean.toLowerCase()]=result.generic;
+        await saveMaster();
+      }
+      return result.generic;
+    }
+  }catch(e){console.warn('AI drug name verify failed:',e);}
+  return null;
 }
 
 function checkDrugInteractions() {
@@ -2223,4 +2625,98 @@ function getPregnancyVaccinations(){
     });
   });
   return result;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 약물 복용 주기 설정 (매일/PRN/주간/월간/N일마다/직접 입력)
+// ═══════════════════════════════════════════════════════════════
+const _MED_SCHED_OPTS = [
+  { type:'daily',   label:'매일' },
+  { type:'prn',     label:'PRN (필요 시)' },
+  { type:'weekly',  label:'주 N회' },
+  { type:'monthly', label:'월 N회' },
+  { type:'days',    label:'N일마다' },
+  { type:'custom',  label:'직접 입력' },
+];
+
+function _fmtMedSched(sched, med) {
+  if (!sched) return (med && med.includes('(PRN)')) ? 'PRN' : '매일';
+  if (sched.type === 'weekly')  return '주'+(sched.interval||1)+'회';
+  if (sched.type === 'monthly') return '월'+(sched.interval||1)+'회';
+  if (sched.type === 'days')    return (sched.interval||1)+'일마다';
+  if (sched.type === 'custom')  return (sched.custom||'').trim() || '직접';
+  if (sched.type === 'prn')     return 'PRN';
+  return '매일';
+}
+
+// 주기 선택 UI HTML 빌더 (모달 / 조건편집 폼 공용)
+function _renderSchedPickerInner(prefix, current) {
+  const optsHtml = _MED_SCHED_OPTS.map(o => {
+    const sel = current.type === o.type;
+    return `<button onclick="_setMedSchedType('${prefix}','${o.type}')" id="${prefix}-btn-${o.type}" type="button" style="flex:1 1 30%;min-width:64px;padding:7px 4px;font-size:.7rem;border:1.5px solid ${sel?'var(--ac)':'var(--bd)'};border-radius:6px;background:${sel?'var(--ac)':'var(--sf2)'};color:${sel?'#fff':'var(--ink)'};cursor:pointer;font-family:var(--font)">${o.label}</button>`;
+  }).join('');
+  const needInterval = ['weekly','monthly','days'].includes(current.type);
+  const needCustom   = current.type === 'custom';
+  const unitText = current.type==='weekly'?'회/주':current.type==='monthly'?'회/월':current.type==='days'?'일마다':'';
+  return `<div style="font-size:.72rem">
+    <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${optsHtml}</div>
+    <div id="${prefix}-interval-row" style="display:${needInterval?'flex':'none'};align-items:center;gap:6px;margin-bottom:6px">
+      <span>간격:</span>
+      <input type="number" id="${prefix}-interval" value="${current.interval||1}" min="1" max="90" style="width:60px;padding:4px;font-size:.75rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:var(--mono)">
+      <span id="${prefix}-interval-unit">${unitText}</span>
+    </div>
+    <div id="${prefix}-custom-row" style="display:${needCustom?'block':'none'};margin-bottom:6px">
+      <input type="text" id="${prefix}-custom" value="${esc(current.custom||'')}" placeholder="예: 매주 월요일 저녁, 격주 금요일, 매달 1일..." style="width:100%;padding:5px 8px;font-size:.72rem;border:1px solid var(--bd);border-radius:4px;font-family:var(--font);background:var(--sf2);color:var(--ink)">
+    </div>
+  </div>`;
+}
+
+// 복용 주기 모달 임시 상태 (window 전역 오염 방지 — prefix별 격리)
+const _msState = {};
+
+function _setMedSchedType(prefix, type) {
+  _msState[prefix] = type;
+  const units = { weekly:'회/주', monthly:'회/월', days:'일마다' };
+  const row = document.getElementById(prefix+'-interval-row');
+  const unitEl = document.getElementById(prefix+'-interval-unit');
+  const customRow = document.getElementById(prefix+'-custom-row');
+  if (row) row.style.display = ['weekly','monthly','days'].includes(type) ? 'flex' : 'none';
+  if (unitEl) unitEl.textContent = units[type] || '';
+  if (customRow) customRow.style.display = type === 'custom' ? 'block' : 'none';
+  _MED_SCHED_OPTS.forEach(o => {
+    const btn = document.getElementById(prefix+'-btn-'+o.type);
+    if (btn) { const s=o.type===type; btn.style.borderColor=s?'var(--ac)':'var(--bd)'; btn.style.background=s?'var(--ac)':'var(--sf2)'; btn.style.color=s?'#fff':'var(--ink)'; }
+  });
+}
+
+function _collectSchedFromForm(prefix, fallback) {
+  const type = _msState[prefix] || fallback?.type || 'daily';
+  const interval = parseInt(document.getElementById(prefix+'-interval')?.value) || 1;
+  const custom = (document.getElementById(prefix+'-custom')?.value || '').trim();
+  const out = { type };
+  if (['weekly','monthly','days'].includes(type)) out.interval = interval;
+  if (type === 'custom') out.custom = custom;
+  return out;
+}
+
+function openMedSchedule(domainId, condIdx, medName) {
+  const ds = S.domainState[domainId];
+  if (!ds?.master?.conditions?.[condIdx]) return;
+  const c = ds.master.conditions[condIdx];
+  if (!c.medSchedule) c.medSchedule = {};
+  const current = c.medSchedule[medName] || { type: medName.includes('(PRN)') ? 'prn' : 'daily', interval: 1 };
+  _msState.ms = current.type;
+  showConfirmModal('💊 ' + medName + ' 복용 주기',
+    _renderSchedPickerInner('ms', current),
+    [{ label:'저장', primary:true, action:async()=>{
+      const sched = _collectSchedFromForm('ms', current);
+      // default(매일, interval=1) 이면 기록하지 않고 제거
+      if (sched.type === 'daily') delete c.medSchedule[medName];
+      else c.medSchedule[medName] = sched;
+      if (ds.masterFileId) await driveUpdate(ds.masterFileId, ds.master);
+      cacheToLocal(domainId);
+      closeConfirmModal();
+      showToast('✅ 주기 설정됨');
+      renderView('meds');
+    }}, { label:'취소', action:closeConfirmModal }]);
 }

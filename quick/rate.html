@@ -230,11 +230,18 @@ function showEntryInfo(entry){
 
 function showAlreadyRated(entry){
   const rating=entry.outcome?.rating;
+  const isAuto=entry.outcome?.source==='auto';
+  const isCancelled=entry._outcomeCancelled;
   document.getElementById('buttons').style.display='none';
   document.getElementById('sub-text').style.display='none';
   document.getElementById('already').style.display='';
-  document.getElementById('already-text').textContent='이미 경과가 기록되어 있어요';
-  document.getElementById('already-sub').textContent=(labels[rating]||rating)+' · 추가 기록은 빠른 기록 앱에서';
+  if(isCancelled){
+    document.getElementById('already-text').textContent='새 기록이 추가되어 경과 알림이 취소되었습니다';
+    document.getElementById('already-sub').textContent=isAuto?'자동 경과: '+(labels[rating]||rating)+(entry.outcome?.reason?' ('+entry.outcome.reason+')':''):'빠른 기록 앱에서 확인하세요';
+  } else {
+    document.getElementById('already-text').textContent='이미 경과가 기록되어 있어요';
+    document.getElementById('already-sub').textContent=(isAuto?'자동: ':'')+(labels[rating]||rating)+(isAuto&&entry.outcome?.reason?' ('+entry.outcome.reason+')':'');
+  }
 }
 
 let _selectedRating=null;

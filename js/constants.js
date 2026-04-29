@@ -1,6 +1,14 @@
 // js/constants.js — 상수 정의 (Phase 1 모듈화)
 
 const APP_VERSION = [
+  {v:'v9.8.7', date:'2026-04-22', note:'bung운동UX(다크모드색상·운동추가시폼유지·단위placeholder동기화·40+종목·카테고리picker)'},
+  {v:'v9.8.6', date:'2026-04-22', note:'시간미상기록주간필터포함·편두통메모요약에포함·_logTimestamp헬퍼'},
+  {v:'v9.8.5', date:'2026-04-22', note:'AI보수성완화(도피성면책금지·임상의대상·확진외강한의견OK)·_OPINION_POSTURE'},
+  {v:'v9.8.4', date:'2026-04-22', note:'Grok멀티에이전트환자설명용·bung비일일약배지·bung중복메모대량정리도구'},
+  {v:'v9.8.3', date:'2026-04-22', note:'기본모드환자설명용복원(R2 Claude=최종이라 출력허용)·통합검증'},
+  {v:'v9.8.2', date:'2026-04-22', note:'대상환자명시·환자설명용최종단계만·역할재진술금지·최종요약진행률·Opus4.7추가'},
+  {v:'v9.8.1', date:'2026-04-22', note:'질환편집약물칩에복용주기선택(주N회·월N회·N일마다·직접입력)'},
+  {v:'v9.8', date:'2026-04-21', note:'붕쌤마음관리·건강관리메모분리 · 데일리체크도메인별메모 · 홈/저널교차표시필터 · 메모짝도메인이동버튼'},
   {v:'v9.7', date:'2026-04-08', note:'데일리체크붕쌤필터 · 경과알림서버스케줄 · 양방향동기화 · medCheck정규화 · 관계기록가임기매칭 · 정액검사비교 · AI일일요약월간인사이트 · OCR재분석 · 오프라인데일리체크 · 홈대시보드커스텀'},
   {v:'v9.6', date:'2026-04-05', note:'매일복용약체크 · 약물변경이력개선 · 날짜별약물반영 · 비용전체도메인합산 · AI모델가격업데이트 · 복용순응률통계 · 모델가격표시'},
   {v:'v9.5', date:'2026-04-05', note:'코드모듈화(15파일) · 편두통일기예보 · 약물효과리포트 · 로그프리셋 · 자동로그인 · 로그자동저장 · SW업데이트알림 · Gemini리뷰반영'},
@@ -339,8 +347,18 @@ const DOMAINS = {
       treatments: [],
       nrsLabel: '컨디션 (0=최악 10=최상)',
       customFields: true,
+      journalCategories: ['🏥 병원비교','📋 검사기록','❤️ 시도/관계','💊 약물변경','📊 컨디션','|','🍼 출산준비','💊 영양제','기타'],
     },
   },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// SUPPLEMENT LABELS — 영양제 라벨 일원화 (bungruki/log/views 공유)
+// ═══════════════════════════════════════════════════════════════
+const BRK_SUPPL_LABELS = {
+  folicAcid:{label:'엽산',icon:'💊'}, iron:{label:'철분',icon:'🩸'}, vitaminD:{label:'비타민D',icon:'☀️'},
+  multivitamin:{label:'멀티비타민',icon:'💊'}, magnesium:{label:'마그네슘',icon:'🧲'},
+  arginine:{label:'아르기닌',icon:'💪'}, coq10:{label:'CoQ10',icon:'⚡'}, silymarin:{label:'실리마린',icon:'🌿'},
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -373,8 +391,9 @@ const MODEL_OPTIONS = {
     {value:'gpt-4.1-mini',label:'GPT-4.1 Mini (구버전)'},
   ],
   claude: [
-    {value:'claude-sonnet-4-6',label:'Sonnet 4.6 (추천)'},
-    {value:'claude-opus-4-6',label:'Opus 4.6 (최고성능)'},
+    {value:'claude-sonnet-4-6',label:'Sonnet 4.6 (추천·일상)'},
+    {value:'claude-opus-4-7',label:'Opus 4.7 (최신·최고성능·2026-04)'},
+    {value:'claude-opus-4-6',label:'Opus 4.6 (구세대 최고성능)'},
     {value:'claude-haiku-4-5-20251001',label:'Haiku 4.5 (빠름·저비용)'},
   ],
   gemini: [
@@ -408,16 +427,21 @@ const KEY_INFO = {
 };
 
 const DEFAULT_PRICE_TABLE = {
+  // GPT (2026-04 verified)
   'gpt-5.4':{in:2.50,out:15.00},
   'gpt-5.4-mini':{in:0.75,out:4.50},
   'gpt-5.4-nano':{in:0.20,out:1.25},
   'gpt-5.3-chat-latest':{in:2.50,out:10.00},
   'gpt-4.1':{in:2.00,out:8.00},
   'gpt-4.1-mini':{in:0.40,out:1.60},
+  'gpt-4.1-nano':{in:0.05,out:0.20},
+  'gpt-4o':{in:2.50,out:10.00},
+  'gpt-4o-mini':{in:0.15,out:0.60},
   'o3':{in:2.00,out:8.00},
   'o3-mini':{in:1.10,out:4.40},
   'o4-mini':{in:0.55,out:2.20},
   'claude-sonnet-4-6':{in:3.00,out:15.00},
+  'claude-opus-4-7':{in:5.00,out:25.00},
   'claude-opus-4-6':{in:5.00,out:25.00},
   'claude-haiku-4-5-20251001':{in:1.00,out:5.00},
   'gemini-3.1-pro-preview':{in:2.00,out:12.00},
