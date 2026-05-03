@@ -1,12 +1,41 @@
-# HANDOFF — v9.8.7 세션 인수인계 가이드
+# HANDOFF — v9.8.8 세션 인수인계 가이드
 
-## 현재 상태: v9.8.7 (main)
+## 현재 상태: v9.8.8 (main)
 - 브랜치: main
-- SW CACHE_NAME: v99x (메인), v21 (quick)
-- APP_VERSION: v9.8.7
-- backup/v9.8.7 브랜치 생성 완료
-- backup/v9.6, v9.7 이전 세션에서 정리 완료 확인
-- ⚠️ backup/v9.8 자동 삭제 실패(403) — 다음 세션 수동 정리 (초과 1건)
+- SW CACHE_NAME: v99y (메인), v21 (quick)
+- APP_VERSION: v9.8.8
+- backup/v9.8.8 브랜치 생성 완료
+- ⚠️ backup/v9.8, v9.8.2 자동 삭제 실패(403) — 다음 세션 수동 정리 (초과 2건)
+
+## 세션 J 완료 (2026-05-03) — 검사 아카이브 접기 + 약물 복용법
+
+### PR #210 (v9.8.8)
+**요청 2건**
+
+#### 1. 검사 아카이브 접기 토글 (`js/checkup.js`)
+- 헤더 클릭 시 ▸/▾로 접기/펼치기, `localStorage 'om_checkup_collapsed'` 영속, **기본 접힘**
+- 접힌 상태에서도 건수·항목 수는 헤더에 표시
+- 접으면 액션 버튼·탭바·업로드·콘텐츠 모두 숨김 → 화면 공간 확보
+
+#### 2. 약물 복용법 — 일투수 + 1회 복용량 (`js/conditions.js`)
+- `medSchedule[medName]` 스키마 확장: `timesPerDay`, `doseAmount`, `doseUnit` (T/C/mL/포/매/회/방울/개)
+- 📅 모달에 ⏰ 일투수(QD/BID/TID/QID — daily 타입에서만) + 💊 1회 복용량(숫자+단위) 행 추가
+- `_isDefaultSched` 헬퍼 신설 → daily + QD + 용량 미설정만 default 취급
+- `_fmtMedSched` 확장: "매일 1T BID", "주2회 0.5T", "PRN 5mL" 식 표시
+- 칩 📅 배지 보라색 강조: timesPerDay>1 또는 doseAmount>0인 경우
+- 모달 라벨 "복용 주기" → "복용법"
+
+**Gemini 리뷰 반영 (medium 2건)**
+- `_collectSchedFromForm`/`_isDefaultSched`에서 `doseAmount && doseAmount > 0` 패턴이 0/null 모호
+- → `doseAmount != null && doseAmount > 0`로 통일, "0 = 미설정" 의도를 주석으로 명시
+
+### 다음 세션 TODO
+- backup/v9.8, v9.8.2 수동 삭제 (GitHub UI)
+- AI 응답 실전 모니터링 → `_OPINION_POSTURE` 미세 조정 여부 판단
+
+---
+
+## 세션 I 완료 (2026-04-29)
 
 ## 세션 I 완료 (2026-04-29) — bung 데일리체크 운동 UX 개선
 
