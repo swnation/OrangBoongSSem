@@ -954,7 +954,8 @@ function _openDxMedSched(idx){
   const med=_dxMedsList[idx];if(!med)return;
   const current=_dxMedSchedMap[med]||{type:med.includes('(PRN)')?'prn':'daily',interval:1,custom:''};
   _msState.dx=current.type;
-  showConfirmModal('💊 '+med+' 복용 주기',
+  _msState.dx_freq=current.timesPerDay||1;
+  showConfirmModal('💊 '+med+' 복용법',
     _renderSchedPickerInner('dx', current),
     [{ label:'적용', primary:true, action:()=>{
       const sched=_collectSchedFromForm('dx', current);
@@ -967,12 +968,12 @@ function _openDxMedSched(idx){
         _dxMedsList[idx] = nextName;
         _dxTrackList.forEach(t=>{if(t.med===med) t.med=nextName;});
       }
-      // 3. _dxMedSchedMap 정리: 옛 키 제거 + 기본(daily) 외만 새 키로 저장
+      // 3. _dxMedSchedMap 정리: 옛 키 제거 + 기본 외만 새 키로 저장
       delete _dxMedSchedMap[med];
-      if(sched.type !== 'daily') _dxMedSchedMap[nextName] = sched;
+      if(!_isDefaultSched(sched)) _dxMedSchedMap[nextName] = sched;
       closeConfirmModal();
       renderDxMedChips();
-      showToast('✅ 주기 설정: '+_fmtMedSched(sched, nextName));
+      showToast('✅ 복용법: '+_fmtMedSched(sched, nextName));
     }}, { label:'취소', action:closeConfirmModal }]);
 }
 
@@ -986,13 +987,14 @@ function renderDxMedChips() {
     const untilLabel=ti?(ti.until==='change'?'변경시까지':ti.until):'';
     const sched=_dxMedSchedMap[m];
     const schedLabel=_fmtMedSched(sched, m);
-    const schedIsCustom=sched && (sched.type==='weekly'||sched.type==='monthly'||sched.type==='days'||sched.type==='custom');
+    // 비기본(주/월/N일/직접) 또는 일투수>1, 또는 1회 복용량 설정된 경우 강조 색상
+    const schedIsCustom=sched && (sched.type==='weekly'||sched.type==='monthly'||sched.type==='days'||sched.type==='custom'||(sched.timesPerDay&&sched.timesPerDay>1)||(sched.doseAmount&&sched.doseAmount>0));
     const schedBtnStyle=schedIsCustom
       ? 'border:1px solid #7c3aed;background:#ede9fe;color:#6d28d9'
       : (isPrn?'border:1px solid #f59e0b;background:#fef3c7;color:#92400e':'border:1px solid var(--bd);background:none;color:var(--mu)');
     return `<span class="file-chip" style="${isPrn?'border:1.5px dashed #f59e0b;background:#fff7ed':''}">${esc(m)} <span class="file-remove" onclick="removeDxMed(${i})">✕</span>
       <button onclick="_toggleDxPrn(${i})" type="button" style="font-size:.55rem;padding:1px 4px;border:1px solid ${isPrn?'#f59e0b':'var(--bd)'};border-radius:3px;background:${isPrn?'#fef3c7':'none'};color:${isPrn?'#92400e':'var(--mu)'};cursor:pointer;margin-left:2px;font-family:var(--font)" title="PRN 토글">${isPrn?'PRN':'매일'}</button>
-      <button onclick="_openDxMedSched(${i})" type="button" style="font-size:.55rem;padding:1px 5px;border-radius:3px;${schedBtnStyle};cursor:pointer;margin-left:2px;font-family:var(--font)" title="복용 주기 설정 (주/월/N일/직접 입력)">📅 ${esc(schedLabel)}</button>
+      <button onclick="_openDxMedSched(${i})" type="button" style="font-size:.55rem;padding:1px 5px;border-radius:3px;${schedBtnStyle};cursor:pointer;margin-left:2px;font-family:var(--font)" title="복용법 설정 (주기·일투수 QD/BID/TID/QID·1회 복용량)">📅 ${esc(schedLabel)}</button>
       <button onclick="_toggleTrack(${i})" type="button" style="font-size:.55rem;padding:1px 4px;border:1px solid ${tracked?'#10b981':'var(--bd)'};border-radius:3px;background:${tracked?'#f0fdf4':'none'};color:${tracked?'#10b981':'var(--mu)'};cursor:pointer;margin-left:2px;font-family:var(--font)" title="순응도 추적">${tracked?'📊'+untilLabel:'추적'}</button></span>`;
   }).join('');
 }
@@ -1060,9 +1062,10 @@ async function saveCondition() {
   if(!ds.master.conditions) ds.master.conditions=[];
 
   // 현재 약물 목록에 있는 스케줄만 필터링 (제거된 약의 잔여 스케줄 정리)
+  // default(매일·QD·용량 미설정)는 제외하고 저장 — 일투수/용량이 있으면 daily여도 보존
   const cleanSched={};
   Object.entries(_dxMedSchedMap).forEach(([k,v])=>{
-    if(_dxMedsList.includes(k) && v && v.type && v.type!=='daily'){
+    if(_dxMedsList.includes(k) && v && !_isDefaultSched(v)){
       cleanSched[k]=v;
     }
   });
@@ -2639,14 +2642,27 @@ const _MED_SCHED_OPTS = [
   { type:'custom',  label:'직접 입력' },
 ];
 
+// 일투수 라벨 (1=QD, 2=BID, 3=TID, 4=QID)
+const _MED_FREQ_LABELS = {1:'QD',2:'BID',3:'TID',4:'QID'};
+// 1회 복용 단위
+const _MED_DOSE_UNITS = ['T','C','mL','포','매','회','방울','개'];
+
 function _fmtMedSched(sched, med) {
   if (!sched) return (med && med.includes('(PRN)')) ? 'PRN' : '매일';
-  if (sched.type === 'weekly')  return '주'+(sched.interval||1)+'회';
-  if (sched.type === 'monthly') return '월'+(sched.interval||1)+'회';
-  if (sched.type === 'days')    return (sched.interval||1)+'일마다';
-  if (sched.type === 'custom')  return (sched.custom||'').trim() || '직접';
-  if (sched.type === 'prn')     return 'PRN';
-  return '매일';
+  let base;
+  if (sched.type === 'weekly')  base = '주'+(sched.interval||1)+'회';
+  else if (sched.type === 'monthly') base = '월'+(sched.interval||1)+'회';
+  else if (sched.type === 'days')    base = (sched.interval||1)+'일마다';
+  else if (sched.type === 'custom')  base = (sched.custom||'').trim() || '직접';
+  else if (sched.type === 'prn')     base = 'PRN';
+  else                                base = '매일';
+  // 1회 복용량 + 일투수 부가 표시 (있을 때만)
+  const dose = (sched.doseAmount && sched.doseUnit) ? (sched.doseAmount+sched.doseUnit) : '';
+  const freq = (sched.type==='daily' && sched.timesPerDay && sched.timesPerDay>1)
+    ? (_MED_FREQ_LABELS[sched.timesPerDay]||sched.timesPerDay+'회') : '';
+  // 매일 + QD + 용량 없음 = base만
+  const tail = [dose, freq].filter(Boolean).join(' ');
+  return tail ? base+' '+tail : base;
 }
 
 // 주기 선택 UI HTML 빌더 (모달 / 조건편집 폼 공용)
@@ -2658,17 +2674,49 @@ function _renderSchedPickerInner(prefix, current) {
   const needInterval = ['weekly','monthly','days'].includes(current.type);
   const needCustom   = current.type === 'custom';
   const unitText = current.type==='weekly'?'회/주':current.type==='monthly'?'회/월':current.type==='days'?'일마다':'';
+  // 일투수 (QD/BID/TID/QID) — daily 타입에서만 표시
+  const showFreq = current.type === 'daily' || !current.type;
+  const curFreq = current.timesPerDay || 1;
+  const freqHtml = [1,2,3,4].map(n=>{
+    const s = curFreq === n;
+    return `<button onclick="_setMedFreq('${prefix}',${n})" id="${prefix}-freq-${n}" type="button" style="flex:1;padding:5px 4px;font-size:.68rem;border:1.5px solid ${s?'var(--ac)':'var(--bd)'};border-radius:5px;background:${s?'var(--ac)':'var(--sf2)'};color:${s?'#fff':'var(--ink)'};cursor:pointer;font-family:var(--font)"><div style="font-weight:700">${_MED_FREQ_LABELS[n]}</div><div style="font-size:.55rem;opacity:.85">1일 ${n}회</div></button>`;
+  }).join('');
+  // 1회 복용량 (모든 타입에서 표시)
+  const curAmt = current.doseAmount ?? '';
+  const curUnit = current.doseUnit || 'T';
+  const unitOpts = _MED_DOSE_UNITS.map(u=>`<option value="${u}"${curUnit===u?' selected':''}>${u}</option>`).join('');
   return `<div style="font-size:.72rem">
+    <div style="font-size:.62rem;color:var(--mu);margin-bottom:3px">📅 복용 주기</div>
     <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${optsHtml}</div>
     <div id="${prefix}-interval-row" style="display:${needInterval?'flex':'none'};align-items:center;gap:6px;margin-bottom:6px">
       <span>간격:</span>
-      <input type="number" id="${prefix}-interval" value="${current.interval||1}" min="1" max="90" style="width:60px;padding:4px;font-size:.75rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:var(--mono)">
+      <input type="number" id="${prefix}-interval" value="${current.interval||1}" min="1" max="90" style="width:60px;padding:4px;font-size:.75rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:var(--mono);background:var(--sf2);color:var(--ink)">
       <span id="${prefix}-interval-unit">${unitText}</span>
     </div>
     <div id="${prefix}-custom-row" style="display:${needCustom?'block':'none'};margin-bottom:6px">
       <input type="text" id="${prefix}-custom" value="${esc(current.custom||'')}" placeholder="예: 매주 월요일 저녁, 격주 금요일, 매달 1일..." style="width:100%;padding:5px 8px;font-size:.72rem;border:1px solid var(--bd);border-radius:4px;font-family:var(--font);background:var(--sf2);color:var(--ink)">
     </div>
+    <div id="${prefix}-freq-row" style="display:${showFreq?'block':'none'};margin-top:10px;padding-top:8px;border-top:1px dashed var(--bd)">
+      <div style="font-size:.62rem;color:var(--mu);margin-bottom:4px">⏰ 일투수 (1일 N회)</div>
+      <div style="display:flex;gap:4px">${freqHtml}</div>
+    </div>
+    <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--bd)">
+      <div style="font-size:.62rem;color:var(--mu);margin-bottom:4px">💊 1회 복용량 <span style="color:var(--mu2)">(선택)</span></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <input type="number" id="${prefix}-dose" value="${curAmt}" min="0" step="0.5" placeholder="1" style="width:70px;padding:4px;font-size:.75rem;border:1px solid var(--bd);border-radius:4px;text-align:center;font-family:var(--mono);background:var(--sf2);color:var(--ink)">
+        <select id="${prefix}-dose-unit" style="padding:4px;font-size:.72rem;border:1px solid var(--bd);border-radius:4px;background:var(--sf2);color:var(--ink);font-family:var(--font);cursor:pointer">${unitOpts}</select>
+        <span style="font-size:.6rem;color:var(--mu2)">예: 1T, 0.5T, 5mL, 2캡슐</span>
+      </div>
+    </div>
   </div>`;
+}
+
+function _setMedFreq(prefix, n){
+  _msState[prefix+'_freq'] = n;
+  [1,2,3,4].forEach(k=>{
+    const btn = document.getElementById(prefix+'-freq-'+k);
+    if(btn){ const s=k===n; btn.style.borderColor=s?'var(--ac)':'var(--bd)'; btn.style.background=s?'var(--ac)':'var(--sf2)'; btn.style.color=s?'#fff':'var(--ink)'; }
+  });
 }
 
 // 복용 주기 모달 임시 상태 (window 전역 오염 방지 — prefix별 격리)
@@ -2680,9 +2728,11 @@ function _setMedSchedType(prefix, type) {
   const row = document.getElementById(prefix+'-interval-row');
   const unitEl = document.getElementById(prefix+'-interval-unit');
   const customRow = document.getElementById(prefix+'-custom-row');
+  const freqRow = document.getElementById(prefix+'-freq-row');
   if (row) row.style.display = ['weekly','monthly','days'].includes(type) ? 'flex' : 'none';
   if (unitEl) unitEl.textContent = units[type] || '';
   if (customRow) customRow.style.display = type === 'custom' ? 'block' : 'none';
+  if (freqRow) freqRow.style.display = type === 'daily' ? 'block' : 'none';
   _MED_SCHED_OPTS.forEach(o => {
     const btn = document.getElementById(prefix+'-btn-'+o.type);
     if (btn) { const s=o.type===type; btn.style.borderColor=s?'var(--ac)':'var(--bd)'; btn.style.background=s?'var(--ac)':'var(--sf2)'; btn.style.color=s?'#fff':'var(--ink)'; }
@@ -2693,10 +2743,26 @@ function _collectSchedFromForm(prefix, fallback) {
   const type = _msState[prefix] || fallback?.type || 'daily';
   const interval = parseInt(document.getElementById(prefix+'-interval')?.value) || 1;
   const custom = (document.getElementById(prefix+'-custom')?.value || '').trim();
+  const timesPerDay = _msState[prefix+'_freq'] || fallback?.timesPerDay || 1;
+  const doseRaw = document.getElementById(prefix+'-dose')?.value;
+  const doseAmount = doseRaw !== '' && doseRaw != null ? parseFloat(doseRaw) : null;
+  const doseUnit = document.getElementById(prefix+'-dose-unit')?.value || 'T';
   const out = { type };
   if (['weekly','monthly','days'].includes(type)) out.interval = interval;
   if (type === 'custom') out.custom = custom;
+  if (type === 'daily' && timesPerDay && timesPerDay > 1) out.timesPerDay = timesPerDay;
+  // 0은 임상적으로 의미 없으므로 "미설정"으로 간주 — null/undefined와 동일 처리
+  if (doseAmount != null && doseAmount > 0) { out.doseAmount = doseAmount; out.doseUnit = doseUnit; }
   return out;
+}
+
+// 스케줄이 default(매일·QD·용량 미설정)인지
+function _isDefaultSched(s){
+  if(!s) return true;
+  if(s.type !== 'daily' && s.type !== undefined) return false;
+  if(s.timesPerDay && s.timesPerDay > 1) return false;
+  if(s.doseAmount != null && s.doseAmount > 0) return false;
+  return true;
 }
 
 function openMedSchedule(domainId, condIdx, medName) {
@@ -2706,17 +2772,18 @@ function openMedSchedule(domainId, condIdx, medName) {
   if (!c.medSchedule) c.medSchedule = {};
   const current = c.medSchedule[medName] || { type: medName.includes('(PRN)') ? 'prn' : 'daily', interval: 1 };
   _msState.ms = current.type;
-  showConfirmModal('💊 ' + medName + ' 복용 주기',
+  _msState.ms_freq = current.timesPerDay || 1;
+  showConfirmModal('💊 ' + medName + ' 복용법',
     _renderSchedPickerInner('ms', current),
     [{ label:'저장', primary:true, action:async()=>{
       const sched = _collectSchedFromForm('ms', current);
-      // default(매일, interval=1) 이면 기록하지 않고 제거
-      if (sched.type === 'daily') delete c.medSchedule[medName];
+      // default 이면 기록하지 않고 제거
+      if (_isDefaultSched(sched)) delete c.medSchedule[medName];
       else c.medSchedule[medName] = sched;
       if (ds.masterFileId) await driveUpdate(ds.masterFileId, ds.master);
       cacheToLocal(domainId);
       closeConfirmModal();
-      showToast('✅ 주기 설정됨');
+      showToast('✅ 복용법 저장됨');
       renderView('meds');
     }}, { label:'취소', action:closeConfirmModal }]);
 }
