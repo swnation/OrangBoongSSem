@@ -2106,6 +2106,13 @@ function _showCheckupAnalysisResults(allResults) {
 // ═══════════════════════════════════════════════════════════════
 
 var _checkupViewTab = 'timeline'; // timeline | trends | categories | search
+// 검사 아카이브 접기 상태 (localStorage 영속) — 기본: 접힘
+var _checkupCollapsed = (function(){ try { return _storageGet('om_checkup_collapsed') !== '0'; } catch(e) { return true; } })();
+function _toggleCheckupCollapsed(){
+  _checkupCollapsed = !_checkupCollapsed;
+  try { _storageSet('om_checkup_collapsed', _checkupCollapsed ? '1' : '0'); } catch(e) {}
+  renderView('meds');
+}
 var _ckSearchQuery = '';
 
 function renderCheckupArchive() {
@@ -2171,21 +2178,24 @@ function renderCheckupArchive() {
   // 약물 안전 경고
   const drugAlertsHtml = renderDrugAlerts();
 
+  const collapsed = _checkupCollapsed;
+  const collapsedBody = collapsed ? '' : `<div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${tabBar}</div>${uploadArea}${content}`;
   return `${drugAlertsHtml}<div style="padding:12px;background:var(--sf2);border:1.5px solid var(--domain-color);border-radius:10px;margin-bottom:10px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:${collapsed?0:8}px;cursor:pointer;user-select:none" onclick="_toggleCheckupCollapsed()">
+      <span style="font-size:.85rem;color:var(--mu);width:14px;text-align:center" title="${collapsed?'펼치기':'접기'}">${collapsed?'▸':'▾'}</span>
       <span style="font-size:1.1rem">📋</span>
       <span style="font-size:.88rem;font-weight:700;color:var(--domain-color)">검사 아카이브</span>
-      <button onclick="aiCheckupInterpretation()" style="margin-left:auto;background:none;border:1px solid #10b981;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#10b981;cursor:pointer;font-family:var(--font)">💡 AI 종합 해석</button>
+      <span style="font-size:.62rem;color:var(--mu);margin-left:auto">${allCheckups.length}건 · ${totalItems}항목</span>
+    </div>
+    ${collapsed?'':`<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+      <button onclick="aiCheckupInterpretation()" style="background:none;border:1px solid #10b981;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#10b981;cursor:pointer;font-family:var(--font)">💡 AI 종합 해석</button>
       <button onclick="aiReclassifyAll()" style="background:none;border:1px solid #8b5cf6;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#8b5cf6;cursor:pointer;font-family:var(--font)">🤖 재분류</button>
       <button onclick="openBatchInstitution()" style="background:none;border:1px solid #f59e0b;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#f59e0b;cursor:pointer;font-family:var(--font)">🏥 기관명</button>
       <button onclick="_detectDuplicateCheckups()" style="background:none;border:1px solid #dc2626;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#dc2626;cursor:pointer;font-family:var(--font)">🔗 중복 정리</button>
       <button onclick="_toggleCkSelectMode()" style="background:none;border:1px solid ${_ckSelectMode?'#dc2626':'#8b5cf6'};border-radius:5px;padding:2px 8px;font-size:.6rem;color:${_ckSelectMode?'#dc2626':'#8b5cf6'};cursor:pointer;font-family:var(--font)">${_ckSelectMode?'✕ 선택 해제':'☑️ 선택 병합'}</button>
       <button id="ck-ai-merge-btn" onclick="_aiMergeSelected()" style="display:${_ckSelectMode&&_ckSelectedIds.size>=2?'inline':'none'};background:#8b5cf6;border:none;border-radius:5px;padding:2px 8px;font-size:.6rem;color:#fff;cursor:pointer;font-family:var(--font)">🤖 AI 병합 (${_ckSelectedIds.size}건)</button>
-      <span style="font-size:.62rem;color:var(--mu)">${allCheckups.length}건 · ${totalItems}항목</span>
-    </div>
-    <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap">${tabBar}</div>
-    ${uploadArea}
-    ${content}
+    </div>`}
+    ${collapsedBody}
   </div>`;
 }
 
