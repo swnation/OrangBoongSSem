@@ -1,8 +1,12 @@
-const CACHE_NAME = 'orangi-health-v97z17';
+const CACHE_NAME = 'orangi-health-v99y';
 const PRECACHE = [
   './index.html',
   './style.css',
   './js/constants.js',
+  './js/storage.js',
+  './js/firebase-init.js',
+  './js/firebase-auth.js',
+  './js/firebase-store.js',
   './js/state.js',
   './js/utils.js',
   './js/crypto.js',
@@ -13,6 +17,7 @@ const PRECACHE = [
   './js/head-diagram.js',
   './js/log.js',
   './js/conditions.js',
+  './js/checkup.js',
   './js/bungruki.js',
   './js/settings.js',
   './js/pwa.js',

@@ -5,14 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Orangi Health AI 협진 시스템 v8.0</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <meta name="theme-color" content="#2c5f8a">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@15/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.min.mjs" type="module"></script>
+<script>
+// pdf.js 글로벌 접근 (모듈→글로벌 브릿지)
+window._pdfjsReady = import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.min.mjs').then(m => {
+  m.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.9.155/build/pdf.worker.min.mjs';
+  window.pdfjsLib = m;
+  return m;
+}).catch(() => null);
+</script>
 </head>
 <body>
 
@@ -91,6 +101,8 @@
       <button class="sb-foot-btn" onclick="openCtx()">📋 환자 컨텍스트</button>
       <button class="sb-foot-btn" onclick="manualBackup()">📦 데이터 백업</button>
       <button class="sb-foot-btn" onclick="codeBackupToDrive()">💾 코드 백업</button>
+      <button class="sb-foot-btn" onclick="openBungHealthMemoCleanup()" title="bung/ 데일리체크에서 마음관리·건강관리에 중복 저장된 과거 메모 중 건강관리 쪽을 일괄 삭제">🧹 붕쌤 중복 메모 정리</button>
+      <button class="sb-foot-btn" onclick="showToastLog()" style="display:flex;align-items:center;gap:6px">📋 알림 로그<span id="toast-log-badge" style="display:none;font-size:.55rem;background:#dc2626;color:#fff;padding:0 4px;border-radius:3px;font-family:var(--mono)">0</span></button>
       <button class="sb-foot-btn" id="notif-toggle-btn" onclick="toggleNotifications()">🔔 알림 설정</button>
       <div style="border-top:1px solid #1a2535;margin:4px 0"></div>
       <label class="sb-foot-btn" style="display:flex;align-items:center;gap:6px;cursor:pointer">
@@ -186,7 +198,15 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+
 <script src="js/constants.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/firebase-init.js"></script>
+<script src="js/firebase-auth.js"></script>
+<script src="js/firebase-store.js"></script>
 <script src="js/state.js"></script>
 <script src="js/utils.js"></script>
 <script src="js/crypto.js"></script>
@@ -198,6 +218,7 @@
 <script src="js/log.js"></script>
 <script src="js/conditions.js"></script>
 <script src="js/bungruki.js"></script>
+<script src="js/checkup.js"></script>
 <script src="js/settings.js"></script>
 <script src="js/pwa.js"></script>
 <script src="js/views.js"></script>
@@ -237,6 +258,8 @@ try { const ae=localStorage.getItem('aiEnabled'); if(ae) S.aiEnabled=JSON.parse(
 
 window.addEventListener('load', () => {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Firebase 초기화
+  initFirebase().then(() => { if(isFirebaseReady()) setupFirebaseAuth(); });
   // API 키 로드: 암호화 저장이 있으면 PIN 요청, 없으면 평문 마이그레이션
   if(localStorage.getItem(_KEY_STORAGE)) {
     showPinPrompt(false);

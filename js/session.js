@@ -88,7 +88,7 @@ async function runBasicMode() {
       const answer=await callAIStream(aiId,getRoleSystem(aiId),r1Prompt,(chunk)=>{
         const ta=document.getElementById('ans-'+aiId);
         if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
-      },ac.signal);
+      },ac.signal,'session-r1');
       r1Results[aiId]=answer;
       S.session.rounds[0].answers[aiId]=answer;
       delete S.session.rounds[0].errors[aiId];
@@ -119,7 +119,7 @@ async function runBasicMode() {
   if(!S.session.rounds[1]) S.session.rounds[1]={round:2,answers:{},errors:{}};
   document.getElementById('session-round-badge').textContent='R2';
 
-  const claudePrompt=`${contextFull}\n\n[오늘 세션 질문]\n${q}\n\n[GPT 데이터 분석]\n${r1Results.gpt||'(실패)'}\n\n[Perplexity 근거 검색]\n${r1Results.perp||'(실패)'}\n\n위 두 AI의 분석과 근거를 종합하여 최종 임상 판단과 액션 플랜을 도출하세요.`;
+  const claudePrompt=`${contextFull}\n\n[오늘 세션 질문]\n${q}\n\n[GPT 데이터 분석]\n${r1Results.gpt||'(실패)'}\n\n[Perplexity 근거 검색]\n${r1Results.perp||'(실패)'}\n\n위 두 AI의 분석과 근거를 종합하여 최종 임상 판단과 액션 플랜을 도출하세요. 도피성 마무리("전문의 상담 필요" 등) 금지 — 질문자는 임상의이므로 근거 기반 강한 권고·용량·우선순위까지 구체 제시. 확진만 금지.`;
 
   setCardStatus('claude','loading');
   startAITimer('claude');
@@ -131,7 +131,7 @@ async function runBasicMode() {
     const answer=await callAIStream('claude',getRoleSystem('claude'),claudePrompt,(chunk)=>{
       const ta=document.getElementById('ans-claude');
       if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
-    },ac.signal);
+    },ac.signal,'session-r1');
     S.session.rounds[1].answers.claude=answer;
     delete S.session.rounds[1].errors.claude;
     const ta=document.getElementById('ans-claude');
@@ -209,7 +209,7 @@ async function runQuickQuestion(aiId) {
     const answer=await callAIStream(aiId,getRoleSystem(aiId),buildUserPrompt(aiId,1),(chunk)=>{
       const ta=document.getElementById('ans-'+aiId);
       if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
-    });
+    },undefined,'session-r1');
     S.session.rounds[0].answers[aiId]=answer;
     const ta=document.getElementById('ans-'+aiId);
     if(ta){ta.value=answer;ta.classList.remove('gen');}
@@ -288,7 +288,7 @@ async function runRound(roundNum, errorsOnly) {
       const answer = await callAIStream(aiId, getRoleSystem(aiId), buildUserPrompt(aiId,roundNum), (chunk)=>{
         const ta=document.getElementById('ans-'+aiId);
         if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
-      }, ac.signal);
+      }, ac.signal, 'session-r'+roundNum);
       S.session.rounds[roundNum-1].answers[aiId]=answer;
       delete S.session.rounds[roundNum-1].errors[aiId];
       const ta=document.getElementById('ans-'+aiId);
@@ -363,7 +363,7 @@ async function regenOne(aiId) {
     const answer=await callAIStream(aiId,getRoleSystem(aiId),buildUserPrompt(aiId,curRound),(chunk)=>{
       const ta=document.getElementById('ans-'+aiId);
       if(ta){ta.value=chunk;ta.scrollTop=ta.scrollHeight;}
-    }, ac.signal);
+    }, ac.signal, 'session-r'+curRound);
     S.session.rounds[curRound-1].answers[aiId]=answer;
     delete S.session.rounds[curRound-1].errors[aiId];
     const ta=document.getElementById('ans-'+aiId);
@@ -427,14 +427,17 @@ function startAITimer(aiId) {
   const el=document.getElementById('timer-'+aiId);
   if(!el) return;
   const start=Date.now();
-  el.textContent='0s';
+  const model=S.models[aiId]||DEFAULT_MODELS[aiId];
+  const price=DEFAULT_PRICE_TABLE[model];
+  const estInfo=price?` · ~$${((4000/1e6*price.in)+(2000/1e6*price.out)).toFixed(4)}/call`:'';
+  el.textContent=`0s${estInfo}`;
   el.style.display='inline';
   el.style.color='var(--mu)';
   const warn=document.getElementById('slow-'+aiId);
   if(warn) warn.style.display='none';
   _aiTimers[aiId]=setInterval(()=>{
     const sec=Math.round((Date.now()-start)/1000);
-    el.textContent=sec+'s';
+    el.textContent=`${sec}s${estInfo}`;
     if(sec>=AI_SLOW_THRESHOLD) {
       el.style.color='#f59e0b';
       if(warn) { warn.style.display='inline'; warn.title=`${sec}초 경과 — 중단 후 재시도를 권장합니다`; }
@@ -527,11 +530,25 @@ async function runGrokMultiAgent() {
   },1000);
 
   const contextFull=getFullContext(q);
-
+  const dcG = DC();
   const system=`Grok ${agentLevel} Multi-Agent 모드. 내부 ${agentLevel}명(Captain, Researcher, Logician, Contrarian 등) 토론 후 요약.
-SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요.
-**최종 출력은 반드시 아래 JSON만 출력. 다른 텍스트 절대 금지. 각 문자열 100자 이내.**
-{"session_summary":"3문장요약","new_consensus":["합의"],"new_discarded":["폐기"],"updated_issues":["쟁점"],"new_protocols":[],"round_evolution":"에이전트 토론 발전과정","final_recommendation":"최종권고","next_steps":["행동1","행동2"]}`;
+[대상 환자] ${dcG.user} · ${dcG.label}
+SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요. 자기 역할·에이전트 이름 재진술 금지.
+
+${_OPINION_POSTURE}
+
+**최종 출력은 반드시 아래 JSON만 출력. 다른 텍스트 절대 금지.**
+{
+  "session_summary":"3문장 요약 (≤200자)",
+  "new_consensus":["합의 (각 ≤100자)"],
+  "new_discarded":["폐기 (각 ≤100자)"],
+  "updated_issues":["쟁점 (각 ≤100자)"],
+  "new_protocols":[],
+  "round_evolution":"에이전트 토론 발전과정 (≤150자)",
+  "final_recommendation":"최종 권고 — 구체 액션·우선순위·용량·조건 (≤240자). 도피성 마무리 금지.",
+  "next_steps":["행동1 (언제·무엇을·왜)","행동2"],
+  "patient_friendly":"${dcG.user}에게 전달할 설명용 문장 2~4문장. 전문용어 최소화. '${dcG.user}님' 호칭 사용. 핵심 판단·권고·주의점 부드럽게 전달."
+}`;
 
   const userPrompt=`${contextFull}\n\n[질문]\n${q}`;
 
@@ -548,7 +565,7 @@ SSOT 원칙 준수. 중간 토론 과정은 출력하지 마세요.
     const raw=(data.output||[]).filter(o=>o.type==='message').map(o=>(o.content||[]).filter(c=>c.type==='output_text').map(c=>c.text).join('')).join('\n')||data.output_text||JSON.stringify(data);
     // 토큰 비용 기록
     const mu=data.usage||{};
-    recordUsage('grok',maModel,mu.input_tokens||0,mu.output_tokens||0);
+    recordUsage('grok',maModel,mu.input_tokens||0,mu.output_tokens||0,'summary');
 
     // JSON 추출 (기존 Claude runFinalSummary와 동일한 파싱)
     let parsed;
@@ -594,25 +611,48 @@ async function runFinalSummary() {
   if(finalBtn) finalBtn.disabled=true;
   if(finalSp) finalSp.style.display='block';
 
-  const lastRound=S.session.rounds[S.session.rounds.length-1];
-  const lastRoundText=lastRound
-    ? Object.entries(lastRound.answers||{}).map(([id,ans])=>`[${AI_DEFS[id]?.name}]\n${(ans||'').substring(0,800)}`).join('\n\n---\n\n')
-    : '';
+  // 진행률·타이머·프롬프트 구성 모두 try 안에서 → 어떤 단계에서 예외나도 finally가 안전 정리
+  let _summaryTick = null;
+  try {
+    _showProgress(0, 1, '📝 최종 요약 생성 중... (AI 호출)');
+    let _summaryEstPct = 0;
+    _summaryTick = setInterval(()=>{
+      _summaryEstPct = Math.min(95, _summaryEstPct + 4);
+      _showProgress(_summaryEstPct, 100, '📝 최종 요약 생성 중... 환자 설명용 문장 포함');
+    }, 800);
 
-  const prompt = `${DC().user} ${DC().label} 협진 세션 마무리 요약을 JSON으로만 작성.
+    const lastRound=S.session.rounds[S.session.rounds.length-1];
+    const lastRoundText=lastRound
+      ? Object.entries(lastRound.answers||{}).map(([id,ans])=>`[${AI_DEFS[id]?.name}]\n${(ans||'').substring(0,800)}`).join('\n\n---\n\n')
+      : '';
+
+    const dc = DC();
+    const prompt = `${dc.user} ${dc.label} 협진 세션 마무리 요약을 JSON으로만 작성.
+[대상 환자] ${dc.user} · ${dc.label}
 
 질문: ${S.session.question}
 
 최종 라운드 답변:
 ${lastRoundText}
 
-JSON 형식 (각 문자열 100자 이내):
-{"session_summary":"3문장요약","new_consensus":["합의"],"new_discarded":["폐기"],"updated_issues":["쟁점"],"new_protocols":[],"round_evolution":"발전과정","final_recommendation":"최종권고","next_steps":["행동1","행동2"]}`;
+${_OPINION_POSTURE}
 
-  try {
+JSON 형식 (각 문자열은 명시된 길이 이내):
+{
+  "session_summary": "3문장 요약 (≤200자)",
+  "new_consensus": ["합의 (각 ≤100자)"],
+  "new_discarded": ["폐기 (각 ≤100자)"],
+  "updated_issues": ["쟁점 (각 ≤100자)"],
+  "new_protocols": [],
+  "round_evolution": "발전과정 (≤150자)",
+  "final_recommendation": "최종 권고 — 구체 액션·우선순위·용량·조건 명시 (≤240자). '전문의와 상담' '주치의 판단' 같은 도피성 마무리 금지.",
+  "next_steps": ["행동1 (언제·무엇을·왜)", "행동2"],
+  "patient_friendly": "${dc.user}에게 전달할 설명용 문장. 2~4문장. 전문용어 최소화. '${dc.user}님' 호칭 사용. 이번 세션의 핵심 판단·권고·주의점을 부드럽게 전달."
+}`;
+
     const result = await callAI('claude',
-      '당신은 협진 세션 요약 전문가. 유효한 JSON만 출력. 다른 텍스트 금지.',
-      prompt);
+      '당신은 협진 세션 요약 전문가. 질문자는 임상의이므로 면책·도피성 문구 금지. 유효한 JSON만 출력. 다른 텍스트 금지.',
+      prompt, 'summary');
 
     let parsed;
     let clean = result.replace(/```json|```/g,'').trim();
@@ -650,6 +690,7 @@ JSON 형식 (각 문자열 100자 이내):
 
     const area=document.getElementById('summary-area');
     if(area){area.innerHTML=renderSummaryResult(parsed);area.scrollIntoView({behavior:'smooth'});}
+    _showProgress(100, 100, '✅ 최종 요약 완료');
     showToast('✅ 세션 저장 & Drive 동기화 완료!');
     // Offer context auto-merge
     if(parsed.new_consensus?.length||parsed.updated_issues?.length||parsed.final_recommendation) {
@@ -657,6 +698,9 @@ JSON 형식 (각 문자열 100자 이내):
     }
   } catch(e) {
     showToast('❌ 요약 실패: '+e.message,5000);
+  } finally {
+    clearInterval(_summaryTick);
+    setTimeout(_hideProgress, 1200);
   }
   if(finalBtn) finalBtn.disabled=false;
   if(finalSp) finalSp.style.display='none';
@@ -696,13 +740,15 @@ function renderSummaryResult(r) {
   const todayCost=getSidebarCostToday();
   const costBadge=todayCost>0?`<span style="font-size:.7rem;font-family:var(--mono);color:var(--mu);margin-left:auto">$${todayCost.toFixed(4)}</span>`:'';
 
+  const patientFriendly = r.patient_friendly ? `<div class="final-card" style="border-left:4px solid var(--ac)"><h3>💬 환자 전달용 문장 <span class="badge badge-blue">${esc(DC().user)}에게</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p style="line-height:1.7;white-space:pre-wrap">${esc(r.patient_friendly)}</p></div></div>` : '';
   return `
     <div class="final-card"><h3>📈 라운드 발전 <span class="badge badge-blue">Evolution</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p>${esc(r.round_evolution||'')}</p></div></div>
     <div class="final-card"><h3>✅ 세션 요약 ${costBadge}<button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p>${esc(r.session_summary||'')}</p></div></div>
     ${newCon?`<div class="final-card"><h3>🆕 새 합의 <span class="badge badge-green">누적 저장</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><ul>${newCon}</ul></div></div>`:''}
     ${issues?`<div class="final-card"><h3>🔍 미해결 쟁점 <span class="badge badge-orange">추적 중</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><ul>${issues}</ul></div></div>`:''}
     <div class="final-card"><h3>🎯 최종 권고 <span class="badge badge-purple">Action</span><button class="btn-copy" onclick="copyCardText(this)">📋 복사</button></h3><div class="fcontent"><p>${esc(r.final_recommendation||'')}</p><div class="divider"></div><ul>${steps}</ul></div></div>
-    <p style="font-size:.7rem;color:var(--mu);text-align:center;padding:6px 0 16px">※ 의료적 결정은 반드시 전문의와 상담하세요.</p>
+    ${patientFriendly}
+    <p style="font-size:.65rem;color:var(--mu2);text-align:center;padding:6px 0 16px">※ 협진 AI의 의견은 임상 판단 보조용. 확진·침습적 결정은 추가 검사/전문의 자문으로 정교화.</p>
     <div style="text-align:center;padding-bottom:16px"><button class="btn-share" onclick="shareSession()">🔗 세션 공유</button></div>`;
 }
 

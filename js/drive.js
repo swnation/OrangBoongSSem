@@ -50,7 +50,7 @@ async function ensureValidToken() {
 
 function _tryAutoLogin() {
   if(S.token||!window.google?.accounts?.oauth2) return;
-  if(localStorage.getItem('om_auto_login')!=='true') return;
+  if(getAppSetting('autoLogin')!=='true') return;
   try {
     if(!tokenClient) {
       tokenClient = google.accounts.oauth2.initTokenClient({
@@ -94,10 +94,14 @@ function handleToken(resp) {
   }
   const isRefresh = !!S.token; // already had a token = this is a refresh
   S.token = resp.access_token;
-  localStorage.setItem('om_auto_login','true'); // 다음 방문 시 자동 로그인
+  setAppSetting('autoLogin','true');
   scheduleTokenRefresh(resp.expires_in || 3600);
   if (_tokenRefreshResolve) { _tokenRefreshResolve(true); _tokenRefreshResolve = null; return; }
   if (isRefresh) return; // silent refresh from timer — no UI reload needed
+  // Firebase Auth 로그인 (수동 로그인 시만 — 사용자 클릭 컨텍스트에서 팝업 허용)
+  if (isFirebaseReady() && !getFirebaseUid() && typeof firebaseSignInWithGoogle === 'function') {
+    firebaseSignInWithGoogle();
+  }
   setDriveStatus(true);
   _initAutoLoginToggle();
   const dc = document.getElementById('default-connect'); if(dc) dc.style.display='none';
@@ -120,7 +124,7 @@ function signOut() {
     google.accounts.oauth2.revoke(S.token,()=>{});
   }
   S.token=null;
-  localStorage.removeItem('om_auto_login');
+  setAppSetting('autoLogin',null);
   if(_tokenRefreshTimer)clearTimeout(_tokenRefreshTimer);
   _tokenExpiresAt=0;
   setDriveStatus(false);
@@ -129,14 +133,13 @@ function signOut() {
 }
 
 function toggleAutoLogin(enabled) {
-  if(enabled) localStorage.setItem('om_auto_login','true');
-  else localStorage.removeItem('om_auto_login');
+  setAppSetting('autoLogin',enabled?'true':null);
   showToast(enabled?'✅ 자동 로그인 켜짐':'⬜ 자동 로그인 꺼짐');
 }
 
 function _initAutoLoginToggle() {
   const cb=document.getElementById('auto-login-toggle');
-  if(cb) cb.checked=localStorage.getItem('om_auto_login')==='true';
+  if(cb) cb.checked=getAppSetting('autoLogin')==='true';
 }
 
 function setDriveStatus(ok) {
@@ -221,7 +224,7 @@ async function loadAllDomainsForCost() {
         for(const k of Object.keys(def)){if(!(k in ds.master))ds.master[k]=def[k];}
         // localStorage 비용 캐시 동기화
         if(ds.master.usage_data) {
-          try{localStorage.setItem('om_usage_'+domainId,JSON.stringify(ds.master.usage_data));}catch(e){}
+          try{setUsageCache(domainId,ds.master.usage_data);}catch(e){}
         }
       }
     } catch(e) { /* 조용히 실패 */ }
@@ -251,7 +254,7 @@ async function loadDomainData(domainId) {
       if (!ds.master.accumulated) ds.master.accumulated = def.accumulated;
       // localStorage 비용 캐시 병합 (Drive 저장 전 페이지 갱신 시 손실 복구)
       try {
-        const localUsage=JSON.parse(localStorage.getItem('om_usage_'+domainId)||'null');
+        const localUsage=getUsageCache(domainId);
         if(localUsage) {
           if(!ds.master.usage_data) ds.master.usage_data={};
           Object.entries(localUsage).forEach(([date,aiMap])=>{
@@ -269,8 +272,8 @@ async function loadDomainData(domainId) {
           const saved = JSON.parse(atob(ds.master._keys_encrypted));
           if(saved.keys) Object.keys(saved.keys).forEach(id=>{if(!S.keys[id]&&saved.keys[id])S.keys[id]=saved.keys[id];});
           if(saved.models) Object.keys(saved.models).forEach(id=>{if(saved.models[id])S.models[id]=saved.models[id];});
-          localStorage.setItem('om_keys',JSON.stringify(S.keys));
-          localStorage.setItem('om_models',JSON.stringify(S.models));
+          _storageSetJSON('om_keys',S.keys);
+          setAppSetting('models',S.models);
         } catch(e) {}
         // Remove insecure key storage from Drive
         delete ds.master._keys_encrypted;
@@ -363,7 +366,7 @@ function _syncCustomItemsToMaster() {
   const ds=D(); const dom=S.currentDomain;
   const customs={};
   _CUSTOM_KEYS.forEach(k=>{
-    const val=JSON.parse(localStorage.getItem(`om_custom_${k}_${dom}`)||'[]');
+    const val=getCustomItems(dom,k);
     if(val.length) customs[k]=val;
   });
   if(Object.keys(customs).length) ds.master._customItems=customs;
@@ -375,10 +378,9 @@ function _restoreCustomItemsFromMaster(ds, domainId) {
   if(!customs) return;
   _CUSTOM_KEYS.forEach(k=>{
     if(!customs[k]?.length) return;
-    const lsKey=`om_custom_${k}_${domainId}`;
-    const existing=JSON.parse(localStorage.getItem(lsKey)||'[]');
+    const existing=getCustomItems(domainId,k);
     const merged=[...new Set([...existing,...customs[k]])];
-    localStorage.setItem(lsKey,JSON.stringify(merged));
+    setCustomItems(domainId,k,merged);
   });
 }
 
@@ -465,11 +467,11 @@ async function codeBackupToDrive() {
 async function autoCodeBackup() {
   const ver = APP_VERSION[0]?.v;
   if (!ver) return;
-  const lastBackupVer = localStorage.getItem('om_last_code_backup');
+  const lastBackupVer = _storageGet('om_last_code_backup');
   if (lastBackupVer === ver) return; // 이미 이 버전 백업함
   try {
     await codeBackupToDrive();
-    localStorage.setItem('om_last_code_backup', ver);
+    _storageSet('om_last_code_backup', ver);
   } catch(e) {}
 }
 
@@ -483,16 +485,16 @@ function cacheToLocal(domainId) {
     const ds = S.domainState[domainId];
     if (!ds?.master) return;
     const key = OFFLINE_PREFIX + domainId;
-    localStorage.setItem(key, JSON.stringify({
+    setOfflineCache(domainId, {
       master: ds.master,
       timestamp: Date.now(),
-    }));
+    });
   } catch(e) { /* quota exceeded etc */ }
 }
 
 function loadFromLocal(domainId) {
   try {
-    const data = JSON.parse(localStorage.getItem(OFFLINE_PREFIX + domainId) || 'null');
+    const data = getOfflineCache(domainId);
     return data;
   } catch(e) { return null; }
 }

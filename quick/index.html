@@ -3,11 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#c96442">
 <title>🧠 두통 빠른 기록</title>
 <link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -152,25 +153,25 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
         <div style="flex:1">
           <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">붕쌤 (즉시 알림)</div>
           <input class="settings-input" id="ntfy-bung-input" placeholder="붕쌤 ntfy 토픽"
-            onchange="localStorage.setItem('om_ntfy_bung',this.value.trim());syncNtfyConfig()">
+            onchange="setAppSetting('ntfyBung',this.value.trim());syncNtfyConfig()">
         </div>
         <div style="flex:1">
           <div style="font-size:.62rem;color:var(--mu2);margin-bottom:2px">오랑이 (경과 알림)</div>
           <input class="settings-input" id="ntfy-orangi-input" placeholder="오랑이 ntfy 토픽"
-            onchange="localStorage.setItem('om_ntfy_orangi',this.value.trim());syncNtfyConfig()">
+            onchange="setAppSetting('ntfyOrangi',this.value.trim());syncNtfyConfig()">
         </div>
       </div>
       <div class="settings-note">기록 저장 시 붕쌤에게 즉시 알림, 오랑이에게 경과 확인 알림을 보냅니다.</div>
       <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
         <span style="font-size:.72rem;color:var(--mu)">기본 경과 알림:</span>
-        <input type="number" class="settings-input" id="ntfy-delay-input" style="width:60px;text-align:center" min="10" max="480" value="60"
-          onchange="localStorage.setItem('om_outcome_delay',this.value);syncNtfyConfig()">
+        <input type="number" class="settings-input" id="ntfy-delay-input" style="width:60px;text-align:center" min="10" max="480" value="120"
+          onchange="setAppSetting('outcomeDelay',this.value);syncNtfyConfig()">
         <span style="font-size:.72rem;color:var(--mu)">분 후</span>
       </div>
       <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
         <span style="font-size:.72rem;color:var(--mu)">💊 약물 복용 알림:</span>
         <select id="ntfy-med-delay-input" class="settings-input" style="width:80px;text-align:center"
-          onchange="localStorage.setItem('om_med_reminder_delay',this.value);syncNtfyConfig()">
+          onchange="setAppSetting('medReminderDelay',this.value);syncNtfyConfig()">
           <option value="0">끄기</option>
           <option value="15">15분</option>
           <option value="30">30분</option>
@@ -196,7 +197,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div id="q-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;justify-content:center;align-items:center" onclick="if(event.target===this)this.style.display='none'">
+  <div id="q-modal-content" style="background:var(--sf);border-radius:14px;padding:16px;max-width:360px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.3)"></div>
+</div>
 
+<script src="../js/storage.js"></script>
 <script>
 'use strict';
 
@@ -224,16 +229,16 @@ function getCustom(key) {
   const mk=_QC_KEY_MAP[key];
   // 메인 앱 키에서 먼저 읽고, 없으면 구 키(om_qc_)도 병합
   try {
-    const main=mk?JSON.parse(localStorage.getItem(mk)||'[]'):[];
-    const old=JSON.parse(localStorage.getItem('om_qc_'+key)||'[]');
-    if(old.length&&mk) { const merged=[...new Set([...main,...old])]; localStorage.setItem(mk,JSON.stringify(merged)); localStorage.removeItem('om_qc_'+key); return merged; }
+    const main=mk?_storageGetJSON(mk,[]):[];
+    const old=_storageGetJSON('om_qc_'+key,[]);
+    if(old.length&&mk) { const merged=[...new Set([...main,...old])]; _storageSetJSON(mk,merged); _storageRemove('om_qc_'+key); return merged; }
     return main.length?main:old;
   } catch { return []; }
 }
 function saveCustom(key, arr) {
   const mk=_QC_KEY_MAP[key];
-  if(mk) localStorage.setItem(mk, JSON.stringify(arr));
-  else localStorage.setItem('om_qc_'+key, JSON.stringify(arr));
+  if(mk) _storageSetJSON(mk,arr);
+  else _storageSetJSON('om_qc_'+key,arr);
   // 클라우드에도 커스텀 항목 동기화
   syncCustomsToCloud();
 }
@@ -241,15 +246,15 @@ function getAllCustoms() {
   const result={};
   Object.keys(_QC_KEY_MAP).forEach(k=>{result[k]=getCustom(k);});
   // ntfy 토픽도 포함 (기기간 공유)
-  const nb=localStorage.getItem('om_ntfy_bung');if(nb) result._ntfy_bung=nb;
-  const no=localStorage.getItem('om_ntfy_orangi');if(no) result._ntfy_orangi=no;
+  const nb=getAppSetting('ntfyBung');if(nb) result._ntfy_bung=nb;
+  const no=getAppSetting('ntfyOrangi');if(no) result._ntfy_orangi=no;
   return result;
 }
 function setAllCustoms(obj) {
   if(!obj) return;
   // ntfy 토픽 복원
-  if(obj._ntfy_bung&&!localStorage.getItem('om_ntfy_bung')) localStorage.setItem('om_ntfy_bung',obj._ntfy_bung);
-  if(obj._ntfy_orangi&&!localStorage.getItem('om_ntfy_orangi')) localStorage.setItem('om_ntfy_orangi',obj._ntfy_orangi);
+  if(obj._ntfy_bung&&!getAppSetting('ntfyBung')) setAppSetting('ntfyBung',obj._ntfy_bung);
+  if(obj._ntfy_orangi&&!getAppSetting('ntfyOrangi')) setAppSetting('ntfyOrangi',obj._ntfy_orangi);
   // 커스텀 칩 복원
   Object.entries(obj).forEach(([k,arr])=>{
     if(k.startsWith('_')) return; // skip settings keys
@@ -257,8 +262,8 @@ function setAllCustoms(obj) {
     const existing=getCustom(k);
     const merged=[...new Set([...existing,...arr])];
     const mk=_QC_KEY_MAP[k];
-    if(mk) localStorage.setItem(mk, JSON.stringify(merged));
-    else localStorage.setItem('om_qc_'+k, JSON.stringify(merged));
+    if(mk) _storageSetJSON(mk, merged);
+    else _storageSetJSON('om_qc_'+k,merged);
   });
 }
 let _customSyncTimer=null;
@@ -269,6 +274,72 @@ function syncCustomsToCloud() {
     try{await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'saveCustoms',customs:getAllCustoms()}),redirect:'follow'});}catch(e){}
   },500);
+}
+
+// ── 메인앱↔quick 양방향 커스텀 항목 동기화 ──
+function _syncCustomsFromMain(){
+  // 메인앱에서 추가된 항목을 localStorage에서 읽어 머지
+  // (같은 origin이므로 localStorage 공유)
+  const labels={'med':'약물','sym':'증상','tx':'치료','pain':'통증종류','trigger':'트리거','site-left':'부위(왼)','site-right':'부위(오)'};
+  const newItems=[];
+  Object.keys(_QC_KEY_MAP).forEach(k=>{
+    const mk=_QC_KEY_MAP[k];
+    try{
+      const items=_storageGetJSON(mk,[]);
+      const current=getCustom(k);
+      const added=items.filter(i=>!current.includes(i));
+      if(added.length) newItems.push({key:k,label:labels[k]||k,items:added});
+    }catch(e){}
+  });
+  if(newItems.length){
+    const msg=newItems.map(n=>`${n.label}: ${n.items.join(', ')}`).join('\n');
+    showToast('🔄 메인앱에서 '+newItems.reduce((s,n)=>s+n.items.length,0)+'개 항목 동기화됨');
+  }
+}
+
+// ── 식약처 약 검색 API (메인앱과 동일) ──
+const _DRUG_API_URL='https://apis.data.go.kr/1471000/DrugPrdtPrmsnInfoService07/getDrugPrdtPrmsnInq07';
+const _DRUG_API_KEY='e2e1a2277cd6d60badb822ca35b3a1147b0d13dacec0f374b8684b85af4dac78';
+const _drugCache={};
+async function searchDrugAPI(query){
+  if(query.length<2) return [];
+  if(_drugCache[query]) return _drugCache[query];
+  const results=[];
+  try{
+    const url=`${_DRUG_API_URL}?serviceKey=${_DRUG_API_KEY}&item_name=${encodeURIComponent(query)}&type=json&numOfRows=10`;
+    const r=await fetch(url,{signal:AbortSignal.timeout(3000)});
+    if(r.ok){const d=await r.json();(d?.body?.items||[]).forEach(item=>{if(item.ITEM_NAME)results.push(item.ITEM_NAME);});}
+  }catch(e){}
+  const unique=[...new Set(results)].slice(0,12);
+  _drugCache[query]=unique;
+  return unique;
+}
+
+let _drugSearchTimer=null;
+function setupDrugAutocomplete(inputId){
+  const input=document.getElementById(inputId);if(!input||input._acSetup) return;
+  input._acSetup=true;
+  const dlId=inputId+'-dl';
+  let dl=document.getElementById(dlId);
+  if(!dl){dl=document.createElement('datalist');dl.id=dlId;document.body.appendChild(dl);}
+  input.setAttribute('list',dlId);
+  const allMeds=[...MEDS,...getCustom('med')];
+  input.addEventListener('input',function(){
+    const q=input.value.toLowerCase().trim();
+    if(q.length<1){dl.innerHTML='';return;}
+    const local=allMeds.filter(m=>m.toLowerCase().includes(q)).slice(0,8);
+    dl.innerHTML=local.map(m=>`<option value="${esc(m)}">`).join('');
+    if(q.length>=2){
+      clearTimeout(_drugSearchTimer);
+      _drugSearchTimer=setTimeout(async()=>{
+        const api=await searchDrugAPI(q);
+        if(api.length){
+          const combined=[...new Set([...local,...api])].slice(0,15);
+          dl.innerHTML=combined.map(m=>`<option value="${esc(m)}">`).join('');
+        }
+      },300);
+    }
+  });
 }
 
 // ── 설정(ntfy 등)을 quickLogs 안에 특수 항목으로 저장 → 기존 클라우드 동기화로 기기간 공유 ──
@@ -288,16 +359,16 @@ function saveQuickConfig(cfg){
 function applyQuickConfig(){
   const cfg=getQuickConfig();
   // 클라우드 → localStorage 복원 (클라우드가 진실)
-  if(cfg.ntfy_bung) localStorage.setItem('om_ntfy_bung',cfg.ntfy_bung);
-  if(cfg.ntfy_orangi) localStorage.setItem('om_ntfy_orangi',cfg.ntfy_orangi);
-  if(cfg.outcome_delay) localStorage.setItem('om_outcome_delay',cfg.outcome_delay);
-  if(cfg.med_reminder_delay!==undefined) localStorage.setItem('om_med_reminder_delay',String(cfg.med_reminder_delay));
+  if(cfg.ntfy_bung) setAppSetting('ntfyBung',cfg.ntfy_bung);
+  if(cfg.ntfy_orangi) setAppSetting('ntfyOrangi',cfg.ntfy_orangi);
+  if(cfg.outcome_delay) setAppSetting('outcomeDelay',cfg.outcome_delay);
+  if(cfg.med_reminder_delay!==undefined) setAppSetting('medReminderDelay',String(cfg.med_reminder_delay));
 }
 function syncNtfyConfig(){
-  const nb=localStorage.getItem('om_ntfy_bung')||'';
-  const no=localStorage.getItem('om_ntfy_orangi')||'';
-  const od=localStorage.getItem('om_outcome_delay')||'60';
-  const md=localStorage.getItem('om_med_reminder_delay')||'30';
+  const nb=getAppSetting('ntfyBung')||'';
+  const no=getAppSetting('ntfyOrangi')||'';
+  const od=getAppSetting('outcomeDelay')||'120';
+  const md=getAppSetting('medReminderDelay')||'30';
   const entry=saveQuickConfig({ntfy_bung:nb,ntfy_orangi:no,outcome_delay:od,med_reminder_delay:md});
   cloudSave([entry]);
 }
@@ -310,7 +381,7 @@ function kstNow() {
 
 // 날씨 자동 수집 (메인앱과 동일)
 async function fetchWeather(){
-  const key=localStorage.getItem('om_weather_key')||'';
+  const key=getAppSetting('weatherKey')||'';
   if(!key) return null;
   try{
     const r=await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=37.5326&lon=127.1378&appid=${key}&units=metric&lang=kr`,{signal:AbortSignal.timeout(2000)});
@@ -320,12 +391,137 @@ async function fetchWeather(){
   }catch(e){return null;}
 }
 
+// ── 편두통 일기예보 (메인앱 renderMigraineForecast 포팅) ──
+function renderQuickForecast() {
+  const logs = getQuickEntries();
+  const nrsLogs = logs.filter(l => l.nrs >= 0 && l.datetime);
+  if (nrsLogs.length < 14) return ''; // 최소 2주 데이터
+
+  const now = kstNow();
+  const today = now.date;
+  const d = new Date(Date.now() + 9*3600000);
+  const dow = d.getUTCDay();
+  const factors = [];
+  const details = [];
+  let riskScore = 0;
+  const allAvg = nrsLogs.reduce((s,l) => s + l.nrs, 0) / nrsLogs.length;
+  const dowName = ['일','월','화','수','목','금','토'][dow];
+
+  // 1) 요일 패턴
+  const sameDow = nrsLogs.filter(l => {
+    const ld = new Date(l.datetime.slice(0,10) + 'T00:00:00Z');
+    return ld.getUTCDay() === dow;
+  });
+  if (sameDow.length >= 3) {
+    const avg = sameDow.reduce((s,l) => s + l.nrs, 0) / sameDow.length;
+    if (avg > allAvg + 1) { riskScore += 20; factors.push(`📅 ${dowName}요일 평균 NRS ${avg.toFixed(1)} (전체 ${allAvg.toFixed(1)})`);
+      details.push({title:'📅 요일 패턴',score:20,desc:`${dowName}요일 ${sameDow.length}건의 평균 NRS ${avg.toFixed(1)}로, 전체 평균 ${allAvg.toFixed(1)}보다 ${(avg-allAvg).toFixed(1)} 높습니다.`}); }
+    else if (avg > allAvg) { riskScore += 8; details.push({title:'📅 요일 패턴',score:8,desc:`${dowName}요일 평균 NRS ${avg.toFixed(1)}로 전체 평균(${allAvg.toFixed(1)})보다 약간 높으나 유의미한 차이는 아닙니다.`}); }
+  }
+
+  // 2) 최근 3일 패턴
+  const recent3 = nrsLogs.filter(l => {
+    const ld = l.datetime.slice(0,10);
+    const diff = Math.round((new Date(today+'T00:00:00') - new Date(ld+'T00:00:00')) / 86400000);
+    return diff >= 0 && diff <= 3;
+  });
+  if (recent3.length) {
+    const avg3 = recent3.reduce((s,l) => s + l.nrs, 0) / recent3.length;
+    const r3Dates = recent3.map(l=>l.datetime.slice(5,10)+':NRS'+l.nrs).join(', ');
+    if (avg3 >= 6) { riskScore += 25; factors.push(`🔥 최근 3일 평균 NRS ${avg3.toFixed(1)} — 고통 지속 중`);
+      details.push({title:'🔥 최근 3일 추세',score:25,desc:`최근 3일간 ${recent3.length}건의 평균 NRS ${avg3.toFixed(1)}. 연속 고통은 다음날에도 이어질 가능성 높음.\n${r3Dates}`}); }
+    else if (avg3 >= 4) { riskScore += 12; factors.push(`⚠️ 최근 3일 평균 NRS ${avg3.toFixed(1)}`);
+      details.push({title:'⚠️ 최근 3일 추세',score:12,desc:`최근 3일 평균 NRS ${avg3.toFixed(1)}로 중간 수준 통증 지속.\n${r3Dates}`}); }
+  }
+
+  // 3) 최근 7일 트리거
+  const recent7 = nrsLogs.filter(l => {
+    const ld = l.datetime.slice(0,10);
+    const diff = Math.round((new Date(today+'T00:00:00') - new Date(ld+'T00:00:00')) / 86400000);
+    return diff >= 0 && diff <= 7;
+  });
+  const activeTriggers = new Set(recent7.flatMap(l => l.triggers || []));
+  const highRiskTriggers = ['수면부족','수면분절','스트레스','생리전후','피로'];
+  const activeHigh = highRiskTriggers.filter(t => activeTriggers.has(t));
+  if (activeHigh.length >= 2) { riskScore += 20; factors.push(`⚡ 고위험 트리거 활성: ${activeHigh.join(', ')}`);
+    details.push({title:'⚡ 고위험 트리거',score:20,desc:`최근 7일 기록에서 고위험 트리거 ${activeHigh.length}개 활성: ${activeHigh.join(', ')}`}); }
+  else if (activeHigh.length === 1) { riskScore += 10; factors.push(`⚡ 트리거 활성: ${activeHigh[0]}`);
+    details.push({title:'⚡ 트리거',score:10,desc:`최근 7일 기록에서 '${activeHigh[0]}' 트리거 활성.`}); }
+
+  // 4) 날씨 (저기압)
+  const withWeather = [...nrsLogs].reverse().find(l => l.weather?.pressure);
+  const cachedP = withWeather?.weather?.pressure;
+  if (cachedP) {
+    if (cachedP < 1005) { riskScore += 20; factors.push(`🌧 저기압 ${cachedP}hPa (기압 민감)`);
+      details.push({title:'🌧 저기압',score:20,desc:`기압 ${cachedP}hPa로 매우 낮음 (기준: 1013hPa). 저기압은 혈관 확장→편두통 악화 가능.`}); }
+    else if (cachedP < 1010) { riskScore += 10; factors.push(`☁️ 기압 ${cachedP}hPa (약간 낮음)`);
+      details.push({title:'☁️ 기압',score:10,desc:`기압 ${cachedP}hPa로 약간 낮음. 기압 민감 시 소폭 위험 상승.`}); }
+  }
+
+  // 실시간 날씨 비동기 업데이트
+  if (window._qForecastTimer) clearTimeout(window._qForecastTimer);
+  window._qForecastTimer = setTimeout(async () => {
+    try {
+      const w = await Promise.race([fetchWeather(), new Promise(r => setTimeout(() => r(null), 3000))]);
+      if (!w?.pressure) return;
+      const el = document.getElementById('quick-forecast-weather');
+      if (el) el.innerHTML = `🌡 현재 ${w.temp}° ${w.condition} ${w.pressure}hPa ${w.humidity}%`;
+    } catch(e) {}
+  }, 100);
+
+  // 점수 정규화 (0~100)
+  riskScore = Math.min(100, riskScore);
+
+  // 위험도 레벨 (다크모드 대응)
+  const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches;
+  let level, emoji, color, bg;
+  if (riskScore >= 60) { level='높음'; emoji='🌩️'; color='#ef4444'; bg=isDark?'linear-gradient(135deg,#2a1010,#3a1515)':'linear-gradient(135deg,#fef2f2,#fee2e2)'; }
+  else if (riskScore >= 35) { level='보통'; emoji='⛅'; color=isDark?'#fbbf24':'#f59e0b'; bg=isDark?'linear-gradient(135deg,#2a2010,#3a2a15)':'linear-gradient(135deg,#fffbeb,#fef3c7)'; }
+  else { level='낮음'; emoji='☀️'; color='#10b981'; bg=isDark?'linear-gradient(135deg,#0d2a1a,#153a20)':'linear-gradient(135deg,#f0fdf4,#dcfce7)'; }
+
+  const factorHtml = factors.length
+    ? factors.map(f => `<div style="font-size:.7rem;color:var(--mu);padding:2px 0">• ${f}</div>`).join('')
+    : '<div style="font-size:.7rem;color:var(--mu2)">특별한 위험 요인 없음</div>';
+
+  const gauge = `<div style="position:relative;height:8px;background:var(--bd);border-radius:4px;overflow:hidden;margin:8px 0">
+    <div style="width:${riskScore}%;height:100%;background:${color};border-radius:4px;transition:width .5s"></div>
+  </div>`;
+
+  // 상세 근거 (접기/펼치기)
+  let detailHtml = '';
+  if (details.length) {
+    detailHtml = `<div id="qf-detail" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid ${color}30">
+      <div style="font-size:.65rem;color:var(--mu);margin-bottom:6px">분석 데이터: ${nrsLogs.length}건 · 전체 평균 NRS: ${allAvg.toFixed(1)}</div>
+      ${details.map(dd => `<div style="padding:6px 8px;margin-bottom:4px;background:var(--sf);border-radius:6px;border-left:3px solid ${dd.score>=20?'#ef4444':dd.score>=10?'#f59e0b':'#10b981'}">
+        <div style="display:flex;justify-content:space-between"><span style="font-size:.72rem;font-weight:600">${dd.title}</span><span style="font-size:.65rem;font-weight:700;color:${dd.score>=20?'#ef4444':dd.score>=10?'#f59e0b':'#10b981'}">+${dd.score}점</span></div>
+        <div style="font-size:.65rem;color:var(--mu);line-height:1.5;margin-top:2px;white-space:pre-line">${esc(dd.desc)}</div>
+      </div>`).join('')}
+      <div style="font-size:.58rem;color:var(--mu2);line-height:1.5;margin-top:6px;padding:6px;background:var(--sf);border-radius:4px"><b>산출 기준</b>: 요일패턴(+20) · 3일추세(+25) · 고위험트리거(+20) · 저기압(+20) · 생리주기(+15)</div>
+    </div>`;
+  }
+
+  return `<div style="background:${bg};border:1.5px solid ${color}30;border-radius:12px;padding:14px;margin-bottom:16px;cursor:pointer" onclick="var d=document.getElementById('qf-detail');if(d)d.style.display=d.style.display==='none'?'block':'none'">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <span style="font-size:1.8rem">${emoji}</span>
+      <div>
+        <div style="font-size:.82rem;font-weight:700;color:${color}">오늘의 편두통 일기예보</div>
+        <div style="font-size:.68rem;color:var(--mu)">위험도 <b>${riskScore}점</b> · ${level}</div>
+      </div>
+      <span style="margin-left:auto;font-size:.55rem;color:var(--mu2)">탭→근거</span>
+    </div>
+    ${gauge}
+    ${factorHtml}
+    <div id="quick-forecast-weather" style="font-size:.65rem;color:var(--mu2);margin-top:6px"></div>
+    ${detailHtml}
+  </div>`;
+}
+
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function getQuickLogs() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }
+  try { return _storageGetJSON(LS_KEY,[]); }
   catch { return []; }
 }
 // 기록만 반환 (설정 항목 제외)
@@ -335,7 +531,7 @@ function getQuickEntries() {
 
 // v9.0 부위명 마이그레이션
 (function migrateSiteNames(){
-  if(localStorage.getItem('om_site_migrated')) return;
+  if(_storageGet('om_site_migrated')) return;
   const logs=getQuickLogs();
   const renames={'미간':'이마','눈썹위':'눈썹부위'};
   let changed=false;
@@ -348,8 +544,8 @@ function getQuickEntries() {
       return s;
     });
   });
-  if(changed) localStorage.setItem(LS_KEY,JSON.stringify(logs));
-  localStorage.setItem('om_site_migrated','1');
+  if(changed) _storageSetJSON(LS_KEY,logs);
+  _storageSet('om_site_migrated','1');
 })();
 
 // 커스텀 항목 자동 복구: 기록에 쓰인 항목 중 기본 목록에 없는 것을 커스텀에 추가
@@ -385,7 +581,7 @@ function getQuickEntries() {
 })();
 
 function saveQuickLogs(logs) {
-  localStorage.setItem(LS_KEY, JSON.stringify(logs));
+  _storageSetJSON(LS_KEY,logs);
   updatePendingCount();
 }
 
@@ -427,12 +623,142 @@ function switchTab(tab) {
   if (tab==='outcome') renderOutcomeTab();
 }
 
+// ── 약물 수량 + 24시간 경고 시스템 ──
+const _medQty = {}; // {medName: {qty:1, unit:'T'}}
+// 제형별 단위 + 스텝 설정
+const _MED_UNIT_CFG = {
+  'T':{step:0.5,min:0.5,max:20},
+  'C':{step:1,min:1,max:20},
+  'mL':{step:1,min:1,max:100},
+  '포':{step:1,min:1,max:10},
+  '회':{step:1,min:1,max:10},
+  '매':{step:1,min:1,max:5},
+  '방울':{step:1,min:1,max:20},
+  '개':{step:1,min:1,max:5},
+  'puff':{step:1,min:1,max:10},
+};
+// 성분별 24시간 한도 (mg)
+const _MED_INGREDIENT_LIMITS = {
+  'acetaminophen': {maxMg:4000, warn:'간독성 위험', meds:{'AAP 500mg':500,'AAP 1000mg':1000}},
+  'loxoprofen': {maxMg:180, warn:'위장관 부작용', meds:{'Loxoprofen':60}},
+  'metoclopramide': {maxMg:30, warn:'추체외로 증상', meds:{'Metoclopramide':10}},
+};
+
+function _getMedUnit(name){
+  if(/건조시럽/.test(name)) return '포';
+  if(/시럽|액$|액\s|용액|현탁|리퀴드/.test(name)) return 'mL';
+  if(/주사|주$|앰플|앰퓰|바이알|inj/i.test(name)) return '회';
+  if(/캡슐|캡$|cap/i.test(name)) return 'C';
+  if(/패치|첩부/.test(name)) return '매';
+  if(/크림|연고|겔$|겔\s|로션|외용/.test(name)) return '회';
+  if(/스프레이|흡입|네뷸/.test(name)) return 'puff';
+  if(/점안|점비|점이|안약/.test(name)) return '방울';
+  if(/좌약|좌제|좌$/.test(name)) return '개';
+  return 'T';
+}
+
+function _getOrInitQty(med){
+  if(!_medQty[med]){
+    const unit=_getMedUnit(med);
+    _medQty[med]={qty:1, unit};
+  }
+  return _medQty[med];
+}
+
+function _adjMedQty(med, delta){
+  const q=_getOrInitQty(med);
+  const cfg=_MED_UNIT_CFG[q.unit]||_MED_UNIT_CFG['T'];
+  const step=cfg.step;
+  q.qty=Math.max(cfg.min, Math.min(cfg.max, q.qty+(delta>0?step:-step)));
+  _renderMedQtyUI();
+  _updateMedWarnings();
+}
+
+function _renderMedQtyUI(){
+  const area=document.getElementById('med-qty-area'); if(!area) return;
+  const selMeds=[];
+  document.querySelectorAll('.chip.sel[data-group="med"]').forEach(el=>selMeds.push(el.dataset.val));
+  if(!selMeds.length){area.innerHTML='';return;}
+  area.innerHTML=selMeds.map(m=>{
+    const q=_getOrInitQty(m);
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:.75rem">
+      <span style="flex:1;color:var(--ink)">${esc(m)}</span>
+      <button onclick="_adjMedQty('${esc(m).replace(/'/g,"\\'")}',-0.5)" style="width:26px;height:26px;border:1.5px solid var(--bd);border-radius:6px;background:var(--sf2);font-size:.8rem;cursor:pointer;color:var(--ink)">−</button>
+      <span style="min-width:32px;text-align:center;font-weight:700;font-family:var(--mono)">${q.qty}</span>
+      <button onclick="_adjMedQty('${esc(m).replace(/'/g,"\\'")}',0.5)" style="width:26px;height:26px;border:1.5px solid var(--bd);border-radius:6px;background:var(--sf2);font-size:.8rem;cursor:pointer;color:var(--ink)">+</button>
+      <span style="font-size:.65rem;color:var(--mu);min-width:20px">${q.unit}</span>
+    </div>`;
+  }).join('');
+}
+
+function _updateMedWarnings(){
+  const area=document.getElementById('med-warn-area'); if(!area) return;
+  const selMeds=[];
+  document.querySelectorAll('.chip.sel[data-group="med"]').forEach(el=>selMeds.push(el.dataset.val));
+  if(!selMeds.length){area.innerHTML='';return;}
+
+  // 선택 시간 기준 24시간 이내 기록 수집
+  const dateVal=document.getElementById('q-date')?.value;
+  const timeVal=document.getElementById('q-time')?.value||'00:00';
+  const selDt=new Date(dateVal+'T'+timeVal);
+  const logs=getQuickEntries();
+  const recent24=logs.filter(l=>{
+    if(!l.datetime||!l.meds?.length) return false;
+    const dt=new Date(l.datetime);
+    const diff=Math.abs(selDt-dt);
+    return diff<24*3600000 && String(l.id)!==document.getElementById('q-edit-id')?.value;
+  });
+
+  // 성분별 누적 mg 계산
+  const warnings=[];
+  Object.entries(_MED_INGREDIENT_LIMITS).forEach(([ingr,limit])=>{
+    let totalMg=0;
+    // 기존 24시간 기록
+    recent24.forEach(l=>{
+      (l.meds||[]).forEach(m=>{
+        const mgPer=limit.meds[m];
+        if(mgPer){
+          const prevQty=l.medsQty?.[m]?.qty||1;
+          totalMg+=mgPer*prevQty;
+        }
+      });
+    });
+    // 현재 선택
+    let currentMg=0;
+    selMeds.forEach(m=>{
+      const mgPer=limit.meds[m];
+      if(mgPer){
+        const q=_getOrInitQty(m);
+        currentMg+=mgPer*q.qty;
+      }
+    });
+    if(currentMg===0) return;
+    const grandTotal=totalMg+currentMg;
+    const pct=Math.round(grandTotal/limit.maxMg*100);
+    if(pct>=80){
+      const prevCount=recent24.reduce((s,l)=>{let c=0;(l.meds||[]).forEach(m=>{if(limit.meds[m])c+=(l.medsQty?.[m]?.qty||1);});return s+c;},0);
+      warnings.push({ingr,totalMg:grandTotal,maxMg:limit.maxMg,pct,warn:limit.warn,
+        detail:`24시간 이내 ${grandTotal}mg / ${limit.maxMg}mg (${pct}%)${prevCount?` — 이전 ${prevCount}T 복용`:''}`});
+    }
+  });
+
+  if(!warnings.length){area.innerHTML='';return;}
+  area.innerHTML=warnings.map(w=>
+    `<div style="margin-top:6px;padding:8px 10px;border-radius:8px;background:${w.pct>=100?'#fee2e2':'#fffbeb'};border:1.5px solid ${w.pct>=100?'#fca5a5':'#fde68a'};font-size:.72rem">
+      <div style="font-weight:700;color:${w.pct>=100?'#dc2626':'#b45309'}">⚠️ ${w.pct>=100?'과량 경고':'주의'}: ${w.detail}</div>
+      <div style="font-size:.65rem;color:${w.pct>=100?'#991b1b':'#92400e'};margin-top:2px">${w.warn}</div>
+    </div>`
+  ).join('');
+}
+
 // ── Chip toggle ──
 function toggleChip(el, cls) {
   el.classList.toggle('sel');
   el.classList.toggle(cls, el.classList.contains('sel'));
   // Sync head diagram if it's a site chip
   if(el.dataset.side) syncHeadDiagram();
+  // 약물 칩 선택 변경 시 수량 UI + 경고 갱신
+  if(el.dataset.group==='med') { _renderMedQtyUI(); _updateMedWarnings(); }
 }
 
 function addOtherChip(inputId, containerId, group, cls) {
@@ -591,12 +917,150 @@ function addSiteChip(inputId, containerId, side) {
   if (!customs.includes(val)) { customs.push(val); saveCustom('site-' + side, customs); }
 }
 
+// ── 칩 관리 (메인앱과 동일 키 공유: 숨김/고정/순서) ──
+const _Q_HIDDEN_KEY = 'om_hidden_chips_orangi-migraine';
+const _Q_PINNED_KEY = 'om_pinned_chips_orangi-migraine';
+const _Q_ORDER_KEY  = 'om_chip_order_orangi-migraine';
+function _qGetHidden(){ return _storageGetJSON(_Q_HIDDEN_KEY,{}); }
+function _qSaveHidden(h){ _storageSetJSON(_Q_HIDDEN_KEY,h); }
+function _qGetPinned(){ return _storageGetJSON(_Q_PINNED_KEY,{}); }
+function _qSavePinned(p){ _storageSetJSON(_Q_PINNED_KEY,p); }
+function _qGetOrder(){ return _storageGetJSON(_Q_ORDER_KEY,{}); }
+function _qSaveOrder(o){ _storageSetJSON(_Q_ORDER_KEY,o); }
+
+// 기본 칩 이름→그룹 매핑 (default arrays)
+const _Q_DEFAULT_MAP = {
+  sym: SYMPTOMS, pain: PAIN_TYPES, med: MEDS, tx: TREATMENTS, trigger: TRIGGERS
+};
+const _Q_GROUP_LABEL = {sym:'증상',pain:'통증 종류',med:'약물',tx:'시술',trigger:'트리거'};
+
+// 순서 적용 헬퍼
+function _qApplyOrder(group, items){
+  const order=(_qGetOrder()[group])||[];
+  if(!order.length) return items;
+  const itemSet=new Set(items);
+  const orderSet=new Set(order);
+  const ordered=order.filter(n=>itemSet.has(n));
+  const rest=items.filter(n=>!orderSet.has(n));
+  return [...ordered, ...rest];
+}
+function _qIsPinned(group,val){
+  const p=_qGetPinned()[group]||[];
+  return p.includes(val);
+}
+
+function _qOpenChipManager(group){
+  const defaults=_Q_DEFAULT_MAP[group]||[];
+  const customs=getCustom(group);
+  const hiddenList=_qGetHidden()[group]||[];
+  const pinnedList=_qGetPinned()[group]||[];
+  const defsVis=defaults.filter(x=>!hiddenList.includes(x));
+  const items=_qApplyOrder(group, [...defsVis, ...customs]);
+
+  // 전역 참조
+  window._qcmItems=items; window._qcmGroup=group;
+
+  let html=`<div style="font-weight:700;font-size:.9rem;margin-bottom:6px">${_Q_GROUP_LABEL[group]||group} 관리</div>
+  <div style="font-size:.68rem;color:var(--mu);margin-bottom:8px;line-height:1.5">📌 고정: 실수 삭제 방지 · ↑↓ 순서 변경 · ✕ 삭제</div>`;
+
+  if(items.length){
+    html+=items.map((v,i)=>{
+      const isPinned=pinnedList.includes(v);
+      const canUp=i>0, canDown=i<items.length-1;
+      return `<div style="display:flex;align-items:center;gap:4px;padding:5px 0;border-bottom:1px solid var(--bd)">
+        <button onclick="_qTogglePin(${i})" title="${isPinned?'고정 해제':'고정'}" style="background:${isPinned?'#fef3c7':'none'};border:1px solid ${isPinned?'#fbbf24':'var(--bd)'};border-radius:4px;padding:2px 5px;font-size:.72rem;cursor:pointer;min-width:26px">${isPinned?'📌':'📍'}</button>
+        <span style="flex:1;font-size:.76rem;color:var(--ink);${isPinned?'font-weight:600':''}">${esc(v)}</span>
+        <button onclick="_qMove(${i},-1)" ${canUp?'':'disabled'} style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 5px;font-size:.68rem;cursor:${canUp?'pointer':'not-allowed'};opacity:${canUp?1:.3};min-width:22px">↑</button>
+        <button onclick="_qMove(${i},1)" ${canDown?'':'disabled'} style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 5px;font-size:.68rem;cursor:${canDown?'pointer':'not-allowed'};opacity:${canDown?1:.3};min-width:22px">↓</button>
+        <button onclick="_qDelete(${i})" ${isPinned?'disabled':''} title="${isPinned?'고정 해제 후 삭제':'삭제'}" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 6px;font-size:.68rem;cursor:${isPinned?'not-allowed':'pointer'};color:${isPinned?'var(--mu2)':'var(--re)'};opacity:${isPinned?.4:1}">✕</button>
+      </div>`;
+    }).join('');
+  } else {
+    html+=`<div style="color:var(--mu);font-size:.78rem;padding:8px 0">항목이 없습니다.</div>`;
+  }
+
+  html+=`<button onclick="document.getElementById('q-modal-overlay').style.display='none'" style="margin-top:12px;width:100%;padding:8px;border:1.5px solid var(--bd);border-radius:8px;background:var(--sf2);font-size:.78rem;cursor:pointer;color:var(--ink)">닫기</button>`;
+
+  document.getElementById('q-modal-content').innerHTML=html;
+  document.getElementById('q-modal-overlay').style.display='flex';
+}
+
+function _qTogglePin(idx){
+  const group=window._qcmGroup; const name=window._qcmItems?.[idx];
+  if(!name||!group) return;
+  const p=_qGetPinned(); if(!p[group]) p[group]=[];
+  const i=p[group].indexOf(name);
+  if(i>=0) p[group].splice(i,1); else p[group].push(name);
+  _qSavePinned(p);
+  _qOpenChipManager(group);
+}
+function _qMove(idx, delta){
+  const group=window._qcmGroup; const name=window._qcmItems?.[idx];
+  if(!name||!group) return;
+  const items=[...window._qcmItems];
+  const newIdx=idx+delta;
+  if(newIdx<0||newIdx>=items.length) return;
+  [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+  const o=_qGetOrder(); o[group]=items; _qSaveOrder(o);
+  _qRerender();
+  _qOpenChipManager(group);
+}
+function _qDelete(idx){
+  const group=window._qcmGroup; const name=window._qcmItems?.[idx];
+  if(!name||!group) return;
+  if(_qIsPinned(group,name)) { showToast('📌 고정된 항목은 삭제할 수 없어요'); return; }
+  const customs=getCustom(group);
+  if(customs.includes(name)) {
+    saveCustom(group, customs.filter(v=>v!==name));
+  } else {
+    // 기본 → hidden
+    const h=_qGetHidden(); if(!h[group]) h[group]=[];
+    if(!h[group].includes(name)) h[group].push(name);
+    _qSaveHidden(h);
+  }
+  // order에서도 제거
+  const o=_qGetOrder();
+  if(o[group]) { o[group]=o[group].filter(v=>v!==name); _qSaveOrder(o); }
+  showToast(`🗑 "${name}" 삭제됨`);
+  _qRerender();
+  _qOpenChipManager(group);
+}
+function _qRerender(){
+  // 현재 폼 데이터 수집 후 리렌더
+  const formData=_collectFormData();
+  renderForm(formData);
+}
+function _collectFormData(){
+  const data={};
+  data.datetime=(document.getElementById('q-date')?.value||'')+'T'+(document.getElementById('q-time-unknown')?.checked?'시간미상':(document.getElementById('q-time')?.value||''));
+  const skipNrs=document.getElementById('q-skip-nrs')?.checked;
+  data.nrs=skipNrs?-1:parseInt(document.getElementById('q-nrs')?.value||'5');
+  data.sites=[];
+  document.querySelectorAll('.chip.sel[data-side]').forEach(el=>{
+    const side=el.dataset.side==='left'?'왼쪽':'오른쪽';
+    data.sites.push(side+' '+el.dataset.val);
+  });
+  data.painType=[];document.querySelectorAll('.chip.sel[data-group="pain"]').forEach(el=>data.painType.push(el.dataset.val));
+  data.symptoms=[];document.querySelectorAll('.chip.sel[data-group="sym"]').forEach(el=>data.symptoms.push(el.dataset.val));
+  data.meds=[];document.querySelectorAll('.chip.sel[data-group="med"]').forEach(el=>data.meds.push(el.dataset.val));
+  data.medsQty=JSON.parse(JSON.stringify(_medQty));
+  data.treatments=[];document.querySelectorAll('.chip.sel[data-group="tx"]').forEach(el=>data.treatments.push(el.dataset.val));
+  data.triggers=[];document.querySelectorAll('.chip.sel[data-group="trigger"]').forEach(el=>data.triggers.push(el.dataset.val));
+  data.memo=document.getElementById('q-memo')?.value||'';
+  const editId=document.getElementById('q-edit-id')?.value;
+  if(editId) data.id=parseInt(editId);
+  return data;
+}
+
 // ── Form render ──
 function renderForm(entry) {
   const now = kstNow();
   const e = entry || {};
   const isEdit = !!entry;
   const nrs = e.nrs ?? 5;
+  // 약물 수량 초기화 (편집 시 기존 값 복원)
+  Object.keys(_medQty).forEach(k=>delete _medQty[k]);
+  if(e.medsQty) Object.entries(e.medsQty).forEach(([m,q])=>{_medQty[m]={qty:q.qty,unit:q.unit||'T'};});
   const skipNrs = e.nrs === -1;
 
   const siteChips = (side, items) => {
@@ -608,38 +1072,46 @@ function renderForm(entry) {
     }).join('');
   };
 
-  // 기본 + 커스텀(영구 저장) + 편집 시 항목 복원
+  // 기본(숨김 제외) + 커스텀 + 편집 시 extra 복원 → 순서 적용
+  const _qh=_qGetHidden();
+  const _hSym=_qh.sym||[]; const _hPain=_qh.pain||[]; const _hMed=_qh.med||[]; const _hTx=_qh.tx||[]; const _hTrig=_qh.trigger||[];
+
   const customSyms = getCustom('sym');
   const extraSyms = (e.symptoms||[]).filter(s => !SYMPTOMS.includes(s) && !customSyms.includes(s));
-  const symChips = [...SYMPTOMS, ...customSyms, ...extraSyms].map(s => {
+  const symAll = _qApplyOrder('sym', [...SYMPTOMS.filter(s=>!_hSym.includes(s)), ...customSyms, ...extraSyms]);
+  const symChips = symAll.map(s => {
     const sel = e.symptoms?.includes(s);
     return `<span class="chip ${sel?'sel sel-sym':''}" data-val="${esc(s)}" data-group="sym" onclick="toggleChip(this,'sel-sym')">${esc(s)}</span>`;
   }).join('');
 
   const customPain = getCustom('pain');
   const extraPain = (e.painType||[]).filter(p => !PAIN_TYPES.includes(p) && !customPain.includes(p));
-  const painTypeChips = [...PAIN_TYPES, ...customPain, ...extraPain].map(p => {
+  const painAll = _qApplyOrder('pain', [...PAIN_TYPES.filter(p=>!_hPain.includes(p)), ...customPain, ...extraPain]);
+  const painTypeChips = painAll.map(p => {
     const sel = e.painType?.includes(p);
     return `<span class="chip ${sel?'sel sel-pain':''}" data-val="${esc(p)}" data-group="pain" onclick="toggleChip(this,'sel-pain')">${esc(p)}</span>`;
   }).join('');
 
   const customMeds = getCustom('med');
   const extraMeds = (e.meds||[]).filter(m => !MEDS.includes(m) && !customMeds.includes(m));
-  const medChips = [...MEDS, ...customMeds, ...extraMeds].map(m => {
+  const medAll = _qApplyOrder('med', [...MEDS.filter(m=>!_hMed.includes(m)), ...customMeds, ...extraMeds]);
+  const medChips = medAll.map(m => {
     const sel = e.meds?.includes(m);
     return `<span class="chip ${sel?'sel sel-med':''}" data-val="${esc(m)}" data-group="med" onclick="toggleChip(this,'sel-med')">${esc(m)}</span>`;
   }).join('');
 
   const customTx = getCustom('tx');
   const extraTx = (e.treatments||[]).filter(t => !TREATMENTS.includes(t) && !customTx.includes(t));
-  const txChips = [...TREATMENTS, ...customTx, ...extraTx].map(t => {
+  const txAll = _qApplyOrder('tx', [...TREATMENTS.filter(t=>!_hTx.includes(t)), ...customTx, ...extraTx]);
+  const txChips = txAll.map(t => {
     const sel = e.treatments?.includes(t);
     return `<span class="chip ${sel?'sel sel-tx':''}" data-val="${esc(t)}" data-group="tx" onclick="toggleChip(this,'sel-tx')">${esc(t)}</span>`;
   }).join('');
 
   const customTriggers = getCustom('trigger');
   const extraTriggers = (e.triggers||[]).filter(t => !TRIGGERS.includes(t) && !customTriggers.includes(t));
-  const triggerChips = [...TRIGGERS, ...customTriggers, ...extraTriggers].map(t => {
+  const trigAll = _qApplyOrder('trigger', [...TRIGGERS.filter(t=>!_hTrig.includes(t)), ...customTriggers, ...extraTriggers]);
+  const triggerChips = trigAll.map(t => {
     const sel = e.triggers?.includes(t);
     return `<span class="chip ${sel?'sel sel-trigger':''}" data-val="${esc(t)}" data-group="trigger" onclick="toggleChip(this,'sel-trigger')">${esc(t)}</span>`;
   }).join('');
@@ -651,7 +1123,7 @@ function renderForm(entry) {
   const timeVal = timeUnknown ? now.time : timeRaw;
 
   document.getElementById('tab-form').innerHTML = `
-    ${isEdit ? `<input type="hidden" id="q-edit-id" value="${e.id}">` : ''}
+    ${isEdit ? `<input type="hidden" id="q-edit-id" value="${e.id}">` : renderQuickForecast()}
     <div class="section">
       <div class="section-title">날짜 / 시간</div>
       <div class="row">
@@ -692,7 +1164,7 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
-      <div class="section-title">통증 종류</div>
+      <div class="section-title">통증 종류 <button onclick="_qOpenChipManager('pain')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
       <div class="chips" id="pain-chips">${painTypeChips}</div>
       <div class="other-row">
         <input class="other-input" id="pain-other" placeholder="기타 통증">
@@ -701,7 +1173,7 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
-      <div class="section-title">증상</div>
+      <div class="section-title">증상 <button onclick="_qOpenChipManager('sym')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
       <div class="chips" id="sym-chips">${symChips}</div>
       <div class="other-row">
         <input class="other-input" id="sym-other" placeholder="기타 증상">
@@ -710,16 +1182,18 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
-      <div class="section-title">약물</div>
+      <div class="section-title">약물 <button onclick="_qOpenChipManager('med')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
       <div class="chips" id="med-chips">${medChips}</div>
       <div class="other-row">
         <input class="other-input" id="med-other" placeholder="기타 약물">
         <button class="btn-other-add" onclick="addOtherChip('med-other','med-chips','med','sel-med')">+</button>
       </div>
+      <div id="med-qty-area" style="margin-top:6px"></div>
+      <div id="med-warn-area"></div>
     </div>
 
     <div class="section">
-      <div class="section-title">시술</div>
+      <div class="section-title">시술 <button onclick="_qOpenChipManager('tx')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
       <div class="chips" id="tx-chips">${txChips}</div>
       <div class="other-row">
         <input class="other-input" id="tx-other" placeholder="직접 입력">
@@ -728,7 +1202,7 @@ function renderForm(entry) {
     </div>
 
     <div class="section">
-      <div class="section-title">⚡ 추정 트리거</div>
+      <div class="section-title">⚡ 추정 트리거 <button onclick="_qOpenChipManager('trigger')" style="background:none;border:none;cursor:pointer;font-size:.6rem;color:var(--mu2);margin-left:4px">✏️관리</button></div>
       <div class="chips" id="trigger-chips">${triggerChips}</div>
       <div class="other-row">
         <input class="other-input" id="trigger-other" placeholder="직접 입력">
@@ -743,10 +1217,10 @@ function renderForm(entry) {
 
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:8px 10px;background:var(--sf);border:1px solid var(--bd);border-radius:8px">
       <span style="font-size:.72rem;color:var(--mu)">⏱ 경과 알림</span>
-      <select id="q-outcome-delay" style="border:1px solid var(--bd);border-radius:6px;padding:3px 8px;font-size:.75rem;background:var(--sf);color:var(--ink);font-family:inherit">
+      <select id="q-outcome-delay" onchange="_onOutcomeDelayChange(this.value)" style="border:1px solid var(--bd);border-radius:6px;padding:3px 8px;font-size:.75rem;background:var(--sf);color:var(--ink);font-family:inherit">
         <option value="0">안 보냄</option>
         <option value="30">30분 후</option>
-        <option value="60" selected>1시간 후</option>
+        <option value="60">1시간 후</option>
         <option value="90">1시간 30분</option>
         <option value="120">2시간 후</option>
         <option value="180">3시간 후</option>
@@ -761,12 +1235,14 @@ function renderForm(entry) {
   `;
   renderRecentQuickLogs();
   renderHeadDiagram();
-  // 기본 알림 시간 반영
-  const defDelay=localStorage.getItem('om_outcome_delay')||'60';
+  // 기본 알림 시간 반영 (기본 2시간)
+  const defDelay=getAppSetting('outcomeDelay')||'120';
   const delSel=document.getElementById('q-outcome-delay');
-  if(delSel){if([...delSel.options].some(o=>o.value===defDelay))delSel.value=defDelay;else delSel.value='60';}
+  if(delSel){if([...delSel.options].some(o=>o.value===defDelay))delSel.value=defDelay;else delSel.value='120';}
   // Sync diagram with pre-selected chips (edit mode)
   setTimeout(()=>syncHeadDiagram(),50);
+  // 약물 수량 UI + 경고 + 검색 자동완성 셋업
+  setTimeout(()=>{_renderMedQtyUI();_updateMedWarnings();setupDrugAutocomplete('med-other');},100);
 }
 
 function renderRecentQuickLogs() {
@@ -790,7 +1266,7 @@ function renderRecentQuickLogs() {
           ...(l.sites||[]).map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
           ...(l.painType||[]).map(p => `<span class="log-tag log-tag-pain">${esc(p)}</span>`),
           ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
-          ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
+          ...(l.meds||[]).map(m => {const q=l.medsQty?.[m];return `<span class="log-tag log-tag-med">${esc(m)}${q&&q.qty!==1?' ×'+q.qty+q.unit:''}</span>`;}),
           ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
           ...(l.triggers||[]).map(t => `<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`),
         ].join('');
@@ -841,7 +1317,12 @@ async function saveEntry() {
   const symptoms = [];
   document.querySelectorAll('.chip.sel[data-group="sym"]').forEach(el => symptoms.push(el.dataset.val));
   const meds = [];
-  document.querySelectorAll('.chip.sel[data-group="med"]').forEach(el => meds.push(el.dataset.val));
+  const medsQty = {};
+  document.querySelectorAll('.chip.sel[data-group="med"]').forEach(el => {
+    const m=el.dataset.val; meds.push(m);
+    const q=_medQty[m]; if(q) medsQty[m]={qty:q.qty,unit:q.unit};
+    else medsQty[m]={qty:1,unit:_getMedUnit(m)};
+  });
   const treatments = [];
   document.querySelectorAll('.chip.sel[data-group="tx"]').forEach(el => treatments.push(el.dataset.val));
   const triggers = [];
@@ -854,7 +1335,7 @@ async function saveEntry() {
   if (editId) {
     const idx = logs.findIndex(l => String(l.id) === editId);
     if (idx >= 0) {
-      const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, painType, symptoms, meds, treatments, triggers, memo, synced: false };
+      const updated = { ...logs[idx], datetime: `${date}T${time}`, nrs, sites, painType, symptoms, meds, medsQty: Object.keys(medsQty).length?medsQty:undefined, treatments, triggers, memo, synced: false };
       logs[idx] = updated;
       saveQuickLogs(logs);
       showToast('💾 저장 중...');
@@ -868,7 +1349,7 @@ async function saveEntry() {
   const entry = {
     id: Date.now(),
     datetime: `${date}T${time}`,
-    nrs, sites, painType, symptoms, meds, treatments, triggers, memo,
+    nrs, sites, painType, symptoms, meds, medsQty: Object.keys(medsQty).length?medsQty:undefined, treatments, triggers, memo,
     synced: false,
     createdAt: new Date(Date.now() + 9*3600000).toISOString()
   };
@@ -883,14 +1364,50 @@ async function saveEntry() {
 
   const ok = await cloudSave([entry]);
   await sendQuickNtfy(entry);
+  _autoDetectQuickOutcomes();
   showToast(ok ? '✅ 저장 완료 + ☁️ 붕쌤에게 전송됨' : '✅ 로컬 저장됨 (☁️ 업로드 실패)');
   renderForm();
+}
+
+// ── 자동 경과 감지 (시간대별 NRS + 증상 변화 기반) ──
+function _autoDetectQuickOutcomes() {
+  const now = kstNow();
+  const today = now.date;
+  const logs = getQuickEntries();
+  const todayLogs = logs.filter(l => l.datetime?.slice(0,10) === today && !l.datetime.includes('시간미상') && l.nrs >= 0);
+  if (todayLogs.length < 2) return;
+  todayLogs.sort((a,b) => a.datetime.localeCompare(b.datetime));
+  let changed = false;
+  for (let i = 0; i < todayLogs.length - 1; i++) {
+    const cur = todayLogs[i];
+    const next = todayLogs[i+1];
+    if (cur.outcome && cur.outcome.source !== 'auto') continue;
+    if (!(cur.meds?.length > 0 || cur.treatments?.length > 0)) continue;
+    const nrsDiff = next.nrs - cur.nrs;
+    const symBefore = (cur.symptoms || []).length;
+    const symAfter = (next.symptoms || []).length;
+    let rating, reason;
+    if (nrsDiff <= -2) { rating = 'better'; reason = `NRS ${cur.nrs}→${next.nrs} (${Math.abs(nrsDiff)} 감소)`; }
+    else if (nrsDiff === -1) { rating = symAfter < symBefore ? 'better' : 'same'; reason = `NRS ${cur.nrs}→${next.nrs}` + (symAfter < symBefore ? `, 증상 ${symBefore}→${symAfter}개` : ''); }
+    else if (nrsDiff === 0) { rating = 'same'; reason = `NRS 변화없음(${cur.nrs})` + (symAfter < symBefore ? `, 증상 ${symBefore}→${symAfter}개 감소` : ''); }
+    else if (nrsDiff >= 2) { rating = 'worse'; reason = `NRS ${cur.nrs}→${next.nrs} (${nrsDiff} 증가)`; }
+    else { rating = 'same'; reason = `NRS ${cur.nrs}→${next.nrs}`; }
+    const timeDiff = Math.round((new Date(next.datetime) - new Date(cur.datetime)) / 60000);
+    reason += ` · ${timeDiff}분 후`;
+    const allLogs = getQuickLogs();
+    const realEntry = allLogs.find(l => l.id === cur.id);
+    if (realEntry) {
+      realEntry.outcome = { rating, source: 'auto', reason, ratedAt: new Date().toISOString() };
+      changed = true;
+    }
+    if (changed) saveQuickLogs(allLogs);
+  }
 }
 
 // ── ntfy 알림 (빠른 기록 → 붕쌤 즉시 알림) ──
 async function sendQuickNtfy(entry) {
   // 붕쌤 즉시 알림 (토픽 독립 — 붕쌤 토픽 없어도 경과 알림은 별도 예약)
-  const topic=localStorage.getItem('om_ntfy_bung');
+  const topic=getAppSetting('ntfyBung');
   if(topic){
     const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
     const sites=(entry.sites||[]).join(', ');
@@ -900,15 +1417,33 @@ async function sendQuickNtfy(entry) {
     const body=['🤕 오랑이 두통 기록 (빠른기록)',((entry.datetime||'').slice(11,16)+' '+nrs+' '+sites).trim(),meds?'💊 '+meds:'',tx?'🩺 '+tx:'',trg?'⚡ '+trg:''].filter(Boolean).join('\n');
     try{await fetch('https://ntfy.sh/'+encodeURIComponent(topic),{method:'POST',body:body.trim()});}catch(e){}
   }
-  // 경과 알림 예약 (클라이언트 타이머 — 새 기록 시 이전 예약 자동 취소)
-  const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||'0');
+  // 새 기록 시 이전 미발송 경과 알림 취소 (새 기록이 곧 경과 데이터가 되므로)
+  _cancelPendingOutcomeNtfy(entry.id);
+  // 경과 알림 예약
+  const outcomeDelay=parseInt(document.getElementById('q-outcome-delay')?.value||getAppSetting('outcomeDelay')||'120');
   if(outcomeDelay>0) scheduleOutcomeNtfy(entry,outcomeDelay);
   // 약물 미입력 시 복용 확인 알림 (서버사이드, 설정값 사용)
-  const medDelay=parseInt(localStorage.getItem('om_med_reminder_delay')||'30');
+  const medDelay=parseInt(getAppSetting('medReminderDelay')||'30');
   if(medDelay>0&&!(entry.meds||[]).length&&!entry._medReminderSent) _sendMedReminder(entry, medDelay);
 }
 
 let _outcomeTimer=null;
+
+// 새 기록 저장 시 이전 미발송 경과 알림 일괄 취소
+function _cancelPendingOutcomeNtfy(newEntryId){
+  if(_outcomeTimer){clearTimeout(_outcomeTimer);_outcomeTimer=null;}
+  const logs=getQuickLogs();
+  let changed=false;
+  logs.forEach(l=>{
+    if(l._type==='config'||String(l.id)===String(newEntryId)) return;
+    if(l.outcomeNotifyAt&&!l.outcomeNotifySent&&!l.outcome){
+      l.outcomeNotifySent=true; // 서버 ntfy는 취소 불가하지만, 로컬 재발송 방지
+      l._outcomeCancelled=true;
+      changed=true;
+    }
+  });
+  if(changed) saveQuickLogs(logs);
+}
 
 function _setOutcomeTimer(entryId,delayMin){
   if(_outcomeTimer) clearTimeout(_outcomeTimer);
@@ -932,21 +1467,41 @@ function _markOutcomeSent(entryId){
   if(idx>=0&&!logs[idx].outcomeNotifySent){logs[idx].outcomeNotifySent=true;saveQuickLogs(logs);cloudSave([logs[idx]]);}
 }
 async function _sendServerScheduledNtfy(entry,delayMin){
-  const orangiTopic=localStorage.getItem('om_ntfy_orangi');
+  const orangiTopic=getAppSetting('ntfyOrangi');
   if(!orangiTopic||entry.outcome) return;
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
   const meds=(entry.meds||[]).join(', ');
   const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   const rateUrl=baseUrl+'rate.html';
   const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
-  const actions='view,😊 호전,'+rateUrl+'?r=better&id='+entry.id+';view,😐 비슷,'+rateUrl+'?r=same&id='+entry.id+';view,😣 악화,'+rateUrl+'?r=worse&id='+entry.id;
-  const ntfyUrl='https://ntfy.sh/'+encodeURIComponent(orangiTopic)+'?title='+encodeURIComponent('🤕 두통 경과 확인')+'&actions='+encodeURIComponent(actions)+'&delay='+delayMin+'m';
-  try{await fetch(ntfyUrl,{method:'POST',body:info+' → 지금 어때요?'});}catch(e){console.warn('ntfy scheduled send failed:',e);}
+  const actions='view,😊 호전,'+rateUrl+'?r=better&id='+entry.id+';view,😐 비슷,'+rateUrl+'?r=same&id='+entry.id+';view,😣 악화,'+rateUrl+'?r=worse&id='+entry.id+';view,🤷 모름,'+rateUrl+'?r=unknown&id='+entry.id;
+  // delay만 쿼리에, title/actions는 URL 길이 최소화를 위해 분리
+  const ntfyUrl='https://ntfy.sh/'+encodeURIComponent(orangiTopic)+'?delay='+delayMin+'m&title='+encodeURIComponent('🤕 두통 경과 확인')+'&actions='+encodeURIComponent(actions);
+  try{
+    const resp=await fetch(ntfyUrl,{method:'POST',body:info+' → 지금 어때요?'});
+    if(!resp.ok) console.warn('ntfy scheduled resp:',resp.status);
+  }catch(e){
+    console.warn('ntfy scheduled send failed:',e);
+    // 서버 발송 실패 시 폴백: 로컬 outcomeNotifyAt 기반으로 페이지 재방문 시 즉시 발송
+    entry._ntfyFallback=true;
+  }
 }
 
 function scheduleOutcomeNtfy(entry,customDelayMin){
-  const delayMin=customDelayMin||parseInt(localStorage.getItem('om_outcome_delay')||'60');
+  const delayMin=customDelayMin||parseInt(getAppSetting('outcomeDelay')||'120');
   _setOutcomeTimer(String(entry.id),delayMin);
+}
+
+// 경과 알림 시간 변경 시 기본값 고정 여부 확인
+function _onOutcomeDelayChange(val){
+  const current=getAppSetting('outcomeDelay')||'120';
+  if(val===current) return;
+  const labels={'0':'안 보냄','30':'30분','60':'1시간','90':'1시간 30분','120':'2시간','180':'3시간'};
+  if(confirm('앞으로도 경과 알림을 '+(labels[val]||val+'분')+' 후로 고정할까요?\n\n확인 → 기본값 변경\n취소 → 이번만 적용')){
+    setAppSetting('outcomeDelay',val);
+    syncNtfyConfig();
+    showToast('⏱ 기본 경과 알림: '+(labels[val]||val+'분'));
+  }
 }
 
 function rescheduleOutcome(entryId,delayMin){
@@ -966,41 +1521,40 @@ async function sendOutcomeNtfy(entryId){
   const allLogs=getQuickLogs();
   const idx=allLogs.findIndex(l=>String(l.id)===String(entryId));
   if(idx>=0){allLogs[idx].outcomeNotifySent=true;saveQuickLogs(allLogs);cloudSave([allLogs[idx]]);}
-  const orangiTopic=localStorage.getItem('om_ntfy_orangi');
+  const orangiTopic=getAppSetting('ntfyOrangi');
   if(!orangiTopic) return;
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
   const meds=(entry.meds||[]).join(', ');
   const baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   const rateUrl=baseUrl+'rate.html';
   const info=[(entry.datetime||'').slice(11,16),nrs,meds].filter(Boolean).join(' ');
-  const actions='view,😊 호전,'+rateUrl+'?r=better&id='+entryId+';view,😐 비슷,'+rateUrl+'?r=same&id='+entryId+';view,😣 악화,'+rateUrl+'?r=worse&id='+entryId;
+  const actions='view,😊 호전,'+rateUrl+'?r=better&id='+entryId+';view,😐 비슷,'+rateUrl+'?r=same&id='+entryId+';view,😣 악화,'+rateUrl+'?r=worse&id='+entryId+';view,🤷 모름,'+rateUrl+'?r=unknown&id='+entryId;
   const ntfyUrl='https://ntfy.sh/'+encodeURIComponent(orangiTopic)+'?title='+encodeURIComponent('🤕 두통 경과 확인')+'&actions='+encodeURIComponent(actions);
   try{await fetch(ntfyUrl,{method:'POST',body:info+' → 지금 어때요?'});}catch(e){console.warn('ntfy outcome failed:',e);}
 }
 
 function checkPendingOutcome(){
-  // 기록에 저장된 outcomeNotifyAt을 기준으로 체크
-  // ntfy 서버사이드 스케줄링이므로 재발송 불필요 — 로컬 상태만 업데이트
   const logs=getQuickEntries();
   const now=Date.now();
   for(let i=logs.length-1;i>=0;i--){
     const l=logs[i];
     if(l.outcome||l.outcomeNotifySent||!l.outcomeNotifyAt) continue;
     if(now>=l.outcomeNotifyAt){
-      // 서버가 이미 발송 — 로컬 상태만 업데이트
+      // 예정 시각 경과 — 서버가 보냈어야 하지만 혹시 실패했을 수 있으므로 폴백 발송
+      sendOutcomeNtfy(l.id);
       _markOutcomeSent(l.id);
     } else {
-      // 아직 미도래 — UI 갱신용 타이머
+      // 아직 미도래 — UI 갱신용 타이머 + 만료 시 폴백 발송
       if(_outcomeTimer) clearTimeout(_outcomeTimer);
-      _outcomeTimer=setTimeout(()=>_markOutcomeSent(l.id),l.outcomeNotifyAt-now);
+      _outcomeTimer=setTimeout(()=>{sendOutcomeNtfy(l.id);_markOutcomeSent(l.id);},l.outcomeNotifyAt-now);
     }
-    break; // 가장 최근 미발송 1건만
+    break; // 가장 최근 미발송 1건만 처리
   }
 }
 
 // ── 약물 복용 확인 알림 (서버사이드 스케줄링) ──
 async function _sendMedReminder(entry, delayMin){
-  const orangiTopic=localStorage.getItem('om_ntfy_orangi');
+  const orangiTopic=getAppSetting('ntfyOrangi');
   if(!orangiTopic) return;
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
   const baseUrl=location.href.split('#')[0].split('?')[0];
@@ -1024,7 +1578,7 @@ function quickAddMeds(entryId){
   const entry=logs[idx];
   const existing=(entry.meds||[]);
   // 자주 쓰는 약물 목록
-  const allMeds=[...new Set([...MEDS,...(JSON.parse(localStorage.getItem('om_custom_meds_orangi-migraine')||'[]'))])];
+  const allMeds=[...new Set([...MEDS,...(getCustomItems('orangi-migraine','meds'))])];
   const chips=allMeds.map(m=>{
     const sel=existing.includes(m);
     return '<span class="chip'+(sel?' sel':'')+'" data-val="'+esc(m)+'" onclick="this.classList.toggle(\'sel\')" style="font-size:.72rem;padding:4px 10px;border:1.5px solid var(--bd);border-radius:16px;cursor:pointer;background:'+(sel?'var(--ac)':'var(--sf)')+';color:'+(sel?'#fff':'var(--ink)')+'">'+esc(m)+'</span>';
@@ -1088,9 +1642,9 @@ function renderOutcomeTab() {
       +'</div>'
       +'<div style="font-size:.78rem;color:var(--mu);margin-bottom:8px">'+esc(tx)+'</div>'
       +'<div style="display:flex;gap:6px">'
-      +'<button onclick="rateQuickOutcome('+idx+',\'better\')" style="flex:1;padding:8px;border:1.5px solid #16a34a;border-radius:8px;background:'+(rating==='better'?'#16a34a':'#f0fdf4')+';color:'+(rating==='better'?'#fff':'#16a34a')+';font-size:.78rem;font-weight:600;cursor:pointer">🟢 호전</button>'
-      +'<button onclick="rateQuickOutcome('+idx+',\'same\')" style="flex:1;padding:8px;border:1.5px solid #f59e0b;border-radius:8px;background:'+(rating==='same'?'#f59e0b':'#fffbeb')+';color:'+(rating==='same'?'#fff':'#f59e0b')+';font-size:.78rem;font-weight:600;cursor:pointer">🟡 비슷</button>'
-      +'<button onclick="rateQuickOutcome('+idx+',\'worse\')" style="flex:1;padding:8px;border:1.5px solid #dc2626;border-radius:8px;background:'+(rating==='worse'?'#dc2626':'#fef2f2')+';color:'+(rating==='worse'?'#fff':'#dc2626')+';font-size:.78rem;font-weight:600;cursor:pointer">🔴 악화</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'better\')" style="flex:1;padding:8px;border:2px solid #16a34a;border-radius:8px;background:'+(rating==='better'?'#16a34a':'#16a34a18')+';color:'+(rating==='better'?'#fff':'#16a34a')+';font-size:.78rem;font-weight:600;cursor:pointer">🟢 호전</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'same\')" style="flex:1;padding:8px;border:2px solid #f59e0b;border-radius:8px;background:'+(rating==='same'?'#f59e0b':'#f59e0b18')+';color:'+(rating==='same'?'#fff':'#f59e0b')+';font-size:.78rem;font-weight:600;cursor:pointer">🟡 비슷</button>'
+      +'<button onclick="rateQuickOutcome('+idx+',\'worse\')" style="flex:1;padding:8px;border:2px solid #dc2626;border-radius:8px;background:'+(rating==='worse'?'#dc2626':'#dc262618')+';color:'+(rating==='worse'?'#fff':'#dc2626')+';font-size:.78rem;font-weight:600;cursor:pointer">🔴 악화</button>'
       +'</div>'
       +'<div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">'
       +'<button onclick="rateQuickOutcome('+idx+',\'unknown\')" style="background:none;border:1px solid var(--bd);border-radius:6px;padding:4px 10px;font-size:.68rem;color:var(--mu);cursor:pointer;'+(rating==='unknown'?'background:var(--bd);font-weight:600':'')+'">🤷 기억 안남</button>'
@@ -1156,18 +1710,18 @@ function clearQuickOutcome(idx) {
 }
 
 async function testFollowupNtfy() {
-  var topic=localStorage.getItem('om_ntfy_orangi');
+  var topic=getAppSetting('ntfyOrangi');
   if(!topic){showToast('⚠️ 오랑이 경과 알림 토픽이 설정되지 않았습니다');return;}
   var baseUrl=location.href.split('#')[0].split('?')[0].replace(/\/[^/]*$/,'/');
   var rateUrl=baseUrl+'rate.html';
-  var actions='view,😊 호전,'+rateUrl+'?r=better&id=0;view,😐 비슷,'+rateUrl+'?r=same&id=0;view,😣 악화,'+rateUrl+'?r=worse&id=0';
+  var actions='view,😊 호전,'+rateUrl+'?r=better&id=0;view,😐 비슷,'+rateUrl+'?r=same&id=0;view,😣 악화,'+rateUrl+'?r=worse&id=0;view,🤷 모름,'+rateUrl+'?r=unknown&id=0';
   var ntfyUrl='https://ntfy.sh/'+encodeURIComponent(topic)+'?title='+encodeURIComponent('🔔 경과 알림 테스트')+'&actions='+encodeURIComponent(actions);
   try{
     var r=await fetch(ntfyUrl,{method:'POST',body:'이 알림이 보이면 정상 작동합니다!'});
     if(r.ok) showToast('✅ 경과 테스트 알림 전송됨!');
     else showToast('❌ 실패: HTTP '+r.status,4000);
   }catch(e){showToast('❌ 네트워크 오류: '+e.message,4000);}
-  var bungTopic=localStorage.getItem('om_ntfy_bung');
+  var bungTopic=getAppSetting('ntfyBung');
   if(bungTopic){
     try{await fetch('https://ntfy.sh/'+encodeURIComponent(bungTopic),{method:'POST',body:'🔔 붕쌤 알림 테스트\n이 알림이 보이면 정상 작동합니다!'});}catch(e){}
   }
@@ -1188,12 +1742,13 @@ function renderList() {
       ...(l.sites||[]).map(s => `<span class="log-tag log-tag-site">${esc(s)}</span>`),
       ...(l.painType||[]).map(p => `<span class="log-tag log-tag-pain">${esc(p)}</span>`),
       ...(l.symptoms||[]).map(s => `<span class="log-tag log-tag-sym">${esc(s)}</span>`),
-      ...(l.meds||[]).map(m => `<span class="log-tag log-tag-med">${esc(m)}</span>`),
+      ...(l.meds||[]).map(m => {const q=l.medsQty?.[m];return `<span class="log-tag log-tag-med">${esc(m)}${q&&q.qty!==1?' ×'+q.qty+q.unit:''}</span>`;}),
       ...(l.treatments||[]).map(t => `<span class="log-tag log-tag-tx">${esc(t)}</span>`),
       ...(l.triggers||[]).map(t => `<span class="log-tag" style="background:#fef3c7;color:#92400e">⚡${esc(t)}</span>`),
     ].join('');
+    const _oRating=l.outcome?.rating;const _oAuto=l.outcome?.source==='auto';
     const outcomeTag = l.outcome
-      ? `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:${l.outcome.rating==='better'?'#dcfce7':l.outcome.rating==='same'?'#fef3c7':'#fee2e2'};color:${l.outcome.rating==='better'?'#15803d':l.outcome.rating==='same'?'#92400e':'#b91c1c'}">${l.outcome.rating==='better'?'🟢호전':l.outcome.rating==='same'?'🟡비슷':'🔴악화'}</span>`
+      ? `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:${_oRating==='better'?'#dcfce7':_oRating==='same'?'#fef3c7':_oRating==='unknown'?'#f3f4f6':'#fee2e2'};color:${_oRating==='better'?'#15803d':_oRating==='same'?'#92400e':_oRating==='unknown'?'#4b5563':'#b91c1c'}" title="${esc(l.outcome.reason||'')}">${_oRating==='better'?'🟢호전':_oRating==='same'?'🟡비슷':_oRating==='unknown'?'🤷모름':'🔴악화'}${_oAuto?' <span style="font-size:.5rem;opacity:.7">자동</span>':''}</span>`
       : `<span class="log-tag" onclick="event.stopPropagation();quickEditOutcome(${l.id})" style="cursor:pointer;background:#f5f3ff;color:#7c3aed;border:1px dashed #c4b5fd">+ 경과</span>`;
     const nrsHtml = l.nrs >= 0
       ? `<span class="log-item-nrs" style="background:${nrsColor(l.nrs)}">NRS ${l.nrs}</span>`
@@ -1253,14 +1808,18 @@ function quickEditOutcome(id) {
   const time=dt.slice(11,16);
   const nrs=entry.nrs>=0?'NRS '+entry.nrs:'';
   const current=entry.outcome?.rating;
-  const labels={better:'😊 호전',same:'😐 비슷',worse:'😣 악화'};
+  const labels={better:'😊 호전',same:'😐 비슷',worse:'😣 악화',unknown:'🤷 모르겠어요'};
+  const colors={better:['#16a34a','#dcfce7','#15803d'],same:['#f59e0b','#fef3c7','#92400e'],worse:['#dc2626','#fee2e2','#b91c1c'],unknown:['#6b7280','#f3f4f6','#4b5563']};
 
-  var html=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">
-    <div style="background:var(--sf);border-radius:14px;padding:20px;max-width:320px;width:85vw;box-shadow:0 4px 20px rgba(0,0,0,.2)">
-      <div style="font-size:.82rem;font-weight:600;margin-bottom:4px">📋 경과 기록</div>
+  var html=`<div style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)this.remove()">
+    <div style="background:var(--bg,#fff);border:1.5px solid var(--bd);border-radius:14px;padding:20px;max-width:320px;width:85vw;box-shadow:0 4px 20px rgba(0,0,0,.3)">
+      <div style="font-size:.82rem;font-weight:600;margin-bottom:4px;color:var(--ink,#1a1a1a)">📋 경과 기록</div>
       <div style="font-size:.72rem;color:var(--mu);margin-bottom:14px">${dt.slice(0,10)} ${time} ${nrs}</div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        ${['better','same','worse'].map(r=>`<button onclick="saveQuickOutcome(${id},'${r}')" style="padding:12px;border:2px solid ${r==='better'?'#86efac':r==='same'?'#fde68a':'#fca5a5'};background:${current===r?(r==='better'?'#dcfce7':r==='same'?'#fef3c7':'#fee2e2'):'var(--sf)'};border-radius:10px;font-size:.92rem;font-weight:${current===r?'700':'400'};cursor:pointer;font-family:inherit">${labels[r]}</button>`).join('')}
+        ${['better','same','worse','unknown'].map(r=>{
+          const c=colors[r];const sel=current===r;
+          return `<button onclick="saveQuickOutcome(${id},'${r}')" style="padding:12px;border:2px solid ${c[0]};background:${sel?c[1]:c[0]+'18'};border-radius:10px;font-size:.92rem;font-weight:${sel?'700':'500'};cursor:pointer;font-family:inherit;color:${sel?c[2]:c[0]}">${labels[r]}</button>`;
+        }).join('')}
       </div>
       ${current?`<button onclick="saveQuickOutcome(${id},null)" style="display:block;margin:12px auto 0;font-size:.72rem;color:var(--mu);background:none;border:none;cursor:pointer;text-decoration:underline">경과 삭제</button>`:''}
     </div></div>`;
@@ -1313,8 +1872,8 @@ async function cloudSaveAll(logs) {
 const SYNC_URL_KEY = 'om_quick_sync_url';
 const DEFAULT_SYNC_URL = 'https://script.google.com/macros/s/AKfycbzYF46qeLJRGIQsqfXbic6ITRGKr1eA9chrVJ8Fu5_gM7TDSYUFlpaWQGmSR9RdAACjzw/exec';
 
-function getSyncUrl() { return localStorage.getItem(SYNC_URL_KEY) || DEFAULT_SYNC_URL; }
-function saveSyncUrl(url) { localStorage.setItem(SYNC_URL_KEY, url.trim()); }
+function getSyncUrl() { return _storageGet(SYNC_URL_KEY) || DEFAULT_SYNC_URL; }
+function saveSyncUrl(url) { _storageSet(SYNC_URL_KEY, url.trim()); }
 
 function toggleSettings() {
   const panel = document.getElementById('settings-panel');
@@ -1323,10 +1882,10 @@ function toggleSettings() {
     document.getElementById('sync-url-input').value = getSyncUrl();
     document.getElementById('sync-indicator').innerHTML = getSyncUrl()
       ? '<span style="color:#2d6a4f">☁️ 동기화 활성</span>' : '<span style="color:#c03030">동기화 꺼짐</span>';
-    document.getElementById('ntfy-bung-input').value = localStorage.getItem('om_ntfy_bung')||'';
-    document.getElementById('ntfy-orangi-input').value = localStorage.getItem('om_ntfy_orangi')||'';
-    document.getElementById('ntfy-delay-input').value = localStorage.getItem('om_outcome_delay')||'60';
-    document.getElementById('ntfy-med-delay-input').value = localStorage.getItem('om_med_reminder_delay')||'30';
+    document.getElementById('ntfy-bung-input').value = getAppSetting('ntfyBung')||'';
+    document.getElementById('ntfy-orangi-input').value = getAppSetting('ntfyOrangi')||'';
+    document.getElementById('ntfy-delay-input').value = getAppSetting('outcomeDelay')||'120';
+    document.getElementById('ntfy-med-delay-input').value = getAppSetting('medReminderDelay')||'30';
   }
 }
 
@@ -1434,7 +1993,7 @@ checkPendingOutcome(); // 미발송 경과 알림 체크
 const _handleHash=()=>{
   const h=location.hash;
   // #rate-{rating}-{id} → 경과 바로 기록
-  const rateMatch=h.match(/^#rate-(better|same|worse)-(\d+)$/);
+  const rateMatch=h.match(/^#rate-(better|same|worse|unknown)-(\d+)$/);
   if(rateMatch){
     const [,rating,id]=rateMatch;
     rateQuickOutcomeById(id,rating);
@@ -1462,9 +2021,12 @@ fetchCloudStatus();
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
     fetchCloudStatus(); checkPendingOutcome();
+    // 메인앱에서 추가된 커스텀 항목 자동 머지 (localStorage 공유)
+    _syncCustomsFromMain();
     // 탭 복귀 시 현재 탭 데이터 갱신 (rate.html에서 경과 저장 후 돌아왔을 때)
     const tabs=document.querySelectorAll('.tab');
-    if(tabs[2].classList.contains('active')) renderList();
+    if(tabs[0].classList.contains('active')) renderForm(); // 폼 리렌더 (새 항목 반영)
+    else if(tabs[2].classList.contains('active')) renderList();
     else if(tabs[1].classList.contains('active')) renderOutcomeTab();
   }
 });
@@ -1476,8 +2038,8 @@ if ('serviceWorker' in navigator) {
 
 // ── Quick 프리셋 ──
 function _qPresetKey() { return 'om_presets_orangi-migraine'; } // quick은 편두통 전용
-function _loadQPresets() { try{return JSON.parse(localStorage.getItem(_qPresetKey())||'[]');}catch(e){return [];} }
-function _saveQPresets(list) { localStorage.setItem(_qPresetKey(),JSON.stringify(list)); }
+function _loadQPresets() { try{return _storageGetJSON(_qPresetKey(),[]);}catch(e){return [];} }
+function _saveQPresets(list) { _storageSetJSON(_qPresetKey(),list); }
 
 function saveQuickPreset() {
   var chips=[];

@@ -33,7 +33,7 @@ function showConfirmModal(title,body,buttons) {
   document.getElementById('confirm-foot').onclick = function(e) {
     const btn = e.target.closest('[data-confirm-idx]');
     const closeBtn = e.target.closest('[data-confirm-close]');
-    if(btn) { const idx = parseInt(btn.dataset.confirmIdx); const action = _confirmActions[idx]; if(action) { try { if(typeof action==='function') action(); else new Function(action)(); } catch(err) { console.error('Confirm action error:', err); } } }
+    if(btn) { const idx = parseInt(btn.dataset.confirmIdx); const action = _confirmActions[idx]; if(typeof action==='function') { try { action(); } catch(err) { console.error('Confirm action error:', err); } } }
     if(closeBtn) closeConfirmModal();
   };
   openModal('confirm-modal');
@@ -41,9 +41,55 @@ function showConfirmModal(title,body,buttons) {
 function closeConfirmModal(){closeModal('confirm-modal');}
 
 let _toastTimer;
+const _toastLog = [];
+let _toastLogBackup = null;
+const _TOAST_LOG_MAX = 100;
+
 function showToast(msg,dur=2800) {
   const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');
   clearTimeout(_toastTimer);_toastTimer=setTimeout(()=>el.classList.remove('show'),dur);
+  // Log it
+  const now=new Date();
+  const time=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');
+  _toastLog.unshift({time,msg});
+  if(_toastLog.length>_TOAST_LOG_MAX) _toastLog.length=_TOAST_LOG_MAX;
+  // Update badge
+  const badge=document.getElementById('toast-log-badge');
+  if(badge){badge.textContent=_toastLog.length;badge.style.display=_toastLog.length?'inline':'none';}
+}
+
+function showToastLog() {
+  if(!_toastLog.length){
+    if(_toastLogBackup?.length){
+      // 비운 로그 복원 가능
+      showConfirmModal('📋 알림 로그','<div style="text-align:center;padding:16px;font-size:.78rem;color:var(--mu)">알림 없음</div>',
+        [{label:'↩ 복원 ('+_toastLogBackup.length+'건)',action:function(){_toastLog.push(..._toastLogBackup);_toastLogBackup=null;closeConfirmModal();showToastLog();}},
+         {label:'닫기',action:closeConfirmModal,primary:true}]);
+      return;
+    }
+    showToast('알림 없음');return;
+  }
+  const rows=_toastLog.map(function(t){
+    const isErr=t.msg.includes('❌')||t.msg.includes('⚠️')||t.msg.includes('실패');
+    const isOk=t.msg.includes('✅')||t.msg.includes('완료')||t.msg.includes('저장');
+    const color=isErr?'var(--err)':isOk?'var(--ok)':'var(--ink)';
+    return '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--bd);font-size:.72rem">'
+      +'<span style="font-family:var(--mono);color:var(--mu);min-width:52px;flex-shrink:0">'+t.time+'</span>'
+      +'<span style="color:'+color+'">'+esc(t.msg)+'</span></div>';
+  }).join('');
+  showConfirmModal('📋 알림 로그 (최근 '+_toastLog.length+'건)',
+    '<div style="max-height:400px;overflow-y:auto">'+rows+'</div>',
+    [{label:'🗑 비우기',action:function(){
+      _toastLogBackup=_toastLog.slice(); // 복원용 백업
+      _toastLog.length=0;
+      const badge=document.getElementById('toast-log-badge');
+      if(badge){badge.textContent='0';badge.style.display='none';}
+      closeConfirmModal();
+      // showToast 대신 직접 표시 (로그에 안 남도록)
+      const el=document.getElementById('toast');el.textContent='🗑 알림 로그 비움 (↩ 복원 가능)';el.classList.add('show');
+      clearTimeout(_toastTimer);_toastTimer=setTimeout(()=>el.classList.remove('show'),2800);
+    }},
+     {label:'닫기',action:closeConfirmModal,primary:true}]);
 }
 
 // #3 ESC key closes modals

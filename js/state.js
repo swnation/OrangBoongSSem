@@ -2,11 +2,11 @@
 
 let S = {
   token: null,
-  currentDomain: localStorage.getItem('om_domain') || 'orangi-migraine',
+  currentDomain: getAppSetting('lastDomain') || 'orangi-migraine',
   // Per-domain state: { folderId, masterFileId, master, logFileId, logData, logMonth }
   domainState: {},
   keys:   {}, // 암호화 저장 — _loadKeys()로 복호화 후 설정
-  models: JSON.parse(localStorage.getItem('om_models') || JSON.stringify(DEFAULT_MODELS)),
+  models: getAppSettingJSON('models', DEFAULT_MODELS),
   currentView: 'drive-connect',
   session: null,
   generating: false,
@@ -30,6 +30,6 @@ function getDefaultMaster() {
     sessions:[], conditions:[], templates: dc.templates ? [...dc.templates] : [],
     last_backup:null, session_timeline:[], pending_qa:[], usage_data:{},
     monthly_summaries:{}, price_table:null, price_updated:null,
-    settings:{},
+    settings:{}, healthCheckups:[],
   };
 }
