@@ -2751,7 +2751,8 @@ function _collectSchedFromForm(prefix, fallback) {
   if (['weekly','monthly','days'].includes(type)) out.interval = interval;
   if (type === 'custom') out.custom = custom;
   if (type === 'daily' && timesPerDay && timesPerDay > 1) out.timesPerDay = timesPerDay;
-  if (doseAmount && doseAmount > 0) { out.doseAmount = doseAmount; out.doseUnit = doseUnit; }
+  // 0은 임상적으로 의미 없으므로 "미설정"으로 간주 — null/undefined와 동일 처리
+  if (doseAmount != null && doseAmount > 0) { out.doseAmount = doseAmount; out.doseUnit = doseUnit; }
   return out;
 }
 
@@ -2760,7 +2761,7 @@ function _isDefaultSched(s){
   if(!s) return true;
   if(s.type !== 'daily' && s.type !== undefined) return false;
   if(s.timesPerDay && s.timesPerDay > 1) return false;
-  if(s.doseAmount && s.doseAmount > 0) return false;
+  if(s.doseAmount != null && s.doseAmount > 0) return false;
   return true;
 }
 
